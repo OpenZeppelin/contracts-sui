@@ -1,0 +1,23 @@
+# Sui build artifacts
+build/
+.sui/
+sui.keystore
+
+# Move build outputs
+*.mv
+*.abi
+
+# IDE and editor files
+.vscode/
+
+# OS generated files
+.DS_Store
+._*
+
+# Logs
+*.log
+logs/
+
+# Temporary folders
+tmp/
+temp/
