@@ -1,14 +1,9 @@
 # Sui build artifacts
-build/
+build
 .sui/
 sui.keystore
-
-# Move build outputs
-*.mv
-*.abi
-
-# IDE and editor files
-.vscode/
+.trace
+.coverage_map.mvcov
 
 # OS generated files
 .DS_Store

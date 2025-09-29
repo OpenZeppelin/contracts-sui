@@ -1,0 +1,7 @@
+[package]
+name = "oz-math"
+version = "0.0.1"
+edition = "2024"
+
+[addresses]
+oz_math = "0x0"
