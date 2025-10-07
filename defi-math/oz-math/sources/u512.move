@@ -1,4 +1,4 @@
-module oz_math::u512;
+module openzeppelin_math::u512;
 
 /// Represents a 512-bit unsigned integer as two 256-bit words.
 public struct U512 has copy, drop, store {

@@ -1,6 +1,6 @@
-module oz_math::core;
+module openzeppelin_math::core;
 
-use oz_math::u512;
+use openzeppelin_math::u512;
 
 /// Base offset applied to all errors emitted by this module.
 const ERROR_OFFSET: u64 = 1_000;

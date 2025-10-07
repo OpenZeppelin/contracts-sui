@@ -1,7 +1,7 @@
 [package]
-name = "openzeppelin_math"
+name = "openzeppelin_access"
 version = "0.0.1"
 edition = "2024"
 
 [addresses]
-openzeppelin_math = "0x0"
+openzeppelin_access = "0x0"
