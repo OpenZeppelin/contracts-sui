@@ -1,8 +1,13 @@
 module openzeppelin_access::ownable;
 
+use sui::event;
+
 /// Invalid transfer policy
 #[error(code = 0)]
 const EInvalidTransferPolicy: vector<u8> = b"Invalid transfer policy.";
+/// Request is for the wrong capability
+#[error(code = 1)]
+const EInvalidTransferRequest: vector<u8> = b"Invalid ownership transfer for request.";
 
 /// A capability that allows the owner of the smart contract (package) to perform certain actions.
 /// The OTW phantom type is used to enforce that there isonly one owner per module.
@@ -24,6 +29,31 @@ public enum TransferPolicy has drop, store {
 public struct OwnershipInitializer<phantom OTW> {
     owner_cap: OwnerCap<OTW>,
 }
+
+/// A capability required to transfer ownership to a new address with a two step transfer policy.
+/// This capability can only be created by the pending owner through the `request_ownership` function
+/// and it is destroyed when the ownership is transferred to the new owner through the `transfer_requested_ownership` function.
+public struct OwnershipRequestCap has key {
+    id: UID,
+    cap_id: ID,
+    new_owner: address,
+}
+
+// === Events ===
+
+/// Emitted when the ownership is transferred to `new_owner`.
+///
+/// #### Parameters
+/// - `cap_id`: The ID of the owner capability object
+/// - `previous_owner`: The address of the previous owner
+/// - `new_owner`: The address of the new owner
+public struct OwnershipTransferred has copy, drop {
+    cap_id: ID,
+    previous_owner: address,
+    new_owner: address,
+}
+
+// === Functions ===
 
 /// Creates a new owner capability for a package using a one-time witness.
 /// This function should be called during package initialization to set up the initial owner.
@@ -54,9 +84,60 @@ public fun new_owner<T: drop>(otw: T, ctx: &mut TxContext): OwnershipInitializer
 /// #### Parameters
 /// - `cap`: The owner capability object
 /// - `new_owner`: Address that will receive ownership
-public fun transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address) {
+public fun transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address, ctx: &mut TxContext) {
     assert!(is_immediate_transfer_policy(&cap), EInvalidTransferPolicy);
+
+    // Only the current owner can access this function through the OwnerCap
+    let current_owner = ctx.sender();
+    event::emit(OwnershipTransferred {
+        cap_id: object::id(&cap),
+        previous_owner: current_owner,
+        new_owner,
+    });
     transfer::transfer(cap, new_owner);
+}
+
+/// Transfers ownership to the requested address.
+///
+/// #### Parameters
+/// - `cap`: The owner capability object
+/// - `request`: The ownership request given by the pending owner
+/// - `ctx`: Transaction context to access the caller
+public fun transfer_requested_ownership<T>(cap: OwnerCap<T>, request: OwnershipRequestCap, ctx: &mut TxContext) {
+    assert!(is_two_step_transfer_policy(&cap), EInvalidTransferPolicy);
+
+    let OwnershipRequestCap { id, cap_id, new_owner } = request;
+
+    // Check that the request is for the correct capability
+    assert!(object::uid_as_inner(&cap.id) == cap_id, EInvalidTransferRequest);
+
+    // Delete the request
+    id.delete();
+
+    // Only the current owner can access this function through the OwnerCap
+    let current_owner = ctx.sender();
+    event::emit(OwnershipTransferred {
+        cap_id,
+        previous_owner: current_owner,
+        new_owner,
+    });
+    transfer::transfer(cap, new_owner);
+}
+
+/// Requests ownership of the capability.
+///
+/// #### Parameters
+/// - `cap_id`: The ID of the capability object
+/// - `current_owner`: The address of the current owner
+/// - `ctx`: Transaction context to access the caller
+public fun request_ownership(cap_id: ID, current_owner: address, ctx: &mut TxContext) {
+    let ownership_request = OwnershipRequestCap {
+        id: object::new(ctx),
+        cap_id,
+        new_owner: ctx.sender(),
+    };
+    transfer::transfer(ownership_request, current_owner);
+
 }
 
 /// Renounces ownership by deleting the capability.
@@ -68,6 +149,15 @@ public fun transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address) {
 /// - `cap`: The owner capability object to renounce
 public fun renounce_ownership<T>(cap: OwnerCap<T>) {
     let OwnerCap { id, transfer_policy: _ } = cap;
+    id.delete();
+}
+
+/// Rejects the ownership request by deleting the capability.
+///
+/// #### Parameters
+/// - `request`: The ownership request to reject
+public fun reject_ownership_request(request: OwnershipRequestCap) {
+    let OwnershipRequestCap { id, cap_id: _, new_owner: _ } = request;
     id.delete();
 }
 
@@ -85,9 +175,9 @@ public fun set_two_step_transfer<T>(builder: &mut OwnershipInitializer<T>) {
 /// #### Parameters
 /// - `builder`: The ownership initializer hot potato wrapper
 /// - `initial_owner`: The initial owner address
-public fun finalize<T>(builder: OwnershipInitializer<T>, initial_owner: address) {
+public fun finalize<T>(builder: OwnershipInitializer<T>, initial_owner: address, ctx: &mut TxContext) {
     let OwnershipInitializer { owner_cap } = builder;
-    owner_cap.transfer_ownership(initial_owner);
+    owner_cap.transfer_ownership(initial_owner, ctx);
 }
 
 //
