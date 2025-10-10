@@ -1,3 +1,22 @@
+//! Module/Package-level ownership primitives for Sui packages.
+//!
+//! This module provides ownership control for Sui packages through the `OwnerCap<OTW>` capability.
+//! The capability is created during package initialization using a one-time witness (`OTW`) and
+//! gates access to privileged entry points.
+//!
+//! Two ownership transfer policies are supported:
+//! - `TransferPolicy::Immediate`: Enables direct ownership transfers via `transfer_ownership`
+//! - `TransferPolicy::TwoStep`: Requires a two-phase handoff where:
+//!   1. The prospective owner requests ownership through `request_ownership`
+//!   2. The current owner approves via `transfer_requested_ownership` or rejects via
+//!      `reject_ownership_request`
+//!
+//! The `OwnershipInitializer` helper allows configuring the transfer policy before finalizing
+//! ownership. For convenience, `new_owner` and `new_two_step_owner` wrap the common initialization
+//! patterns.
+//!
+//! All ownership transfers emit `OwnershipTransferred` events to enable tracking of administrative
+//! changes.
 module openzeppelin_access::ownable;
 
 use sui::event;

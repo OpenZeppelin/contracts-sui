@@ -1,4 +1,5 @@
-//! Gift box example secured by `OwnerCap` from `openzeppelin_access::ownable`.
+//! Gift box example secured by `OwnerCap` from `openzeppelin_access::ownable`
+//! in immediate transfer policy.
 //!
 //! The `init` function creates the module's owner capability with an immediate
 //! transfer policy and finalizes ownership so the deployer holds the capability.
