@@ -4,8 +4,8 @@ Each package directory includes Move modules and companion PTB scripts that demo
 
 ## What’s Included
 
-- `examples/`: Move modules demonstrating OpenZeppelin primitives and patterns.
-- `examples/ptb/`: Programmable transaction block (PTB) snippets that drive those modules from the CLI, showcasing common flows like package publish and functionality execution.
+- `examples/*`: Move modules demonstrating OpenZeppelin primitives and patterns.
+- `examples/**/ptbs/`: Programmable transaction block (PTB) snippets that drive those modules from the CLI, showcasing common flows like package publish and functionality execution.
 
 ## Quickstart: Localnet Setup
 
@@ -30,7 +30,7 @@ Follow this checklist before running any PTB scripts. It prepares a local Sui ne
    ```
    The CLI will prompt you with questions - answer them as follows:
    - Connect to Sui Full node server? Enter `y`
-   - Server URL: Enter `http://127.0.0.1:9000`  
+   - Server URL: Enter `http://127.0.0.1:9000`
    - Environment alias: Enter `localnet`
    - Key scheme: Enter `0` for ed25519
 

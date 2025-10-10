@@ -199,18 +199,6 @@ public fun finalize<T>(builder: OwnershipInitializer<T>, ctx: &mut TxContext) {
     internal_transfer_ownership(owner_cap, ctx.sender(), ctx);
 }
 
-/// Returns true if the transfer policy is immediate.
-public fun is_immediate_transfer_policy<T>(owner_cap: &OwnerCap<T>): bool {
-    &owner_cap.transfer_policy == TransferPolicy::Immediate
-}
-
-/// Returns true if the transfer policy is two step.
-public fun is_two_step_transfer_policy<T>(owner_cap: &OwnerCap<T>): bool {
-    &owner_cap.transfer_policy == TransferPolicy::TwoStep
-}
-
-// === Macros ===
-
 /// Creates a new owner capability with an immediate transfer policy for a package using a one-time witness.
 /// This function should be used during package initialization to set up the initial owner.
 ///
@@ -232,4 +220,14 @@ public fun new_two_step_owner<T: drop>(otw: T, ctx: &mut TxContext) {
     let mut builder = build_ownership(otw, ctx);
     builder.set_two_step_transfer();
     builder.finalize(ctx);
+}
+
+/// Returns true if the transfer policy is immediate.
+public fun is_immediate_transfer_policy<T>(owner_cap: &OwnerCap<T>): bool {
+    &owner_cap.transfer_policy == TransferPolicy::Immediate
+}
+
+/// Returns true if the transfer policy is two step.
+public fun is_two_step_transfer_policy<T>(owner_cap: &OwnerCap<T>): bool {
+    &owner_cap.transfer_policy == TransferPolicy::TwoStep
 }
