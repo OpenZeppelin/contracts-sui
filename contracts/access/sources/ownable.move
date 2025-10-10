@@ -104,15 +104,7 @@ public fun build_ownership<T: drop>(otw: T, ctx: &mut TxContext): OwnershipIniti
 /// - `new_owner`: Address that will receive ownership
 public fun transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address, ctx: &mut TxContext) {
     assert!(is_immediate_transfer_policy(&cap), EInvalidTransferPolicy);
-
-    // Only the current owner can access this function through the OwnerCap
-    let current_owner = ctx.sender();
-    event::emit(OwnershipTransferred {
-        cap_id: object::id(&cap),
-        previous_owner: current_owner,
-        new_owner,
-    });
-    transfer::transfer(cap, new_owner);
+    internal_transfer_ownership(cap, new_owner, ctx);
 }
 
 /// Transfers ownership to the requested address.
@@ -136,10 +128,17 @@ public fun transfer_requested_ownership<T>(
     // Delete the request
     id.delete();
 
+    // Transfer the ownership
+    internal_transfer_ownership(cap, new_owner, ctx);
+}
+
+/// Internal function to transfer ownership to a new address.
+/// This function is used to transfer ownership to a new address without checking the transfer policy.
+fun internal_transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address, ctx: &TxContext) {
     // Only the current owner can access this function through the OwnerCap
     let current_owner = ctx.sender();
     event::emit(OwnershipTransferred {
-        cap_id,
+        cap_id: object::id(&cap),
         previous_owner: current_owner,
         new_owner,
     });
@@ -195,12 +194,9 @@ public fun set_two_step_transfer<T>(builder: &mut OwnershipInitializer<T>) {
 ///
 /// #### Parameters
 /// - `builder`: The ownership initializer hot potato wrapper
-public fun finalize<T>(
-    builder: OwnershipInitializer<T>,
-    ctx: &mut TxContext,
-) {
+public fun finalize<T>(builder: OwnershipInitializer<T>, ctx: &mut TxContext) {
     let OwnershipInitializer { owner_cap } = builder;
-    owner_cap.transfer_ownership(ctx.sender(), ctx);
+    internal_transfer_ownership(owner_cap, ctx.sender(), ctx);
 }
 
 /// Returns true if the transfer policy is immediate.

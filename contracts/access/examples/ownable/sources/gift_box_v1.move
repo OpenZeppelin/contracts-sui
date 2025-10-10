@@ -11,7 +11,7 @@
 //! IMPORTANT: Care must be taken when transferring ownership to ensure the recipient
 //! address is valid and able to receive the capability. Once transferred, the previous
 //! owner immediately loses access to owner-restricted functions.
-module ownable::gift_box_v1;
+module ownable_examples::gift_box_v1;
 
 use openzeppelin_access::ownable::{Self, OwnerCap};
 use std::string::String;

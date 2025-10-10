@@ -1,5 +1,5 @@
 [package]
-name = "gift_box"
+name = "ownable_examples"
 edition = "2024.beta"
 license = "MIT"
 
@@ -7,4 +7,4 @@ license = "MIT"
 openzeppelin_access = { local = "../.." }
 
 [addresses]
-ownable = "0xE0"
+ownable_examples = "0x0"
