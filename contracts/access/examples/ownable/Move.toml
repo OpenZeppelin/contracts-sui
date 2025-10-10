@@ -1,0 +1,10 @@
+[package]
+name = "gift_box"
+edition = "2024.beta"
+license = "MIT"
+
+[dependencies]
+openzeppelin_access = { local = "../.." }
+
+[addresses]
+ownable = "0x0"
