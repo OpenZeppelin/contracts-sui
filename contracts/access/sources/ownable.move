@@ -1,6 +1,6 @@
-//! Module/Package-level ownership primitives for Sui packages.
+//! Module/Package-level single ownership primitives for Sui packages.
 //!
-//! This module provides ownership control for Sui packages through the `OwnerCap<OTW>` capability.
+//! This module provides single ownership control for Sui packages through the `OwnerCap<OTW>` capability.
 //! The capability is created during package initialization using a one-time witness (`OTW`) and
 //! gates access to privileged entry points.
 //!

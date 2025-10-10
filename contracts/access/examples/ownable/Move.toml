@@ -7,4 +7,4 @@ license = "MIT"
 openzeppelin_access = { local = "../.." }
 
 [addresses]
-ownable = "0x0"
+ownable = "0xE0"
