@@ -216,7 +216,7 @@ public fun is_two_step_transfer_policy<T>(owner_cap: &OwnerCap<T>): bool {
 // === Macros ===
 
 /// Creates a new owner capability with an immediate transfer policy for a package using a one-time witness.
-/// This macro should be used during package initialization to set up the initial owner.
+/// This function should be used during package initialization to set up the initial owner.
 ///
 /// #### Parameters
 /// - `otw`: One-time witness type that proves this is being called during package initialization.
@@ -227,7 +227,7 @@ public fun new_owner<T: drop>(otw: T, ctx: &mut TxContext) {
 }
 
 /// Creates a new owner capability with a two step transfer policy for a package using a one-time witness.
-/// This macro should be used during package initialization to set up the initial owner.
+/// This function should be used during package initialization to set up the initial owner.
 ///
 /// #### Parameters
 /// - `otw`: One-time witness type that proves this is being called during package initialization.
