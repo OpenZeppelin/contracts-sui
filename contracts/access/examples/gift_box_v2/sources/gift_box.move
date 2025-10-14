@@ -16,7 +16,7 @@
 //! IMPORTANT: While anyone can request ownership of the `OwnerCap`, only the current
 //! owner can complete the handoff by calling `ownable::transfer_requested_ownership`.
 //! The current owner can reject ownership requests by calling `ownable::reject_ownership_request`.
-module ownable_examples::gift_box_v2;
+module gift_box_v2_example::gift_box_v2;
 
 use openzeppelin_access::ownable::{Self, OwnerCap};
 use std::string::String;
