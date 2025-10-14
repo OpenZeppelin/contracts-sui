@@ -1,6 +1,6 @@
 ## Example overview:
 
-### **Gift Box V1**
+### **Gift Box V1** (Immediate Transfer)
 
 This package demonstrates a gift box module protected by `OwnerCap` from `openzeppelin_access::ownable` using the immediate-transfer policy. During deployment, `init` mints the capability and finalizes ownership so the publisher controls the module. Because the policy is immediate, the current owner can hand off control in a single transaction via `ownable::transfer_ownership`, without any acknowledgement from the recipient. Be sure the new owner address is correct and can store the capability—once the transfer succeeds, the previous owner permanently loses access to the restricted entry points.
 

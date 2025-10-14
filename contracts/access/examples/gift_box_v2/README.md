@@ -1,6 +1,6 @@
 ## Example overview
 
-### Gift Box V2
+### Gift Box V2 (Two-Step Ownership Transfer)
 
 This module demonstrates securing a gift box with `OwnerCap` under the two-step ownership transfer policy provided by `openzeppelin_access::ownable`. During initialization, `init` mints the capability, switches it to the two-step policy, and finalizes ownership so the publisher controls the module.
 
