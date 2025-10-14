@@ -108,6 +108,7 @@ export OWNER_ADDRESS=$(sui client active-address)  # deploying account
    run_ptb ptbs/03_transfer_requested_ownership.ptb
    ```
    OwnerCap now belongs to `$NEW_OWNER_ADDRESS`.
+3. Verify the transaction output shows `OwnershipTransferred` with `$NEW_OWNER_ADDRESS`.
 
 ### Step 6 – New owner sends a gift
 
