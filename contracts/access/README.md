@@ -8,7 +8,7 @@ Opinionated access control primitives for Sui smart contracts.
 
 | Module | Summary |
 |--------|---------|
-| `ownable` | Single-owner capability that guards per-module/per-package privileged entry points. |
+| `ownable` | Single-owner capability handler that guards per-module/per-package privileged entry points. |
 
 ---
 
@@ -33,7 +33,7 @@ Hands-on walkthroughs live in the [`examples/`](examples/) folder:
 
 | Example | Pattern | Highlights |
 |---------|---------|------------|
-| `gift_box_v1` | Immediate transfer | Owner capability moves in a single transaction. |
-| `gift_box_v2` | Two-step transfer | Request + approval flow using `OwnershipRequestCap`. |
+| [`gift_box_v1`](examples/gift_box_v1/) | Immediate transfer | Owner capability moves in a single transaction. |
+| [`gift_box_v2`](examples/gift_box_v2/) | Two-step transfer | Request + approval flow using `OwnershipRequestCap`. |
 
 Each example pairs a Move module with PTB scripts that you can run end-to-end; see the README inside each folder for a full quickstart.

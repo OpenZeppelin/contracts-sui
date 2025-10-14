@@ -1,54 +1,78 @@
-# Contracts Examples
+# Examples
 
-Each package directory includes Move modules and companion PTB scripts that demonstrate how to compose OpenZeppelin primitives into end-to-end flows. Use these walkthroughs to see the patterns in action before integrating them into your own projects.
+Every package ships with runnable demos—Move modules paired with PTB scripts—that show how to stitch OpenZeppelin primitives into full flows. This page helps you prep your environment and discover what’s available.
 
-## What’s Included
+---
 
-- `examples/*`: Move modules demonstrating OpenZeppelin primitives and patterns.
-- `examples/**/ptbs/`: Programmable transaction block (PTB) snippets that drive those modules from the CLI, showcasing common flows like package publish and functionality execution.
+## Layout Overview
 
-## Quickstart: Localnet Setup
+| Path pattern | What you’ll find |
+|--------------|------------------|
+| `examples/*` | Move modules showcasing the package feature. |
+| `examples/**/ptbs/` | Programmable transaction blocks that drive the example from the CLI. |
+| [`scripts/run_ptb.py`](../scripts/run_ptb.py) | Shared helper to run PTBs with env-var substitution. |
 
-Follow this checklist before running any PTB scripts. It prepares a local Sui network with a faucet so you can iterate safely.
+Each example README explains the scenario and walks through the PTBs step by step.
 
-1. **Install Sui (or verify it’s available)**
+---
+
+## Localnet Quickstart
+
+Run through this checklist once per session before executing any PTB scripts:
+
+1. **Install or verify Sui CLI**
    ```bash
    sui --version
    ```
-   If the command fails, install the binaries via the [official guide](https://docs.sui.io/guides/developer/getting-started/sui-install).
+   If the command fails, follow the [official installation guide](https://docs.sui.io/guides/developer/getting-started/sui-install).
 
-2. **Start the local network**
+2. **Start a local network with faucet**
    ```bash
-   RUST_LOG="off,sui_node=info" \
+   RUST_LOG='off,sui_node=info' \
    sui start --with-faucet --force-regenesis
    ```
-   Leave this terminal running; it hosts the validator, local RPC endpoint, and faucet.
+   Keep this terminal running; it hosts the validator, RPC endpoint, and faucet.
 
-3. **Configure sui client (first time only)**
+3. **Initial CLI setup (first run only)**
    ```bash
    sui client
    ```
-   The CLI will prompt you with questions - answer them as follows:
-   - Connect to Sui Full node server? Enter `y`
-   - Server URL: Enter `http://127.0.0.1:9000`
-   - Environment alias: Enter `localnet`
-   - Key scheme: Enter `0` for ed25519
+   Suggested answers:
+   - Connect to Sui Full node server? → `y`
+   - Server URL → `http://127.0.0.1:9000`
+   - Environment alias → `localnet`
+   - Key scheme → `0` (ed25519)
 
-4. **Switch the CLI to localnet**
+4. **Switch to the localnet environment**
    ```bash
    sui client switch --env localnet
    sui client active-address
    ```
-   The CLI will prompt you to create/import keypairs if needed.
+   Create or import a keypair if prompted.
 
-5. **Fund test accounts**
+5. **Fund every test account you plan to use**
    ```bash
    sui client faucet --address 0xYOUR_ADDRESS
    ```
-   Repeat for every signer that will send PTBs (owners, recipients, etc.).
+   Repeat for senders, recipients, and any other signer in your walkthrough.
 
-6. **Verify connectivity**
+6. **Sanity-check connectivity**
    ```bash
    sui client gas
+   sui client committee
    ```
-   Successful responses confirm the CLI can reach the local fullnode and that gas coins are available.
+   Successful responses confirm the CLI can reach the local fullnode and your accounts have gas coins.
+
+7. **Open the example workspace**
+   ```bash
+   cd contracts/access/examples
+   ```
+
+> **Tip:** Set an alias once per shell session to run PTBs easily:  
+> `alias run_ptb='python3 ../../../../scripts/run_ptb.py'`
+
+---
+
+## Ready to Explore?
+
+Navigate into an example folder (e.g., [`gift_box_v1/`](access/examples/gift_box_v1/)) and follow its README for a guided PTB session. When you add new examples, drop them under `examples/` and link their quickstart in the corresponding package README so the catalog stays up to date.
