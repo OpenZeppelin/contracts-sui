@@ -25,7 +25,7 @@ use std::string::String;
 public struct GIFT_BOX_V2 has drop {}
 
 fun init(otw: GIFT_BOX_V2, ctx: &mut TxContext) {
-    ownable::new_two_step_owner(otw, ctx);
+    ownable::new_two_step_owner(&otw, ctx);
 }
 
 public struct Gift has key, store {

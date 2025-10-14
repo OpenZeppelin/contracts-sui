@@ -83,8 +83,8 @@ public struct OwnershipTransferred has copy, drop {
 ///
 /// #### Aborts
 /// - If `otw` is not a valid one-time witness type
-public fun build_ownership<T: drop>(otw: T, ctx: &mut TxContext): OwnershipInitializer<T> {
-    assert!(sui::types::is_one_time_witness(&otw));
+public fun build_ownership<T: drop>(otw: &T, ctx: &mut TxContext): OwnershipInitializer<T> {
+    assert!(sui::types::is_one_time_witness(otw));
 
     let owner_cap = OwnerCap<T> {
         id: object::new(ctx),
@@ -102,6 +102,10 @@ public fun build_ownership<T: drop>(otw: T, ctx: &mut TxContext): OwnershipIniti
 /// #### Parameters
 /// - `cap`: The owner capability object
 /// - `new_owner`: Address that will receive ownership
+/// - `ctx`: Transaction context to access the caller
+///
+/// #### Aborts
+/// - If the transfer policy is not immediate
 public fun transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address, ctx: &mut TxContext) {
     assert!(is_immediate_transfer_policy(&cap), EInvalidTransferPolicy);
     internal_transfer_ownership(cap, new_owner, ctx);
@@ -113,6 +117,9 @@ public fun transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address, ctx: &mut
 /// - `cap`: The owner capability object
 /// - `request`: The ownership request given by the pending owner
 /// - `ctx`: Transaction context to access the caller
+///
+/// #### Aborts
+/// - If the transfer policy is not two step
 public fun transfer_requested_ownership<T>(
     cap: OwnerCap<T>,
     request: OwnershipRequestCap,
@@ -205,7 +212,7 @@ public fun finalize<T>(builder: OwnershipInitializer<T>, ctx: &mut TxContext) {
 /// #### Parameters
 /// - `otw`: One-time witness type that proves this is being called during package initialization.
 /// - `ctx`: Transaction context for creating the capability object.
-public fun new_owner<T: drop>(otw: T, ctx: &mut TxContext) {
+public fun new_owner<T: drop>(otw: &T, ctx: &mut TxContext) {
     let builder = build_ownership(otw, ctx);
     builder.finalize(ctx);
 }
@@ -216,7 +223,7 @@ public fun new_owner<T: drop>(otw: T, ctx: &mut TxContext) {
 /// #### Parameters
 /// - `otw`: One-time witness type that proves this is being called during package initialization.
 /// - `ctx`: Transaction context for creating the capability object.
-public fun new_two_step_owner<T: drop>(otw: T, ctx: &mut TxContext) {
+public fun new_two_step_owner<T: drop>(otw: &T, ctx: &mut TxContext) {
     let mut builder = build_ownership(otw, ctx);
     builder.set_two_step_transfer();
     builder.finalize(ctx);

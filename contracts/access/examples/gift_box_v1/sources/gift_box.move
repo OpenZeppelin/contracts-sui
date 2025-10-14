@@ -20,7 +20,7 @@ use std::string::String;
 public struct GIFT_BOX has drop {}
 
 fun init(otw: GIFT_BOX, ctx: &mut TxContext) {
-    ownable::new_owner(otw, ctx);
+    ownable::new_owner(&otw, ctx);
 }
 
 public struct Gift has key, store {
