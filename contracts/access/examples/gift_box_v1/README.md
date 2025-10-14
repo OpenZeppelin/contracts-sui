@@ -6,7 +6,7 @@ This package demonstrates a gift box module protected by `OwnerCap` from `openze
 
 ### PTB quickstart (Gift Box V1)
 
-If you still need a local environment and funded accounts, follow the [examples quickstart](../../EXAMPLES.md#quickstart-localnet-setup) first.
+If you still need a local environment and funded accounts, follow the [examples quickstart](../../../EXAMPLES.md#quickstart-localnet-setup) first.
 
 Use the two programmable transaction block helpers under `./ptbs/`—`01_transfer_ownership.ptb` and `02_send_gift.ptb`—to move the owner capability and send a gift via the immediate-transfer policy. Publishing should be done with the Sui CLI directly. The commands below assume your shell is in `contracts/access/examples/gift_box_v1`, that you invoke the shared helper `../../../../scripts/run_ptb.py` (optionally via an alias), and that you set the environment variables noted in each step before running the scripts (no edits to the PTB files are required).
 

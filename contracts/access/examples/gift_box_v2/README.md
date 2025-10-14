@@ -15,7 +15,7 @@ This handshake prevents the capability from moving to an unintended address with
 
 ### PTB quickstart (Gift Box V2)
 
-If you still need a local environment and funded accounts, follow the [examples quickstart](../../EXAMPLES.md#quickstart-localnet-setup) first.
+If you still need a local environment and funded accounts, follow the [examples quickstart](../../../EXAMPLES.md#quickstart-localnet-setup) first.
 
 Use the programmable transaction block helpers under `./ptbs/`—`01_request_ownership.ptb`, `02_reject_request.ptb`, `03_transfer_requested_ownership.ptb`, and `04_send_gift.ptb`—to exercise the full two-step flow. Publishing should be done with the Sui CLI directly. The commands below assume your shell is in `contracts/access/examples/gift_box_v2`, that you invoke the shared helper `../../../../scripts/run_ptb.py` (optionally via an alias), and that you set the environment variables noted in each step before running the scripts (no edits to the PTB files are required).
 
