@@ -2,8 +2,12 @@
 
 OpenZeppelin building blocks for Sui smart contracts development.
 
-See [EXAMPLES.md](EXAMPLES.md) for available smart contract examples, PTB helpers, and localnet setup tips.
+> **NOTE:** New to Sui or exploring this library? Start with **[EXAMPLES.md](EXAMPLES.md)** for step-by-step guides on setting up your local environment, running examples, and interacting with the different modules. The examples demonstrate common patterns and best practices for using OpenZeppelin primitives in your own projects.
+
+---
 
 ## Packages
 
-- `access/`: contains the `openzeppelin_access::ownable` primitives enabling immediate-transfer and two-step ownership flows.
+| Path | Highlights |
+|------|---------|
+| [`access/`](access/) | Single-owner access control via `openzeppelin_access::ownable` supporting immediate and two-step ownership transfers. Provides flexible capability-based ownership patterns for securing privileged module functionality. |
