@@ -1,12 +1,17 @@
 ## Access Examples
 
-This directory collects runnable snippets that demonstrate how to use OpenZeppelin access
-control primitives on Sui packages.
+Hands-on walkthroughs for the `openzeppelin_access` package live here. Each subdirectory contains a Move module plus PTB scripts that illustrate a specific ownership pattern.
 
-> **Note**: These examples are for demonstration purposes only and not intended for production use. They showcase basic patterns
-> but may lack important security considerations and optimizations needed in a production environment.
+> **Important:** These short tutorials focus on pedagogy. They are not meant for use in production.
 
-### Ownable
+### Getting Ready
 
-- [Gift Box V1](gift_box_v1/): immediate-transfer owner capability initialized by the package deployer.
-- [Gift Box V2](gift_box_v2/): two-step ownership handoff requiring a request before transfer.
+- Bring up a local network and fund test accounts using the [examples quickstart](../../EXAMPLES.md#quickstart-localnet-setup).
+- Reuse the shared PTB helper at `../../../../scripts/run_ptb.py` to avoid repeating boilerplate.
+
+### Example Catalog
+
+| Directory | Scenario | Highlights | Quickstart |
+|-----------|----------|------------|------------|
+| [`gift_box_v1/`](gift_box_v1/) | Immediate ownership transfer | `OwnerCap` moves in a single call via `transfer_ownership`. | See `gift_box_v1/README.md` |
+| [`gift_box_v2/`](gift_box_v2/) | Two-step ownership transfer | Request/approve flow using `OwnershipRequestCap`. | See `gift_box_v2/README.md` |
