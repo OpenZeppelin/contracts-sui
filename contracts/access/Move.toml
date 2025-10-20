@@ -5,3 +5,5 @@ edition = "2024"
 
 [addresses]
 openzeppelin_access = "0x0"
+gift_box_v1_example = "0x0"
+gift_box_v2_example = "0x0"

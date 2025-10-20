@@ -238,3 +238,20 @@ public fun is_immediate_transfer_policy<T>(owner_cap: &OwnerCap<T>): bool {
 public fun is_two_step_transfer_policy<T>(owner_cap: &OwnerCap<T>): bool {
     &owner_cap.transfer_policy == TransferPolicy::TwoStep
 }
+
+#[test_only]
+public fun create_immediate_owner_cap_for_testing<T>(ctx: &mut TxContext): OwnerCap<T> {
+    OwnerCap {
+        id: object::new(ctx),
+        transfer_policy: TransferPolicy::Immediate,
+    }
+}
+
+#[test_only]
+public fun last_transfer_event_fields_for_testing(): (ID, address, address) {
+    let events = event::events_by_type<OwnershipTransferred>();
+    let len = std::vector::length(&events);
+    assert!(len > 0);
+    let latest = *std::vector::borrow(&events, len - 1);
+    (latest.cap_id, latest.previous_owner, latest.new_owner)
+}
