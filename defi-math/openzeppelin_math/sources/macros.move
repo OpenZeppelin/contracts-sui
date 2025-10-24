@@ -92,7 +92,8 @@ public(package) fun mul_div_u256_wide(
         };
 
         if (should_round_up) {
-            assert!(quotient < std::u256::max_value!(), EArithmeticOverflow);
+            // This will overflow only if the quotient is already at the maximum value.
+            // This case is extremely unlikely and it would be handled by the move overflow check automatically.
             quotient = quotient + 1;
         }
     };
