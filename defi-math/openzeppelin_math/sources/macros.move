@@ -8,8 +8,23 @@ const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
 #[error(code = 1)]
 const EArithmeticOverflow: vector<u8> = b"Result does not fit in the u256 type";
 
-/// Fast-path for `mul_div` when both operands fit in `u128`, avoiding the wide 512-bit helpers.
-public(package) fun mul_div_u256_no_overflow(
+/// Multiply two `u256` values, divide by `denominator`, and round the result without widening.
+///
+/// This helper assumes both operands fit within `u128`, which allows us to perform the entire
+/// computation in native `u256` space. That keeps the code fast and avoids allocating the full
+/// 512-bit intermediate representation. Rounding is applied according to `rounding_mode`.
+///
+/// #### Parameters
+/// - `a`, `b`: Unsigned factors whose product stays below 2^256.
+/// - `denominator`: Unsigned divisor, must be non-zero.
+/// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The rounded quotient as a `u256`.
+///
+/// #### Aborts
+/// - `EDivideByZero` if `denominator` is zero.
+public(package) fun mul_div_u256_fast(
     a: u256,
     b: u256,
     denominator: u256,
@@ -38,9 +53,24 @@ public(package) fun mul_div_u256_no_overflow(
     quotient
 }
 
-/// Shared implementation for `mul_div_u256` that leverages the 512-bit helper utilities to perform
-/// the multiplication and division without losing precision.
-public(package) fun mul_div_u256_with_overflow(
+/// Multiply two `u256` values with full 512-bit precision before dividing and rounding.
+///
+/// This variant handles the general case where `a * b` may exceed 2^256. It widens the product to
+/// a 512-bit value, performs an exact division, and then applies rounding. If the true quotient does
+/// not fit back into 256 bits an overflow is reported via `EArithmeticOverflow`.
+///
+/// #### Parameters
+/// - `a`, `b`: Unsigned factors up to 2^256 - 1.
+/// - `denominator`: Unsigned divisor, must be non-zero.
+/// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The rounded quotient as a `u256`.
+///
+/// #### Aborts
+/// - `EDivideByZero` if `denominator` is zero.
+/// - `EArithmeticOverflow` if the quotient cannot be represented in 256 bits after rounding.
+public(package) fun mul_div_u256_wide(
     a: u256,
     b: u256,
     denominator: u256,
@@ -72,13 +102,24 @@ public(package) fun mul_div_u256_with_overflow(
 
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
 ///
-/// The macro evaluates everything in `u256`, returning the rounded result as a `u256`.  Narrower
-/// wrappers convert the value back to their respective integer widths after checking that the
-/// result fits. The operation aborts if the division is undefined.
+/// This macro provides a uniform API for `mul_div` across all unsigned integer widths. It normalises
+/// the inputs to `u256`, chooses the most efficient helper, and returns the rounded quotient as a
+/// `u256`. Narrower wrapper modules downcast the result after ensuring it fits. Undefined divisions
+/// (e.g. denominator = 0) abort with descriptive error codes.
 ///
-/// The macro accepts any unsigned integer type (`u8` through `u256`). Choose the input type with
-/// the macro's type argument, e.g. `mul_div!<u64>(x, y, denominator, rounding_down())`. For raw
-/// `u256` operands prefer the `mul_div_u256` helper, which applies additional safeguards.
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$a`, `$b`: Unsigned factors.
+/// - `$denominator`: Unsigned divisor.
+/// - `$rounding_mode`: Rounding strategy.
+///
+/// #### Returns
+/// Rounded quotient as a `u256`.
+///
+/// #### Aborts
+/// Propagates the same error codes as the underlying helpers (`EDivideByZero`, `EArithmeticOverflow`).
 public(package) macro fun mul_div<$Int>(
     $a: $Int,
     $b: $Int,
@@ -92,8 +133,8 @@ public(package) macro fun mul_div<$Int>(
 
     let max_small = std::u128::max_value!() as u256;
     if (a_u256 > max_small || b_u256 > max_small) {
-        mul_div_u256_with_overflow(a_u256, b_u256, denominator_u256, rounding_mode)
+        mul_div_u256_wide(a_u256, b_u256, denominator_u256, rounding_mode)
     } else {
-        mul_div_u256_no_overflow(a_u256, b_u256, denominator_u256, rounding_mode)
+        mul_div_u256_fast(a_u256, b_u256, denominator_u256, rounding_mode)
     }
 }
