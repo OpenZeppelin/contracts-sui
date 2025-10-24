@@ -9,6 +9,15 @@ public struct U512 has copy, drop, store {
 const HALF_BITS: u8 = 128;
 const HALF_MASK: u256 = (1u256 << HALF_BITS) - 1;
 
+#[error(code = 0)]
+const ECarryOverflow: vector<u8> = b"Cross-limb addition overflowed";
+#[error(code = 1)]
+const EUnderflow: vector<u8> = b"Borrow underflowed high limb";
+#[error(code = 2)]
+const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
+#[error(code = 3)]
+const EInvalidRemainder: vector<u8> = b"High remainder bits must be zero";
+
 /// Construct a `U512` from its high and low 256-bit components.
 public fun new(hi: u256, lo: u256): U512 {
     U512 { hi, lo }
@@ -88,7 +97,7 @@ public fun mul_u256(a: u256, b: u256): U512 {
     let (limb2, carry2b) = sum_three_u128(temp2, carry1, 0);
     let carry_total = carry2a + carry2b;
     let (limb3, carry3) = sum_three_u128(p3_hi, carry_total, 0);
-    assert!(carry3 == 0, 0);
+    assert!(carry3 == 0, ECarryOverflow);
 
     let hi = compose_u256(limb3, limb2);
     let lo = compose_u256(limb1, p0_lo);
@@ -122,7 +131,7 @@ fun sub_u256(value: U512, other: u256): U512 {
     let new_lo = value.lo - other;
     let borrow = if (value.lo < other) 1 else 0;
     if (borrow == 1) {
-        assert!(value.hi > 0, 0);
+        assert!(value.hi > 0, EUnderflow);
         U512 { hi: value.hi - 1, lo: new_lo }
     } else {
         U512 { hi: value.hi, lo: new_lo }
@@ -134,7 +143,7 @@ fun sub_u256(value: U512, other: u256): U512 {
 /// Returns `(overflow, quotient, remainder)` where `overflow` is `true` when the
 /// exact quotient does not fit in 256 bits.
 public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
-    assert!(divisor != 0, 0);
+    assert!(divisor != 0, EDivideByZero);
 
     let mut quotient = 0u256;
     let mut remainder = zero();
@@ -159,6 +168,6 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
         i = i + 1;
     };
 
-    assert!(remainder.hi == 0, 0);
+    assert!(remainder.hi == 0, EInvalidRemainder);
     (false, quotient, remainder.lo)
 }
