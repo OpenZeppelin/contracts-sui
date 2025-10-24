@@ -122,37 +122,6 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
 
 /// === Internal helpers ===
 
-#[test_only]
-public fun trigger_carry_overflow_for_testing() {
-    let (_limb, carry) = sum_three_u128(
-        std::u128::max_value!(),
-        std::u128::max_value!(),
-        std::u128::max_value!(),
-    );
-    let (_limb2, carry3) = sum_three_u128(
-        std::u128::max_value!(),
-        carry,
-        std::u128::max_value!(),
-    );
-    assert!(carry3 == 0, ECarryOverflow);
-}
-
-#[test_only]
-public fun trigger_underflow_for_testing() {
-    let value = new(0, 0);
-    let other = 1;
-    let borrow = if (value.lo < other) 1 else 0;
-    if (borrow == 1) {
-        assert!(value.hi > 0, EUnderflow);
-    }
-}
-
-#[test_only]
-public fun trigger_invalid_remainder_for_testing() {
-    let remainder = new(1, 0);
-    assert!(remainder.hi == 0, EInvalidRemainder);
-}
-
 /// Split a `u256` into two `u128` halves (hi, lo).
 fun split_u256(value: u256): (u128, u128) {
     let lo = (value & HALF_MASK) as u128;

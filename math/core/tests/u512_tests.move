@@ -124,24 +124,6 @@ fun div_rem_rejects_zero_divisor() {
     let (_overflow, _quotient, _remainder) = u512::div_rem_u256(u512::zero(), 0);
 }
 
-#[test, expected_failure(abort_code = u512::ECarryOverflow)]
-fun internal_mul_detects_carry_overflow() {
-    // Test-only hook intentionally recreates a scenario where the final carry would overflow.
-    u512::trigger_carry_overflow_for_testing();
-}
-
-#[test, expected_failure(abort_code = u512::EUnderflow)]
-fun internal_sub_detects_underflow() {
-    // Test-only hook subtracts with an empty high limb forcing the underflow branch.
-    u512::trigger_underflow_for_testing();
-}
-
-#[test, expected_failure(abort_code = u512::EInvalidRemainder)]
-fun internal_div_detects_invalid_remainder() {
-    // Test-only hook validates that leftover high bits in the remainder refuse to pass.
-    u512::trigger_invalid_remainder_for_testing();
-}
-
 /// === Helpers ===
 
 /// Simple helper to compare two `U512` values.
