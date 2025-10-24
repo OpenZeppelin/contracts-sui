@@ -8,6 +8,42 @@ const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
 #[error(code = 1)]
 const EArithmeticOverflow: vector<u8> = b"Result does not fit in the u256 type";
 
+/// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
+///
+/// This macro provides a uniform API for `mul_div` across all unsigned integer widths. It normalises
+/// the inputs to `u256`, chooses the most efficient helper, and returns the rounded quotient as a
+/// `u256`. Narrower wrapper modules downcast the result after ensuring it fits. Undefined divisions
+/// (e.g. denominator = 0) abort with descriptive error codes.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$a`, `$b`: Unsigned factors.
+/// - `$denominator`: Unsigned divisor.
+/// - `$rounding_mode`: Rounding strategy.
+///
+/// #### Returns
+/// Rounded quotient as a `u256`.
+///
+/// #### Aborts
+/// Propagates the same error codes as the underlying helpers (`EDivideByZero`, `EArithmeticOverflow`).
+public(package) macro fun mul_div<$Int>(
+    $a: $Int,
+    $b: $Int,
+    $denominator: $Int,
+    $rounding_mode: RoundingMode,
+): u256 {
+    let a_u256 = ($a as u256);
+    let b_u256 = ($b as u256);
+    let denominator_u256 = ($denominator as u256);
+    let rounding_mode = $rounding_mode;
+
+    mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
+}
+
+/// === Helper functions ===
+
 /// Multiply two `u256` values, divide by `denominator`, and round the result without widening.
 ///
 /// This helper assumes both operands fit within `u128`, which allows us to perform the entire
@@ -101,41 +137,12 @@ public(package) fun mul_div_u256_wide(
     quotient
 }
 
-/// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
-///
-/// This macro provides a uniform API for `mul_div` across all unsigned integer widths. It normalises
-/// the inputs to `u256`, chooses the most efficient helper, and returns the rounded quotient as a
-/// `u256`. Narrower wrapper modules downcast the result after ensuring it fits. Undefined divisions
-/// (e.g. denominator = 0) abort with descriptive error codes.
-///
-/// #### Generics
-/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
-///
-/// #### Parameters
-/// - `$a`, `$b`: Unsigned factors.
-/// - `$denominator`: Unsigned divisor.
-/// - `$rounding_mode`: Rounding strategy.
-///
-/// #### Returns
-/// Rounded quotient as a `u256`.
-///
-/// #### Aborts
-/// Propagates the same error codes as the underlying helpers (`EDivideByZero`, `EArithmeticOverflow`).
-public(package) macro fun mul_div<$Int>(
-    $a: $Int,
-    $b: $Int,
-    $denominator: $Int,
-    $rounding_mode: RoundingMode,
-): u256 {
-    let a_u256 = ($a as u256);
-    let b_u256 = ($b as u256);
-    let denominator_u256 = ($denominator as u256);
-    let rounding_mode = $rounding_mode;
-
+/// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
+public(package) fun mul_div_inner(a: u256, b: u256, denominator: u256, rounding_mode: RoundingMode): u256 {
     let max_small = std::u128::max_value!() as u256;
-    if (a_u256 > max_small || b_u256 > max_small) {
-        mul_div_u256_wide(a_u256, b_u256, denominator_u256, rounding_mode)
+    if (a > max_small || b > max_small) {
+        mul_div_u256_wide(a, b, denominator, rounding_mode)
     } else {
-        mul_div_u256_fast(a_u256, b_u256, denominator_u256, rounding_mode)
+        mul_div_u256_fast(a, b, denominator, rounding_mode)
     }
 }
