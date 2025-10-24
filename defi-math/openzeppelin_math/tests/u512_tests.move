@@ -1,31 +1,32 @@
 module openzeppelin_math::u512_tests;
 
 use openzeppelin_math::u512::{Self, U512};
+use std::unit_test::assert_eq;
 
 #[test]
 fun constructors_and_accessors() {
     // `new` should store exactly the values we pass in.
     let value = u512::new(5, 7);
-    assert!(u512::hi(&value) == 5);
-    assert!(u512::lo(&value) == 7);
+    assert_eq!(u512::hi(&value), 5);
+    assert_eq!(u512::lo(&value), 7);
 
     // `zero` returns the additive identity.
     let zero = u512::zero();
-    assert!(u512::hi(&zero) == 0);
-    assert!(u512::lo(&zero) == 0);
+    assert_eq!(u512::hi(&zero), 0);
+    assert_eq!(u512::lo(&zero), 0);
 
     // `from_u256` lifts into the low limb and clears the high one.
     let lifted = u512::from_u256(42);
-    assert!(u512::hi(&lifted) == 0);
-    assert!(u512::lo(&lifted) == 42);
+    assert_eq!(u512::hi(&lifted), 0);
+    assert_eq!(u512::lo(&lifted), 42);
 }
 
 #[test]
 fun mul_u256_handles_small_operands() {
     // Simple multiplication stays entirely in the low limb.
     let result = u512::mul_u256(2, 3);
-    assert!(u512::hi(&result) == 0);
-    assert!(u512::lo(&result) == 6);
+    assert_eq!(u512::hi(&result), 0);
+    assert_eq!(u512::lo(&result), 6);
 }
 
 #[test]
@@ -33,8 +34,8 @@ fun mul_u256_handles_max_operands() {
     // Multiplying the largest possible operands should produce hi = (2^256 - 2) and lo = 1.
     let max = std::u256::max_value!();
     let result = u512::mul_u256(max, max);
-    assert!(u512::hi(&result) == max - 1);
-    assert!(u512::lo(&result) == 1);
+    assert_eq!(u512::hi(&result), max - 1);
+    assert_eq!(u512::lo(&result), 1);
 }
 
 #[test]
@@ -42,8 +43,8 @@ fun mul_u256_combines_high_bits_correctly() {
     // Squaring a value made only of high bits should land entirely in the high limb afterwards.
     let operand = 1u256 << 200;
     let result = u512::mul_u256(operand, operand);
-    assert!(u512::hi(&result) == (1u256 << 144));
-    assert!(u512::lo(&result) == 0);
+    assert_eq!(u512::hi(&result), (1u256 << 144));
+    assert_eq!(u512::lo(&result), 0);
 }
 
 #[test]
@@ -52,8 +53,8 @@ fun mul_u256_carries_across_diagonals() {
     let high_bit = 1u256 << 255;
     let operand = high_bit + 1;
     let result = u512::mul_u256(operand, operand);
-    assert!(u512::hi(&result) == ((1u256 << 254) + 1));
-    assert!(u512::lo(&result) == 1);
+    assert_eq!(u512::hi(&result), ((1u256 << 254) + 1));
+    assert_eq!(u512::lo(&result), 1);
 }
 
 #[test]
@@ -62,8 +63,8 @@ fun div_rem_exact_no_overflow() {
     let numerator = u512::new(0, 84);
     let divisor = 7;
     let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, divisor);
-    assert!(!overflow);
-    assert!(remainder == 0);
+    assert_eq!(overflow, false);
+    assert_eq!(remainder, 0);
     // Verify quotient * divisor + remainder reconstructs the starting numerator.
     let rebuild = add_u512(u512::mul_u256(quotient, divisor), u512::from_u256(remainder));
     assert_u512_eq(rebuild, numerator);
@@ -75,8 +76,8 @@ fun div_rem_with_remainder() {
     let numerator = u512::new(0, 100);
     let divisor = 7;
     let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, divisor);
-    assert!(!overflow);
-    assert!(remainder == 2);
+    assert_eq!(overflow, false);
+    assert_eq!(remainder, 2);
     let rebuild = add_u512(u512::mul_u256(quotient, divisor), u512::from_u256(remainder));
     assert_u512_eq(rebuild, numerator);
 }
@@ -85,9 +86,9 @@ fun div_rem_with_remainder() {
 fun div_rem_handles_high_limb_without_overflow() {
     // Dividing a value with both limbs populated exercises the borrow path inside subtraction.
     let numerator = u512::new(2, 123);
-    let divisor = 3;
+   let divisor = 3;
     let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, divisor);
-    assert!(!overflow);
+    assert_eq!(overflow, false);
     assert!(remainder < divisor);
 
     // As before, rebuild the numerator to ensure no precision loss.
@@ -101,9 +102,9 @@ fun div_rem_flags_overflow_when_quotient_exceeds_u256() {
     // Any quotient that would spill beyond 256 bits must flip the overflow flag.
     let numerator = u512::new(1, 0);
     let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, 1);
-    assert!(overflow);
-    assert!(quotient == 0);
-    assert!(remainder == 0);
+    assert_eq!(overflow, true);
+    assert_eq!(quotient, 0);
+    assert_eq!(remainder, 0);
 }
 
 #[test]
@@ -112,9 +113,9 @@ fun div_rem_large_operands_trigger_overflow_flag() {
     let max = std::u256::max_value!();
     let numerator = u512::new(max, max);
     let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, max);
-    assert!(overflow);
-    assert!(quotient == 0);
-    assert!(remainder == 0);
+    assert_eq!(overflow, true);
+    assert_eq!(quotient, 0);
+    assert_eq!(remainder, 0);
 }
 
 #[test, expected_failure(abort_code = u512::EDivideByZero)]
@@ -145,8 +146,8 @@ fun internal_div_detects_invalid_remainder() {
 
 /// Simple helper to compare two `U512` values.
 fun assert_u512_eq(left: U512, right: U512) {
-    assert!(u512::hi(&left) == u512::hi(&right));
-    assert!(u512::lo(&left) == u512::lo(&right));
+    assert_eq!(u512::hi(&left), u512::hi(&right));
+    assert_eq!(u512::lo(&left), u512::lo(&right));
 }
 
 /// Adds two `U512` values (small helper for test expectations).
