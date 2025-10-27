@@ -5,15 +5,13 @@ use openzeppelin_math::u512;
 
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
-#[error(code = 1)]
-const EArithmeticOverflow: vector<u8> = b"Result does not fit in the u256 type";
 
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
 ///
 /// This macro provides a uniform API for `mul_div` across all unsigned integer widths. It normalises
-/// the inputs to `u256`, chooses the most efficient helper, and returns the rounded quotient as a
-/// `u256`. Narrower wrapper modules downcast the result after ensuring it fits. Undefined divisions
-/// (e.g. denominator = 0) abort with descriptive error codes.
+/// the inputs to `u256`, chooses the most efficient helper, and returns the rounded quotient alongside
+/// an overflow flag. Narrower wrapper modules downcast the result after ensuring it fits. Undefined
+/// divisions (e.g. denominator = 0) abort with descriptive error codes.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -24,16 +22,17 @@ const EArithmeticOverflow: vector<u8> = b"Result does not fit in the u256 type";
 /// - `$rounding_mode`: Rounding strategy.
 ///
 /// #### Returns
-/// Rounded quotient as a `u256`.
+/// `(overflow, result)` where `overflow` is `true` when the rounded quotient exceeds `u256::MAX` and
+/// `result` carries the rounded value when no overflow occurred.
 ///
 /// #### Aborts
-/// Propagates the same error codes as the underlying helpers (`EDivideByZero`, `EArithmeticOverflow`).
+/// Propagates the same error codes as the underlying helpers (`EDivideByZero`).
 public(package) macro fun mul_div<$Int>(
     $a: $Int,
     $b: $Int,
     $denominator: $Int,
     $rounding_mode: RoundingMode,
-): u256 {
+): (bool, u256) {
     let a_u256 = ($a as u256);
     let b_u256 = ($b as u256);
     let denominator_u256 = ($denominator as u256);
@@ -93,7 +92,8 @@ public(package) fun mul_div_u256_fast(
 ///
 /// This variant handles the general case where `a * b` may exceed 2^256. It widens the product to
 /// a 512-bit value, performs an exact division, and then applies rounding. If the true quotient does
-/// not fit back into 256 bits an overflow is reported via `EArithmeticOverflow`.
+/// not fit back into 256 bits or rounding would push it past the maximum value, the helper returns
+/// `(true, _)` to signal overflow.
 ///
 /// #### Parameters
 /// - `a`, `b`: Unsigned factors up to 2^256 - 1.
@@ -101,22 +101,24 @@ public(package) fun mul_div_u256_fast(
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
 /// #### Returns
-/// The rounded quotient as a `u256`.
+/// `(overflow, result)` where `overflow` indicates whether the exact (or rounded) quotient exceeds
+/// the `u256` range. `result` is only meaningful when `overflow` is `false`.
 ///
 /// #### Aborts
 /// - `EDivideByZero` if `denominator` is zero.
-/// - `EArithmeticOverflow` if the quotient cannot be represented in 256 bits after rounding.
 public(package) fun mul_div_u256_wide(
     a: u256,
     b: u256,
     denominator: u256,
     rounding_mode: RoundingMode,
-): u256 {
+): (bool, u256) {
     assert!(denominator != 0, EDivideByZero);
 
     let numerator = u512::mul_u256(a, b);
     let (overflow, mut quotient, remainder) = u512::div_rem_u256(numerator, denominator);
-    assert!(!overflow, EArithmeticOverflow);
+    if (overflow) {
+        return (true, 0)
+    };
 
     if (remainder != 0) {
         let should_round_up = if (rounding_mode == rounding::up()) {
@@ -128,21 +130,29 @@ public(package) fun mul_div_u256_wide(
         };
 
         if (should_round_up) {
-            // This will overflow only if the quotient is already at the maximum value.
-            // This case is extremely unlikely and it would be handled by the move overflow check automatically.
+            if (quotient == std::u256::max_value!()) {
+                return (true, 0)
+            };
             quotient = quotient + 1;
         }
     };
 
-    quotient
+    (false, quotient)
 }
 
 /// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
-public(package) fun mul_div_inner(a: u256, b: u256, denominator: u256, rounding_mode: RoundingMode): u256 {
+/// Returns `(overflow, quotient)` mirroring the macro implementation.
+public(package) fun mul_div_inner(
+    a: u256,
+    b: u256,
+    denominator: u256,
+    rounding_mode: RoundingMode,
+): (bool, u256) {
     let max_small = std::u128::max_value!() as u256;
     if (a > max_small || b > max_small) {
         mul_div_u256_wide(a, b, denominator, rounding_mode)
     } else {
-        mul_div_u256_fast(a, b, denominator, rounding_mode)
+        let quotient = mul_div_u256_fast(a, b, denominator, rounding_mode);
+        (false, quotient)
     }
 }

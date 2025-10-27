@@ -3,12 +3,16 @@ module openzeppelin_math::u16;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
-#[error(code = 0)]
-const EArithmeticOverflow: vector<u8> = b"Result does not fit in the u16 type";
-
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
-public fun mul_div(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode): u16 {
-    let result = macros::mul_div!(a, b, denominator, rounding_mode);
-    assert!(result <= std::u16::max_value!() as u256, EArithmeticOverflow);
-    result as u16
+/// Returns `(overflow, result)` where `overflow` signals that the rounded quotient cannot be
+/// represented as `u16`.
+public fun mul_div(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode): (bool, u16) {
+    let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
+
+    // Check if the result fits in u16
+    if (result > (std::u16::max_value!() as u256)) {
+        (true, 0)
+    } else {
+        (false, result as u16)
+    }
 }

@@ -8,20 +8,24 @@ use std::unit_test::assert_eq;
 // Larger inputs continue to follow the same rounding contract.
 #[test]
 fun rounding_modes() {
-    let down = u64::mul_div(70, 10, 4, rounding::down());
+    let (down_overflow, down) = u64::mul_div(70, 10, 4, rounding::down());
+    assert_eq!(down_overflow, false);
     assert_eq!(down, 175);
 
-    let up = u64::mul_div(5, 3, 4, rounding::up());
+    let (up_overflow, up) = u64::mul_div(5, 3, 4, rounding::up());
+    assert_eq!(up_overflow, false);
     assert_eq!(up, 4);
 
-    let nearest = u64::mul_div(7, 10, 4, rounding::nearest());
+    let (nearest_overflow, nearest) = u64::mul_div(7, 10, 4, rounding::nearest());
+    assert_eq!(nearest_overflow, false);
     assert_eq!(nearest, 18);
 }
 
 // Perfect division should remain unaffected by rounding mode choice.
 #[test]
 fun exact_division() {
-    let exact = u64::mul_div(8_000, 2, 4, rounding::up());
+    let (overflow, exact) = u64::mul_div(8_000, 2, 4, rounding::up());
+    assert_eq!(overflow, false);
     assert_eq!(exact, 4_000);
 }
 
@@ -31,8 +35,10 @@ fun rejects_zero_denominator() {
     u64::mul_div(1, 1, 0, rounding::down());
 }
 
-// Downstream overflow is still surfaced with the wrapper’s specific code.
-#[test, expected_failure(abort_code = u64::EArithmeticOverflow)]
+// Downstream overflow is still surfaced via the overflow flag.
+#[test]
 fun detects_overflow() {
-    u64::mul_div(std::u64::max_value!(), 2, 1, rounding::down());
+    let (overflow, result) = u64::mul_div(std::u64::max_value!(), 2, 1, rounding::down());
+    assert_eq!(overflow, true);
+    assert_eq!(result, 0);
 }
