@@ -16,3 +16,12 @@ public fun mul_div(a: u128, b: u128, denominator: u128, rounding_mode: RoundingM
         (false, result as u128)
     }
 }
+
+/// Shift the value right by the given number of bits.
+/// Returns `None` if the shift consumes a non-zero bit.
+public fun checked_shr(value: u128, shift: u8): Option<u128> {
+    if (shift >= 128) {
+        return option::none()
+    };
+    macros::checked_shr!(value, shift)
+}

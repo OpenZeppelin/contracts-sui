@@ -5,6 +5,8 @@ use openzeppelin_math::rounding;
 use openzeppelin_math::u512;
 use std::unit_test::assert_eq;
 
+// === mul_div ===
+
 #[test]
 fun fast_rounding_modes() {
     // Downward rounding leaves the truncated quotient untouched.
@@ -120,4 +122,20 @@ fun macro_uses_wide_path_for_large_inputs() {
 #[test, expected_failure(abort_code = macros::EDivideByZero)]
 fun macro_rejects_zero_denominator() {
     macros::mul_div!(1u64, 1u64, 0u64, rounding::down());
+}
+
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // 0b1_0000_0000 >> 8 lands on 0b1 without precision loss.
+    let result = macros::checked_shr!(256u16, 8);
+    assert_eq!(result, option::some(1u16));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // Detect that the low bit would be truncated.
+    let result = macros::checked_shr!(5u32, 1);
+    assert_eq!(result, option::none());
 }
