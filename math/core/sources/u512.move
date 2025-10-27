@@ -1,3 +1,8 @@
+//! This module provides a 512-bit unsigned integer type that is intended to be used as an
+//! intermediary step for u256 operations that may overflow, rather than being used directly
+//! like other integer types. It enables safe handling of intermediate calculations that exceed
+//! u256 bounds before being reduced back to u256.
+
 module openzeppelin_math::u512;
 
 /// Represents a 512-bit unsigned integer as two 256-bit words.

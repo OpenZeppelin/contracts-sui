@@ -41,6 +41,31 @@ public(package) macro fun mul_div<$Int>(
     mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
 }
 
+/// Compute the arithmetic mean of two unsigned integers with configurable rounding.
+///
+/// The helper works across all unsigned widths by normalising the operands to `u256`. It avoids
+/// overflow by anchoring on the smaller input, halving the difference with `mul_div_inner`, and
+/// then shifting back into the caller's width.
+public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: RoundingMode): $Int {
+    let a_u256 = ($a as u256);
+    let b_u256 = ($b as u256);
+    let rounding_mode = $rounding_mode;
+
+    let mut lower = a_u256;
+    let mut upper = b_u256;
+    if (lower > upper) {
+        lower = b_u256;
+        upper = a_u256;
+    };
+
+    let delta = upper - lower;
+    // Use the fast path as delta * 1 is guaranteed to fit in u256
+    let half = mul_div_u256_fast(delta, 1, 2, rounding_mode);
+    let average = lower + half;
+
+    average as $Int
+}
+
 /// === Helper functions ===
 
 /// Multiply two `u256` values, divide by `denominator`, and round the result without widening.
