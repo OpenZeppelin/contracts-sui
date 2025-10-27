@@ -63,8 +63,12 @@ fun wide_respects_rounding_modes() {
     let denom_down = 13;
     let (_, baseline_down, remainder_down) = u512::div_rem_u256(numerator, denom_down);
     assert!(remainder_down < denom_down - remainder_down);
-    let (overflow_nearest_down, nearest_down) =
-        macros::mul_div_u256_wide(large, large, denom_down, rounding::nearest());
+    let (overflow_nearest_down, nearest_down) = macros::mul_div_u256_wide(
+        large,
+        large,
+        denom_down,
+        rounding::nearest(),
+    );
     assert_eq!(overflow_nearest_down, false);
     assert_eq!(nearest_down, baseline_down);
 
@@ -72,8 +76,12 @@ fun wide_respects_rounding_modes() {
     let denom_up = 11;
     let (_, baseline_up, remainder_up) = u512::div_rem_u256(numerator, denom_up);
     assert!(remainder_up >= denom_up - remainder_up);
-    let (overflow_nearest_up, nearest_up) =
-        macros::mul_div_u256_wide(large, large, denom_up, rounding::nearest());
+    let (overflow_nearest_up, nearest_up) = macros::mul_div_u256_wide(
+        large,
+        large,
+        denom_up,
+        rounding::nearest(),
+    );
     assert_eq!(overflow_nearest_up, false);
     assert_eq!(nearest_up, baseline_up + 1);
 }

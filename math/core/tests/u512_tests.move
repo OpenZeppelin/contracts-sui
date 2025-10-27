@@ -86,7 +86,7 @@ fun div_rem_with_remainder() {
 fun div_rem_handles_high_limb_without_overflow() {
     // Dividing a value with both limbs populated exercises the borrow path inside subtraction.
     let numerator = u512::new(2, 123);
-   let divisor = 3;
+    let divisor = 3;
     let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, divisor);
     assert_eq!(overflow, false);
     assert!(remainder < divisor);
