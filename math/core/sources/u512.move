@@ -169,12 +169,19 @@ fun ge_u256(value: &U512, other: u256): bool {
 
 /// Subtract a `u256` scalar from a `U512`, handling a potential borrow from the high limb.
 fun sub_u256(value: U512, other: u256): U512 {
-    let new_lo = value.lo - other;
-    let borrow = if (value.lo < other) 1 else 0;
-    if (borrow == 1) {
-        assert!(value.hi > 0, EUnderflow);
-        U512 { hi: value.hi - 1, lo: new_lo }
-    } else {
+    if (value.lo >= other) {
+        let new_lo = value.lo - other;
         U512 { hi: value.hi, lo: new_lo }
+    } else {
+        assert!(value.hi > 0, EUnderflow);
+        let hi = value.hi - 1;
+        let complement = (std::u256::max_value!() - other) + 1;
+        let new_lo = value.lo + complement;
+        U512 { hi, lo: new_lo }
     }
+}
+
+#[test_only]
+public fun sub_u256_for_testing(value: U512, other: u256): U512 {
+    sub_u256(value, other)
 }
