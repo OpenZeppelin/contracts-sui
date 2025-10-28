@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         package: ${{ fromJson(needs.setup.outputs.packages) }}
     steps:
@@ -105,7 +105,7 @@ jobs:
       contents: read
       pull-requests: write
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         package: ${{ fromJson(needs.setup.outputs.packages) }}
     steps:
