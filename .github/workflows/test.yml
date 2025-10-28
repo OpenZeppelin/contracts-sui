@@ -71,27 +71,27 @@ jobs:
       - name: Lint tests
         run: sui move build --test --lint --warnings-are-errors
         working-directory: ./${{ matrix.package }}
-#   build:
-#     name: Build ${{ matrix.package }}
-#     needs: [setup, lint]
-#     runs-on: ubuntu-latest
-#     strategy:
-#       fail-fast: false
-#       matrix:
-#         package: ${{ fromJson(needs.setup.outputs.packages) }}
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
 
-#       - name: Restore Sui CLI
-#         uses: ./.github/actions/restore-sui
-#         with:
-#           version: ${{ env.SUI_VERSION }}
+  build:
+    name: Build ${{ matrix.package }}
+    needs: [setup, lint]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.setup.outputs.packages) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-#       - name: Build
-#         run: sui move build --skip-fetch-latest-git-deps
-#         working-directory: ./${{ matrix.package }}
+      - name: Restore Sui CLI
+        uses: ./.github/actions/restore-sui
+        with:
+          version: ${{ env.SUI_VERSION }}
 
+      - name: Build
+        run: sui move build --skip-fetch-latest-git-deps
+        working-directory: ./${{ matrix.package }}
 #   test:
 #     name: Test ${{ matrix.package }}
 #     needs: [setup, build]
