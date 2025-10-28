@@ -54,6 +54,22 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           sui --version
 
+  check-move-formatting:
+    name: Move Formatter Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Move formatting
+        uses: MystenLabs/move-formatter-action@v1
+        with:
+          prettier-plugin-move-version: "latest"
+          working-directory: "."
+          pattern: "**/*.move"
+          write-changes: false
+
   lint:
     name: Lint ${{ matrix.package }}
     needs: setup
