@@ -1,3 +1,8 @@
+//! This module provides a 512-bit unsigned integer type that is intended to be used as an
+//! intermediary step for u256 operations that may overflow, rather than being used directly
+//! like other integer types. It enables safe handling of intermediate calculations that exceed
+//! u256 bounds before being reduced back to u256.
+
 module openzeppelin_math::u512;
 
 /// Represents a 512-bit unsigned integer as two 256-bit words.
@@ -8,6 +13,15 @@ public struct U512 has copy, drop, store {
 
 const HALF_BITS: u8 = 128;
 const HALF_MASK: u256 = (1u256 << HALF_BITS) - 1;
+
+#[error(code = 0)]
+const ECarryOverflow: vector<u8> = b"Cross-limb addition overflowed";
+#[error(code = 1)]
+const EUnderflow: vector<u8> = b"Borrow underflowed high limb";
+#[error(code = 2)]
+const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
+#[error(code = 3)]
+const EInvalidRemainder: vector<u8> = b"High remainder bits must be zero";
 
 /// Construct a `U512` from its high and low 256-bit components.
 public fun new(hi: u256, lo: u256): U512 {
@@ -32,24 +46,6 @@ public fun hi(value: &U512): u256 {
 /// Accessor for the low 256 bits.
 public fun lo(value: &U512): u256 {
     value.lo
-}
-
-/// Split a `u256` into two `u128` halves (hi, lo).
-fun split_u256(value: u256): (u128, u128) {
-    let lo = (value & HALF_MASK) as u128;
-    let hi = (value >> HALF_BITS) as u128;
-    (hi, lo)
-}
-
-/// Reassemble two `u128` halves (hi, lo) into a single `u256`.
-fun compose_u256(hi: u128, lo: u128): u256 {
-    ((hi as u256) << HALF_BITS) | (lo as u256)
-}
-
-/// Add three `u128` values and return the lower limb plus carry-out.
-fun sum_three_u128(a: u128, b: u128, c: u128): (u128, u128) {
-    let total = (a as u256) + (b as u256) + (c as u256);
-    (((total & HALF_MASK) as u128), ((total >> HALF_BITS) as u128))
 }
 
 /// Multiply two `u256` integers and return the full 512-bit product using cross-limb accumulation.
@@ -88,11 +84,65 @@ public fun mul_u256(a: u256, b: u256): U512 {
     let (limb2, carry2b) = sum_three_u128(temp2, carry1, 0);
     let carry_total = carry2a + carry2b;
     let (limb3, carry3) = sum_three_u128(p3_hi, carry_total, 0);
-    assert!(carry3 == 0, 0);
+    assert!(carry3 == 0, ECarryOverflow);
 
     let hi = compose_u256(limb3, limb2);
     let lo = compose_u256(limb1, p0_lo);
     U512 { hi, lo }
+}
+
+/// Divide a 512-bit numerator by a 256-bit divisor.
+///
+/// Returns `(overflow, quotient, remainder)` where `overflow` is `true` when the
+/// exact quotient does not fit in 256 bits.
+public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
+    assert!(divisor != 0, EDivideByZero);
+
+    let mut quotient = 0u256;
+    let mut remainder = zero();
+
+    let mut i: u16 = 0;
+    while (i < 512) {
+        let idx = 511 - i;
+        remainder = shift_left1(&remainder);
+        let bit = get_bit(&numerator, idx);
+        if (bit == 1) {
+            remainder.lo = remainder.lo | 1;
+        };
+
+        if (ge_u256(&remainder, divisor)) {
+            if (idx >= 256) {
+                return (true, 0, 0)
+            };
+            remainder = sub_u256(remainder, divisor);
+            quotient = quotient | (1u256 << (idx as u8));
+        };
+
+        i = i + 1;
+    };
+
+    assert!(remainder.hi == 0, EInvalidRemainder);
+    (false, quotient, remainder.lo)
+}
+
+/// === Internal helpers ===
+
+/// Split a `u256` into two `u128` halves (hi, lo).
+fun split_u256(value: u256): (u128, u128) {
+    let lo = (value & HALF_MASK) as u128;
+    let hi = (value >> HALF_BITS) as u128;
+    (hi, lo)
+}
+
+/// Reassemble two `u128` halves (hi, lo) into a single `u256`.
+fun compose_u256(hi: u128, lo: u128): u256 {
+    ((hi as u256) << HALF_BITS) | (lo as u256)
+}
+
+/// Add three `u128` values and return the lower limb plus carry-out.
+fun sum_three_u128(a: u128, b: u128, c: u128): (u128, u128) {
+    let total = (a as u256) + (b as u256) + (c as u256);
+    (((total & HALF_MASK) as u128), ((total >> HALF_BITS) as u128))
 }
 
 /// Shift a 512-bit value left by one bit, preserving the carry between limbs.
@@ -119,46 +169,19 @@ fun ge_u256(value: &U512, other: u256): bool {
 
 /// Subtract a `u256` scalar from a `U512`, handling a potential borrow from the high limb.
 fun sub_u256(value: U512, other: u256): U512 {
-    let new_lo = value.lo - other;
-    let borrow = if (value.lo < other) 1 else 0;
-    if (borrow == 1) {
-        assert!(value.hi > 0, 0);
-        U512 { hi: value.hi - 1, lo: new_lo }
-    } else {
+    if (value.lo >= other) {
+        let new_lo = value.lo - other;
         U512 { hi: value.hi, lo: new_lo }
+    } else {
+        assert!(value.hi > 0, EUnderflow);
+        let hi = value.hi - 1;
+        let complement = (std::u256::max_value!() - other) + 1;
+        let new_lo = value.lo + complement;
+        U512 { hi, lo: new_lo }
     }
 }
 
-/// Divide a 512-bit numerator by a 256-bit divisor.
-///
-/// Returns `(overflow, quotient, remainder)` where `overflow` is `true` when the
-/// exact quotient does not fit in 256 bits.
-public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
-    assert!(divisor != 0, 0);
-
-    let mut quotient = 0u256;
-    let mut remainder = zero();
-
-    let mut i: u16 = 0;
-    while (i < 512) {
-        let idx = 511 - i;
-        remainder = shift_left1(&remainder);
-        let bit = get_bit(&numerator, idx);
-        if (bit == 1) {
-            remainder.lo = remainder.lo | 1;
-        };
-
-        if (ge_u256(&remainder, divisor)) {
-            if (idx >= 256) {
-                return (true, 0, 0)
-            };
-            remainder = sub_u256(remainder, divisor);
-            quotient = quotient | (1u256 << (idx as u8));
-        };
-
-        i = i + 1;
-    };
-
-    assert!(remainder.hi == 0, 0);
-    (false, quotient, remainder.lo)
+#[test_only]
+public fun sub_u256_for_testing(value: U512, other: u256): U512 {
+    sub_u256(value, other)
 }
