@@ -47,27 +47,30 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           sui --version
 
-#   lint:
-#     name: Lint ${{ matrix.package }}
-#     needs: setup
-#     runs-on: ubuntu-latest
-#     strategy:
-#       fail-fast: false
-#       matrix:
-#         package: ${{ fromJson(needs.setup.outputs.packages) }}
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
+  lint:
+    name: Lint ${{ matrix.package }}
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.setup.outputs.packages) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-#       - name: Restore Sui CLI
-#         uses: ./.github/actions/restore-sui
-#         with:
-#           version: ${{ env.SUI_VERSION }}
+      - name: Restore Sui CLI
+        uses: ./.github/actions/restore-sui
+        with:
+          version: ${{ env.SUI_VERSION }}
 
-#       - name: Lint
-#         run: sui move build --lint --warnings-are-errors
-#         working-directory: ./${{ matrix.package }}
+      - name: Lint
+        run: sui move build --lint --warnings-are-errors
+        working-directory: ./${{ matrix.package }}
 
+      - name: Lint tests
+        run: sui move build --test --lint --warnings-are-errors
+        working-directory: ./${{ matrix.package }}
 #   build:
 #     name: Build ${{ matrix.package }}
 #     needs: [setup, lint]
