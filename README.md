@@ -11,13 +11,6 @@ standards under the OpenZeppelin quality by providing a set of high-quality,
 battle-tested contracts that can be used to build decentralized applications
 on the Sui network.
 
-## Project Structure
-
-- `contracts/`: Core contract modules
-  - [`access/`](./contracts/access/): Access Management (`Ownable` and Role-based access controls coming soon).
-- `math/`: DeFi Math utilities
-  - [`core/`](./math/core/): Safe math operations with overflow protection for various integer types (u8-u512)
-
 ## Setup
 
 Sui smart contracts are written in Move leveraging the Sui Move framework.
@@ -87,20 +80,6 @@ risk and uncertainty. Although OpenZeppelin is well known for its security
 audits, using OpenZeppelin Contracts for Sui is not a substitute for a security
 audit.
 
-## License
-
-OpenZeppelin Contracts for Sui is released under the [MIT License](./LICENSE).
-
-## Coding Standards
-
-This project maintains high code quality standards:
-
-- 90%+ test coverage requirement
-- Strict linting with warnings as errors
-- [Move Conventions](https://docs.sui.io/concepts/sui-move-concepts/conventions)
-- Comprehensive CI/CD pipeline with automated checks
-- Typo detection
-
 ## Contributing
 
 We welcome contributions from the community!
@@ -110,3 +89,7 @@ If you are looking for a good place to start, find a good first issue [here](htt
 You can open an issue for a [bug report](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=bug_report.yml), [core implementation](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=core_implementation.yml), or [feature request](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=feature_request.yml).
 
 You can find more details in our [Contributing](./CONTRIBUTING.md) guide, and please read our [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+## License
+
+OpenZeppelin Contracts for Sui is released under the [MIT License](./LICENSE).

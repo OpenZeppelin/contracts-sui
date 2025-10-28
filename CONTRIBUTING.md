@@ -57,17 +57,23 @@ Your contribution must meet these requirements:
 4. Run tests and linter. This can be done by running local continuous integration and make sure it passes (the tests on GitHub will be run once they are approved by us for the external PRs).
 
    ```bash
-   # build
+   # Build a specific package
    sui move build --path <package>
 
-   # run tests
+   # Run tests
    sui move test --path <package>
 
-   # run linter
+   # Run tests with coverage
+   sui move test --coverage --path <package>
+
+   # View coverage summary
+   sui move coverage summary --path <package>
+
+   # Run linter with strict checks
    sui move build --lint --warnings-are-errors --path <package>
 
-   # run documentation checks
-   sui move build --doc --path <module>
+   # Run documentation checks
+   sui move build --doc --path <package>
    ```
 
 5. Go to [OpenZeppelin/contracts-sui](https://github.com/OpenZeppelin/contracts-sui) in your web browser and issue a new pull request.
