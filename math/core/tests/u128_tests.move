@@ -16,7 +16,12 @@ fun rounding_modes() {
     assert_eq!(up_overflow, false);
     assert_eq!(up, 4);
 
-    let (nearest_overflow, nearest) = u128::mul_div(7, 10, 4, rounding::nearest());
+    let (nearest_overflow, nearest) = u128::mul_div(
+        7,
+        10,
+        4,
+        rounding::nearest(),
+    );
     assert_eq!(nearest_overflow, false);
     assert_eq!(nearest, 18);
 }
@@ -38,7 +43,12 @@ fun rejects_zero_denominator() {
 // Casting down from u256 must still flag when values exceed u128’s range.
 #[test]
 fun detects_overflow() {
-    let (overflow, result) = u128::mul_div(std::u128::max_value!(), 2, 1, rounding::down());
+    let (overflow, result) = u128::mul_div(
+        std::u128::max_value!(),
+        2,
+        1,
+        rounding::down(),
+    );
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
 }
