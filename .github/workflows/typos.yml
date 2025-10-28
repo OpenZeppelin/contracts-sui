@@ -1,0 +1,19 @@
+name: Typo Check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  typos:
+    name: Check for typos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for typos
+        uses: crate-ci/typos@master
