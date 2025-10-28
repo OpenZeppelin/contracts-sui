@@ -99,8 +99,8 @@ jobs:
           sui move coverage summary --summarize-functions > coverage-report.txt
           cat coverage-report.txt
 
-          # Extract coverage percentage more robustly
-          coverage=$(awk '/[0-9]+\.[0-9]+%/ {gsub(/%/, "", $NF); print $NF; exit}' coverage-report.txt)
+          # Extract overall Move coverage percentage
+          coverage=$(grep "% Move Coverage:" coverage-report.txt | awk '{print $(NF-1)}')
 
           if [ -z "$coverage" ]; then
             echo "Error: Could not extract coverage percentage"
