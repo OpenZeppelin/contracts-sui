@@ -21,34 +21,6 @@ Follow the installation guide in the [Sui documentation](https://docs.sui.io/gui
 
 **Required version**: Sui CLI [1.58.3](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.58.3).
 
-## Building and Testing
-
-### Build
-
-```bash
-# Build a specific package
-sui move build --path <package>
-```
-
-### Test
-
-```bash
-# Run tests
-sui move test --path <package>
-
-# Run tests with coverage
-sui move test --coverage --path <package>
-
-# View coverage summary
-sui move coverage summary --path <package>
-```
-
-### Lint
-
-```bash
-# Run linter with strict checks
-sui move build --lint --warnings-are-errors --path <package>
-```
 
 ## Docs
 
