@@ -118,113 +118,18 @@ jobs:
           version: ${{ env.SUI_VERSION }}
 
       - name: Run tests
-        run: sui move test --coverage
+        run: sui move test --trace
         working-directory: ./${{ matrix.package }}
 
-      - name: Enforce coverage threshold
-        id: coverage-check
-        run: |
-          sui move coverage summary --summarize-functions > coverage-report.txt
-          cat coverage-report.txt
-
-          # Extract overall Move coverage percentage
-          coverage=$(grep "% Move Coverage:" coverage-report.txt | awk '{print $(NF-1)}')
-
-          if [ -z "$coverage" ]; then
-            echo "Error: Could not extract coverage percentage"
-            exit 1
-          fi
-
-          echo "Code coverage: $coverage%"
-          echo "COVERAGE=$coverage" >> $GITHUB_ENV
-
-          # Check threshold using awk (more portable than bc)
-          if awk "BEGIN {exit !($coverage < $COVERAGE_THRESHOLD)}"; then
-            echo "❌ Error: Code coverage ($coverage%) is below required threshold of $COVERAGE_THRESHOLD%"
-            echo "COVERAGE_PASSED=false" >> $GITHUB_ENV
-            exit 1
-          fi
-
-          echo "✅ Coverage threshold met: $coverage% >= $COVERAGE_THRESHOLD%"
-          echo "COVERAGE_PASSED=true" >> $GITHUB_ENV
+      - name: Generate Codecov report
+        run: sui move coverage lcov > lcov.info
         working-directory: ./${{ matrix.package }}
 
-      - name: Generate test summary
-        if: always()
-        run: |
-          coverage="${{ env.COVERAGE }}"
-          threshold="${{ env.COVERAGE_THRESHOLD }}"
-          passed="${{ env.COVERAGE_PASSED }}"
-
-          echo "## 🧪 Test Results: \`${{ matrix.package }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Coverage | ${coverage}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Threshold | ${threshold}% |" >> $GITHUB_STEP_SUMMARY
-
-          if [ "$passed" = "true" ]; then
-            echo "| Status | ✅ PASSED |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Status | ❌ FAILED |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Update or create coverage comment
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          script: |
-            const package = '${{ matrix.package }}';
-            const coverage = '${{ env.COVERAGE }}';
-            const threshold = '${{ env.COVERAGE_THRESHOLD }}';
-            const passed = parseFloat(coverage) >= parseFloat(threshold);
-            const emoji = passed ? '✅' : '❌';
-
-            // Unique identifier for this package's comment
-            const commentMarker = `<!-- coverage-report-${package.replace(/\//g, '-')} -->`;
-
-            const body = `${commentMarker}
-            ## ${emoji} Coverage Report: \`${package}\`
-
-            - **Coverage:** ${coverage}%
-            - **Threshold:** ${threshold}%
-            - **Status:** ${passed ? 'PASSED' : 'FAILED'}
-
-            <details>
-            <summary>View full report</summary>
-
-            Check the CI logs for detailed per-module coverage breakdown.
-            </details>
-
-            *Last updated: ${new Date().toUTCString()}*`;
-
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-
-            const existingComment = comments.find(comment => 
-              comment.body.includes(commentMarker)
-            );
-
-            if (existingComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                comment_id: existingComment.id,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
-              console.log('Updated existing comment');
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
-              console.log('Created new comment');
-            }
+          file: ./${{ matrix.package }}/lcov.info
+          flags: ${{ matrix.package }}
+          name: ${{ matrix.package }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
