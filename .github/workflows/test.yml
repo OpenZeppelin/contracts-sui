@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SUI_VERSION: "1.58.1"
+  SUI_VERSION: "1.58.3"
 
 jobs:
   setup:
