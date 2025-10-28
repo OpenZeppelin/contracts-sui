@@ -63,10 +63,7 @@ public(package) macro fun mul_div<$Int>(
 /// #### Aborts
 /// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
 /// than or equal to the bit-width of `$Int`.
-public(package) macro fun checked_shr<$Int>(
-    $value: $Int,
-    $shift: u8,
-): Option<$Int> {
+public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$Int> {
     let mask = (1_u256 << $shift) - 1;
     let shifted = $value & (mask as $Int);
     if (shifted != 0) {

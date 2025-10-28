@@ -22,6 +22,39 @@ fun constructors_and_accessors() {
 }
 
 #[test]
+fun sub_u256_without_borrow_keeps_high_limb() {
+    let original = u512::new(3, 50);
+    let subtrahend = 7u256;
+
+    let result = u512::sub_u256_for_testing(original, subtrahend);
+    assert_eq!(u512::hi(&result), 3);
+    assert_eq!(u512::lo(&result), 43);
+
+    let rebuild = add_u512(result, u512::from_u256(subtrahend));
+    assert_u512_eq(rebuild, original);
+}
+
+#[test]
+fun sub_u256_with_borrow_reduces_high_limb() {
+    let original = u512::new(9, 4);
+    let original_hi = u512::hi(&original);
+    let original_lo = u512::lo(&original);
+    let subtrahend = 10u256;
+
+    let result = u512::sub_u256_for_testing(original, subtrahend);
+    assert_eq!(u512::hi(&result), original_hi - 1);
+    let complement = (std::u256::max_value!() - subtrahend) + 1;
+    let expected = u512::new(original_hi - 1, original_lo + complement);
+    assert_u512_eq(result, expected);
+}
+
+#[test, expected_failure(abort_code = u512::EUnderflow)]
+fun sub_u256_rejects_borrow_without_high_limb() {
+    let original = u512::new(0, 1);
+    let _unused = u512::sub_u256_for_testing(original, 2u256);
+}
+
+#[test]
 fun mul_u256_handles_small_operands() {
     // Simple multiplication stays entirely in the low limb.
     let result = u512::mul_u256(2, 3);
