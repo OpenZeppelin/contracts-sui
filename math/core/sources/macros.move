@@ -75,6 +75,45 @@ public(package) macro fun checked_shr<$Int>(
     option::some($value >> $shift)
 }
 
+/// Attempt to left shift `$value` by `$shift` bits while ensuring no truncated bits are lost.
+///
+/// The helper inspects the upper `$shift` bits and only performs the shift when all of them are
+/// zero, avoiding silent precision loss. It mirrors the signatures of the width-specific wrappers,
+/// returning `option::none()` when the operation would drop information. The macro does **not**
+/// enforce that `$shift` is below the bit-width of `$Int`; callers must guarantee that condition to
+/// avoid the Move runtime abort that occurs when shifting by an excessive amount.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: Unsigned integer subject to the shift.
+/// - `$shift`: Number of bits to shift to the left. Must be less than the bit-width of `$Int`.
+///
+/// #### Returns
+/// `option::some(result)` with the shifted value when the high bits are all zero, otherwise
+/// `option::none()`.
+///
+/// #### Aborts
+/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
+/// than or equal to the bit-width of `$Int`.
+public(package) macro fun checked_shl<$Int>(
+    $value: $Int,
+    $shift: u8,
+): Option<$Int> {
+    if ($shift == 0) {
+        return option::some($value)
+    };
+    // Masking should be more efficient but it requires to know the bit
+    // size of $Int and we favor simplicity in this case.
+    let shifted = $value << $shift;
+    let shifted_back = shifted >> $shift;
+    if (shifted_back != $value) {
+        return option::none()
+    };
+    option::some(shifted)
+}
+
 /// === Helper functions ===
 
 /// Multiply two `u256` values, divide by `denominator`, and round the result without widening.

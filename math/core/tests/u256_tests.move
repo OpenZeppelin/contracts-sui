@@ -76,8 +76,39 @@ fun checked_shr_detects_set_bits() {
 
 #[test]
 fun checked_shr_detects_large_shift_loss() {
-    // Shifting by width-1 is valid if the value has enough trailing zeros
+    // Reject when shifting by 255 would drop non-zero bits.
+    let result = u256::checked_shr(3, 255);
+    assert_eq!(result, option::none());
+}
+
+// === checked_shl ===
+
+#[test]
+fun checked_shl_returns_some() {
+    // Shift to the top bit while staying within range.
+    let value = 1u256;
+    let result = u256::checked_shl(value, 255);
+    assert_eq!(result, option::some(1u256 << 255));
+}
+
+#[test]
+fun checked_shl_returns_same_for_zero_shift() {
+    // Shifting by zero should return the same value.
     let value = 1u256 << 255;
-    let result = u256::checked_shr(value, 255);
-    assert_eq!(result, option::some(1));
+    let result = u256::checked_shl(value, 0);
+    assert_eq!(result, option::some(value));
+}
+
+#[test]
+fun checked_shl_detects_high_bits() {
+    // Highest bit already set — shifting again should fail.
+    let result = u256::checked_shl(1u256 << 255, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shl_rejects_large_shift() {
+    // Disallow shifting when the value would overflow after a large shift.
+    let result = u256::checked_shl(2, 255);
+    assert_eq!(result, option::none());
 }

@@ -25,3 +25,12 @@ public fun checked_shr(value: u128, shift: u8): Option<u128> {
     };
     macros::checked_shr!(value, shift)
 }
+
+/// Shift the value left by the given number of bits.
+/// Returns `None` if the shift consumes a non-zero bit.
+public fun checked_shl(value: u128, shift: u8): Option<u128> {
+    if (shift >= 128) {
+        return option::none()
+    };
+    macros::checked_shl!(value, shift)
+}

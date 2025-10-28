@@ -15,3 +15,9 @@ public fun mul_div(a: u256, b: u256, denominator: u256, rounding_mode: RoundingM
 public fun checked_shr(value: u256, shift: u8): Option<u256> {
     macros::checked_shr!(value, shift)
 }
+
+/// Shift the value left by the given number of bits.
+/// Returns `None` if the shift consumes a non-zero bit.
+public fun checked_shl(value: u256, shift: u8): Option<u256> {
+    macros::checked_shl!(value, shift)
+}

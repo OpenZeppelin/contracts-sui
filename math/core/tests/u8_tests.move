@@ -67,3 +67,33 @@ fun checked_shr_rejects_large_shift() {
     let result = u8::checked_shr(1, 8);
     assert_eq!(result, option::none());
 }
+
+// === checked_shl ===
+
+#[test]
+fun checked_shl_returns_some() {
+    // 0b0000_0001 << 7 reaches the top bit exactly.
+    let result = u8::checked_shl(1, 7);
+    assert_eq!(result, option::some(128));
+}
+
+#[test]
+fun checked_shl_returns_same_for_zero_shift() {
+    // Shifting by zero should return the same value.
+    let result = u8::checked_shl(129, 0);
+    assert_eq!(result, option::some(129));
+}
+
+#[test]
+fun checked_shl_detects_high_bits() {
+    // 0b1000_0001 << 1 would overflow the type.
+    let result = u8::checked_shl(129, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shl_rejects_large_shift() {
+    // Disallow width-sized shifts that would abort at runtime.
+    let result = u8::checked_shl(1, 8);
+    assert_eq!(result, option::none());
+}

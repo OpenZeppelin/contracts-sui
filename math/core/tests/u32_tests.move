@@ -67,3 +67,33 @@ fun checked_shr_rejects_large_shift() {
     let result = u32::checked_shr(1, 32);
     assert_eq!(result, option::none());
 }
+
+// === checked_shl ===
+
+#[test]
+fun checked_shl_returns_some() {
+    // 0x0000_0001 << 31 lands exactly on the sign bit.
+    let result = u32::checked_shl(1, 31);
+    assert_eq!(result, option::some(0x8000_0000));
+}
+
+#[test]
+fun checked_shl_returns_same_for_zero_shift() {
+    // Shifting by zero should return the same value.
+    let result = u32::checked_shl(0x9000_0000, 0);
+    assert_eq!(result, option::some(0x9000_0000));
+}
+
+#[test]
+fun checked_shl_detects_high_bits() {
+    // 0x9000_0000 already uses the top bits; shifting would overflow.
+    let result = u32::checked_shl(0x9000_0000, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shl_rejects_large_shift() {
+    // Guard against the width-sized shift.
+    let result = u32::checked_shl(1, 32);
+    assert_eq!(result, option::none());
+}

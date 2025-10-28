@@ -68,3 +68,34 @@ fun checked_shr_rejects_large_shift() {
     let result = u128::checked_shr(1, 128);
     assert_eq!(result, option::none());
 }
+
+// === checked_shl ===
+
+#[test]
+fun checked_shl_returns_some() {
+    // Shift a single 1 into the most-significant bit.
+    let result = u128::checked_shl(1, 127);
+    assert_eq!(result, option::some(1u128 << 127));
+}
+
+#[test]
+fun checked_shl_returns_same_for_zero_shift() {
+    // Shifting by zero should return the same value.
+    let value = 1u128 << 127;
+    let result = u128::checked_shl(value, 0);
+    assert_eq!(result, option::some(value));
+}
+
+#[test]
+fun checked_shl_detects_high_bits() {
+    // Highest bit already set — shifting would overflow.
+    let result = u128::checked_shl(1u128 << 127, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shl_rejects_large_shift() {
+    // Prevent width-sized shift that would abort.
+    let result = u128::checked_shl(1, 128);
+    assert_eq!(result, option::none());
+}
