@@ -16,7 +16,12 @@ fun rounding_modes() {
     assert_eq!(up_overflow, false);
     assert_eq!(up, 4);
 
-    let (nearest_overflow, nearest) = u8::mul_div(7, 10, 4, rounding::nearest());
+    let (nearest_overflow, nearest) = u8::mul_div(
+        7,
+        10,
+        4,
+        rounding::nearest(),
+    );
     assert_eq!(nearest_overflow, false);
     assert_eq!(nearest, 18);
 }

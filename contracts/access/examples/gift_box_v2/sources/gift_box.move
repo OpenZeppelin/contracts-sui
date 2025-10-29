@@ -36,7 +36,12 @@ public struct Gift has key, store {
 /// Sends a gift to a recipient.
 ///
 /// NOTE: Only the owner of this module is allowed to send a gift through the owner capability.
-public fun send_gift(_: &OwnerCap<GIFT_BOX_V2>, note: String, to: address, ctx: &mut TxContext) {
+public fun send_gift(
+    _: &OwnerCap<GIFT_BOX_V2>,
+    note: String,
+    to: address,
+    ctx: &mut TxContext,
+) {
     let new_gift = Gift {
         id: object::new(ctx),
         note,
