@@ -1,5 +1,9 @@
 # OpenZeppelin Contracts for Sui
 
+[![Lint and Test](https://github.com/OpenZeppelin/contracts-sui/actions/workflows/test.yml/badge.svg)](https://github.com/OpenZeppelin/contracts-sui/actions/workflows/test.yml)
+[![Coverage Status](https://codecov.io/gh/OpenZeppelin/contracts-sui/graph/badge.svg)](https://codecov.io/gh/OpenZeppelin/contracts-sui)
+[![License](https://img.shields.io/github/license/OpenZeppelin/contracts-sui)](https://github.com/OpenZeppelin/contracts-sui/blob/main/LICENSE)
+
 **OpenZeppelin Contracts for Sui** is a collection of secure smart contract
 libraries written in Move for the [Sui blockchain](https://sui.io/). Our goal
 is to bring Web3 standards under the OpenZeppelin quality by providing a set of
