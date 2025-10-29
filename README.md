@@ -1,15 +1,10 @@
 # OpenZeppelin Contracts for Sui
 
-> [!Warning]
-> This is experimental software and is provided on an "as is" and "as available"
-> basis. We do not give any warranties and will not be liable for any losses
-> incurred through any use of this code base.
-
 **OpenZeppelin Contracts for Sui** is a collection of secure smart contract
-libraries written in Move for the [Sui blockchain](https://sui.io/). Our goal is to bring Web3
-standards under the OpenZeppelin quality by providing a set of high-quality,
-battle-tested contracts that can be used to build decentralized applications
-on the Sui network.
+libraries written in Move for the [Sui blockchain](https://sui.io/). Our goal
+is to bring Web3 standards under the OpenZeppelin quality by providing a set of
+high-quality, battle-tested contracts that can be used to build decentralized
+applications on the Sui network.
 
 ## Usage
 
@@ -23,7 +18,8 @@ Follow the installation guide in the [Sui documentation](https://docs.sui.io/gui
 
 ## Docs
 
-Documentation is available inline in the source code. You can generate the documentation locally using:
+Documentation is available inline in the source code. You can generate the
+documentation locally using:
 
 ```bash
 # Generate and view documentation for a specific package
@@ -51,15 +47,20 @@ risk and uncertainty. Although OpenZeppelin is well known for its security
 audits, using OpenZeppelin Contracts for Sui is not a substitute for a security
 audit.
 
-## Contributing
+## Contribute
 
 We welcome contributions from the community!
 
-If you are looking for a good place to start, find a good first issue [here](https://github.com/OpenZeppelin/contracts-sui/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22).
+If you are looking for a good place to start, find a good first issue
+[here](https://github.com/OpenZeppelin/contracts-sui/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22).
 
-You can open an issue for a [bug report](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=bug_report.yml), [core implementation](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=core_implementation.yml), or [feature request](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=feature_request.yml).
+You can open an issue for a
+[bug report](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=bug_report.yml),
+[core implementation](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=core_implementation.yml),
+or [feature request](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=feature_request.yml).
 
-You can find more details in our [Contributing](./CONTRIBUTING.md) guide, and please read our [Code of Conduct](./CODE_OF_CONDUCT.md).
+You can find more details in our [Contributing](./CONTRIBUTING.md) guide, and
+please read our [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License
 
