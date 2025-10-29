@@ -1,6 +1,11 @@
 coverage:
+  precision: 2
   status:
     project:
       default:
         target: 100%
         threshold: 10%
+
+ignore:
+  - "**/tests/**"
+  - "**/examples/**"
