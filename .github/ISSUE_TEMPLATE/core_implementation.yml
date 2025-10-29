@@ -1,0 +1,11 @@
+name: 🏗️ Core Implementation
+description: Create a report to help us improve
+title: "🏗️ [Core Feature]: "
+labels: ["core", "needs triage"]
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: What is the key feature we're aiming to implement?
+    validations:
+      required: true
