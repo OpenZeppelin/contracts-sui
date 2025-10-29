@@ -26,8 +26,7 @@ use sui::event;
 const EInvalidTransferPolicy: vector<u8> = b"Invalid transfer policy.";
 /// Request is for the wrong capability
 #[error(code = 1)]
-const EInvalidTransferRequest: vector<u8> =
-    b"Invalid ownership transfer for request.";
+const EInvalidTransferRequest: vector<u8> = b"Invalid ownership transfer for request.";
 
 /// A capability that allows the owner of the smart contract (package) to perform certain actions.
 /// The OTW phantom type is used to enforce that there isonly one owner per module.
@@ -84,10 +83,7 @@ public struct OwnershipTransferred has copy, drop {
 ///
 /// #### Aborts
 /// - If `otw` is not a valid one-time witness type
-public fun build_ownership<T: drop>(
-    otw: &T,
-    ctx: &mut TxContext,
-): OwnershipInitializer<T> {
+public fun build_ownership<T: drop>(otw: &T, ctx: &mut TxContext): OwnershipInitializer<T> {
     assert!(sui::types::is_one_time_witness(otw));
 
     let owner_cap = OwnerCap<T> {
@@ -110,11 +106,7 @@ public fun build_ownership<T: drop>(
 ///
 /// #### Aborts
 /// - If the transfer policy is not immediate
-public fun transfer_ownership<T>(
-    cap: OwnerCap<T>,
-    new_owner: address,
-    ctx: &mut TxContext,
-) {
+public fun transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address, ctx: &mut TxContext) {
     assert!(is_immediate_transfer_policy(&cap), EInvalidTransferPolicy);
     internal_transfer_ownership(cap, new_owner, ctx);
 }
@@ -149,11 +141,7 @@ public fun transfer_requested_ownership<T>(
 
 /// Internal function to transfer ownership to a new address.
 /// This function is used to transfer ownership to a new address without checking the transfer policy.
-fun internal_transfer_ownership<T>(
-    cap: OwnerCap<T>,
-    new_owner: address,
-    ctx: &TxContext,
-) {
+fun internal_transfer_ownership<T>(cap: OwnerCap<T>, new_owner: address, ctx: &TxContext) {
     // Only the current owner can access this function through the OwnerCap
     let current_owner = ctx.sender();
     event::emit(OwnershipTransferred {
@@ -170,11 +158,7 @@ fun internal_transfer_ownership<T>(
 /// - `cap_id`: The ID of the capability object
 /// - `current_owner`: The address of the current owner
 /// - `ctx`: Transaction context to access the caller
-public fun request_ownership(
-    cap_id: ID,
-    current_owner: address,
-    ctx: &mut TxContext,
-) {
+public fun request_ownership(cap_id: ID, current_owner: address, ctx: &mut TxContext) {
     let ownership_request = OwnershipRequestCap {
         id: object::new(ctx),
         cap_id,
@@ -256,9 +240,7 @@ public fun is_two_step_transfer_policy<T>(owner_cap: &OwnerCap<T>): bool {
 }
 
 #[test_only]
-public fun create_immediate_owner_cap_for_testing<T>(
-    ctx: &mut TxContext,
-): OwnerCap<T> {
+public fun create_immediate_owner_cap_for_testing<T>(ctx: &mut TxContext): OwnerCap<T> {
     OwnerCap {
         id: object::new(ctx),
         transfer_policy: TransferPolicy::Immediate,

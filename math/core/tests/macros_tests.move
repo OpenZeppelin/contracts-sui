@@ -131,12 +131,7 @@ fun macro_uses_fast_path_for_small_inputs() {
 #[test]
 fun macro_uses_wide_path_for_large_inputs() {
     let large = (std::u128::max_value!() as u256) + 1;
-    let (overflow, macro_result) = macros::mul_div!(
-        large,
-        large,
-        7,
-        rounding::down(),
-    );
+    let (overflow, macro_result) = macros::mul_div!(large, large, 7, rounding::down());
     assert_eq!(overflow, false);
     let (wide_overflow, expected) = macros::mul_div_u256_wide(
         large,
