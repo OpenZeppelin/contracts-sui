@@ -3,20 +3,6 @@ module openzeppelin_math::macros;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
-public(package) macro fun mul_div<$Int>(
-  $a: $Int,
-  $b: $Int,
-  $denominator: $Int,
-  $rounding_mode: RoundingMode,
-): (bool, u256) {
-  let a_u256 = ($a as u256);
-  let b_u256 = ($b as u256);
-  let denominator_u256 = ($denominator as u256);
-  let rounding_mode = $rounding_mode;
-
-  mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
-}
-
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
 
@@ -41,6 +27,19 @@ const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
 ///
 /// #### Aborts
 /// Propagates the same error codes as the underlying helpers (`EDivideByZero`).
+public(package) macro fun mul_div<$Int>(
+  $a: $Int,
+  $b: $Int,
+  $denominator: $Int,
+  $rounding_mode: RoundingMode,
+): (bool, u256) {
+  let a_u256 = ($a as u256);
+  let b_u256 = ($b as u256);
+  let denominator_u256 = ($denominator as u256);
+  let rounding_mode = $rounding_mode;
+
+  mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
+}
 
 /// === Helper functions ===
 
