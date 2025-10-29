@@ -1,5 +1,10 @@
 # OpenZeppelin Contracts for Sui
 
+> [!Warning]
+> This is experimental software and is provided on an "as is" and "as available"
+> basis. We do not give any warranties and will not be liable for any losses
+> incurred through any use of this code base.
+
 **OpenZeppelin Contracts for Sui** is a collection of secure smart contract
 libraries written in Move for the [Sui blockchain](https://sui.io/). Our goal
 is to bring Web3 standards under the OpenZeppelin quality by providing a set of
