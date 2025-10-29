@@ -60,7 +60,6 @@ If you are looking for a good place to start, find a good first issue
 
 You can open an issue for a
 [bug report](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=bug_report.yml),
-[core implementation](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=core_implementation.yml),
 or [feature request](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=feature_request.yml).
 
 You can find more details in our [Contributing](./CONTRIBUTING.md) guide, and
