@@ -3,6 +3,20 @@ module openzeppelin_math::macros;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
+public(package) macro fun mul_div<$Int>(
+  $a: $Int,
+  $b: $Int,
+  $denominator: $Int,
+  $rounding_mode: RoundingMode,
+): (bool, u256) {
+  let a_u256 = ($a as u256);
+  let b_u256 = ($b as u256);
+  let denominator_u256 = ($denominator as u256);
+  let rounding_mode = $rounding_mode;
+
+  mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
+}
+
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
 
@@ -27,19 +41,6 @@ const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
 ///
 /// #### Aborts
 /// Propagates the same error codes as the underlying helpers (`EDivideByZero`).
-public(package) macro fun mul_div<$Int>(
-    $a: $Int,
-    $b: $Int,
-    $denominator: $Int,
-    $rounding_mode: RoundingMode,
-): (bool, u256) {
-    let a_u256 = ($a as u256);
-    let b_u256 = ($b as u256);
-    let denominator_u256 = ($denominator as u256);
-    let rounding_mode = $rounding_mode;
-
-    mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
-}
 
 /// === Helper functions ===
 
@@ -60,32 +61,32 @@ public(package) macro fun mul_div<$Int>(
 /// #### Aborts
 /// - `EDivideByZero` if `denominator` is zero.
 public(package) fun mul_div_u256_fast(
-    a: u256,
-    b: u256,
-    denominator: u256,
-    rounding_mode: RoundingMode,
+  a: u256,
+  b: u256,
+  denominator: u256,
+  rounding_mode: RoundingMode,
 ): u256 {
-    assert!(denominator != 0, EDivideByZero);
+  assert!(denominator != 0, EDivideByZero);
 
-    let numerator = a * b;
-    let mut quotient = numerator / denominator;
-    let remainder = numerator % denominator;
+  let numerator = a * b;
+  let mut quotient = numerator / denominator;
+  let remainder = numerator % denominator;
 
-    if (remainder != 0) {
-        let should_round_up = if (rounding_mode == rounding::up()) {
-            true
-        } else if (rounding_mode == rounding::nearest()) {
-            remainder >= denominator - remainder
-        } else {
-            false
-        };
-
-        if (should_round_up) {
-            quotient = quotient + 1;
-        }
+  if (remainder != 0) {
+    let should_round_up = if (rounding_mode == rounding::up()) {
+      true
+    } else if (rounding_mode == rounding::nearest()) {
+      remainder >= denominator - remainder
+    } else {
+      false
     };
 
-    quotient
+    if (should_round_up) {
+      quotient = quotient + 1;
+    }
+  };
+
+  quotient
 }
 
 /// Multiply two `u256` values with full 512-bit precision before dividing and rounding.
@@ -107,55 +108,55 @@ public(package) fun mul_div_u256_fast(
 /// #### Aborts
 /// - `EDivideByZero` if `denominator` is zero.
 public(package) fun mul_div_u256_wide(
-    a: u256,
-    b: u256,
-    denominator: u256,
-    rounding_mode: RoundingMode,
+  a: u256,
+  b: u256,
+  denominator: u256,
+  rounding_mode: RoundingMode,
 ): (bool, u256) {
-    assert!(denominator != 0, EDivideByZero);
+  assert!(denominator != 0, EDivideByZero);
 
-    let numerator = u512::mul_u256(a, b);
-    let (overflow, mut quotient, remainder) = u512::div_rem_u256(
-        numerator,
-        denominator,
-    );
-    if (overflow) {
+  let numerator = u512::mul_u256(a, b);
+  let (overflow, mut quotient, remainder) = u512::div_rem_u256(
+    numerator,
+    denominator,
+  );
+  if (overflow) {
+    return (true, 0)
+  };
+
+  if (remainder != 0) {
+    let should_round_up = if (rounding_mode == rounding::up()) {
+      true
+    } else if (rounding_mode == rounding::nearest()) {
+      remainder >= denominator - remainder
+    } else {
+      false
+    };
+
+    if (should_round_up) {
+      if (quotient == std::u256::max_value!()) {
         return (true, 0)
-    };
+      };
+      quotient = quotient + 1;
+    }
+  };
 
-    if (remainder != 0) {
-        let should_round_up = if (rounding_mode == rounding::up()) {
-            true
-        } else if (rounding_mode == rounding::nearest()) {
-            remainder >= denominator - remainder
-        } else {
-            false
-        };
-
-        if (should_round_up) {
-            if (quotient == std::u256::max_value!()) {
-                return (true, 0)
-            };
-            quotient = quotient + 1;
-        }
-    };
-
-    (false, quotient)
+  (false, quotient)
 }
 
 /// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
 /// Returns `(overflow, quotient)` mirroring the macro implementation.
 public(package) fun mul_div_inner(
-    a: u256,
-    b: u256,
-    denominator: u256,
-    rounding_mode: RoundingMode,
+  a: u256,
+  b: u256,
+  denominator: u256,
+  rounding_mode: RoundingMode,
 ): (bool, u256) {
-    let max_small = std::u128::max_value!() as u256;
-    if (a > max_small || b > max_small) {
-        mul_div_u256_wide(a, b, denominator, rounding_mode)
-    } else {
-        let quotient = mul_div_u256_fast(a, b, denominator, rounding_mode);
-        (false, quotient)
-    }
+  let max_small = std::u128::max_value!() as u256;
+  if (a > max_small || b > max_small) {
+    mul_div_u256_wide(a, b, denominator, rounding_mode)
+  } else {
+    let quotient = mul_div_u256_fast(a, b, denominator, rounding_mode);
+    (false, quotient)
+  }
 }
