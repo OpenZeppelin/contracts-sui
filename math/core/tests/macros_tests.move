@@ -44,7 +44,12 @@ fun wide_matches_u512_downward() {
     let numerator = u512::mul_u256(large, large);
     let (overflow, baseline, _) = u512::div_rem_u256(numerator, 7);
     assert_eq!(overflow, false);
-    let (macro_overflow, wide) = macros::mul_div_u256_wide(large, large, 7, rounding::down());
+    let (macro_overflow, wide) = macros::mul_div_u256_wide(
+        large,
+        large,
+        7,
+        rounding::down(),
+    );
     assert_eq!(macro_overflow, false);
     assert_eq!(wide, baseline);
 }
@@ -57,13 +62,21 @@ fun wide_respects_rounding_modes() {
     assert!(remainder != 0);
 
     // Rounding up always bumps the truncated quotient when remainder is non-zero.
-    let (overflow_up, up) = macros::mul_div_u256_wide(large, large, 7, rounding::up());
+    let (overflow_up, up) = macros::mul_div_u256_wide(
+        large,
+        large,
+        7,
+        rounding::up(),
+    );
     assert_eq!(overflow_up, false);
     assert_eq!(up, baseline + 1);
 
     // Nearest mirrors `rounding::down` when the remainder is small...
     let denom_down = 13;
-    let (_, baseline_down, remainder_down) = u512::div_rem_u256(numerator, denom_down);
+    let (_, baseline_down, remainder_down) = u512::div_rem_u256(
+        numerator,
+        denom_down,
+    );
     assert!(remainder_down < denom_down - remainder_down);
     let (overflow_nearest_down, nearest_down) = macros::mul_div_u256_wide(
         large,
@@ -76,7 +89,10 @@ fun wide_respects_rounding_modes() {
 
     // ...and bumps when the remainder dominates.
     let denom_up = 11;
-    let (_, baseline_up, remainder_up) = u512::div_rem_u256(numerator, denom_up);
+    let (_, baseline_up, remainder_up) = u512::div_rem_u256(
+        numerator,
+        denom_up,
+    );
     assert!(remainder_up >= denom_up - remainder_up);
     let (overflow_nearest_up, nearest_up) = macros::mul_div_u256_wide(
         large,
@@ -97,7 +113,12 @@ fun wide_rejects_zero_denominator() {
 #[test]
 fun wide_detects_overflowing_quotient() {
     let max = std::u256::max_value!();
-    let (overflow, _) = macros::mul_div_u256_wide(max, max, 1, rounding::down());
+    let (overflow, _) = macros::mul_div_u256_wide(
+        max,
+        max,
+        1,
+        rounding::down(),
+    );
     assert_eq!(overflow, true);
 }
 
@@ -114,7 +135,12 @@ fun macro_uses_wide_path_for_large_inputs() {
     let large = (std::u128::max_value!() as u256) + 1;
     let (overflow, macro_result) = macros::mul_div!(large, large, 7, rounding::down());
     assert_eq!(overflow, false);
-    let (wide_overflow, expected) = macros::mul_div_u256_wide(large, large, 7, rounding::down());
+    let (wide_overflow, expected) = macros::mul_div_u256_wide(
+        large,
+        large,
+        7,
+        rounding::down(),
+    );
     assert_eq!(wide_overflow, false);
     assert_eq!(macro_result, expected);
 }
