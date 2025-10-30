@@ -1,5 +1,9 @@
 # OpenZeppelin Contracts for Sui
 
+[![Lint and Test](https://github.com/OpenZeppelin/contracts-sui/actions/workflows/test.yml/badge.svg)](https://github.com/OpenZeppelin/contracts-sui/actions/workflows/test.yml)
+[![Coverage Status](https://codecov.io/gh/OpenZeppelin/contracts-sui/graph/badge.svg)](https://codecov.io/gh/OpenZeppelin/contracts-sui)
+[![License](https://img.shields.io/github/license/OpenZeppelin/contracts-sui)](https://github.com/OpenZeppelin/contracts-sui/blob/main/LICENSE)
+
 > [!Warning]
 > This is experimental software and is provided on an "as is" and "as available"
 > basis. We do not give any warranties and will not be liable for any losses
@@ -61,7 +65,6 @@ If you are looking for a good place to start, find a good first issue
 
 You can open an issue for a
 [bug report](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=bug_report.yml),
-[core implementation](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=core_implementation.yml),
 or [feature request](https://github.com/OpenZeppelin/contracts-sui/issues/new?template=feature_request.yml).
 
 You can find more details in our [Contributing](./CONTRIBUTING.md) guide, and

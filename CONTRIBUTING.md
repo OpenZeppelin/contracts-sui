@@ -47,10 +47,11 @@ Your contribution must meet these requirements:
    ```
 
 3. Make your changes, add your files, update documentation, commit, and push to your fork.
+   We use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for commit messages.
 
    ```sh
    git add .
-   git commit "Fix some bug short description #123"
+   git commit "fix: some bug short description #123"
    git push origin fix/some-bug-short-description-#123
    ```
 
