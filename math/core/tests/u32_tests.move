@@ -44,7 +44,7 @@ fun mul_div_rejects_zero_denominator() {
 
 // Cast back to u32 must trip when the result no longer fits.
 #[test]
-fun detects_overflow() {
+fun mul_div_detects_overflow() {
     let (overflow, result) = u32::mul_div(
         std::u32::max_value!(),
         2,

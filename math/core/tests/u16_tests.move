@@ -44,7 +44,7 @@ fun mul_div_rejects_zero_denominator() {
 
 // Downcast overflow must be intercepted.
 #[test]
-fun detects_overflow() {
+fun mul_div_detects_overflow() {
     let (overflow, result) = u16::mul_div(
         std::u16::max_value!(),
         2,

@@ -44,7 +44,7 @@ fun mul_div_rejects_zero_denominator() {
 
 // Casting down from u256 must still flag when values exceed u128’s range.
 #[test]
-fun detects_overflow() {
+fun mul_div_detects_overflow() {
     let (overflow, result) = u128::mul_div(
         std::u128::max_value!(),
         2,

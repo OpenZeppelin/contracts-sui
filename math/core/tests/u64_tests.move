@@ -44,7 +44,7 @@ fun mul_div_rejects_zero_denominator() {
 
 // Downstream overflow is still surfaced via the overflow flag.
 #[test]
-fun detects_overflow() {
+fun mul_div_detects_overflow() {
     let (overflow, result) = u64::mul_div(
         std::u64::max_value!(),
         2,
