@@ -1,0 +1,19 @@
+name: Restore Sui CLI
+description: Restore Sui CLI from cache and add to PATH
+inputs:
+  version:
+    description: "Sui version"
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Restore Sui binary from cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.local/bin/sui
+        key: sui-${{ runner.os }}-${{ inputs.version }}
+        fail-on-cache-miss: true
+
+    - name: Add Sui to PATH
+      shell: bash
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH

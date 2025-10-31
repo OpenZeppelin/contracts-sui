@@ -95,11 +95,17 @@ fun div_rem_exact_no_overflow() {
     // Exact division should produce a zero remainder and no overflow.
     let numerator = u512::new(0, 84);
     let divisor = 7;
-    let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, divisor);
+    let (overflow, quotient, remainder) = u512::div_rem_u256(
+        numerator,
+        divisor,
+    );
     assert_eq!(overflow, false);
     assert_eq!(remainder, 0);
     // Verify quotient * divisor + remainder reconstructs the starting numerator.
-    let rebuild = add_u512(u512::mul_u256(quotient, divisor), u512::from_u256(remainder));
+    let rebuild = add_u512(
+        u512::mul_u256(quotient, divisor),
+        u512::from_u256(remainder),
+    );
     assert_u512_eq(rebuild, numerator);
 }
 
@@ -108,10 +114,16 @@ fun div_rem_with_remainder() {
     // Non-zero remainder stays below the divisor while still rebuilding the numerator.
     let numerator = u512::new(0, 100);
     let divisor = 7;
-    let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, divisor);
+    let (overflow, quotient, remainder) = u512::div_rem_u256(
+        numerator,
+        divisor,
+    );
     assert_eq!(overflow, false);
     assert_eq!(remainder, 2);
-    let rebuild = add_u512(u512::mul_u256(quotient, divisor), u512::from_u256(remainder));
+    let rebuild = add_u512(
+        u512::mul_u256(quotient, divisor),
+        u512::from_u256(remainder),
+    );
     assert_u512_eq(rebuild, numerator);
 }
 
@@ -120,7 +132,10 @@ fun div_rem_handles_high_limb_without_overflow() {
     // Dividing a value with both limbs populated exercises the borrow path inside subtraction.
     let numerator = u512::new(2, 123);
     let divisor = 3;
-    let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, divisor);
+    let (overflow, quotient, remainder) = u512::div_rem_u256(
+        numerator,
+        divisor,
+    );
     assert_eq!(overflow, false);
     assert!(remainder < divisor);
 
@@ -154,7 +169,10 @@ fun div_rem_large_operands_trigger_overflow_flag() {
 #[test, expected_failure(abort_code = u512::EDivideByZero)]
 fun div_rem_rejects_zero_divisor() {
     // Division by zero should trap immediately.
-    let (_overflow, _quotient, _remainder) = u512::div_rem_u256(u512::zero(), 0);
+    let (_overflow, _quotient, _remainder) = u512::div_rem_u256(
+        u512::zero(),
+        0,
+    );
 }
 
 /// === Helpers ===
