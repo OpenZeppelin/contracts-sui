@@ -1,0 +1,135 @@
+name: Lint and Test
+
+on:
+  push:
+    branches: [main, v*]
+  pull_request:
+    branches: [main, v*]
+
+# Cancel in-progress runs on new pushes to the same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  SUI_VERSION: "1.58.3"
+  COVERAGE_THRESHOLD: 90.0
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      packages: ${{ steps.set-matrix.outputs.packages }}
+    steps:
+      - name: Set package matrix
+        id: set-matrix
+        run: |
+          PACKAGES='["math/core"]'
+          echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
+
+      - name: Cache Sui binary
+        id: cache-sui
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/sui
+          key: sui-${{ runner.os }}-${{ env.SUI_VERSION }}
+
+      - name: Install Sui CLI from binary
+        if: steps.cache-sui.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.local/bin
+          curl -fLJ https://github.com/MystenLabs/sui/releases/download/mainnet-v${{ env.SUI_VERSION }}/sui-mainnet-v${{ env.SUI_VERSION }}-ubuntu-x86_64.tgz -o sui.tgz
+          tar -xzf sui.tgz
+          chmod +x sui
+          mv sui ~/.local/bin/
+
+      - name: Verify Sui installation
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          sui --version
+
+  check-move-formatting:
+    name: Move Formatter Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Move formatting
+        uses: MystenLabs/move-formatter-action@v1
+        with:
+          prettier-plugin-move-version: "latest"
+          working-directory: "."
+          pattern: "**/*.move"
+          write-changes: false
+
+  lint:
+    name: Lint ${{ matrix.package }}
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        package: ${{ fromJson(needs.setup.outputs.packages) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restore Sui CLI
+        uses: ./.github/actions/restore-sui
+        with:
+          version: ${{ env.SUI_VERSION }}
+
+      - name: Lint
+        run: sui move build --lint --warnings-are-errors
+        working-directory: ./${{ matrix.package }}
+
+      - name: Lint tests
+        run: sui move build --test --lint --warnings-are-errors
+        working-directory: ./${{ matrix.package }}
+
+  test:
+    name: Test ${{ matrix.package }}
+    needs: [setup, lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: true
+      matrix:
+        package: ${{ fromJson(needs.setup.outputs.packages) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restore Sui CLI
+        uses: ./.github/actions/restore-sui
+        with:
+          version: ${{ env.SUI_VERSION }}
+
+      - name: Run tests
+        run: sui move test --trace
+        working-directory: ./${{ matrix.package }}
+
+      - name: Generate Codecov report
+        run: sui move coverage lcov > lcov.info
+        working-directory: ./${{ matrix.package }}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./${{ matrix.package }}/lcov.info
+          flags: ${{ matrix.package }}
+          name: ${{ matrix.package }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
