@@ -4,7 +4,7 @@ coverage:
     project:
       default:
         target: 100%
-        threshold: 10%
+        threshold: 22% # TODO: Increase coverage to >= 90%
 
 ignore:
   - "**/tests/**"

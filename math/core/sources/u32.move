@@ -16,3 +16,8 @@ public fun mul_div(a: u32, b: u32, denominator: u32, rounding_mode: RoundingMode
         (false, result as u32)
     }
 }
+
+/// Compute the arithmetic mean of two `u32` values with configurable rounding.
+public fun average(a: u32, b: u32, rounding_mode: RoundingMode): u32 {
+    macros::average!(a, b, rounding_mode)
+}
