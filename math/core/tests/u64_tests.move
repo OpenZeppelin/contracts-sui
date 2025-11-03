@@ -1,65 +1,67 @@
-module openzeppelin_math::u64_tests {
-    use openzeppelin_math::{macros, rounding, u64};
-    use std::unit_test::assert_eq;
+module openzeppelin_math::u64_tests;
 
-    // === mul_div ===
+use openzeppelin_math::macros;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u64;
+use std::unit_test::assert_eq;
 
-    // Larger inputs continue to follow the same rounding contract.
-    #[test]
-    fun mul_div_rounding_modes() {
-        let (down_overflow, down) = u64::mul_div(70, 10, 4, rounding::down());
-        assert_eq!(down_overflow, false);
-        assert_eq!(down, 175);
+// === mul_div ===
 
-        let (up_overflow, up) = u64::mul_div(5, 3, 4, rounding::up());
-        assert_eq!(up_overflow, false);
-        assert_eq!(up, 4);
+// Larger inputs continue to follow the same rounding contract.
+#[test]
+fun mul_div_rounding_modes() {
+    let (down_overflow, down) = u64::mul_div(70, 10, 4, rounding::down());
+    assert_eq!(down_overflow, false);
+    assert_eq!(down, 175);
 
-        let (nearest_overflow, nearest) = u64::mul_div(7, 10, 4, rounding::nearest());
-        assert_eq!(nearest_overflow, false);
-        assert_eq!(nearest, 18);
-    }
+    let (up_overflow, up) = u64::mul_div(5, 3, 4, rounding::up());
+    assert_eq!(up_overflow, false);
+    assert_eq!(up, 4);
 
-    // Perfect division should remain unaffected by rounding mode choice.
-    #[test]
-    fun mul_div_exact_division() {
-        let (overflow, exact) = u64::mul_div(8_000, 2, 4, rounding::up());
-        assert_eq!(overflow, false);
-        assert_eq!(exact, 4_000);
-    }
+    let (nearest_overflow, nearest) = u64::mul_div(7, 10, 4, rounding::nearest());
+    assert_eq!(nearest_overflow, false);
+    assert_eq!(nearest, 18);
+}
 
-    // Guard against missing macro errors during integration.
-    #[test, expected_failure(abort_code = macros::EDivideByZero)]
-    fun mul_div_rejects_zero_denominator() {
-        u64::mul_div(1, 1, 0, rounding::down());
-    }
+// Perfect division should remain unaffected by rounding mode choice.
+#[test]
+fun mul_div_exact_division() {
+    let (overflow, exact) = u64::mul_div(8_000, 2, 4, rounding::up());
+    assert_eq!(overflow, false);
+    assert_eq!(exact, 4_000);
+}
 
-    // Downstream overflow is still surfaced via the overflow flag.
-    #[test]
-    fun mul_div_detects_overflow() {
-        let (overflow, result) = u64::mul_div(std::u64::max_value!(), 2, 1, rounding::down());
-        assert_eq!(overflow, true);
-        assert_eq!(result, 0);
-    }
+// Guard against missing macro errors during integration.
+#[test, expected_failure(abort_code = macros::EDivideByZero)]
+fun mul_div_rejects_zero_denominator() {
+    u64::mul_div(1, 1, 0, rounding::down());
+}
 
-    // === average ===
+// Downstream overflow is still surfaced via the overflow flag.
+#[test]
+fun mul_div_detects_overflow() {
+    let (overflow, result) = u64::mul_div(std::u64::max_value!(), 2, 1, rounding::down());
+    assert_eq!(overflow, true);
+    assert_eq!(result, 0);
+}
 
-    #[test]
-    fun average_rounding_modes() {
-        let down = u64::average(10, 15, rounding::down());
-        assert_eq!(down, 12);
+// === average ===
 
-        let up = u64::average(10, 15, rounding::up());
-        assert_eq!(up, 13);
+#[test]
+fun average_rounding_modes() {
+    let down = u64::average(10, 15, rounding::down());
+    assert_eq!(down, 12);
 
-        let nearest = u64::average(1, 2, rounding::nearest());
-        assert_eq!(nearest, 2);
-    }
+    let up = u64::average(10, 15, rounding::up());
+    assert_eq!(up, 13);
 
-    #[test]
-    fun average_is_commutative() {
-        let left = u64::average(1_000, 50, rounding::nearest());
-        let right = u64::average(50, 1_000, rounding::nearest());
-        assert_eq!(left, right);
-    }
+    let nearest = u64::average(1, 2, rounding::nearest());
+    assert_eq!(nearest, 2);
+}
+
+#[test]
+fun average_is_commutative() {
+    let left = u64::average(1_000, 50, rounding::nearest());
+    let right = u64::average(50, 1_000, rounding::nearest());
+    assert_eq!(left, right);
 }

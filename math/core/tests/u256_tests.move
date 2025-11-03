@@ -1,74 +1,76 @@
-module openzeppelin_math::u256_tests {
-    use openzeppelin_math::{macros, rounding, u256};
-    use std::unit_test::assert_eq;
+module openzeppelin_math::u256_tests;
 
-    // === mul_div ===
+use openzeppelin_math::macros;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u256;
+use std::unit_test::assert_eq;
 
-    // At the top level, the wrapper should mirror the macro’s behaviour.
-    #[test]
-    fun mul_div_rounding_modes() {
-        let (down_overflow, down) = u256::mul_div(70, 10, 4, rounding::down());
-        assert_eq!(down_overflow, false);
-        assert_eq!(down, 175);
+// === mul_div ===
 
-        let (up_overflow, up) = u256::mul_div(5, 3, 4, rounding::up());
-        assert_eq!(up_overflow, false);
-        assert_eq!(up, 4);
+// At the top level, the wrapper should mirror the macro’s behaviour.
+#[test]
+fun mul_div_rounding_modes() {
+    let (down_overflow, down) = u256::mul_div(70, 10, 4, rounding::down());
+    assert_eq!(down_overflow, false);
+    assert_eq!(down, 175);
 
-        let (nearest_overflow, nearest) = u256::mul_div(7, 10, 4, rounding::nearest());
-        assert_eq!(nearest_overflow, false);
-        assert_eq!(nearest, 18);
-    }
+    let (up_overflow, up) = u256::mul_div(5, 3, 4, rounding::up());
+    assert_eq!(up_overflow, false);
+    assert_eq!(up, 4);
 
-    // Verify the wrapper delegates to the wide path when required.
-    #[test]
-    fun mul_div_handles_wide_operands() {
-        let large = (std::u128::max_value!() as u256) + 1;
-        let (overflow, result) = u256::mul_div(large, large, 7, rounding::down());
-        assert_eq!(overflow, false);
-        let (wide_overflow, expected) = macros::mul_div_u256_wide(
-            large,
-            large,
-            7,
-            rounding::down(),
-        );
-        assert_eq!(wide_overflow, false);
-        assert_eq!(result, expected);
-    }
+    let (nearest_overflow, nearest) = u256::mul_div(7, 10, 4, rounding::nearest());
+    assert_eq!(nearest_overflow, false);
+    assert_eq!(nearest, 18);
+}
 
-    // Division-by-zero guard enforced at the macro layer.
-    #[test, expected_failure(abort_code = macros::EDivideByZero)]
-    fun mul_div_rejects_zero_denominator() {
-        u256::mul_div(1, 1, 0, rounding::down());
-    }
+// Verify the wrapper delegates to the wide path when required.
+#[test]
+fun mul_div_handles_wide_operands() {
+    let large = (std::u128::max_value!() as u256) + 1;
+    let (overflow, result) = u256::mul_div(large, large, 7, rounding::down());
+    assert_eq!(overflow, false);
+    let (wide_overflow, expected) = macros::mul_div_u256_wide(
+        large,
+        large,
+        7,
+        rounding::down(),
+    );
+    assert_eq!(wide_overflow, false);
+    assert_eq!(result, expected);
+}
 
-    // Even u256 should flag when the macro’s output overflows 256 bits.
-    #[test]
-    fun mul_div_detects_overflow() {
-        let max = std::u256::max_value!();
-        let (overflow, result) = u256::mul_div(max, max, 1, rounding::down());
-        assert_eq!(overflow, true);
-        assert_eq!(result, 0);
-    }
+// Division-by-zero guard enforced at the macro layer.
+#[test, expected_failure(abort_code = macros::EDivideByZero)]
+fun mul_div_rejects_zero_denominator() {
+    u256::mul_div(1, 1, 0, rounding::down());
+}
 
-    // === average ===
+// Even u256 should flag when the macro’s output overflows 256 bits.
+#[test]
+fun mul_div_detects_overflow() {
+    let max = std::u256::max_value!();
+    let (overflow, result) = u256::mul_div(max, max, 1, rounding::down());
+    assert_eq!(overflow, true);
+    assert_eq!(result, 0);
+}
 
-    #[test]
-    fun average_rounding_modes() {
-        let down = u256::average(4, 7, rounding::down());
-        assert_eq!(down, 5);
+// === average ===
 
-        let up = u256::average(4, 7, rounding::up());
-        assert_eq!(up, 6);
+#[test]
+fun average_rounding_modes() {
+    let down = u256::average(4, 7, rounding::down());
+    assert_eq!(down, 5);
 
-        let nearest = u256::average(1, 2, rounding::nearest());
-        assert_eq!(nearest, 2);
-    }
+    let up = u256::average(4, 7, rounding::up());
+    assert_eq!(up, 6);
 
-    #[test]
-    fun average_is_commutative() {
-        let left = u256::average(std::u256::max_value!(), 0, rounding::nearest());
-        let right = u256::average(0, std::u256::max_value!(), rounding::nearest());
-        assert_eq!(left, right);
-    }
+    let nearest = u256::average(1, 2, rounding::nearest());
+    assert_eq!(nearest, 2);
+}
+
+#[test]
+fun average_is_commutative() {
+    let left = u256::average(std::u256::max_value!(), 0, rounding::nearest());
+    let right = u256::average(0, std::u256::max_value!(), rounding::nearest());
+    assert_eq!(left, right);
 }

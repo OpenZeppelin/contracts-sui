@@ -11,37 +11,32 @@
 //! IMPORTANT: Care must be taken when transferring ownership to ensure the recipient
 //! address is valid and able to receive the capability. Once transferred, the previous
 //! owner immediately loses access to owner-restricted functions.
-module gift_box_v1_example::gift_box_v1 {
-    use openzeppelin_access::ownable::{Self, OwnerCap};
-    use std::string::String;
+module gift_box_v1_example::gift_box_v1;
 
-    /// One-Time Witness
-    public struct GIFT_BOX_V1 has drop {}
+use openzeppelin_access::ownable::{Self, OwnerCap};
+use std::string::String;
 
-    fun init(otw: GIFT_BOX_V1, ctx: &mut TxContext) {
-        ownable::new_owner(&otw, ctx);
-    }
+/// One-Time Witness
+public struct GIFT_BOX_V1 has drop {}
 
-    public struct Gift has key, store {
-        id: UID,
-        note: String,
-    }
+fun init(otw: GIFT_BOX_V1, ctx: &mut TxContext) {
+    ownable::new_owner(&otw, ctx);
+}
 
-    /// Sends a gift to a recipient.
-    ///
-    /// NOTE: Only the owner of this module is allowed to send a gift through the owner capability.
-    public fun send_gift(
-        _: &OwnerCap<GIFT_BOX_V1>,
-        note: String,
-        to: address,
-        ctx: &mut TxContext,
-    ) {
-        let new_gift = Gift {
-            id: object::new(ctx),
-            note,
-        };
+public struct Gift has key, store {
+    id: UID,
+    note: String,
+}
 
-        // Transfer the gift to the recipient
-        transfer::transfer(new_gift, to);
-    }
+/// Sends a gift to a recipient.
+///
+/// NOTE: Only the owner of this module is allowed to send a gift through the owner capability.
+public fun send_gift(_: &OwnerCap<GIFT_BOX_V1>, note: String, to: address, ctx: &mut TxContext) {
+    let new_gift = Gift {
+        id: object::new(ctx),
+        note,
+    };
+
+    // Transfer the gift to the recipient
+    transfer::transfer(new_gift, to);
 }
