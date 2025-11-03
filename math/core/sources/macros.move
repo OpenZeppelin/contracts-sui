@@ -182,7 +182,10 @@ public(package) fun mul_div_u256_wide(
     assert!(denominator != 0, EDivideByZero);
 
     let numerator = u512::mul_u256(a, b);
-    let (overflow, mut quotient, remainder) = u512::div_rem_u256(numerator, denominator);
+    let (overflow, mut quotient, remainder) = u512::div_rem_u256(
+        numerator,
+        denominator,
+    );
     if (overflow) {
         return (true, 0)
     };

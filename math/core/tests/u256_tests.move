@@ -10,7 +10,12 @@ use std::unit_test::assert_eq;
 // At the top level, the wrapper should mirror the macro’s behaviour.
 #[test]
 fun mul_div_rounding_modes() {
-    let (down_overflow, down) = u256::mul_div(70, 10, 4, rounding::down());
+    let (down_overflow, down) = u256::mul_div(
+        70,
+        10,
+        4,
+        rounding::down(),
+    );
     assert_eq!(down_overflow, false);
     assert_eq!(down, 175);
 
@@ -18,7 +23,12 @@ fun mul_div_rounding_modes() {
     assert_eq!(up_overflow, false);
     assert_eq!(up, 4);
 
-    let (nearest_overflow, nearest) = u256::mul_div(7, 10, 4, rounding::nearest());
+    let (nearest_overflow, nearest) = u256::mul_div(
+        7,
+        10,
+        4,
+        rounding::nearest(),
+    );
     assert_eq!(nearest_overflow, false);
     assert_eq!(nearest, 18);
 }
@@ -27,9 +37,19 @@ fun mul_div_rounding_modes() {
 #[test]
 fun mul_div_handles_wide_operands() {
     let large = (std::u128::max_value!() as u256) + 1;
-    let (overflow, result) = u256::mul_div(large, large, 7, rounding::down());
+    let (overflow, result) = u256::mul_div(
+        large,
+        large,
+        7,
+        rounding::down(),
+    );
     assert_eq!(overflow, false);
-    let (wide_overflow, expected) = macros::mul_div_u256_wide(large, large, 7, rounding::down());
+    let (wide_overflow, expected) = macros::mul_div_u256_wide(
+        large,
+        large,
+        7,
+        rounding::down(),
+    );
     assert_eq!(wide_overflow, false);
     assert_eq!(result, expected);
 }
@@ -44,7 +64,12 @@ fun mul_div_rejects_zero_denominator() {
 #[test]
 fun mul_div_detects_overflow() {
     let max = std::u256::max_value!();
-    let (overflow, result) = u256::mul_div(max, max, 1, rounding::down());
+    let (overflow, result) = u256::mul_div(
+        max,
+        max,
+        1,
+        rounding::down(),
+    );
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
 }
@@ -77,7 +102,8 @@ fun checked_shr_detects_set_bits() {
 #[test]
 fun checked_shr_detects_large_shift_loss() {
     // Reject when shifting by 255 would drop non-zero bits.
-    let result = u256::checked_shr(3, 255);
+    let value = 3u256 << 254;
+    let result = u256::checked_shr(value, 255);
     assert_eq!(result, option::none());
 }
 
