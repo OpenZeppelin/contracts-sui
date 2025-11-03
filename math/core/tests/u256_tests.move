@@ -76,8 +76,8 @@ fun checked_shr_detects_set_bits() {
 
 #[test]
 fun checked_shr_detects_large_shift_loss() {
-    // Shifting by width-1 is valid if the value has enough trailing zeros
-    let value = 1u256 << 255;
+    // Shifting by width is invalid
+    let value = 3u256 << 254;
     let result = u256::checked_shr(value, 255);
-    assert_eq!(result, option::some(1));
+    assert_eq!(result, option::none());
 }
