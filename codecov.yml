@@ -1,0 +1,11 @@
+coverage:
+  precision: 2
+  status:
+    project:
+      default:
+        target: 100%
+        threshold: 22% # TODO: Increase coverage to >= 90%
+
+ignore:
+  - "**/tests/**"
+  - "**/examples/**"

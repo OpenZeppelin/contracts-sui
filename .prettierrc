@@ -1,0 +1,14 @@
+{
+	"printWidth": 100,
+	"tabWidth": 2,
+	"useModuleLabel": true,
+	"autoGroupImports": "module",
+	"overrides": [
+		{
+			"files": "**/*.move",
+			"options": {
+				"tabWidth": 4
+			}
+		}
+	]
+}

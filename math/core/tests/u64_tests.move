@@ -18,7 +18,12 @@ fun mul_div_rounding_modes() {
     assert_eq!(up_overflow, false);
     assert_eq!(up, 4);
 
-    let (nearest_overflow, nearest) = u64::mul_div(7, 10, 4, rounding::nearest());
+    let (nearest_overflow, nearest) = u64::mul_div(
+        7,
+        10,
+        4,
+        rounding::nearest(),
+    );
     assert_eq!(nearest_overflow, false);
     assert_eq!(nearest, 18);
 }
@@ -40,7 +45,12 @@ fun mul_div_rejects_zero_denominator() {
 // Downstream overflow is still surfaced via the overflow flag.
 #[test]
 fun mul_div_detects_overflow() {
-    let (overflow, result) = u64::mul_div(std::u64::max_value!(), 2, 1, rounding::down());
+    let (overflow, result) = u64::mul_div(
+        std::u64::max_value!(),
+        2,
+        1,
+        rounding::down(),
+    );
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
 }

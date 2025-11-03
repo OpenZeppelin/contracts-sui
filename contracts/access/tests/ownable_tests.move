@@ -17,9 +17,7 @@ fun transfer_ownership_moves_cap_to_new_owner() {
         0,
     );
 
-    let owner_cap = ownable::create_immediate_owner_cap_for_testing<ImmediateTransferOTW>(
-        &mut ctx,
-    );
+    let owner_cap = ownable::create_immediate_owner_cap_for_testing<ImmediateTransferOTW>(&mut ctx);
     assert!(ownable::is_immediate_transfer_policy(&owner_cap));
 
     let cap_id = object::id(&owner_cap);
