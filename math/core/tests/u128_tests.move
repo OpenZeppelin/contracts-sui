@@ -36,6 +36,11 @@ fun checked_shl_returns_some() {
 }
 
 #[test]
+fun checked_shl_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u128::checked_shl(0, 129), option::some(0));
+}
+
+#[test]
 fun checked_shl_returns_same_for_zero_shift() {
     // Shifting by zero should return the same value.
     let value = 1u128 << 127;
@@ -65,6 +70,11 @@ fun checked_shr_returns_some() {
     let value = 1u128 << 64;
     let result = u128::checked_shr(value, 64);
     assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u128::checked_shr(0, 129), option::some(0));
 }
 
 #[test]
