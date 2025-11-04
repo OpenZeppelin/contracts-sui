@@ -128,3 +128,26 @@ fun mul_div_detects_overflow() {
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
 }
+
+// === mul_shr ===
+
+#[test]
+fun mul_shr_returns_some_when_in_range() {
+    let result = u16::mul_shr(600, 10, 2, rounding::down());
+    assert_eq!(result, option::some(1500));
+}
+
+#[test]
+fun mul_shr_respects_rounding_modes() {
+    let down = u16::mul_shr(5, 3, 1, rounding::down());
+    assert_eq!(down, option::some(7));
+
+    let nearest = u16::mul_shr(5, 3, 1, rounding::nearest());
+    assert_eq!(nearest, option::some(8));
+}
+
+#[test]
+fun mul_shr_detects_overflow() {
+    let overflow = u16::mul_shr(std::u16::max_value!(), std::u16::max_value!(), 0, rounding::down());
+    assert_eq!(overflow, option::none());
+}
