@@ -30,7 +30,10 @@ public fun checked_shr(value: u64, shift: u8): Option<u64> {
 }
 
 /// Shift the value left by the given number of bits.
-/// Returns `None` if the shift consumes a non-zero bit.
+///
+/// Returns `None` for the following cases:
+/// - the shift is greater than or equal to 64 bits.
+/// - the shift consumes a non-zero bit when shifting left.
 public fun checked_shl(value: u64, shift: u8): Option<u64> {
     if (shift >= 64) {
         return option::none()
