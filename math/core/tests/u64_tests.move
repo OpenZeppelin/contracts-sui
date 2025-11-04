@@ -37,7 +37,7 @@ fun checked_shl_returns_some() {
 
 #[test]
 fun checked_shl_zero_input_returns_zero_for_overshift() {
-    assert_eq!(u64::checked_shl(0, 12), option::some(0));
+    assert_eq!(u64::checked_shl(0, 65), option::some(0));
 }
 
 #[test]
@@ -74,7 +74,7 @@ fun checked_shr_returns_some() {
 
 #[test]
 fun checked_shr_zero_input_returns_zero_for_overshift() {
-    assert_eq!(u64::checked_shr(0, 12), option::some(0));
+    assert_eq!(u64::checked_shr(0, 65), option::some(0));
 }
 
 #[test]
