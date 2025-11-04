@@ -170,7 +170,7 @@ fun average_respects_rounding_modes() {
 #[test]
 fun average_handles_large_inputs() {
     let max = std::u256::max_value!();
-    let almost = max - 1u256;
+    let almost = max - 1;
 
     let down = macros::average!(max, almost, rounding::down());
     assert_eq!(down, almost);
