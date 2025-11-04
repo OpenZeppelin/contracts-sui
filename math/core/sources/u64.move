@@ -45,3 +45,12 @@ public fun mul_div(a: u64, b: u64, denominator: u64, rounding_mode: RoundingMode
         (false, result as u64)
     }
 }
+
+/// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
+///
+/// Returns None for the following cases:
+/// - the rounded quotient cannot be represented as `u64`
+public fun mul_shr(a: u64, b: u64, shift: u8, rounding_mode: RoundingMode): Option<u64> {
+    let (_, result) = macros::mul_shr!(a, b, shift, rounding_mode);
+    result.try_as_u64()
+}
