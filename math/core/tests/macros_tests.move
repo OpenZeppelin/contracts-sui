@@ -166,6 +166,22 @@ fun checked_shr_detects_set_bits() {
     assert_eq!(result, option::none());
 }
 
+// === checked_shl ===
+
+#[test]
+fun checked_shl_returns_some() {
+    // 0x0001 << 8 remains within the u16 range.
+    let result = macros::checked_shl!(1u16, 8);
+    assert_eq!(result, option::some(256u16));
+}
+
+#[test]
+fun checked_shl_detects_high_bits() {
+    // Highest bit of u256 set — shifting would overflow the 256-bit range.
+    let result = macros::checked_shl!(std::u256::max_value!(), 1);
+    assert_eq!(result, option::none());
+}
+
 // === average ===
 
 #[test]

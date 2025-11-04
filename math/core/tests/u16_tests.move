@@ -5,6 +5,80 @@ use openzeppelin_math::rounding;
 use openzeppelin_math::u16;
 use std::unit_test::assert_eq;
 
+// === average ===
+
+#[test]
+fun average_rounding_modes() {
+    let down = u16::average(400, 401, rounding::down());
+    assert_eq!(down, 400);
+
+    let up = u16::average(400, 401, rounding::up());
+    assert_eq!(up, 401);
+
+    let nearest = u16::average(1, 2, rounding::nearest());
+    assert_eq!(nearest, 2);
+}
+
+#[test]
+fun average_is_commutative() {
+    let left = u16::average(500, 100, rounding::nearest());
+    let right = u16::average(100, 500, rounding::nearest());
+    assert_eq!(left, right);
+}
+
+// === checked_shl ===
+
+#[test]
+fun checked_shl_returns_some() {
+    // 0x0001 << 8 is the highest safe power of two.
+    let result = u16::checked_shl(1, 8);
+    assert_eq!(result, option::some(256));
+}
+
+#[test]
+fun checked_shl_returns_same_for_zero_shift() {
+    // Shifting by zero should return the same value.
+    let result = u16::checked_shl(0x8001, 0);
+    assert_eq!(result, option::some(0x8001));
+}
+
+#[test]
+fun checked_shl_detects_high_bits() {
+    // 0x8001 << 1 would overflow the 16-bit range.
+    let result = u16::checked_shl(0x8001, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shl_rejects_large_shift() {
+    // Shift of 16 would trigger a Move abort; guard it instead.
+    let result = u16::checked_shl(1, 16);
+    assert_eq!(result, option::none());
+}
+
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // 0b1_0000_0000 >> 8 yields 0b0000_0001 with no information loss.
+    let result = u16::checked_shr(256, 8);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // Low bit set, shifting by one would drop it.
+    let result = u16::checked_shr(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shr_rejects_large_shift() {
+    // Reject width-sized shift to prevent narrowing to zero implicitly.
+    let result = u16::checked_shr(1, 16);
+    assert_eq!(result, option::none());
+}
+
 // === mul_div ===
 
 // Mirror the u8 suite but at the wider width.
@@ -53,48 +127,4 @@ fun mul_div_detects_overflow() {
     );
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
-}
-
-// === checked_shr ===
-
-#[test]
-fun checked_shr_returns_some() {
-    // 0b1_0000_0000 >> 8 yields 0b0000_0001 with no information loss.
-    let result = u16::checked_shr(256, 8);
-    assert_eq!(result, option::some(1));
-}
-
-#[test]
-fun checked_shr_detects_set_bits() {
-    // Low bit set, shifting by one would drop it.
-    let result = u16::checked_shr(5, 1);
-    assert_eq!(result, option::none());
-}
-
-#[test]
-fun checked_shr_rejects_large_shift() {
-    // Reject width-sized shift to prevent narrowing to zero implicitly.
-    let result = u16::checked_shr(1, 16);
-    assert_eq!(result, option::none());
-}
-
-// === average ===
-
-#[test]
-fun average_rounding_modes() {
-    let down = u16::average(400, 401, rounding::down());
-    assert_eq!(down, 400);
-
-    let up = u16::average(400, 401, rounding::up());
-    assert_eq!(up, 401);
-
-    let nearest = u16::average(1, 2, rounding::nearest());
-    assert_eq!(nearest, 2);
-}
-
-#[test]
-fun average_is_commutative() {
-    let left = u16::average(500, 100, rounding::nearest());
-    let right = u16::average(100, 500, rounding::nearest());
-    assert_eq!(left, right);
 }
