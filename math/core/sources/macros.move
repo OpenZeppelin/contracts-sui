@@ -222,7 +222,8 @@ public(package) fun mul_div_u256_fast(
     let remainder = numerator % denominator;
 
     if (remainder != 0) {
-        // Overflow is not possible here because the numerator (a * b) must be less than 2^256.
+        // Overflow is not possible here because the numerator (a * b) is bounded by (2^128-1)^2 < u256::MAX.
+        // Even after rounding up, the result fits in u256.
         (_, quotient) = round_division_result(quotient, denominator, remainder, rounding_mode);
     };
 
@@ -315,7 +316,8 @@ public(package) fun mul_shr_u256_fast(
     let remainder = numerator & mask;
 
     if (remainder != 0) {
-        // Overflow is not possible here because the numerator (a * b) must be less than 2^256.
+        // Overflow is not possible here because the numerator (a * b) is bounded by (2^128-1)^2 < u256::MAX.
+        // Even after rounding up, the result fits in u256.
         (_, result) = round_division_result(result, denominator, remainder, rounding_mode);
     };
 
