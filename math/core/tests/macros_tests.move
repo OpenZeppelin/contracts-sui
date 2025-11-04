@@ -10,26 +10,26 @@ use std::unit_test::assert_eq;
 #[test]
 fun fast_rounding_modes() {
     // Downward rounding leaves the truncated quotient untouched.
-    let down = macros::mul_div_u256_fast(7, 10, 4, rounding::down());
-    assert_eq!(down, 17);
+    let (_, down) = macros::mul_div_u256_fast(7, 10, 4, rounding::down());
+    assert_eq!(down, 17u256);
 
     // Force a manual round-up.
-    let up = macros::mul_div_u256_fast(5, 3, 4, rounding::up());
+    let (_, up) = macros::mul_div_u256_fast(5, 3, 4, rounding::up());
     assert_eq!(up, 4);
 
     // Nearest rounds down when the remainder is small.
-    let nearest_down = macros::mul_div_u256_fast(6, 1, 5, rounding::nearest());
+    let (_, nearest_down) = macros::mul_div_u256_fast(6, 1, 5, rounding::nearest());
     assert_eq!(nearest_down, 1);
 
     // Nearest rounds up when the remainder dominates.
-    let nearest_up = macros::mul_div_u256_fast(9, 1, 5, rounding::nearest());
+    let (_, nearest_up) = macros::mul_div_u256_fast(9, 1, 5, rounding::nearest());
     assert_eq!(nearest_up, 2);
 }
 
 #[test]
 fun fast_handles_exact_division() {
     // An exact division should never apply rounding adjustments.
-    let exact = macros::mul_div_u256_fast(8, 2, 4, rounding::up());
+    let (_, exact) = macros::mul_div_u256_fast(8, 2, 4, rounding::up());
     assert_eq!(exact, 4);
 }
 
@@ -126,7 +126,7 @@ fun wide_detects_overflowing_quotient() {
 fun macro_uses_fast_path_for_small_inputs() {
     let (overflow, result) = macros::mul_div!(15u8, 3u8, 4u8, rounding::down());
     assert_eq!(overflow, false);
-    let expected = macros::mul_div_u256_fast(15, 3, 4, rounding::down());
+    let (_, expected) = macros::mul_div_u256_fast(15, 3, 4, rounding::down());
     assert_eq!(result, expected);
 }
 
