@@ -25,3 +25,8 @@ public fun checked_shr(value: u256, shift: u8): Option<u256> {
 public fun checked_shl(value: u256, shift: u8): Option<u256> {
     macros::checked_shl!(value, shift)
 }
+
+/// Compute the arithmetic mean of two `u256` values with configurable rounding.
+public fun average(a: u256, b: u256, rounding_mode: RoundingMode): u256 {
+    macros::average!(a, b, rounding_mode)
+}

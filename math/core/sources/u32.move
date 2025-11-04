@@ -40,3 +40,8 @@ public fun checked_shl(value: u32, shift: u8): Option<u32> {
     };
     macros::checked_shl!(value, shift)
 }
+
+/// Compute the arithmetic mean of two `u32` values with configurable rounding.
+public fun average(a: u32, b: u32, rounding_mode: RoundingMode): u32 {
+    macros::average!(a, b, rounding_mode)
+}

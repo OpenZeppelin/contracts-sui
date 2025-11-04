@@ -30,10 +30,18 @@ public fun checked_shr(value: u8, shift: u8): Option<u8> {
 }
 
 /// Shift the value left by the given number of bits.
-/// Returns `None` if the shift consumes a non-zero bit.
+///
+/// Returns `None` for the following cases:
+/// - the shift is greater than or equal to 8 bits.
+/// - the shift consumes a non-zero bit when shifting left.
 public fun checked_shl(value: u8, shift: u8): Option<u8> {
     if (shift >= 8) {
         return option::none()
     };
     macros::checked_shl!(value, shift)
+}
+
+/// Compute the arithmetic mean of two `u8` values with configurable rounding.
+public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
+    macros::average!(a, b, rounding_mode)
 }
