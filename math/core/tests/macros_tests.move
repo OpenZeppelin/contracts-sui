@@ -150,6 +150,22 @@ fun macro_rejects_zero_denominator() {
     macros::mul_div!(1u64, 1u64, 0u64, rounding::down());
 }
 
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // 0b1_0000_0000 >> 8 lands on 0b1 without precision loss.
+    let result = macros::checked_shr!(256u16, 8);
+    assert_eq!(result, option::some(1u16));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // Detect that the low bit would be truncated.
+    let result = macros::checked_shr!(5u32, 1);
+    assert_eq!(result, option::none());
+}
+
 // === average ===
 
 #[test]

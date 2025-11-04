@@ -41,6 +41,37 @@ public(package) macro fun mul_div<$Int>(
     mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
 }
 
+/// Attempt to right shift `$value` by `$shift` bits while ensuring no truncated bits are lost.
+///
+/// The helper inspects the lower `$shift` bits and only performs the shift when all of them are
+/// zero, avoiding silent precision loss. It mirrors the signatures of the width-specific wrappers,
+/// returning `option::none()` when the operation would drop information. The macro does **not**
+/// enforce that `$shift` is below the bit-width of `$Int`; callers must guarantee that condition to
+/// avoid the Move runtime abort that occurs when shifting by an excessive amount.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: Unsigned integer subject to the shift.
+/// - `$shift`: Number of bits to shift to the right. Must be less than the bit-width of `$Int`.
+///
+/// #### Returns
+/// `option::some(result)` with the shifted value when the low bits are all zero, otherwise
+/// `option::none()`.
+///
+/// #### Aborts
+/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
+/// than or equal to the bit-width of `$Int`.
+public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$Int> {
+    let mask = (1_u256 << $shift) - 1;
+    let shifted = $value & (mask as $Int);
+    if (shifted != 0) {
+        return option::none()
+    };
+    option::some($value >> $shift)
+}
+
 /// Compute the arithmetic mean of two unsigned integers with configurable rounding.
 ///
 /// The helper works across all unsigned widths by normalising the operands to `u256`. It avoids

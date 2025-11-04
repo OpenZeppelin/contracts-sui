@@ -55,6 +55,29 @@ fun mul_div_detects_overflow() {
     assert_eq!(result, 0);
 }
 
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // 0b1_0000_0000 >> 8 yields 0b0000_0001 with no information loss.
+    let result = u16::checked_shr(256, 8);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // Low bit set, shifting by one would drop it.
+    let result = u16::checked_shr(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shr_rejects_large_shift() {
+    // Reject width-sized shift to prevent narrowing to zero implicitly.
+    let result = u16::checked_shr(1, 16);
+    assert_eq!(result, option::none());
+}
+
 // === average ===
 
 #[test]

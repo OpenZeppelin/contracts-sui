@@ -55,6 +55,30 @@ fun mul_div_detects_overflow() {
     assert_eq!(result, 0);
 }
 
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // 1 << 64 leaves a zeroed lower half that can be shifted out safely.
+    let value = 1u128 << 64;
+    let result = u128::checked_shr(value, 64);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // Detect loss when the LSB is still set.
+    let result = u128::checked_shr(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shr_rejects_large_shift() {
+    // Guard against shifting by the width.
+    let result = u128::checked_shr(1, 128);
+    assert_eq!(result, option::none());
+}
+
 // === average ===
 
 #[test]

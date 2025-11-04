@@ -32,7 +32,12 @@ fun mul_div_rounding_modes() {
 #[test]
 fun mul_div_handles_wide_operands() {
     let large = (std::u128::max_value!() as u256) + 1;
-    let (overflow, result) = u256::mul_div(large, large, 7, rounding::down());
+    let (overflow, result) = u256::mul_div(
+        large,
+        large,
+        7,
+        rounding::down(),
+    );
     assert_eq!(overflow, false);
     let (wide_overflow, expected) = macros::mul_div_u256_wide(
         large,
@@ -54,9 +59,47 @@ fun mul_div_rejects_zero_denominator() {
 #[test]
 fun mul_div_detects_overflow() {
     let max = std::u256::max_value!();
-    let (overflow, result) = u256::mul_div(max, max, 1, rounding::down());
+    let (overflow, result) = u256::mul_div(
+        max,
+        max,
+        1,
+        rounding::down(),
+    );
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
+}
+
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // Shift a high limb filled with zeros: 1 << 200 >> 200 == 1.
+    let value = 1u256 << 200;
+    let result = u256::checked_shr(value, 200);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_handles_top_bit() {
+    // The very top bit (1 << 255) can move to the least-significant position.
+    let value = 1u256 << 255;
+    let result = u256::checked_shr(value, 255);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // LSB set — shifting by one would drop it.
+    let result = u256::checked_shr(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shr_detects_large_shift_loss() {
+    // Shifting by width is invalid.
+    let value = 3u256 << 254;
+    let result = u256::checked_shr(value, 255);
+    assert_eq!(result, option::none());
 }
 
 // === average ===

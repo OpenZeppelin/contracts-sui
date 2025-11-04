@@ -50,6 +50,29 @@ fun mul_div_detects_overflow() {
     assert_eq!(result, 0);
 }
 
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // 0b1000_0000 >> 7 keeps the high bit and yields 0b0000_0001.
+    let result = u8::checked_shr(128, 7);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // 0b0000_0101 would lose the low bit if shifted by one.
+    let result = u8::checked_shr(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shr_rejects_large_shift() {
+    // Shifting by the width or more is treated as invalid.
+    let result = u8::checked_shr(1, 8);
+    assert_eq!(result, option::none());
+}
+
 // === average ===
 
 #[test]

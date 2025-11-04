@@ -55,6 +55,30 @@ fun mul_div_detects_overflow() {
     assert_eq!(result, 0);
 }
 
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // 1 << 32 leaves a clean trailing zero region to drop.
+    let value = 1u64 << 32;
+    let result = u64::checked_shr(value, 32);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // LSB is set, shifting by one would remove it.
+    let result = u64::checked_shr(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shr_rejects_large_shift() {
+    // Disallow shifting by the full width to avoid runtime aborts.
+    let result = u64::checked_shr(1, 64);
+    assert_eq!(result, option::none());
+}
+
 // === average ===
 
 #[test]

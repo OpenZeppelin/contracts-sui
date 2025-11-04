@@ -10,6 +10,14 @@ public fun mul_div(a: u256, b: u256, denominator: u256, rounding_mode: RoundingM
     macros::mul_div!(a, b, denominator, rounding_mode)
 }
 
+/// Shift the value right by the given number of bits.
+///
+/// Returns `None` for the following cases:
+/// - the shift consumes a non-zero bit when shifting right.
+public fun checked_shr(value: u256, shift: u8): Option<u256> {
+    macros::checked_shr!(value, shift)
+}
+
 /// Compute the arithmetic mean of two `u256` values with configurable rounding.
 public fun average(a: u256, b: u256, rounding_mode: RoundingMode): u256 {
     macros::average!(a, b, rounding_mode)

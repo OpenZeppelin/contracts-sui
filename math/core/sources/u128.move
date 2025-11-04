@@ -17,6 +17,18 @@ public fun mul_div(a: u128, b: u128, denominator: u128, rounding_mode: RoundingM
     }
 }
 
+/// Shift the value right by the given number of bits.
+///
+/// Returns `None` for the following cases:
+/// - the shift is greater than or equal to 128 bits.
+/// - the shift consumes a non-zero bit when shifting right.
+public fun checked_shr(value: u128, shift: u8): Option<u128> {
+    if (shift >= 128) {
+        return option::none()
+    };
+    macros::checked_shr!(value, shift)
+}
+
 /// Compute the arithmetic mean of two `u128` values with configurable rounding.
 public fun average(a: u128, b: u128, rounding_mode: RoundingMode): u128 {
     macros::average!(a, b, rounding_mode)

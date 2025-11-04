@@ -55,6 +55,29 @@ fun mul_div_detects_overflow() {
     assert_eq!(result, 0);
 }
 
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // Shifting 0x0001_0000 right by 16 yields 0x0000_0001.
+    let result = u32::checked_shr(1u32 << 16, 16);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // Mask ensures we spot the dropped LSB.
+    let result = u32::checked_shr(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shr_rejects_large_shift() {
+    // Width-sized shift should be rejected.
+    let result = u32::checked_shr(1, 32);
+    assert_eq!(result, option::none());
+}
+
 // === average ===
 
 #[test]
