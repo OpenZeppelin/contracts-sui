@@ -16,7 +16,7 @@ public fun checked_shl(value: u8, shift: u8): Option<u8> {
     if (value == 0) {
         option::some(0)
     } else if (shift >= 8) {
-        return option::none()
+        option::none()
     } else {
         macros::checked_shl!(value, shift)
     }
@@ -30,7 +30,7 @@ public fun checked_shr(value: u8, shift: u8): Option<u8> {
     if (value == 0) {
         option::some(0)
     } else if (shift >= 8) {
-        return option::none()
+        option::none()
     } else {
         macros::checked_shr!(value, shift)
     }
