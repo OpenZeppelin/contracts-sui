@@ -18,7 +18,10 @@ public fun mul_div(a: u64, b: u64, denominator: u64, rounding_mode: RoundingMode
 }
 
 /// Shift the value right by the given number of bits.
-/// Returns `None` if the shift consumes a non-zero bit.
+///
+/// Returns `None` for the following cases:
+/// - the shift is greater than or equal to 64 bits.
+/// - the shift consumes a non-zero bit when shifting right.
 public fun checked_shr(value: u64, shift: u8): Option<u64> {
     if (shift >= 64) {
         return option::none()
