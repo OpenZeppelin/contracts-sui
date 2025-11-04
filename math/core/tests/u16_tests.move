@@ -77,3 +77,24 @@ fun checked_shr_rejects_large_shift() {
     let result = u16::checked_shr(1, 16);
     assert_eq!(result, option::none());
 }
+
+// === average ===
+
+#[test]
+fun average_rounding_modes() {
+    let down = u16::average(400, 401, rounding::down());
+    assert_eq!(down, 400);
+
+    let up = u16::average(400, 401, rounding::up());
+    assert_eq!(up, 401);
+
+    let nearest = u16::average(1, 2, rounding::nearest());
+    assert_eq!(nearest, 2);
+}
+
+#[test]
+fun average_is_commutative() {
+    let left = u16::average(500, 100, rounding::nearest());
+    let right = u16::average(100, 500, rounding::nearest());
+    assert_eq!(left, right);
+}

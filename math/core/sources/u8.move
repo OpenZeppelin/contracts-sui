@@ -28,3 +28,8 @@ public fun checked_shr(value: u8, shift: u8): Option<u8> {
     };
     macros::checked_shr!(value, shift)
 }
+
+/// Compute the arithmetic mean of two `u8` values with configurable rounding.
+public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
+    macros::average!(a, b, rounding_mode)
+}

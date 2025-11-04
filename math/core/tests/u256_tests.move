@@ -10,12 +10,7 @@ use std::unit_test::assert_eq;
 // At the top level, the wrapper should mirror the macro’s behaviour.
 #[test]
 fun mul_div_rounding_modes() {
-    let (down_overflow, down) = u256::mul_div(
-        70,
-        10,
-        4,
-        rounding::down(),
-    );
+    let (down_overflow, down) = u256::mul_div(70, 10, 4, rounding::down());
     assert_eq!(down_overflow, false);
     assert_eq!(down, 175);
 
@@ -105,4 +100,25 @@ fun checked_shr_detects_large_shift_loss() {
     let value = 3u256 << 254;
     let result = u256::checked_shr(value, 255);
     assert_eq!(result, option::none());
+}
+
+// === average ===
+
+#[test]
+fun average_rounding_modes() {
+    let down = u256::average(4, 7, rounding::down());
+    assert_eq!(down, 5);
+
+    let up = u256::average(4, 7, rounding::up());
+    assert_eq!(up, 6);
+
+    let nearest = u256::average(1, 2, rounding::nearest());
+    assert_eq!(nearest, 2);
+}
+
+#[test]
+fun average_is_commutative() {
+    let left = u256::average(std::u256::max_value!(), 0, rounding::nearest());
+    let right = u256::average(0, std::u256::max_value!(), rounding::nearest());
+    assert_eq!(left, right);
 }

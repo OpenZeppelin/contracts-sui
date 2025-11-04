@@ -165,3 +165,40 @@ fun checked_shr_detects_set_bits() {
     let result = macros::checked_shr!(5u32, 1);
     assert_eq!(result, option::none());
 }
+
+// === average ===
+
+#[test]
+fun average_respects_rounding_modes() {
+    let down = macros::average!(4u64, 7u64, rounding::down());
+    assert_eq!(down, 5u64);
+
+    let up = macros::average!(4u64, 7u64, rounding::up());
+    assert_eq!(up, 6u64);
+
+    let nearest = macros::average!(1u16, 2u16, rounding::nearest());
+    assert_eq!(nearest, 2u16);
+
+    let reversed = macros::average!(7u32, 4u32, rounding::down());
+    assert_eq!(reversed, 5u32);
+}
+
+#[test]
+fun average_handles_large_inputs() {
+    let max = std::u256::max_value!();
+    let almost = max - 1;
+
+    let down = macros::average!(max, almost, rounding::down());
+    assert_eq!(down, almost);
+
+    let up = macros::average!(max, almost, rounding::up());
+    assert_eq!(up, max);
+}
+
+#[test]
+fun average_of_equal_values() {
+    let value = 42u64;
+    assert_eq!(macros::average!(value, value, rounding::down()), value);
+    assert_eq!(macros::average!(value, value, rounding::up()), value);
+    assert_eq!(macros::average!(value, value, rounding::nearest()), value);
+}
