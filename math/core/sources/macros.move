@@ -6,70 +6,34 @@ use openzeppelin_math::u512;
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
 
-/// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
+/// Compute the arithmetic mean of two unsigned integers with configurable rounding.
 ///
-/// This macro provides a uniform API for `mul_div` across all unsigned integer widths. It normalises
-/// the inputs to `u256`, chooses the most efficient helper, and returns the rounded quotient alongside
-/// an overflow flag. Narrower wrapper modules downcast the result after ensuring it fits. Undefined
-/// divisions (e.g. denominator = 0) abort with descriptive error codes.
-///
-/// #### Generics
-/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
-///
-/// #### Parameters
-/// - `$a`, `$b`: Unsigned factors.
-/// - `$denominator`: Unsigned divisor.
-/// - `$rounding_mode`: Rounding strategy.
-///
-/// #### Returns
-/// `(overflow, result)` where `overflow` is `true` when the rounded quotient exceeds `u256::MAX` and
-/// `result` carries the rounded value when no overflow occurred.
-///
-/// #### Aborts
-/// Propagates the same error codes as the underlying helpers (`EDivideByZero`).
-public(package) macro fun mul_div<$Int>(
-    $a: $Int,
-    $b: $Int,
-    $denominator: $Int,
-    $rounding_mode: RoundingMode,
-): (bool, u256) {
+/// The helper works across all unsigned widths by normalising the operands to `u256`. It avoids
+/// overflow by anchoring on the smaller input, halving the difference with `mul_div_inner`, and
+/// then shifting back into the caller's width.
+public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: RoundingMode): $Int {
     let a_u256 = ($a as u256);
     let b_u256 = ($b as u256);
-    let denominator_u256 = ($denominator as u256);
     let rounding_mode = $rounding_mode;
 
-    mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
-}
-
-/// Attempt to right shift `$value` by `$shift` bits while ensuring no truncated bits are lost.
-///
-/// The helper inspects the lower `$shift` bits and only performs the shift when all of them are
-/// zero, avoiding silent precision loss. It mirrors the signatures of the width-specific wrappers,
-/// returning `option::none()` when the operation would drop information. The macro does **not**
-/// enforce that `$shift` is below the bit-width of `$Int`; callers must guarantee that condition to
-/// avoid the Move runtime abort that occurs when shifting by an excessive amount.
-///
-/// #### Generics
-/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
-///
-/// #### Parameters
-/// - `$value`: Unsigned integer subject to the shift.
-/// - `$shift`: Number of bits to shift to the right. Must be less than the bit-width of `$Int`.
-///
-/// #### Returns
-/// `option::some(result)` with the shifted value when the low bits are all zero, otherwise
-/// `option::none()`.
-///
-/// #### Aborts
-/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
-/// than or equal to the bit-width of `$Int`.
-public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$Int> {
-    let mask = (1_u256 << $shift) - 1;
-    let shifted = $value & (mask as $Int);
-    if (shifted != 0) {
-        return option::none()
+    // Short circuit to avoid unnecessary computation.
+    if (a_u256 == b_u256) {
+        return a_u256 as $Int
     };
-    option::some($value >> $shift)
+
+    let mut lower = a_u256;
+    let mut upper = b_u256;
+    if (lower > upper) {
+        lower = b_u256;
+        upper = a_u256;
+    };
+
+    let delta = upper - lower;
+    // Use the fast path as delta * 1 is guaranteed to fit in u256
+    let half = mul_div_u256_fast(delta, 1, 2, rounding_mode);
+    let average = lower + half;
+
+    average as $Int
 }
 
 /// Attempt to left shift `$value` by `$shift` bits while ensuring no truncated bits are lost.
@@ -108,34 +72,70 @@ public(package) macro fun checked_shl<$Int>($value: $Int, $shift: u8): Option<$I
     option::some(shifted)
 }
 
-/// Compute the arithmetic mean of two unsigned integers with configurable rounding.
+/// Attempt to right shift `$value` by `$shift` bits while ensuring no truncated bits are lost.
 ///
-/// The helper works across all unsigned widths by normalising the operands to `u256`. It avoids
-/// overflow by anchoring on the smaller input, halving the difference with `mul_div_inner`, and
-/// then shifting back into the caller's width.
-public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: RoundingMode): $Int {
+/// The helper inspects the lower `$shift` bits and only performs the shift when all of them are
+/// zero, avoiding silent precision loss. It mirrors the signatures of the width-specific wrappers,
+/// returning `option::none()` when the operation would drop information. The macro does **not**
+/// enforce that `$shift` is below the bit-width of `$Int`; callers must guarantee that condition to
+/// avoid the Move runtime abort that occurs when shifting by an excessive amount.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: Unsigned integer subject to the shift.
+/// - `$shift`: Number of bits to shift to the right. Must be less than the bit-width of `$Int`.
+///
+/// #### Returns
+/// `option::some(result)` with the shifted value when the low bits are all zero, otherwise
+/// `option::none()`.
+///
+/// #### Aborts
+/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
+/// than or equal to the bit-width of `$Int`.
+public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$Int> {
+    let mask = (1_u256 << $shift) - 1;
+    let shifted = $value & (mask as $Int);
+    if (shifted != 0) {
+        return option::none()
+    };
+    option::some($value >> $shift)
+}
+
+/// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
+///
+/// This macro provides a uniform API for `mul_div` across all unsigned integer widths. It normalises
+/// the inputs to `u256`, chooses the most efficient helper, and returns the rounded quotient alongside
+/// an overflow flag. Narrower wrapper modules downcast the result after ensuring it fits. Undefined
+/// divisions (e.g. denominator = 0) abort with descriptive error codes.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$a`, `$b`: Unsigned factors.
+/// - `$denominator`: Unsigned divisor.
+/// - `$rounding_mode`: Rounding strategy.
+///
+/// #### Returns
+/// `(overflow, result)` where `overflow` is `true` when the rounded quotient exceeds `u256::MAX` and
+/// `result` carries the rounded value when no overflow occurred.
+///
+/// #### Aborts
+/// Propagates the same error codes as the underlying helpers (`EDivideByZero`).
+public(package) macro fun mul_div<$Int>(
+    $a: $Int,
+    $b: $Int,
+    $denominator: $Int,
+    $rounding_mode: RoundingMode,
+): (bool, u256) {
     let a_u256 = ($a as u256);
     let b_u256 = ($b as u256);
+    let denominator_u256 = ($denominator as u256);
     let rounding_mode = $rounding_mode;
 
-    // Short circuit to avoid unnecessary computation.
-    if (a_u256 == b_u256) {
-        return a_u256 as $Int
-    };
-
-    let mut lower = a_u256;
-    let mut upper = b_u256;
-    if (lower > upper) {
-        lower = b_u256;
-        upper = a_u256;
-    };
-
-    let delta = upper - lower;
-    // Use the fast path as delta * 1 is guaranteed to fit in u256
-    let half = mul_div_u256_fast(delta, 1, 2, rounding_mode);
-    let average = lower + half;
-
-    average as $Int
+    mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
 }
 
 /// === Helper functions ===

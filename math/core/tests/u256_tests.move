@@ -5,6 +5,92 @@ use openzeppelin_math::rounding;
 use openzeppelin_math::u256;
 use std::unit_test::assert_eq;
 
+// === average ===
+
+#[test]
+fun average_rounding_modes() {
+    let down = u256::average(4, 7, rounding::down());
+    assert_eq!(down, 5);
+
+    let up = u256::average(4, 7, rounding::up());
+    assert_eq!(up, 6);
+
+    let nearest = u256::average(1, 2, rounding::nearest());
+    assert_eq!(nearest, 2);
+}
+
+#[test]
+fun average_is_commutative() {
+    let left = u256::average(std::u256::max_value!(), 0, rounding::nearest());
+    let right = u256::average(0, std::u256::max_value!(), rounding::nearest());
+    assert_eq!(left, right);
+}
+
+// === checked_shl ===
+
+#[test]
+fun checked_shl_returns_some() {
+    // Shift to the top bit while staying within range.
+    let value = 1u256;
+    let result = u256::checked_shl(value, 255);
+    assert_eq!(result, option::some(1u256 << 255));
+}
+
+#[test]
+fun checked_shl_returns_same_for_zero_shift() {
+    // Shifting by zero should return the same value.
+    let value = 1u256 << 255;
+    let result = u256::checked_shl(value, 0);
+    assert_eq!(result, option::some(value));
+}
+
+#[test]
+fun checked_shl_detects_high_bits() {
+    // Highest bit already set — shifting again should fail.
+    let result = u256::checked_shl(1u256 << 255, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shl_rejects_large_shift() {
+    // Disallow shifting when the value would overflow after a large shift.
+    let result = u256::checked_shl(2, 255);
+    assert_eq!(result, option::none());
+}
+
+// === checked_shr ===
+
+#[test]
+fun checked_shr_returns_some() {
+    // Shift a high limb filled with zeros: 1 << 200 >> 200 == 1.
+    let value = 1u256 << 200;
+    let result = u256::checked_shr(value, 200);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_handles_top_bit() {
+    // The very top bit (1 << 255) can move to the least-significant position.
+    let value = 1u256 << 255;
+    let result = u256::checked_shr(value, 255);
+    assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_detects_set_bits() {
+    // LSB set — shifting by one would drop it.
+    let result = u256::checked_shr(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun checked_shr_detects_large_shift_loss() {
+    // Reject when shifting by 255 would drop non-zero bits.
+    let value = 3u256 << 254;
+    let result = u256::checked_shr(value, 255);
+    assert_eq!(result, option::none());
+}
+
 // === mul_div ===
 
 // At the top level, the wrapper should mirror the macro’s behaviour.
@@ -67,90 +153,4 @@ fun mul_div_detects_overflow() {
     );
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
-}
-
-// === checked_shr ===
-
-#[test]
-fun checked_shr_returns_some() {
-    // Shift a high limb filled with zeros: 1 << 200 >> 200 == 1.
-    let value = 1u256 << 200;
-    let result = u256::checked_shr(value, 200);
-    assert_eq!(result, option::some(1));
-}
-
-#[test]
-fun checked_shr_handles_top_bit() {
-    // The very top bit (1 << 255) can move to the least-significant position.
-    let value = 1u256 << 255;
-    let result = u256::checked_shr(value, 255);
-    assert_eq!(result, option::some(1));
-}
-
-#[test]
-fun checked_shr_detects_set_bits() {
-    // LSB set — shifting by one would drop it.
-    let result = u256::checked_shr(5, 1);
-    assert_eq!(result, option::none());
-}
-
-#[test]
-fun checked_shr_detects_large_shift_loss() {
-    // Reject when shifting by 255 would drop non-zero bits.
-    let value = 3u256 << 254;
-    let result = u256::checked_shr(value, 255);
-    assert_eq!(result, option::none());
-}
-
-// === checked_shl ===
-
-#[test]
-fun checked_shl_returns_some() {
-    // Shift to the top bit while staying within range.
-    let value = 1u256;
-    let result = u256::checked_shl(value, 255);
-    assert_eq!(result, option::some(1u256 << 255));
-}
-
-#[test]
-fun checked_shl_returns_same_for_zero_shift() {
-    // Shifting by zero should return the same value.
-    let value = 1u256 << 255;
-    let result = u256::checked_shl(value, 0);
-    assert_eq!(result, option::some(value));
-}
-
-#[test]
-fun checked_shl_detects_high_bits() {
-    // Highest bit already set — shifting again should fail.
-    let result = u256::checked_shl(1u256 << 255, 1);
-    assert_eq!(result, option::none());
-}
-
-#[test]
-fun checked_shl_rejects_large_shift() {
-    // Disallow shifting when the value would overflow after a large shift.
-    let result = u256::checked_shl(2, 255);
-    assert_eq!(result, option::none());
-}
-
-// === average ===
-
-#[test]
-fun average_rounding_modes() {
-    let down = u256::average(4, 7, rounding::down());
-    assert_eq!(down, 5);
-
-    let up = u256::average(4, 7, rounding::up());
-    assert_eq!(up, 6);
-
-    let nearest = u256::average(1, 2, rounding::nearest());
-    assert_eq!(nearest, 2);
-}
-
-#[test]
-fun average_is_commutative() {
-    let left = u256::average(std::u256::max_value!(), 0, rounding::nearest());
-    let right = u256::average(0, std::u256::max_value!(), rounding::nearest());
-    assert_eq!(left, right);
 }
