@@ -148,6 +148,11 @@ fun mul_shr_respects_rounding_modes() {
 
 #[test]
 fun mul_shr_detects_overflow() {
-    let overflow = u32::mul_shr(std::u32::max_value!(), std::u32::max_value!(), 0, rounding::down());
+    let overflow = u32::mul_shr(
+        std::u32::max_value!(),
+        std::u32::max_value!(),
+        0,
+        rounding::down(),
+    );
     assert_eq!(overflow, option::none());
 }
