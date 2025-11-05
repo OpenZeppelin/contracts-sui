@@ -53,6 +53,7 @@ public fun mul_div(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode
 }
 
 /// Count the number of leading zero bits in the value.
+/// 
 /// Returns the full bit width (16) if the value is 0.
 public fun clz(value: u16): u8 {
     macros::clz!(value, BIT_WIDTH as u16) as u8
