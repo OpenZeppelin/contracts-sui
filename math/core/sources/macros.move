@@ -138,6 +138,48 @@ public(package) macro fun mul_div<$Int>(
     mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
 }
 
+/// Count the number of leading zero bits in an unsigned integer.
+///
+/// Uses an iterative binary search to efficiently locate the most significant set bit by repeatedly
+/// halving the search range. The algorithm normalizes the input to `u256` and right-shifts by
+/// progressively smaller powers of two (`bit_width/2`, `bit_width/4`, ..., `1`). When a shift
+/// produces zero, the high bit must lie in the lower half, so we increment the leading-zero count
+/// and examine the original (unshifted) portion. Otherwise, we focus on the shifted (upper) portion.
+/// For a value of zero, the helper returns the full bit width.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to count leading zeros for.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+///
+/// #### Returns
+/// The number of leading zero bits as a `u16`. Returns `$bit_width` if `$value` is 0.
+public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
+    let value = $value;
+    let bit_width = $bit_width;
+    if (value == 0 as $Int) {
+        return bit_width
+    };
+
+    // Binary search optimized for any bit width
+    let mut res = 0;
+    let mut val = (value as u256);
+    let mut shift = (bit_width / 2) as u8;
+    while (shift > 0) {
+        let shifted = val >> shift;
+        if (shifted == 0) {
+            res = res + (shift as u16);
+        } else {
+            val = shifted;
+        };
+        shift = shift / 2;
+    };
+    
+    res
+}
+
 /// === Helper functions ===
 
 /// Multiply two `u256` values, divide by `denominator`, and round the result without widening.
