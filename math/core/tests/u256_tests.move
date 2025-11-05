@@ -154,3 +154,92 @@ fun mul_div_detects_overflow() {
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
 }
+
+// === clz ===
+
+// clz(0) should return 256 (all bits are leading zeros).
+#[test]
+fun clz_returns_bit_width_for_zero() {
+    
+    let result = u256::clz(0);
+    assert_eq!(result, 256);
+}
+
+// When the most significant bit is set, there are no leading zeros.
+#[test]
+fun clz_returns_zero_for_top_bit_set() {
+    let value = 1u256 << 255;
+    let result = u256::clz(value);
+    assert_eq!(result, 0);
+}
+
+// Max value has the top bit set, so no leading zeros.
+#[test]
+fun clz_returns_zero_for_max_value() {
+    let max = std::u256::max_value!();
+    let result = u256::clz(max);
+    assert_eq!(result, 0);
+}
+
+// Test all possible bit positions from 0 to 255.
+#[test]
+fun clz_handles_all_bit_positions() {
+    let mut bit_pos: u8 = 0;
+    while (true) {
+        let value = 1u256 << bit_pos;
+        let expected_clz = 255 - bit_pos;
+        assert_eq!(u256::clz(value), expected_clz as u16);
+        if (bit_pos == 255) {
+            break
+        } else {
+            bit_pos = bit_pos + 1;
+        }
+    };
+}
+
+// Test that lower bits have no effect on the result.
+#[test]
+fun clz_lower_bits_have_no_effect() {
+    let mut bit_pos: u8 = 0;
+    while (true) {
+        let mut value = 1u256 << bit_pos;
+        // Set all bits below bit_pos to 1
+        value = value | (value - 1);
+        let expected_clz = 255 - bit_pos;
+        assert_eq!(u256::clz(value), expected_clz as u16);
+        if (bit_pos == 255) {
+            break
+        } else {
+            bit_pos = bit_pos + 1;
+        }
+    };
+}
+
+// When multiple bits are set, clz counts from the highest bit.
+#[test]
+fun clz_counts_from_highest_bit() {
+    // 0b11 (bits 0 and 1 set) - highest is bit 1, so clz = 254
+    assert_eq!(u256::clz(3), 254);
+    
+    // 0b1111 (bits 0-3 set) - highest is bit 3, so clz = 252
+    assert_eq!(u256::clz(15), 252);
+    
+    // 0xFF (bits 0-7 set) - highest is bit 7, so clz = 248
+    assert_eq!(u256::clz(255), 248);
+}
+
+// Test values near power-of-2 boundaries.
+#[test]
+fun clz_handles_values_near_boundaries() {
+    // 0x100 (256) has bit 8 set, clz = 247
+    assert_eq!(u256::clz(256), 247);
+    
+    // 0xFF (255) has bit 7 set, clz = 248
+    assert_eq!(u256::clz(255), 248);
+    
+    // 0x10000 (65536) has bit 16 set, clz = 239
+    assert_eq!(u256::clz(65536), 239);
+    
+    // 0xFFFF (65535) has bit 15 set, clz = 240
+    assert_eq!(u256::clz(65535), 240);
+}
