@@ -3,6 +3,8 @@ module openzeppelin_math::u16;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
+const BIT_WIDTH: u8 = 16;
+
 /// Compute the arithmetic mean of two `u16` values with configurable rounding.
 public fun average(a: u16, b: u16, rounding_mode: RoundingMode): u16 {
     macros::average!(a, b, rounding_mode)
@@ -14,7 +16,7 @@ public fun average(a: u16, b: u16, rounding_mode: RoundingMode): u16 {
 /// - the shift is greater than or equal to 16 bits.
 /// - the shift consumes a non-zero bit when shifting left.
 public fun checked_shl(value: u16, shift: u8): Option<u16> {
-    if (shift >= 16) {
+    if (shift >= BIT_WIDTH) {
         return option::none()
     };
     macros::checked_shl!(value, shift)
@@ -26,7 +28,7 @@ public fun checked_shl(value: u16, shift: u8): Option<u16> {
 /// - the shift is greater than or equal to 16 bits.
 /// - the shift consumes a non-zero bit when shifting right.
 public fun checked_shr(value: u16, shift: u8): Option<u16> {
-    if (shift >= 16) {
+    if (shift >= BIT_WIDTH) {
         return option::none()
     };
     macros::checked_shr!(value, shift)
@@ -44,4 +46,10 @@ public fun mul_div(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode
     } else {
         (false, result as u16)
     }
+}
+
+/// Count the number of leading zero bits in the value.
+/// Returns the full bit width (16) if the value is 0.
+public fun clz(value: u16): u8 {
+    macros::clz!(value, BIT_WIDTH as u16) as u8
 }
