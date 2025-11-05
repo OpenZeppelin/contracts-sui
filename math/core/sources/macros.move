@@ -180,6 +180,32 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
     res
 }
 
+/// Compute the log in base 2 of a positive value rounded towards zero.
+///
+/// This helper derives the logarithm by leveraging the count-leading-zeros operation. For any
+/// non-zero value, the position of the most significant set bit corresponds to `floor(log2(value))`,
+/// which we compute as `bit_width - 1 - clz(value)`. When the input is zero, the helper returns `0`
+/// to avoid undefined behavior.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to compute the logarithm for.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+///
+/// #### Returns
+/// The base-2 logarithm as a `u8`, rounded towards zero. Returns `0` if `$value` is 0.
+public(package) macro fun log2<$Int>($value: $Int, $bit_width: u16): u8 {
+    let value = $value;
+    if (value == 0 as $Int) {
+        return 0
+    };
+    let bit_width = $bit_width;
+    let zeros = clz!(value, bit_width);
+    (bit_width - 1 - zeros) as u8
+}
+
 /// === Helper functions ===
 
 /// Multiply two `u256` values, divide by `denominator`, and round the result without widening.
