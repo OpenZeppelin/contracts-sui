@@ -170,7 +170,6 @@ fun mul_div_detects_overflow() {
 // clz(0) should return 256 (all bits are leading zeros).
 #[test]
 fun clz_returns_bit_width_for_zero() {
-    
     let result = u256::clz(0);
     assert_eq!(result, 256);
 }
@@ -230,10 +229,10 @@ fun clz_lower_bits_have_no_effect() {
 fun clz_counts_from_highest_bit() {
     // 0b11 (bits 0 and 1 set) - highest is bit 1, so clz = 254
     assert_eq!(u256::clz(3), 254);
-    
+
     // 0b1111 (bits 0-3 set) - highest is bit 3, so clz = 252
     assert_eq!(u256::clz(15), 252);
-    
+
     // 0xFF (bits 0-7 set) - highest is bit 7, so clz = 248
     assert_eq!(u256::clz(255), 248);
 }
@@ -243,13 +242,13 @@ fun clz_counts_from_highest_bit() {
 fun clz_handles_values_near_boundaries() {
     // 0x100 (256) has bit 8 set, clz = 247
     assert_eq!(u256::clz(256), 247);
-    
+
     // 0xFF (255) has bit 7 set, clz = 248
     assert_eq!(u256::clz(255), 248);
-    
+
     // 0x10000 (65536) has bit 16 set, clz = 239
     assert_eq!(u256::clz(65536), 239);
-    
+
     // 0xFFFF (65535) has bit 15 set, clz = 240
     assert_eq!(u256::clz(65535), 240);
 }

@@ -197,10 +197,10 @@ fun clz_lower_bits_have_no_effect() {
 fun clz_counts_from_highest_bit() {
     // 0b11 (bits 0 and 1 set) - highest is bit 1, so clz = 62
     assert_eq!(u64::clz(3), 62);
-    
+
     // 0b1111 (bits 0-3 set) - highest is bit 3, so clz = 60
     assert_eq!(u64::clz(15), 60);
-    
+
     // 0xFF (bits 0-7 set) - highest is bit 7, so clz = 56
     assert_eq!(u64::clz(255), 56);
 }
@@ -210,13 +210,13 @@ fun clz_counts_from_highest_bit() {
 fun clz_handles_values_near_boundaries() {
     // 0x100000000 (2^32) has bit 32 set, clz = 31
     assert_eq!(u64::clz(0x100000000), 31);
-    
+
     // 0xFFFFFFFF (2^32 - 1) has bit 31 set, clz = 32
     assert_eq!(u64::clz(0xFFFFFFFF), 32);
-    
+
     // 0x10000000000000 (2^52) has bit 52 set, clz = 11
     assert_eq!(u64::clz(0x10000000000000), 11);
-    
+
     // 0xFFFFFFFFFFFFF (2^52 - 1) has bit 51 set, clz = 12
     assert_eq!(u64::clz(0xFFFFFFFFFFFFF), 12);
 }
