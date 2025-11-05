@@ -56,3 +56,10 @@ public fun mul_div(a: u128, b: u128, denominator: u128, rounding_mode: RoundingM
 public fun clz(value: u128): u8 {
     macros::clz!(value, BIT_WIDTH as u16) as u8
 }
+
+/// Compute the log in base 2 of a positive value rounded towards zero.
+///
+/// Returns 0 if given 0.
+public fun log2(value: u128): u8 {
+    macros::log2!(value, BIT_WIDTH as u16)
+}
