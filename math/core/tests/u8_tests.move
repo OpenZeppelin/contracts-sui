@@ -213,3 +213,61 @@ fun clz_handles_values_near_boundaries() {
     // 31 has bit 4 set, clz = 3
     assert_eq!(u8::clz(31), 3);
 }
+
+// === log2 ===
+
+#[test]
+fun log2_returns_zero_for_zero() {
+    // log2(0) should return 0 by convention
+    assert_eq!(u8::log2(0), 0);
+}
+
+#[test]
+fun log2_returns_zero_for_one() {
+    // log2(1) = 0 since 2^0 = 1
+    assert_eq!(u8::log2(1), 0);
+}
+
+#[test]
+fun log2_handles_powers_of_two() {
+    // for powers of 2, log2 returns the exponent
+    assert_eq!(u8::log2(1 << 0), 0); // 2^0 = 1
+    assert_eq!(u8::log2(1 << 1), 1); // 2^1 = 2
+    assert_eq!(u8::log2(1 << 2), 2); // 2^2 = 4
+    assert_eq!(u8::log2(1 << 3), 3); // 2^3 = 8
+    assert_eq!(u8::log2(1 << 4), 4); // 2^4 = 16
+    assert_eq!(u8::log2(1 << 5), 5); // 2^5 = 32
+    assert_eq!(u8::log2(1 << 6), 6); // 2^6 = 64
+    assert_eq!(u8::log2(1 << 7), 7); // 2^7 = 128
+}
+
+#[test]
+fun log2_rounds_down() {
+    // log2 rounds down to the nearest integer
+    assert_eq!(u8::log2(3), 1);   // log2(3) ≈ 1.58 → 1
+    assert_eq!(u8::log2(5), 2);   // log2(5) ≈ 2.32 → 2
+    assert_eq!(u8::log2(7), 2);   // log2(7) ≈ 2.81 → 2
+    assert_eq!(u8::log2(15), 3);  // log2(15) ≈ 3.91 → 3
+    assert_eq!(u8::log2(127), 6); // log2(127) ≈ 6.99 → 6
+}
+
+#[test]
+fun log2_handles_values_near_boundaries() {
+    // test values just before and at power-of-2 boundaries
+    // 2^4 - 1 = 15
+    assert_eq!(u8::log2((1 << 4) - 1), 3);
+    // 2^4 = 16
+    assert_eq!(u8::log2(1 << 4), 4);
+    
+    // 2^6 - 1 = 63
+    assert_eq!(u8::log2((1 << 6) - 1), 5);
+    // 2^6 = 64
+    assert_eq!(u8::log2(1 << 6), 6);
+}
+
+#[test]
+fun log2_handles_max_value() {
+    // max value has all bits set, so log2 = 7
+    let max = std::u8::max_value!();
+    assert_eq!(u8::log2(max), 7);
+}
