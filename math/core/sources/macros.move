@@ -176,7 +176,7 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
         };
         shift = shift / 2;
     };
-    
+
     res
 }
 
