@@ -36,6 +36,11 @@ fun checked_shl_returns_some() {
 }
 
 #[test]
+fun checked_shl_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u64::checked_shl(0, 65), option::some(0));
+}
+
+#[test]
 fun checked_shl_returns_same_for_zero_shift() {
     // Shifting by zero should return the same value.
     let value = 1 << 63;
@@ -65,6 +70,11 @@ fun checked_shr_returns_some() {
     let value = 1u64 << 32;
     let result = u64::checked_shr(value, 32);
     assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u64::checked_shr(0, 65), option::some(0));
 }
 
 #[test]

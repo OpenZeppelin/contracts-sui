@@ -11,25 +11,29 @@ public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
 /// Shift the value left by the given number of bits.
 ///
 /// Returns `None` for the following cases:
-/// - the shift is greater than or equal to 8 bits.
 /// - the shift consumes a non-zero bit when shifting left.
 public fun checked_shl(value: u8, shift: u8): Option<u8> {
-    if (shift >= 8) {
-        return option::none()
-    };
-    macros::checked_shl!(value, shift)
+    if (value == 0) {
+        option::some(0)
+    } else if (shift >= 8) {
+        option::none()
+    } else {
+        macros::checked_shl!(value, shift)
+    }
 }
 
 /// Shift the value right by the given number of bits.
 ///
 /// Returns `None` for the following cases:
-/// - the shift is greater than or equal to 8 bits.
 /// - the shift consumes a non-zero bit when shifting right.
 public fun checked_shr(value: u8, shift: u8): Option<u8> {
-    if (shift >= 8) {
-        return option::none()
-    };
-    macros::checked_shr!(value, shift)
+    if (value == 0) {
+        option::some(0)
+    } else if (shift >= 8) {
+        option::none()
+    } else {
+        macros::checked_shr!(value, shift)
+    }
 }
 
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
