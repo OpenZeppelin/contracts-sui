@@ -238,9 +238,9 @@ fun log2_returns_zero_for_one() {
 #[test]
 fun log2_handles_powers_of_two() {
     // for powers of 2, log2 returns the exponent
-    assert_eq!(u128::log2(1 << 0), 0);   // 2^0 = 1
-    assert_eq!(u128::log2(1 << 1), 1);   // 2^1 = 2
-    assert_eq!(u128::log2(1 << 8), 8);   // 2^8 = 256
+    assert_eq!(u128::log2(1 << 0), 0); // 2^0 = 1
+    assert_eq!(u128::log2(1 << 1), 1); // 2^1 = 2
+    assert_eq!(u128::log2(1 << 8), 8); // 2^8 = 256
     assert_eq!(u128::log2(1 << 16), 16); // 2^16 = 65536
     assert_eq!(u128::log2(1 << 32), 32); // 2^32
     assert_eq!(u128::log2(1 << 64), 64); // 2^64
@@ -251,10 +251,10 @@ fun log2_handles_powers_of_two() {
 #[test]
 fun log2_rounds_down() {
     // log2 rounds down to the nearest integer
-    assert_eq!(u128::log2(3), 1);   // log2(3) ≈ 1.58 → 1
-    assert_eq!(u128::log2(5), 2);   // log2(5) ≈ 2.32 → 2
-    assert_eq!(u128::log2(7), 2);   // log2(7) ≈ 2.81 → 2
-    assert_eq!(u128::log2(15), 3);  // log2(15) ≈ 3.91 → 3
+    assert_eq!(u128::log2(3), 1); // log2(3) ≈ 1.58 → 1
+    assert_eq!(u128::log2(5), 2); // log2(5) ≈ 2.32 → 2
+    assert_eq!(u128::log2(7), 2); // log2(7) ≈ 2.81 → 2
+    assert_eq!(u128::log2(15), 3); // log2(15) ≈ 3.91 → 3
     assert_eq!(u128::log2(255), 7); // log2(255) ≈ 7.99 → 7
 }
 
@@ -265,7 +265,7 @@ fun log2_handles_values_near_boundaries() {
     assert_eq!(u128::log2((1 << 8) - 1), 7);
     // 2^8 = 256
     assert_eq!(u128::log2(1 << 8), 8);
-    
+
     // 2^64 - 1
     assert_eq!(u128::log2((1 << 64) - 1), 63);
     // 2^64

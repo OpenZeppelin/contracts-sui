@@ -244,10 +244,10 @@ fun log2_handles_powers_of_two() {
 #[test]
 fun log2_rounds_down() {
     // log2 rounds down to the nearest integer
-    assert_eq!(u8::log2(3), 1);   // log2(3) ≈ 1.58 → 1
-    assert_eq!(u8::log2(5), 2);   // log2(5) ≈ 2.32 → 2
-    assert_eq!(u8::log2(7), 2);   // log2(7) ≈ 2.81 → 2
-    assert_eq!(u8::log2(15), 3);  // log2(15) ≈ 3.91 → 3
+    assert_eq!(u8::log2(3), 1); // log2(3) ≈ 1.58 → 1
+    assert_eq!(u8::log2(5), 2); // log2(5) ≈ 2.32 → 2
+    assert_eq!(u8::log2(7), 2); // log2(7) ≈ 2.81 → 2
+    assert_eq!(u8::log2(15), 3); // log2(15) ≈ 3.91 → 3
     assert_eq!(u8::log2(127), 6); // log2(127) ≈ 6.99 → 6
 }
 
@@ -258,7 +258,7 @@ fun log2_handles_values_near_boundaries() {
     assert_eq!(u8::log2((1 << 4) - 1), 3);
     // 2^4 = 16
     assert_eq!(u8::log2(1 << 4), 4);
-    
+
     // 2^6 - 1 = 63
     assert_eq!(u8::log2((1 << 6) - 1), 5);
     // 2^6 = 64
