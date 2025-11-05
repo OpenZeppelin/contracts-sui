@@ -233,7 +233,7 @@ fun clz_counts_from_highest_bit() {
     // 0b1111 (bits 0-3 set) - highest is bit 3, so clz = 252
     assert_eq!(u256::clz(15), 252);
 
-    // 0xFF (bits 0-7 set) - highest is bit 7, so clz = 248
+    // 0xff (bits 0-7 set) - highest is bit 7, so clz = 248
     assert_eq!(u256::clz(255), 248);
 }
 
@@ -241,14 +241,20 @@ fun clz_counts_from_highest_bit() {
 #[test]
 fun clz_handles_values_near_boundaries() {
     // 0x100 (256) has bit 8 set, clz = 247
-    assert_eq!(u256::clz(256), 247);
+    assert_eq!(u256::clz(1 << 8), 247);
 
-    // 0xFF (255) has bit 7 set, clz = 248
-    assert_eq!(u256::clz(255), 248);
+    // 0xff (255) has bit 7 set, clz = 248
+    assert_eq!(u256::clz((1 << 8) - 1), 248);
 
-    // 0x10000 (65536) has bit 16 set, clz = 239
-    assert_eq!(u256::clz(65536), 239);
+    // 0x1_0000 (65536) has bit 16 set, clz = 239
+    assert_eq!(u256::clz(1 << 16), 239);
 
-    // 0xFFFF (65535) has bit 15 set, clz = 240
-    assert_eq!(u256::clz(65535), 240);
+    // 0xffff (65535) has bit 15 set, clz = 240
+    assert_eq!(u256::clz((1 << 16) - 1), 240);
+
+    // 0x1_0000_0000_0000_0000 (2^64) has bit 64 set, clz = 191
+    assert_eq!(u256::clz(1 << 64), 191);
+
+    // 0xffff_ffff_ffff_ffff (2^64 - 1) has bit 63 set, clz = 192
+    assert_eq!(u256::clz((1 << 64) - 1), 192);
 }

@@ -201,7 +201,7 @@ fun clz_counts_from_highest_bit() {
     // 0b1111 (bits 0-3 set) - highest is bit 3, so clz = 124
     assert_eq!(u128::clz(15), 124);
 
-    // 0xFF (bits 0-7 set) - highest is bit 7, so clz = 120
+    // 0xff (bits 0-7 set) - highest is bit 7, so clz = 120
     assert_eq!(u128::clz(255), 120);
 }
 
@@ -209,14 +209,14 @@ fun clz_counts_from_highest_bit() {
 #[test]
 fun clz_handles_values_near_boundaries() {
     // 2^64 has bit 64 set, clz = 63
-    assert_eq!(u128::clz(0x10000000000000000), 63);
+    assert_eq!(u128::clz(1 << 64), 63);
 
     // 2^64 - 1 has bit 63 set, clz = 64
-    assert_eq!(u128::clz(0xFFFFFFFFFFFFFFFF), 64);
+    assert_eq!(u128::clz((1 << 64) - 1), 64);
 
     // 2^100 has bit 100 set, clz = 27
-    assert_eq!(u128::clz(0x10000000000000000000000000), 27);
+    assert_eq!(u128::clz(1 << 100), 27);
 
     // 2^100 - 1 has bit 99 set, clz = 28
-    assert_eq!(u128::clz(0xFFFFFFFFFFFFFFFFFFFFFFFFF), 28);
+    assert_eq!(u128::clz((1 << 100) - 1), 28);
 }

@@ -194,7 +194,7 @@ fun clz_counts_from_highest_bit() {
     // 0b1111 (bits 0-3 set) - highest is bit 3, so clz = 4
     assert_eq!(u8::clz(15), 4);
 
-    // 0xFF (bits 0-7 set) - highest is bit 7, so clz = 0
+    // 0xff (bits 0-7 set) - highest is bit 7, so clz = 0
     assert_eq!(u8::clz(255), 0);
 }
 
