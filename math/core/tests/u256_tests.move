@@ -185,7 +185,7 @@ fun clz_returns_zero_for_max_value() {
 #[test]
 fun clz_handles_all_bit_positions() {
     let mut bit_pos: u8 = 0;
-    while (true) {
+    loop {
         let value = 1u256 << bit_pos;
         let expected_clz = 255 - bit_pos;
         assert_eq!(u256::clz(value), expected_clz as u16);
@@ -201,7 +201,7 @@ fun clz_handles_all_bit_positions() {
 #[test]
 fun clz_lower_bits_have_no_effect() {
     let mut bit_pos: u8 = 0;
-    while (true) {
+    loop {
         let mut value = 1u256 << bit_pos;
         // Set all bits below bit_pos to 1
         value = value | (value - 1);
