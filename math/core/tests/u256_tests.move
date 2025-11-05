@@ -167,24 +167,24 @@ fun mul_div_detects_overflow() {
 
 // === clz ===
 
-// clz(0) should return 256 (all bits are leading zeros).
 #[test]
 fun clz_returns_bit_width_for_zero() {
+    // clz(0) should return 256 (all bits are leading zeros).
     let result = u256::clz(0);
     assert_eq!(result, 256);
 }
 
-// When the most significant bit is set, there are no leading zeros.
 #[test]
 fun clz_returns_zero_for_top_bit_set() {
+    // when the most significant bit is set, there are no leading zeros.
     let value = 1u256 << 255;
     let result = u256::clz(value);
     assert_eq!(result, 0);
 }
 
-// Max value has the top bit set, so no leading zeros.
 #[test]
 fun clz_returns_zero_for_max_value() {
+    // max value has the top bit set, so no leading zeros.
     let max = std::u256::max_value!();
     let result = u256::clz(max);
     assert_eq!(result, 0);
@@ -212,7 +212,7 @@ fun clz_lower_bits_have_no_effect() {
     let mut bit_pos: u8 = 0;
     loop {
         let mut value = 1u256 << bit_pos;
-        // Set all bits below bit_pos to 1
+        // set all bits below bit_pos to 1
         value = value | (value - 1);
         let expected_clz = 255 - bit_pos;
         assert_eq!(u256::clz(value), expected_clz as u16);
@@ -224,9 +224,9 @@ fun clz_lower_bits_have_no_effect() {
     };
 }
 
-// When multiple bits are set, clz counts from the highest bit.
 #[test]
 fun clz_counts_from_highest_bit() {
+    // when multiple bits are set, clz counts from the highest bit.
     // 0b11 (bits 0 and 1 set) - highest is bit 1, so clz = 254
     assert_eq!(u256::clz(3), 254);
 
