@@ -36,6 +36,11 @@ fun checked_shl_returns_some() {
 }
 
 #[test]
+fun checked_shl_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u32::checked_shl(0, 33), option::some(0));
+}
+
+#[test]
 fun checked_shl_returns_same_for_zero_shift() {
     // Shifting by zero should return the same value.
     let result = u32::checked_shl(0x9000_0000, 0);
@@ -63,6 +68,11 @@ fun checked_shr_returns_some() {
     // Shifting 0x0001_0000 right by 16 yields 0x0000_0001.
     let result = u32::checked_shr(1u32 << 16, 16);
     assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u32::checked_shr(0, 33), option::some(0));
 }
 
 #[test]

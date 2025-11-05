@@ -36,6 +36,11 @@ fun checked_shl_returns_some() {
 }
 
 #[test]
+fun checked_shl_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u8::checked_shl(0, 9), option::some(0));
+}
+
+#[test]
 fun checked_shl_returns_same_for_zero_shift() {
     // Shifting by zero should return the same value.
     let result = u8::checked_shl(129, 0);
@@ -63,6 +68,11 @@ fun checked_shr_returns_some() {
     // 0b1000_0000 >> 7 keeps the high bit and yields 0b0000_0001.
     let result = u8::checked_shr(128, 7);
     assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u8::checked_shr(0, 9), option::some(0));
 }
 
 #[test]

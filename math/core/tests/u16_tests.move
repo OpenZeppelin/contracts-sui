@@ -36,6 +36,11 @@ fun checked_shl_returns_some() {
 }
 
 #[test]
+fun checked_shl_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u16::checked_shl(0, 17), option::some(0));
+}
+
+#[test]
 fun checked_shl_returns_same_for_zero_shift() {
     // Shifting by zero should return the same value.
     let result = u16::checked_shl(0x8001, 0);
@@ -63,6 +68,11 @@ fun checked_shr_returns_some() {
     // 0b1_0000_0000 >> 8 yields 0b0000_0001 with no information loss.
     let result = u16::checked_shr(256, 8);
     assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_zero_input_returns_zero_for_overshift() {
+    assert_eq!(u16::checked_shr(0, 17), option::some(0));
 }
 
 #[test]

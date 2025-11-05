@@ -37,6 +37,11 @@ fun checked_shl_returns_some() {
 }
 
 #[test]
+fun checked_shl_zero_input_returns_zero() {
+    assert_eq!(u256::checked_shl(0, 120), option::some(0));
+}
+
+#[test]
 fun checked_shl_returns_same_for_zero_shift() {
     // Shifting by zero should return the same value.
     let value = 1u256 << 255;
@@ -66,6 +71,11 @@ fun checked_shr_returns_some() {
     let value = 1u256 << 200;
     let result = u256::checked_shr(value, 200);
     assert_eq!(result, option::some(1));
+}
+
+#[test]
+fun checked_shr_zero_input_returns_zero() {
+    assert_eq!(u256::checked_shr(0, 120), option::some(0));
 }
 
 #[test]
