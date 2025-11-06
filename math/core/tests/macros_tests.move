@@ -218,3 +218,90 @@ fun average_of_equal_values() {
     assert_eq!(macros::average!(value, value, rounding::up()), value);
     assert_eq!(macros::average!(value, value, rounding::nearest()), value);
 }
+
+// === clz ===
+
+#[test]
+fun clz_returns_bit_width_for_zero() {
+    // clz(0) should return the bit width (all bits are leading zeros)
+    assert_eq!(macros::clz!(0u8, 8), 8);
+    assert_eq!(macros::clz!(0u16, 16), 16);
+    assert_eq!(macros::clz!(0u32, 32), 32);
+    assert_eq!(macros::clz!(0u64, 64), 64);
+    assert_eq!(macros::clz!(0u128, 128), 128);
+    assert_eq!(macros::clz!(0u256, 256), 256);
+}
+
+#[test]
+fun clz_returns_zero_for_top_bit_set() {
+    // when the most significant bit is set, there are no leading zeros
+    assert_eq!(macros::clz!(1u8 << 7, 8), 0);
+    assert_eq!(macros::clz!(1u16 << 15, 16), 0);
+    assert_eq!(macros::clz!(1u32 << 31, 32), 0);
+    assert_eq!(macros::clz!(1u64 << 63, 64), 0);
+    assert_eq!(macros::clz!(1u128 << 127, 128), 0);
+    assert_eq!(macros::clz!(1u256 << 255, 256), 0);
+}
+
+#[test]
+fun clz_returns_zero_for_max_value() {
+    // max value has the top bit set, so no leading zeros
+    assert_eq!(macros::clz!(std::u8::max_value!(), 8), 0);
+    assert_eq!(macros::clz!(std::u16::max_value!(), 16), 0);
+    assert_eq!(macros::clz!(std::u32::max_value!(), 32), 0);
+    assert_eq!(macros::clz!(std::u64::max_value!(), 64), 0);
+    assert_eq!(macros::clz!(std::u128::max_value!(), 128), 0);
+    assert_eq!(macros::clz!(std::u256::max_value!(), 256), 0);
+}
+
+#[test]
+fun clz_handles_powers_of_two() {
+    // for powers of 2, clz returns bit_width - 1 - log2(value)
+    assert_eq!(macros::clz!(1u8, 8), 7); // 2^0
+    assert_eq!(macros::clz!(2u8, 8), 6); // 2^1
+    assert_eq!(macros::clz!(4u8, 8), 5); // 2^2
+    assert_eq!(macros::clz!(8u8, 8), 4); // 2^3
+
+    assert_eq!(macros::clz!(1u64, 64), 63); // 2^0
+    assert_eq!(macros::clz!(256u64, 64), 55); // 2^8
+    assert_eq!(macros::clz!(65536u64, 64), 47); // 2^16
+
+    assert_eq!(macros::clz!(1u256, 256), 255); // 2^0
+    assert_eq!(macros::clz!(1u256 << 64, 256), 191); // 2^64
+    assert_eq!(macros::clz!(1u256 << 128, 256), 127); // 2^128
+}
+
+#[test]
+fun clz_lower_bits_have_no_effect() {
+    // when lower bits are set, they don't affect the clz count
+    // 0b11 = 3: highest bit is 1, so clz = 6 for u8
+    assert_eq!(macros::clz!(3u8, 8), 6);
+    // 0b111 = 7: highest bit is 2, so clz = 5 for u8
+    assert_eq!(macros::clz!(7u8, 8), 5);
+    // 0b1111 = 15: highest bit is 3, so clz = 4 for u8
+    assert_eq!(macros::clz!(15u8, 8), 4);
+
+    // For u256: 255 = 0xff (bits 0-7 set), highest is bit 7, so clz = 248
+    assert_eq!(macros::clz!(255u256, 256), 248);
+    // 65535 = 0xffff (bits 0-15 set), highest is bit 15, so clz = 240
+    assert_eq!(macros::clz!(65535u256, 256), 240);
+}
+
+#[test]
+fun clz_handles_values_near_boundaries() {
+    // test values just before and at power-of-2 boundaries
+    // 2^8 = 256
+    assert_eq!(macros::clz!(256u16, 16), 7);
+    // 2^8 - 1 = 255
+    assert_eq!(macros::clz!(255u16, 16), 8);
+
+    // 2^16 = 65536
+    assert_eq!(macros::clz!(65536u32, 32), 15);
+    // 2^16 - 1 = 65535
+    assert_eq!(macros::clz!(65535u32, 32), 16);
+
+    // 2^32
+    assert_eq!(macros::clz!(1u64 << 32, 64), 31);
+    // 2^32 - 1
+    assert_eq!(macros::clz!((1u64 << 32) - 1, 64), 32);
+}
