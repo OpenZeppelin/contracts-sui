@@ -149,11 +149,39 @@ fun mul_shr_returns_some_when_in_range() {
 
 #[test]
 fun mul_shr_respects_rounding_modes() {
+    // 5*3 = 15; 15 >> 1 = 7.5
     let down = u32::mul_shr(5, 3, 1, rounding::down());
     assert_eq!(down, option::some(7));
 
+    let up = u32::mul_shr(5, 3, 1, rounding::up());
+    assert_eq!(up, option::some(8));
+
     let nearest = u32::mul_shr(5, 3, 1, rounding::nearest());
     assert_eq!(nearest, option::some(8));
+
+    // 7*4 = 28; 28 >> 2 = 7.0
+    let exact = u32::mul_shr(7, 4, 2, rounding::nearest());
+    assert_eq!(exact, option::some(7));
+
+    // 13*3 = 39; 39 >> 2 = 9.75
+    let down2 = u32::mul_shr(13, 3, 2, rounding::down());
+    assert_eq!(down2, option::some(9));
+
+    let up2 = u32::mul_shr(13, 3, 2, rounding::up());
+    assert_eq!(up2, option::some(10));
+
+    let nearest2 = u32::mul_shr(13, 3, 2, rounding::nearest());
+    assert_eq!(nearest2, option::some(10));
+
+    // 7*3 = 21; 21 >> 2 = 5.25
+    let down3 = u32::mul_shr(7, 3, 2, rounding::down());
+    assert_eq!(down3, option::some(5));
+
+    let up3 = u32::mul_shr(7, 3, 2, rounding::up());
+    assert_eq!(up3, option::some(6));
+
+    let nearest3 = u32::mul_shr(7, 3, 2, rounding::nearest());
+    assert_eq!(nearest3, option::some(5));
 }
 
 #[test]

@@ -262,14 +262,12 @@ public(package) fun mul_div_u256_wide(
         denominator,
     );
     if (overflow) {
-        return (true, 0)
-    };
-
-    if (remainder != 0) {
-        return round_division_result(quotient, denominator, remainder, rounding_mode)
-    };
-
-    (false, quotient)
+        (true, 0)
+    } else if (remainder == 0) {
+        (false, quotient)
+    } else {
+        round_division_result(quotient, denominator, remainder, rounding_mode)
+    }
 }
 
 /// Internal helper for `mul_shr` that selects the most efficient implementation based on the input size.
@@ -343,8 +341,8 @@ public(package) fun mul_shr_u256_wide(
     rounding_mode: RoundingMode,
 ): (bool, u256) {
     let product = u512::mul_u256(a, b);
-    let hi = u512::hi(&product);
-    let lo = u512::lo(&product);
+    let hi = product.hi();
+    let lo = product.lo();
 
     if (shift == 0) {
         if (hi != 0) {
@@ -358,12 +356,12 @@ public(package) fun mul_shr_u256_wide(
         return (true, 0)
     };
 
-    let complement_shift = (256u16 - (shift as u16)) as u8;
+    let complement_shift = (256 - (shift as u16)) as u8;
     let lower = lo >> shift;
     let carry = hi << complement_shift;
     let mut result = lower | carry;
 
-    let mask = (1u256 << shift) - 1;
+    let mask = (1 << shift) - 1;
     let remainder = lo & mask;
     if (remainder != 0) {
         let denominator = 1u256 << shift;
