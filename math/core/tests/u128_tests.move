@@ -140,3 +140,59 @@ fun mul_div_detects_overflow() {
     assert_eq!(overflow, true);
     assert_eq!(result, 0);
 }
+
+// === mul_shr ===
+
+#[test]
+fun mul_shr_returns_some_when_in_range() {
+    let result = u128::mul_shr(1_000_000_000_000, 10_000, 5, rounding::down());
+    assert_eq!(result, option::some(312_500_000_000_000));
+}
+
+#[test]
+fun mul_shr_respects_rounding_modes() {
+    // 5*3 = 15; 15 >> 1 = 7.5
+    let down = u128::mul_shr(5, 3, 1, rounding::down());
+    assert_eq!(down, option::some(7));
+
+    let up = u128::mul_shr(5, 3, 1, rounding::up());
+    assert_eq!(up, option::some(8));
+
+    let nearest = u128::mul_shr(5, 3, 1, rounding::nearest());
+    assert_eq!(nearest, option::some(8));
+
+    // 7*4 = 28; 28 >> 2 = 7.0
+    let exact = u128::mul_shr(7, 4, 2, rounding::nearest());
+    assert_eq!(exact, option::some(7));
+
+    // 13*3 = 39; 39 >> 2 = 9.75
+    let down2 = u128::mul_shr(13, 3, 2, rounding::down());
+    assert_eq!(down2, option::some(9));
+
+    let up2 = u128::mul_shr(13, 3, 2, rounding::up());
+    assert_eq!(up2, option::some(10));
+
+    let nearest2 = u128::mul_shr(13, 3, 2, rounding::nearest());
+    assert_eq!(nearest2, option::some(10));
+
+    // 7*3 = 21; 21 >> 2 = 5.25
+    let down3 = u128::mul_shr(7, 3, 2, rounding::down());
+    assert_eq!(down3, option::some(5));
+
+    let up3 = u128::mul_shr(7, 3, 2, rounding::up());
+    assert_eq!(up3, option::some(6));
+
+    let nearest3 = u128::mul_shr(7, 3, 2, rounding::nearest());
+    assert_eq!(nearest3, option::some(5));
+}
+
+#[test]
+fun mul_shr_detects_overflow() {
+    let overflow = u128::mul_shr(
+        std::u128::max_value!(),
+        std::u128::max_value!(),
+        0,
+        rounding::down(),
+    );
+    assert_eq!(overflow, option::none());
+}
