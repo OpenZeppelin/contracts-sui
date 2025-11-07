@@ -2,6 +2,7 @@ module openzeppelin_math::u8;
 
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
+use std::u256::try_as_u8;
 
 const BIT_WIDTH: u8 = 8;
 
@@ -50,6 +51,15 @@ public fun mul_div(a: u8, b: u8, denominator: u8, rounding_mode: RoundingMode): 
     } else {
         (false, result as u8)
     }
+}
+
+/// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
+///
+/// Returns None for the following cases:
+/// - the rounded quotient cannot be represented as `u8`
+public fun mul_shr(a: u8, b: u8, shift: u8, rounding_mode: RoundingMode): Option<u8> {
+    let (_, result) = macros::mul_shr!(a, b, shift, rounding_mode);
+    result.try_as_u8()
 }
 
 /// Count the number of leading zero bits in the value.

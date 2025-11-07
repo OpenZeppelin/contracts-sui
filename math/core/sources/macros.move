@@ -30,7 +30,7 @@ public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: Roun
 
     let delta = upper - lower;
     // Use the fast path as delta * 1 is guaranteed to fit in u256
-    let half = mul_div_u256_fast(delta, 1, 2, rounding_mode);
+    let (_, half) = mul_div_u256_fast(delta, 1, 2, rounding_mode);
     let average = lower + half;
 
     average as $Int
@@ -138,6 +138,43 @@ public(package) macro fun mul_div<$Int>(
     mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
 }
 
+/// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
+///
+/// This macro mirrors the ergonomics of `mul_div`, promoting the operands to `u256` and delegating to
+/// a shared helper that performs the computation using the most efficient implementation available.
+/// It starts from the floor of `(a * b) / 2^shift`, then applies the requested rounding mode. The
+/// overflow flag reports when the rounded value no longer fits in the `u256` range (i.e. significant
+/// bits remain above the lowest 256 bits after the shift).
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$a`, `$b`: Unsigned factors.
+/// - `$shift`: Number of bits to shift to the right. Must be less than 256.
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// `(overflow, result)` where `overflow` reports that the rounded value cannot fit in 256 bits and
+/// `result` contains the rounded quotient when no overflow occurs.
+///
+/// #### Aborts
+/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is 256 or
+/// greater.
+public(package) macro fun mul_shr<$Int>(
+    $a: $Int,
+    $b: $Int,
+    $shift: u8,
+    $rounding_mode: RoundingMode,
+): (bool, u256) {
+    let a_u256 = ($a as u256);
+    let b_u256 = ($b as u256);
+    let shift = $shift;
+    let rounding_mode = $rounding_mode;
+
+    mul_shr_inner(a_u256, b_u256, shift, rounding_mode)
+}
+
 /// Count the number of leading zero bits in an unsigned integer.
 ///
 /// Uses an iterative binary search to efficiently locate the most significant set bit by repeatedly
@@ -186,11 +223,6 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
 /// non-zero value, the position of the most significant set bit corresponds to `floor(log2(value))`,
 /// which we compute as `bit_width - 1 - clz(value)`. When the input is zero, the helper returns `0`
 /// to avoid undefined behavior.
-///
-/// #### Generics
-/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
-///
-/// #### Parameters
 /// - `$value`: The unsigned integer to compute the logarithm for.
 /// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
 ///
@@ -207,6 +239,22 @@ public(package) macro fun log2<$Int>($value: $Int, $bit_width: u16): u8 {
 }
 
 /// === Helper functions ===
+
+/// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
+/// Returns `(overflow, quotient)` mirroring the macro implementation.
+public(package) fun mul_div_inner(
+    a: u256,
+    b: u256,
+    denominator: u256,
+    rounding_mode: RoundingMode,
+): (bool, u256) {
+    let max_small = std::u128::max_value!() as u256;
+    if (a > max_small || b > max_small) {
+        mul_div_u256_wide(a, b, denominator, rounding_mode)
+    } else {
+        mul_div_u256_fast(a, b, denominator, rounding_mode)
+    }
+}
 
 /// Multiply two `u256` values, divide by `denominator`, and round the result without widening.
 ///
@@ -229,7 +277,7 @@ public(package) fun mul_div_u256_fast(
     b: u256,
     denominator: u256,
     rounding_mode: RoundingMode,
-): u256 {
+): (bool, u256) {
     assert!(denominator != 0, EDivideByZero);
 
     let numerator = a * b;
@@ -237,20 +285,12 @@ public(package) fun mul_div_u256_fast(
     let remainder = numerator % denominator;
 
     if (remainder != 0) {
-        let should_round_up = if (rounding_mode == rounding::up()) {
-            true
-        } else if (rounding_mode == rounding::nearest()) {
-            remainder >= denominator - remainder
-        } else {
-            false
-        };
-
-        if (should_round_up) {
-            quotient = quotient + 1;
-        }
+        // Overflow is not possible here because the numerator (a * b) is bounded by (2^128-1)^2 < u256::MAX.
+        // Even after rounding up, the result fits in u256.
+        (_, quotient) = round_division_result(quotient, denominator, remainder, rounding_mode);
     };
 
-    quotient
+    (false, quotient)
 }
 
 /// Multiply two `u256` values with full 512-bit precision before dividing and rounding.
@@ -280,47 +320,150 @@ public(package) fun mul_div_u256_wide(
     assert!(denominator != 0, EDivideByZero);
 
     let numerator = u512::mul_u256(a, b);
-    let (overflow, mut quotient, remainder) = u512::div_rem_u256(
+    let (overflow, quotient, remainder) = u512::div_rem_u256(
         numerator,
         denominator,
     );
     if (overflow) {
-        return (true, 0)
-    };
-
-    if (remainder != 0) {
-        let should_round_up = if (rounding_mode == rounding::up()) {
-            true
-        } else if (rounding_mode == rounding::nearest()) {
-            remainder >= denominator - remainder
-        } else {
-            false
-        };
-
-        if (should_round_up) {
-            if (quotient == std::u256::max_value!()) {
-                return (true, 0)
-            };
-            quotient = quotient + 1;
-        }
-    };
-
-    (false, quotient)
+        (true, 0)
+    } else if (remainder == 0) {
+        (false, quotient)
+    } else {
+        round_division_result(quotient, denominator, remainder, rounding_mode)
+    }
 }
 
-/// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
+/// Internal helper for `mul_shr` that selects the most efficient implementation based on the input size.
 /// Returns `(overflow, quotient)` mirroring the macro implementation.
-public(package) fun mul_div_inner(
+public(package) fun mul_shr_inner(
     a: u256,
     b: u256,
-    denominator: u256,
+    shift: u8,
     rounding_mode: RoundingMode,
 ): (bool, u256) {
     let max_small = std::u128::max_value!() as u256;
     if (a > max_small || b > max_small) {
-        mul_div_u256_wide(a, b, denominator, rounding_mode)
+        mul_shr_u256_wide(a, b, shift, rounding_mode)
     } else {
-        let quotient = mul_div_u256_fast(a, b, denominator, rounding_mode);
-        (false, quotient)
+        mul_shr_u256_fast(a, b, shift, rounding_mode)
+    }
+}
+
+/// Multiplies two `u256` values whose product fits within 256 bits, shifts the result right by the specified amount,
+/// and applies rounding according to the given mode. Optimized for cases where overflow is not possible.
+///
+/// #### Parameters
+/// - `a`, `b`:  Unsigned factors whose product stays below 2^256.
+/// - `shift`: Number of bits to shift right (0–255).
+/// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// `(overflow, result)` where `overflow` is `false` and `result` is the shifted and rounded value.
+public(package) fun mul_shr_u256_fast(
+    a: u256,
+    b: u256,
+    shift: u8,
+    rounding_mode: RoundingMode,
+): (bool, u256) {
+    let numerator = a * b;
+
+    if (shift == 0) {
+        return (false, numerator)
+    };
+
+    let mut result = numerator >> shift;
+    let denominator = 1u256 << shift;
+    let mask = denominator - 1;
+    let remainder = numerator & mask;
+
+    if (remainder != 0) {
+        // Overflow is not possible here because the numerator (a * b) is bounded by (2^128-1)^2 < u256::MAX.
+        // Even after rounding up, the result fits in u256.
+        (_, result) = round_division_result(result, denominator, remainder, rounding_mode);
+    };
+
+    (false, result)
+}
+
+/// Multiplies two `u256` values with full precision, shifts the result right by the specified amount,
+/// and applies rounding according to the given mode. Handles the general case where the product may
+/// exceed 256 bits.
+///
+/// #### Parameters
+/// - `a`, `b`: Unsigned factors whose product may exceed 2^256.
+/// - `shift`: Number of bits to shift right (0–255).
+/// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// `(overflow, result)` where `overflow` indicates whether the shifted value cannot fit in 256 bits
+/// and `result` contains the shifted and rounded value when no overflow occurred.
+public(package) fun mul_shr_u256_wide(
+    a: u256,
+    b: u256,
+    shift: u8,
+    rounding_mode: RoundingMode,
+): (bool, u256) {
+    let product = u512::mul_u256(a, b);
+    let hi = product.hi();
+    let lo = product.lo();
+
+    if (shift == 0) {
+        if (hi != 0) {
+            return (true, 0)
+        };
+        return (false, lo)
+    };
+
+    let overflow = (hi >> shift) != 0;
+    if (overflow) {
+        return (true, 0)
+    };
+
+    let complement_shift = (256 - (shift as u16)) as u8;
+    let lower = lo >> shift;
+    let carry = hi << complement_shift;
+    let mut result = lower | carry;
+
+    let mask = (1 << shift) - 1;
+    let remainder = lo & mask;
+    if (remainder != 0) {
+        let denominator = 1u256 << shift;
+        let (overflow, rounded) = round_division_result(
+            result,
+            denominator,
+            remainder,
+            rounding_mode,
+        );
+        if (overflow) {
+            return (true, 0)
+        };
+        result = rounded;
+    };
+
+    (false, result)
+}
+
+/// Determine whether rounding up is required after dividing and apply it to `result`.
+/// Returns `(overflow, result)` where `overflow` is `true` if the rounded value cannot be represented as `u256`.
+public(package) fun round_division_result(
+    result: u256,
+    denominator: u256,
+    remainder: u256,
+    rounding_mode: RoundingMode,
+): (bool, u256) {
+    let should_round_up = if (rounding_mode == rounding::up()) {
+        true
+    } else if (rounding_mode == rounding::nearest()) {
+        remainder >= denominator - remainder
+    } else {
+        false
+    };
+
+    if (!should_round_up) {
+        (false, result)
+    } else if (result == std::u256::max_value!()) {
+        (true, 0)
+    } else {
+        (false, result + 1)
     }
 }

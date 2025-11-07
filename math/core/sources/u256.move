@@ -41,6 +41,20 @@ public fun mul_div(a: u256, b: u256, denominator: u256, rounding_mode: RoundingM
     macros::mul_div!(a, b, denominator, rounding_mode)
 }
 
+/// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
+///
+/// Returns None for the following cases:
+/// - the rounded quotient cannot be represented as `u256`
+public fun mul_shr(a: u256, b: u256, shift: u8, rounding_mode: RoundingMode): Option<u256> {
+    let (overflow, result) = macros::mul_shr!(a, b, shift, rounding_mode);
+
+    if (overflow) {
+        option::none()
+    } else {
+        option::some(result)
+    }
+}
+
 /// Count the number of leading zero bits in the value.
 public fun clz(value: u256): u16 {
     macros::clz!(value, BIT_WIDTH)
