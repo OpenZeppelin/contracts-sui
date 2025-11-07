@@ -48,6 +48,17 @@ public fun lo(value: &U512): u256 {
     value.lo
 }
 
+/// Check whether `value` is greater than or equal to another `U512` value.
+public fun ge(value: &U512, other: &U512): bool {
+    if (value.hi > other.hi) {
+        true
+    } else if (value.hi < other.hi) {
+        false
+    } else {
+        value.lo >= other.lo
+    }
+}
+
 /// Multiply two `u256` integers and return the full 512-bit product using cross-limb accumulation.
 ///
 /// We split both operands into 128-bit halves and compute the four partial products:
@@ -127,6 +138,11 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
 
 /// === Internal helpers ===
 
+/// Check whether `value` is greater than or equal to a `u256` scalar.
+fun ge_u256(value: &U512, other: u256): bool {
+    if (value.hi != 0) true else value.lo >= other
+}
+
 /// Split a `u256` into two `u128` halves (hi, lo).
 fun split_u256(value: u256): (u128, u128) {
     let lo = (value & HALF_MASK) as u128;
@@ -160,11 +176,6 @@ fun get_bit(value: &U512, idx: u16): u8 {
     } else {
         ((value.lo >> (idx as u8)) & 1) as u8
     }
-}
-
-/// Check whether `value` is greater than or equal to a `u256` scalar.
-fun ge_u256(value: &U512, other: u256): bool {
-    if (value.hi != 0) true else value.lo >= other
 }
 
 /// Subtract a `u256` scalar from a `U512`, handling a potential borrow from the high limb.
