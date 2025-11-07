@@ -184,3 +184,83 @@ fun mul_shr_detects_overflow() {
     let overflow = u8::mul_shr(std::u8::max_value!(), std::u8::max_value!(), 0, rounding::down());
     assert_eq!(overflow, option::none());
 }
+
+// === clz ===
+
+#[test]
+fun clz_returns_bit_width_for_zero() {
+    // clz(0) should return 8 (all bits are leading zeros).
+    let result = u8::clz(0);
+    assert_eq!(result, 8);
+}
+
+#[test]
+fun clz_returns_zero_for_top_bit_set() {
+    // when the most significant bit is set, there are no leading zeros.
+    let value = 1u8 << 7;
+    let result = u8::clz(value);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun clz_returns_zero_for_max_value() {
+    // max value has the top bit set, so no leading zeros.
+    let max = std::u8::max_value!();
+    let result = u8::clz(max);
+    assert_eq!(result, 0);
+}
+
+// Test all possible bit positions from 0 to 7.
+#[test]
+fun clz_handles_all_bit_positions() {
+    let mut bit_pos: u8 = 0;
+    while (bit_pos < 8) {
+        let value = 1u8 << bit_pos;
+        let expected_clz = 7 - bit_pos;
+        assert_eq!(u8::clz(value), expected_clz);
+        bit_pos = bit_pos + 1;
+    };
+}
+
+// Test that lower bits have no effect on the result.
+#[test]
+fun clz_lower_bits_have_no_effect() {
+    let mut bit_pos: u8 = 0;
+    while (bit_pos < 8) {
+        let mut value = 1u8 << bit_pos;
+        // set all bits below bit_pos to 1
+        value = value | (value - 1);
+        let expected_clz = 7 - bit_pos;
+        assert_eq!(u8::clz(value), expected_clz);
+        bit_pos = bit_pos + 1;
+    };
+}
+
+#[test]
+fun clz_counts_from_highest_bit() {
+    // when multiple bits are set, clz counts from the highest bit.
+    // 0b11 (bits 0 and 1 set) - highest is bit 1, so clz = 6
+    assert_eq!(u8::clz(3), 6);
+
+    // 0b1111 (bits 0-3 set) - highest is bit 3, so clz = 4
+    assert_eq!(u8::clz(15), 4);
+
+    // 0xff (bits 0-7 set) - highest is bit 7, so clz = 0
+    assert_eq!(u8::clz(255), 0);
+}
+
+// Test values near power-of-2 boundaries.
+#[test]
+fun clz_handles_values_near_boundaries() {
+    // 16 has bit 4 set, clz = 3
+    assert_eq!(u8::clz(16), 3);
+
+    // 15 has bit 3 set, clz = 4
+    assert_eq!(u8::clz(15), 4);
+
+    // 32 has bit 5 set, clz = 2
+    assert_eq!(u8::clz(32), 2);
+
+    // 31 has bit 4 set, clz = 3
+    assert_eq!(u8::clz(31), 3);
+}

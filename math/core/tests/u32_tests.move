@@ -194,3 +194,83 @@ fun mul_shr_detects_overflow() {
     );
     assert_eq!(overflow, option::none());
 }
+
+// === clz ===
+
+#[test]
+fun clz_returns_bit_width_for_zero() {
+    // clz(0) should return 32 (all bits are leading zeros).
+    let result = u32::clz(0);
+    assert_eq!(result, 32);
+}
+
+#[test]
+fun clz_returns_zero_for_top_bit_set() {
+    // when the most significant bit is set, there are no leading zeros.
+    let value = 1u32 << 31;
+    let result = u32::clz(value);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun clz_returns_zero_for_max_value() {
+    // max value has the top bit set, so no leading zeros.
+    let max = std::u32::max_value!();
+    let result = u32::clz(max);
+    assert_eq!(result, 0);
+}
+
+// Test all possible bit positions from 0 to 31.
+#[test]
+fun clz_handles_all_bit_positions() {
+    let mut bit_pos: u8 = 0;
+    while (bit_pos < 32) {
+        let value = 1u32 << bit_pos;
+        let expected_clz = 31 - bit_pos;
+        assert_eq!(u32::clz(value), expected_clz);
+        bit_pos = bit_pos + 1;
+    };
+}
+
+// Test that lower bits have no effect on the result.
+#[test]
+fun clz_lower_bits_have_no_effect() {
+    let mut bit_pos: u8 = 0;
+    while (bit_pos < 32) {
+        let mut value = 1u32 << bit_pos;
+        // set all bits below bit_pos to 1
+        value = value | (value - 1);
+        let expected_clz = 31 - bit_pos;
+        assert_eq!(u32::clz(value), expected_clz);
+        bit_pos = bit_pos + 1;
+    };
+}
+
+#[test]
+fun clz_counts_from_highest_bit() {
+    // when multiple bits are set, clz counts from the highest bit.
+    // 0b11 (bits 0 and 1 set) - highest is bit 1, so clz = 30
+    assert_eq!(u32::clz(3), 30);
+
+    // 0b1111 (bits 0-3 set) - highest is bit 3, so clz = 28
+    assert_eq!(u32::clz(15), 28);
+
+    // 0xff (bits 0-7 set) - highest is bit 7, so clz = 24
+    assert_eq!(u32::clz(255), 24);
+}
+
+// Test values near power-of-2 boundaries.
+#[test]
+fun clz_handles_values_near_boundaries() {
+    // 0x10000 (65536) has bit 16 set, clz = 15
+    assert_eq!(u32::clz(65536), 15);
+
+    // 0xffff (65535) has bit 15 set, clz = 16
+    assert_eq!(u32::clz(65535), 16);
+
+    // 0x0100_0000 (16777216) has bit 24 set, clz = 7
+    assert_eq!(u32::clz(16777216), 7);
+
+    // 0x00ff_ffff (16777215) has bit 23 set, clz = 8
+    assert_eq!(u32::clz(16777215), 8);
+}

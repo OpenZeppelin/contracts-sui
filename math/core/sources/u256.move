@@ -3,6 +3,8 @@ module openzeppelin_math::u256;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
+const BIT_WIDTH: u16 = 256;
+
 /// Compute the arithmetic mean of two `u256` values with configurable rounding.
 public fun average(a: u256, b: u256, rounding_mode: RoundingMode): u256 {
     macros::average!(a, b, rounding_mode)
@@ -51,4 +53,9 @@ public fun mul_shr(a: u256, b: u256, shift: u8, rounding_mode: RoundingMode): Op
     } else {
         option::some(result)
     }
+}
+
+/// Count the number of leading zero bits in the value.
+public fun clz(value: u256): u16 {
+    macros::clz!(value, BIT_WIDTH)
 }

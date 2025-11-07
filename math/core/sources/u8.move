@@ -4,6 +4,8 @@ use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 use std::u256::try_as_u8;
 
+const BIT_WIDTH: u8 = 8;
+
 /// Compute the arithmetic mean of two `u8` values with configurable rounding.
 public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
     macros::average!(a, b, rounding_mode)
@@ -16,7 +18,7 @@ public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
 public fun checked_shl(value: u8, shift: u8): Option<u8> {
     if (value == 0) {
         option::some(0)
-    } else if (shift >= 8) {
+    } else if (shift >= BIT_WIDTH) {
         option::none()
     } else {
         macros::checked_shl!(value, shift)
@@ -30,7 +32,7 @@ public fun checked_shl(value: u8, shift: u8): Option<u8> {
 public fun checked_shr(value: u8, shift: u8): Option<u8> {
     if (value == 0) {
         option::some(0)
-    } else if (shift >= 8) {
+    } else if (shift >= BIT_WIDTH) {
         option::none()
     } else {
         macros::checked_shr!(value, shift)
@@ -58,4 +60,9 @@ public fun mul_div(a: u8, b: u8, denominator: u8, rounding_mode: RoundingMode): 
 public fun mul_shr(a: u8, b: u8, shift: u8, rounding_mode: RoundingMode): Option<u8> {
     let (_, result) = macros::mul_shr!(a, b, shift, rounding_mode);
     result.try_as_u8()
+}
+
+/// Count the number of leading zero bits in the value.
+public fun clz(value: u8): u8 {
+    macros::clz!(value, BIT_WIDTH as u16) as u8
 }
