@@ -52,6 +52,15 @@ public fun mul_div(a: u128, b: u128, denominator: u128, rounding_mode: RoundingM
     }
 }
 
+/// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
+///
+/// Returns None for the following cases:
+/// - the rounded quotient cannot be represented as `u128`
+public fun mul_shr(a: u128, b: u128, shift: u8, rounding_mode: RoundingMode): Option<u128> {
+    let (_, result) = macros::mul_shr!(a, b, shift, rounding_mode);
+    result.try_as_u128()
+}
+
 /// Count the number of leading zero bits in the value.
 public fun clz(value: u128): u8 {
     macros::clz!(value, BIT_WIDTH as u16) as u8
