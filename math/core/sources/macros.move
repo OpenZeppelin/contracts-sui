@@ -217,25 +217,51 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
     res
 }
 
-/// Compute the log in base 2 of a positive value rounded towards zero.
+/// Compute the log in base 2 of a positive value with configurable rounding.
 ///
-/// This helper derives the logarithm by leveraging the count-leading-zeros operation. For any
-/// non-zero value, the position of the most significant set bit corresponds to `floor(log2(value))`,
-/// which we compute as `bit_width - 1 - clz(value)`. When the input is zero, the helper returns `0`
-/// to avoid undefined behavior.
+/// The algorithm first computes floor(log2(value)) using count-leading-zeros, then applies the
+/// requested rounding mode. Powers of 2 return exact results without additional rounding.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
 /// - `$value`: The unsigned integer to compute the logarithm for.
 /// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
 /// #### Returns
-/// The base-2 logarithm as a `u8`, rounded towards zero. Returns `0` if `$value` is 0.
-public(package) macro fun log2<$Int>($value: $Int, $bit_width: u16): u8 {
-    let value = $value;
+/// The base-2 logarithm as a `u16`, rounded according to the specified mode.
+/// Returns `0` if `$value` is 0.
+public(package) macro fun log2<$Int>(
+    $value: $Int,
+    $bit_width: u16,
+    $rounding_mode: RoundingMode,
+): u16 {
+    let (value, bit_width, rounding_mode) = ($value, $bit_width, $rounding_mode);
     if (value == 0 as $Int) {
         return 0
     };
-    let bit_width = $bit_width;
     let zeros = clz!(value, bit_width);
-    (bit_width - 1 - zeros) as u8
+    let floor_log = bit_width - 1 - zeros;
+    if (rounding_mode == rounding::down()) {
+        return floor_log
+    };
+    let power_of_two = (1 as $Int) << (floor_log as u8);
+    if (value == power_of_two) {
+        return floor_log
+    };
+    if (rounding_mode == rounding::up()) {
+        return floor_log + 1
+    };
+    // Nearest: decide whether to round up or down based on midpoint (2^n × √2)
+    let threshold_exp = 2 * floor_log + 1;
+    if (log_should_round_up(value as u256, threshold_exp)) {
+        floor_log + 1
+    } else {
+        floor_log
+    }
+}
 }
 
 /// === Helper functions ===
@@ -465,5 +491,38 @@ public(package) fun round_division_result(
         (true, 0)
     } else {
         (false, result + 1)
+    }
+}
+
+/// Determine if a value should round up based on an algebraic threshold test.
+///
+/// Tests whether `value² >= 2^threshold_exp` to decide rounding without approximation.
+/// Uses fast path when both operands fit in u256, otherwise u512 arithmetic.
+///
+/// #### Parameters
+/// - `value`: The value being tested (already cast to u256).
+/// - `threshold_exp`: The threshold exponent for comparison.
+///
+/// #### Returns
+/// `true` if the value should round up, `false` otherwise.
+public(package) fun log_should_round_up(value: u256, threshold_exp: u16): bool {
+    let max_small = std::u128::max_value!() as u256;
+    let fast_path = threshold_exp < 256 && value <= max_small;
+    
+    if (fast_path) {
+        // Fast path: both value² and threshold fit in u256
+        let value_squared = value * value;
+        let threshold = 1 << (threshold_exp as u8);
+        value_squared >= threshold
+    } else {
+        // Slow path: use u512 for values where value² > u256::MAX or threshold >= 2^256
+        let value_squared = u512::mul_u256(value, value);
+        let threshold = if (threshold_exp >= 256) {
+            let shift = (threshold_exp - 256) as u8;
+            u512::new(1u256 << shift, 0)
+        } else {
+            u512::from_u256(1 << (threshold_exp as u8))
+        };
+        value_squared.ge(&threshold)
     }
 }
