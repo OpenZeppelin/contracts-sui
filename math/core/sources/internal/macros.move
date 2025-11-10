@@ -1,5 +1,6 @@
 module openzeppelin_math::macros;
 
+use openzeppelin_math::common;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
@@ -163,21 +164,7 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
         return bit_width
     };
 
-    // Binary search optimized for any bit width
-    let mut res = 0;
-    let mut val = (value as u256);
-    let mut shift = (bit_width / 2) as u8;
-    while (shift > 0) {
-        let shifted = val >> shift;
-        if (shifted == 0) {
-            res = res + (shift as u16);
-        } else {
-            val = shifted;
-        };
-        shift = shift / 2;
-    };
-
-    res
+    common::leading_zeros_u256($value as u256)
 }
 
 /// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
