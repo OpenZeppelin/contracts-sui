@@ -3,16 +3,21 @@
 ///
 module openzeppelin_math::common;
 
-/// Count the number of leading zeros in a `u256` value.
+/// Count the number of leading zeros in an unsigned integer value of arbitrary bit width.
 ///
-/// Counts the number of leading zero bits in a `u256` value using a binary search method.
-/// Starts with the full 256 bits and iteratively right-shifts the value by progressively smaller powers of two
-/// (128, 64, 32, 16, 8, 4, 2, 1). For each shift, if the upper half is zero, the number of leading zeros increases by the shift amount.
-/// For a value of zero, returns 256; otherwise, returns the count of leading zero bits in the input.
-public(package) fun leading_zeros_u256(val: u256): u16 {
+/// This function counts the number of leading zero bits in a value of a given bit width (such as u8, u16, u32, u64, u128, or u256)
+/// using a binary search method. It starts with the full bit width and iteratively right-shifts the value by progressively smaller
+/// powers of two (bit_width/2, bit_width/4, ..., 1). For each shift, if the upper portion is zero, the number of leading zeros increases
+/// by the shift amount. If the input value is zero, it returns bit_width. Otherwise, it returns the count of leading zero bits for the
+/// value, respecting the provided bit width.
+public(package) fun leading_zeros(val: u256, bit_width: u16): u16 {
+    if (val == 0) {
+        return bit_width
+    };
+
     let mut count: u16 = 0;
     let mut value = val;
-    let mut shift: u8 = 128;
+    let mut shift: u8 = (bit_width / 2) as u8;
     while (shift > 0) {
         let shifted = value >> shift;
         if (shifted == 0) {
