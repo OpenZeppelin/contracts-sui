@@ -66,3 +66,10 @@ public fun clz(value: u256): u16 {
 public fun log2(value: u256, rounding_mode: RoundingMode): u16 {
     macros::log2!(value, BIT_WIDTH, rounding_mode)
 }
+
+/// Compute the log in base 256 of a positive value with configurable rounding.
+///
+/// Returns 0 if given 0.
+public fun log256(value: u256, rounding_mode: RoundingMode): u8 {
+    macros::log256!(value, BIT_WIDTH, rounding_mode)
+}
