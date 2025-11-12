@@ -495,3 +495,55 @@ fun clz_handles_values_near_boundaries() {
     // 2^32 - 1
     assert_eq!(macros::clz!((1u64 << 32) - 1, 64), 32);
 }
+
+// === log2 ===
+
+#[test]
+fun log2_returns_zero_for_zero() {
+    // log2(0) should return 0 by convention
+    assert_eq!(macros::log2!(0u8, 8, rounding::down()), 0);
+    assert_eq!(macros::log2!(0u8, 8, rounding::up()), 0);
+    assert_eq!(macros::log2!(0u8, 8, rounding::nearest()), 0);
+    assert_eq!(macros::log2!(0u16, 16, rounding::down()), 0);
+    assert_eq!(macros::log2!(0u32, 32, rounding::up()), 0);
+    assert_eq!(macros::log2!(0u64, 64, rounding::nearest()), 0);
+    assert_eq!(macros::log2!(0u128, 128, rounding::down()), 0);
+    assert_eq!(macros::log2!(0u256, 256, rounding::up()), 0);
+}
+
+#[test]
+fun log2_returns_zero_for_one() {
+    // log2(1) = 0 since 2^0 = 1
+    assert_eq!(macros::log2!(1u8, 8,rounding::down()), 0);
+    assert_eq!(macros::log2!(1u8, 8,rounding::up()), 0);
+    assert_eq!(macros::log2!(1u8, 8, rounding::nearest()), 0);
+    assert_eq!(macros::log2!(1u16, 16, rounding::down()), 0);
+    assert_eq!(macros::log2!(1u32, 32, rounding::up()), 0);
+    assert_eq!(macros::log2!(1u64, 64, rounding::nearest()), 0);
+    assert_eq!(macros::log2!(1u128, 128, rounding::down()), 0);
+    assert_eq!(macros::log2!(1u256, 256, rounding::up()), 0);
+}
+
+#[test]
+fun log2_rounding_mode_nearest() {
+    let nearest = rounding::nearest();
+    assert_eq!(macros::log2!(6u8, 8, nearest), 3); // 2.585 -> 3
+    assert_eq!(macros::log2!(11u16, 16, nearest), 3); // 3.459 -> 3
+    assert_eq!(macros::log2!(12u16, 16, nearest), 4); // 3.585 -> 4
+    assert_eq!(macros::log2!(22u32, 32, nearest), 4); // 4.459 -> 4
+    assert_eq!(macros::log2!(23u32, 32, nearest), 5); // 4.524 -> 5
+    assert_eq!(macros::log2!(45u64, 64, nearest), 5); // 5.492 -> 5
+    assert_eq!(macros::log2!(46u64, 64, nearest), 6); // 5.524 -> 6
+    assert_eq!(macros::log2!(90u128, 128, nearest), 6); // 6.492 -> 6
+    assert_eq!(macros::log2!(91u128, 128, nearest), 7); // 6.508 -> 7
+    assert_eq!(macros::log2!(181u256, 256, nearest), 7); // 7.4998 -> 7
+    assert_eq!(macros::log2!(182u256, 256, nearest), 8); // 7.5078 -> 8
+}
+
+#[test]
+fun log2_rounding_mode_nearest_high_values() {
+    let val_1 = 0xB504F261779BF7325BF8F7DB0AAFE8F8227AE7E69797296F9526CCD8BBF32000u256;
+    assert_eq!(macros::log2!(val_1, 256, rounding::nearest()), 255); // 255.4999 -> 255
+    let val_2 = 0xB504FB6D10AAFE26CC0E4F709AB10D92CEBF3593218E22304000000000000000u256;
+    assert_eq!(macros::log2!(val_2, 256, rounding::nearest()), 256); // 255.500001 -> 256
+}
