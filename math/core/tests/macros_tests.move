@@ -607,24 +607,24 @@ fun log256_handles_powers_of_256() {
 fun log256_rounds_down() {
     // log256 with Down mode truncates to floor
     let down = rounding::down();
-    assert_eq!(macros::log256!((1u16 << 8) - 1, 16, down), 0); // log256(255) ≈ 0.996 → 0
-    assert_eq!(macros::log256!((1u16 << 8) + 1, 16, down), 1); // log256(257) ≈ 1.002 → 1
-    assert_eq!(macros::log256!((1u32 << 16) - 1, 32, down), 1); // log256(65535) ≈ 1.9999 → 1
-    assert_eq!(macros::log256!((1u32 << 16) + 1, 32, down), 2); // log256(65537) ≈ 2.0001 → 2
-    assert_eq!(macros::log256!((1u64 << 24) - 1, 64, down), 2); // log256(16777215) ≈ 2.9999 → 2
-    assert_eq!(macros::log256!((1u64 << 24) + 1, 64, down), 3); // log256(16777217) ≈ 3.0001 → 3
+    assert_eq!(macros::log256!((1u16 << 8) - 1, 16, down), 0); // log256(255) < 1 → 0
+    assert_eq!(macros::log256!((1u16 << 8) + 1, 16, down), 1); // log256(257) > 1 → 1
+    assert_eq!(macros::log256!((1u32 << 16) - 1, 32, down), 1); // log256(65535) < 2 → 1
+    assert_eq!(macros::log256!((1u32 << 16) + 1, 32, down), 2); // log256(65537) > 2 → 2
+    assert_eq!(macros::log256!((1u64 << 24) - 1, 64, down), 2); // log256(16777215) < 3 → 2
+    assert_eq!(macros::log256!((1u64 << 24) + 1, 64, down), 3); // log256(16777217) > 3 → 3
 }
 
 #[test]
 fun log256_rounds_up() {
     // log256 with Up mode rounds to ceiling
     let up = rounding::up();
-    assert_eq!(macros::log256!((1u16 << 8) - 1, 16, up), 1); // log256(255) ≈ 0.996 → 1
-    assert_eq!(macros::log256!((1u16 << 8) + 1, 16, up), 2); // log256(257) ≈ 1.002 → 2
-    assert_eq!(macros::log256!((1u32 << 16) - 1, 32, up), 2); // log256(65535) ≈ 1.9999 → 2
-    assert_eq!(macros::log256!((1u32 << 16) + 1, 32, up), 3); // log256(65537) ≈ 2.0001 → 3
-    assert_eq!(macros::log256!((1u64 << 24) - 1, 64, up), 3); // log256(16777215) ≈ 2.9999 → 3
-    assert_eq!(macros::log256!((1u64 << 24) + 1, 64, up), 4); // log256(16777217) ≈ 3.0001 → 4
+    assert_eq!(macros::log256!((1u16 << 8) - 1, 16, up), 1); // log256(255) < 1 → 1
+    assert_eq!(macros::log256!((1u16 << 8) + 1, 16, up), 2); // log256(257) > 2 → 2
+    assert_eq!(macros::log256!((1u32 << 16) - 1, 32, up), 2); // log256(65535) < 3 → 2
+    assert_eq!(macros::log256!((1u32 << 16) + 1, 32, up), 3); // log256(65537) > 3 → 3
+    assert_eq!(macros::log256!((1u64 << 24) - 1, 64, up), 3); // log256(16777215) < 4 → 3
+    assert_eq!(macros::log256!((1u64 << 24) + 1, 64, up), 4); // log256(16777217) > 4 → 4
 }
 
 #[test]
