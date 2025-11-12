@@ -306,33 +306,33 @@ fun log2_handles_powers_of_two() {
 fun log2_rounds_down() {
     // log2 with Down mode truncates to floor
     let down = rounding::down();
-    assert_eq!(u8::log2(3, down), 1); // log2(3) ≈ 1.58 → 1
-    assert_eq!(u8::log2(5, down), 2); // log2(5) ≈ 2.32 → 2
-    assert_eq!(u8::log2(7, down), 2); // log2(7) ≈ 2.81 → 2
-    assert_eq!(u8::log2(15, down), 3); // log2(15) ≈ 3.91 → 3
-    assert_eq!(u8::log2(127, down), 6); // log2(127) ≈ 6.99 → 6
+    assert_eq!(u8::log2(3, down), 1); // 1.58 → 1
+    assert_eq!(u8::log2(5, down), 2); // 2.32 → 2
+    assert_eq!(u8::log2(7, down), 2); // 2.81 → 2
+    assert_eq!(u8::log2(15, down), 3); // 3.91 → 3
+    assert_eq!(u8::log2(127, down), 6); // 6.99 → 6
 }
 
 #[test]
 fun log2_rounds_up() {
     // log2 with Up mode rounds to ceiling
     let up = rounding::up();
-    assert_eq!(u8::log2(3, up), 2); // log2(3) ≈ 1.58 → 2
-    assert_eq!(u8::log2(5, up), 3); // log2(5) ≈ 2.32 → 3
-    assert_eq!(u8::log2(7, up), 3); // log2(7) ≈ 2.81 → 3
-    assert_eq!(u8::log2(15, up), 4); // log2(15) ≈ 3.91 → 4
-    assert_eq!(u8::log2(127, up), 7); // log2(127) ≈ 6.99 → 7
+    assert_eq!(u8::log2(3, up), 2); // 1.58 → 2
+    assert_eq!(u8::log2(5, up), 3); // 2.32 → 3
+    assert_eq!(u8::log2(7, up), 3); // 2.81 → 3
+    assert_eq!(u8::log2(15, up), 4); // 3.91 → 4
+    assert_eq!(u8::log2(127, up), 7); // 6.99 → 7
 }
 
 #[test]
 fun log2_rounds_to_nearest() {
     // log2 with Nearest mode rounds to closest integer
     let nearest = rounding::nearest();
-    assert_eq!(u8::log2(3, nearest), 2); // log2(3) ≈ 1.58 → 2
-    assert_eq!(u8::log2(5, nearest), 2); // log2(5) ≈ 2.32 → 2
-    assert_eq!(u8::log2(7, nearest), 3); // log2(7) ≈ 2.81 → 3
-    assert_eq!(u8::log2(15, nearest), 4); // log2(15) ≈ 3.91 → 4
-    assert_eq!(u8::log2(127, nearest), 7); // log2(127) ≈ 6.99 → 7
+    assert_eq!(u8::log2(3, nearest), 2); // 1.58 → 2
+    assert_eq!(u8::log2(5, nearest), 2); // 2.32 → 2
+    assert_eq!(u8::log2(7, nearest), 3); // 2.81 → 3
+    assert_eq!(u8::log2(15, nearest), 4); // 3.91 → 4
+    assert_eq!(u8::log2(127, nearest), 7); // 6.99 → 7
 }
 
 #[test]
