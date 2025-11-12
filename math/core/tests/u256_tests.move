@@ -416,6 +416,14 @@ fun log2_handles_values_near_boundaries() {
 }
 
 #[test]
+fun log2_rounding_mode_nearest_high_values() {
+    let val_1 = 0xB504F261779BF7325BF8F7DB0AAFE8F8227AE7E69797296F9526CCD8BBF32000u256;
+    assert_eq!(u256::log2(val_1, rounding::nearest()), 255); // 255.4999 -> 255
+    let val_2 = 0xB504FB6D10AAFE26CC0E4F709AB10D92CEBF3593218E22304000000000000000u256;
+    assert_eq!(u256::log2(val_2, rounding::nearest()), 256); // 255.500001 -> 256
+}
+
+#[test]
 fun log2_handles_max_value() {
     // max value has all bits set, so log2 = 255
     let max = std::u256::max_value!();
