@@ -262,7 +262,6 @@ public(package) macro fun log2<$Int>(
         floor_log
     }
 }
-}
 
 /// === Helper functions ===
 
@@ -508,7 +507,7 @@ public(package) fun round_division_result(
 public(package) fun log_should_round_up(value: u256, threshold_exp: u16): bool {
     let max_small = std::u128::max_value!() as u256;
     let fast_path = threshold_exp < 256 && value <= max_small;
-    
+
     if (fast_path) {
         // Fast path: both value² and threshold fit in u256
         let value_squared = value * value;

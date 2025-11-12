@@ -514,8 +514,8 @@ fun log2_returns_zero_for_zero() {
 #[test]
 fun log2_returns_zero_for_one() {
     // log2(1) = 0 since 2^0 = 1
-    assert_eq!(macros::log2!(1u8, 8,rounding::down()), 0);
-    assert_eq!(macros::log2!(1u8, 8,rounding::up()), 0);
+    assert_eq!(macros::log2!(1u8, 8, rounding::down()), 0);
+    assert_eq!(macros::log2!(1u8, 8, rounding::up()), 0);
     assert_eq!(macros::log2!(1u8, 8, rounding::nearest()), 0);
     assert_eq!(macros::log2!(1u16, 16, rounding::down()), 0);
     assert_eq!(macros::log2!(1u32, 32, rounding::up()), 0);
