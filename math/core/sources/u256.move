@@ -60,7 +60,7 @@ public fun clz(value: u256): u16 {
     macros::clz!(value, BIT_WIDTH)
 }
 
-/// Compute the log in base 2 of a positive value rounded towards zero.
+/// Compute the log in base 2 of a positive value with configurable rounding.
 ///
 /// Returns 0 if given 0.
 public fun log2(value: u256, rounding_mode: RoundingMode): u16 {
