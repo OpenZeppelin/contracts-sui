@@ -263,6 +263,61 @@ public(package) macro fun log2<$Int>(
     }
 }
 
+/// Compute the log in base 256 of a positive value with configurable rounding.
+///
+/// Since log₂₅₆(x) = log₂(x) / 8, the algorithm computes log₂(x) first, then divides by 8.
+/// For nearest rounding, uses the same exact algebraic test as log2.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to compute the logarithm for.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The base-256 logarithm as a `u16`, rounded according to the specified mode.
+/// Returns `0` if `$value` is 0.
+public(package) macro fun log256<$Int>(
+    $value: $Int,
+    $bit_width: u16,
+    $rounding_mode: RoundingMode,
+): u8 {
+    let (value, bit_width, rounding_mode) = ($value, $bit_width, $rounding_mode);
+    if (value == 0 as $Int) {
+        return 0
+    };
+    let zeros = clz!(value, bit_width);
+    let floor_log2 = bit_width - 1 - zeros;
+    let floor_log256 = (floor_log2 / 8) as u8;
+
+    if (rounding_mode == rounding::down()) {
+        return floor_log256
+    };
+
+    // Check if value is exactly a power of 256 (i.e., log2 is multiple of 8)
+    if (floor_log2 % 8 == 0) {
+        let power_of_256 = (1 as $Int) << (floor_log2 as u8);
+        if (value == power_of_256) {
+            return floor_log256
+        };
+    };
+
+    if (rounding_mode == rounding::up()) {
+        return floor_log256 + 1
+    };
+
+    // Nearest: check if value >= 256^k × √256, where √256 = 16 = 2^4
+    // Using algebraic test: value² >= 2^(16k+8)
+    let threshold_exp = 16 * (floor_log256 as u16) + 8;
+    if (log_should_round_up(value as u256, threshold_exp)) {
+        floor_log256 + 1
+    } else {
+        floor_log256
+    }
+}
+
 /// === Helper functions ===
 
 /// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
