@@ -371,3 +371,101 @@ fun log2_handles_max_value() {
     assert_eq!(u128::log2(max, rounding::up()), 128);
     assert_eq!(u128::log2(max, rounding::nearest()), 128);
 }
+
+// === log256 ===
+
+#[test]
+fun log256_returns_zero_for_zero() {
+    // log256(0) should return 0 by convention
+    assert_eq!(u128::log256(0, rounding::down()), 0);
+    assert_eq!(u128::log256(0, rounding::up()), 0);
+    assert_eq!(u128::log256(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun log256_returns_zero_for_one() {
+    // log256(1) = 0 since 256^0 = 1
+    assert_eq!(u128::log256(1, rounding::down()), 0);
+    assert_eq!(u128::log256(1, rounding::up()), 0);
+    assert_eq!(u128::log256(1, rounding::nearest()), 0);
+}
+
+#[test]
+fun log256_handles_powers_of_256() {
+    // Test exact powers of 256
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    let mut i = 0;
+    while (i < rounding_modes.length()) {
+        let rounding = rounding_modes[i];
+        assert_eq!(u128::log256(1 << 8, rounding), 1); // 256^1 = 256
+        assert_eq!(u128::log256(1 << 16, rounding), 2); // 256^2 = 65536
+        assert_eq!(u128::log256(1 << 24, rounding), 3); // 256^3 = 16777216
+        assert_eq!(u128::log256(1 << 32, rounding), 4); // 256^4 = 4294967296
+        assert_eq!(u128::log256(1 << 64, rounding), 8); // 256^8 = 2^64
+        assert_eq!(u128::log256(1 << 96, rounding), 12); // 256^12 = 2^96
+        assert_eq!(u128::log256(1 << 120, rounding), 15); // 256^15 = 2^120
+        i = i + 1;
+    }
+}
+
+#[test]
+fun log256_rounds_down() {
+    // log256 with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(u128::log256(15, down), 0); // 0.488 → 0
+    assert_eq!(u128::log256(16, down), 0); // 0.5 → 0
+    assert_eq!(u128::log256(255, down), 0); // 0.999 → 0
+    assert_eq!(u128::log256(1 << 8, down), 1); // 1 exactly
+    assert_eq!(u128::log256((1 << 8) + 1, down), 1); // 1.001 → 1
+    assert_eq!(u128::log256((1 << 16) - 1, down), 1); // 1.9999 → 1
+    assert_eq!(u128::log256(1 << 16, down), 2); // 2 exactly
+    assert_eq!(u128::log256((1 << 64) - 1, down), 7); // 7.9999 → 7
+    assert_eq!(u128::log256(1 << 64, down), 8); // 8 exactly
+    assert_eq!(u128::log256((1 << 120) - 1, down), 14); // 14.9999 → 14
+    assert_eq!(u128::log256(1 << 120, down), 15); // 15 exactly
+}
+
+#[test]
+fun log256_rounds_up() {
+    // log256 with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(u128::log256(15, up), 1); // 0.488 → 1
+    assert_eq!(u128::log256(16, up), 1); // 0.5 → 1
+    assert_eq!(u128::log256(255, up), 1); // 0.999 → 1
+    assert_eq!(u128::log256(1 << 8, up), 1); // 1 exactly
+    assert_eq!(u128::log256((1 << 8) + 1, up), 2); // 1.001 → 2
+    assert_eq!(u128::log256((1 << 16) - 1, up), 2); // 1.9999 → 2
+    assert_eq!(u128::log256(1 << 16, up), 2); // 2 exactly
+    assert_eq!(u128::log256((1 << 64) - 1, up), 8); // 7.9999 → 8
+    assert_eq!(u128::log256(1 << 64, up), 8); // 8 exactly
+    assert_eq!(u128::log256((1 << 120) - 1, up), 15); // 14.9999 → 15
+    assert_eq!(u128::log256(1 << 120, up), 15); // 15 exactly
+}
+
+#[test]
+fun log256_rounds_to_nearest() {
+    // log256 with Nearest mode rounds to closest integer
+    // Midpoint between 256^k and 256^(k+1) is 256^k × 16
+    let nearest = rounding::nearest();
+    // Between 256^0 and 256^1: midpoint is 16
+    assert_eq!(u128::log256(15, nearest), 0); // 0.488 < 0.5 → 0
+    assert_eq!(u128::log256(16, nearest), 1); // 0.5 → 1
+    assert_eq!(u128::log256(255, nearest), 1); // 0.999 → 1
+    // Between 256^1 and 256^2: midpoint is 4096
+    assert_eq!(u128::log256((1 << 12) - 1, nearest), 1); // 1.4999 < 1.5 → 1
+    assert_eq!(u128::log256(1 << 12, nearest), 2); // 1.5 → 2
+    assert_eq!(u128::log256((1 << 16) - 1, nearest), 2); // 1.9999 → 2
+    // Between 256^7 and 256^8: midpoint is 1 << 60
+    assert_eq!(u128::log256((1 << 60) - 1, nearest), 7); // 7.4999 < 7.5 → 7
+    assert_eq!(u128::log256(1 << 60, nearest), 8); // 7.5 → 8
+    assert_eq!(u128::log256((1 << 64) - 1, nearest), 8); // 7.9999 → 8
+}
+
+#[test]
+fun log256_handles_max_value() {
+    // max value is less than 256^16 = 2^128, so log256 is less than 16
+    let max = std::u128::max_value!();
+    assert_eq!(u128::log256(max, rounding::down()), 15);
+    assert_eq!(u128::log256(max, rounding::up()), 16);
+    assert_eq!(u128::log256(max, rounding::nearest()), 16);
+}
