@@ -1,8 +1,0 @@
-# Requires environment variables (all with 0x prefix):
-#   PACKAGE_ID             -> package ID containing the modules
-#   OWNER_CAP_ID           -> ID of the OwnerCap<GIFT_BOX_V2>
-#   OWNERSHIP_REQUEST_ID   -> object ID of the pending OwnershipRequestCap
---assign owner_cap @${OWNER_CAP_ID}
---assign request_cap @${OWNERSHIP_REQUEST_ID}
---move-call ${PACKAGE_ID}::ownable::transfer_requested_ownership <${PACKAGE_ID}::gift_box_v2::GIFT_BOX_V2> owner_cap request_cap
---gas-budget 500000000
