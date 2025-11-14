@@ -1,5 +1,6 @@
 module openzeppelin_math::macros;
 
+use openzeppelin_math::common;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
@@ -194,27 +195,7 @@ public(package) macro fun mul_shr<$Int>(
 /// #### Returns
 /// The number of leading zero bits as a `u16`. Returns `$bit_width` if `$value` is 0.
 public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
-    let value = $value;
-    let bit_width = $bit_width;
-    if (value == 0 as $Int) {
-        return bit_width
-    };
-
-    // Binary search optimized for any bit width
-    let mut res = 0;
-    let mut val = (value as u256);
-    let mut shift = (bit_width / 2) as u8;
-    while (shift > 0) {
-        let shifted = val >> shift;
-        if (shifted == 0) {
-            res = res + (shift as u16);
-        } else {
-            val = shifted;
-        };
-        shift = shift / 2;
-    };
-
-    res
+    common::clz($value as u256, $bit_width)
 }
 
 /// Compute the log in base 2 of a positive value with configurable rounding.
