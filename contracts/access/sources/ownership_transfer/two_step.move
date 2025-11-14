@@ -11,7 +11,6 @@
 ///
 /// By requiring explicit request and approval of each transfer, the flow provides an important safety
 /// net against accidental misdirection.
-#[allow(duplicate_alias)]
 module openzeppelin_access::two_step_transfer;
 
 use sui::dynamic_object_field as dof;

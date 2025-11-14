@@ -1,5 +1,5 @@
 /// Time-locked wrapper that enforces a configurable delay between scheduling and executing
-/// the transfer of a capability.
+/// the transfer of a capability/object.
 ///
 /// Owners wrap the capability and must queue a transfer via the scheduling helpers.
 /// After scheduling, the owner must wait for the deadline to pass before executing,
@@ -9,11 +9,12 @@
 /// without respecting the delay period.
 module openzeppelin_access::delayed_transfer;
 
-use sui::clock;
+use sui::clock::Clock;
 use sui::dynamic_object_field as dof;
 use sui::event;
 
-const WRAPPED_FIELD: vector<u8> = b"wrapped";
+/// Dynamic field key for a wrapped object.
+public struct Wrapped has copy, drop, store {}
 
 #[error(code = 0)]
 const ETransferAlreadyScheduled: vector<u8> = b"Transfer already scheduled.";
@@ -23,20 +24,30 @@ const ENoPendingTransfer: vector<u8> = b"No pending transfer.";
 const EDelayNotElapsed: vector<u8> = b"Delay has not elapsed.";
 #[error(code = 3)]
 const EWrongPendingAction: vector<u8> = b"Pending action mismatch.";
+#[error(code = 4)]
+const EWrongDelayedTransferWrapper: vector<u8> = b"Wrong delayed transfer wrapper.";
+#[error(code = 5)]
+const EWrongDelayedTransferObject: vector<u8> = b"Wrong delayed transfer object.";
 
 /// Wrapper object that delays transfers by at least `min_delay_ms` after scheduling.
 public struct DelayedTransferWrapper<phantom T: key + store> has key {
     id: UID,
     min_delay_ms: u64,
-    pending: option::Option<PendingTransfer>,
+    pending: Option<PendingTransfer>,
 }
 
 /// Snapshot of a scheduled transfer or unwrap, including the execution time.
 /// A non-existing recipient means an unwrap is scheduled.
 public struct PendingTransfer has drop, store {
-    recipient: option::Option<address>,
+    recipient: Option<address>,
     execute_after_ms: u64,
 }
+
+/// Hot potato to ensure a wrapped object was returned after being taken using
+/// the `borrow_val` call.
+public struct Borrow { wrapper_id: ID, object_id: ID }
+
+// === Events ===
 
 /// Emitted when a delayed transfer is scheduled.
 public struct TransferScheduled has copy, drop {
@@ -74,19 +85,41 @@ public fun wrap<T: key + store>(
         min_delay_ms,
         pending: option::none(),
     };
-    dof::add(&mut wrapper.id, WRAPPED_FIELD, cap);
+    dof::add(&mut wrapper.id, Wrapped {}, cap);
     wrapper
 }
 
 /// Borrow the wrapped capability immutably—useful for inspection without touching the schedule.
 public fun borrow<T: key + store>(wrapper: &DelayedTransferWrapper<T>): &T {
-    dof::borrow(&wrapper.id, WRAPPED_FIELD)
+    dof::borrow(&wrapper.id, Wrapped {})
 }
 
 /// Borrow the wrapped capability mutably when internal state needs to be tweaked without editing
 /// the pending schedule.
 public fun borrow_mut<T: key + store>(wrapper: &mut DelayedTransferWrapper<T>): &mut T {
-    dof::borrow_mut(&mut wrapper.id, WRAPPED_FIELD)
+    dof::borrow_mut(&mut wrapper.id, Wrapped {})
+}
+
+/// Take the wrapped capability from the `DelayedTransferWrapper` with a guarantee that it will be returned.
+public fun borrow_val<T: key + store>(self: &mut DelayedTransferWrapper<T>): (T, Borrow) {
+    let cap = dof::remove(&mut self.id, Wrapped {});
+    let object_id = object::id(&cap);
+    (cap, Borrow { wrapper_id: object::id(self), object_id })
+}
+
+/// Return the borrowed capability to the `DelayedTransferWrapper`. This method cannot be avoided
+/// if `borrow_val` is used.
+public fun return_val<T: key + store>(
+    self: &mut DelayedTransferWrapper<T>,
+    capability: T,
+    borrow: Borrow,
+) {
+    let Borrow { wrapper_id, object_id } = borrow;
+
+    assert!(object::id(self) == wrapper_id, EWrongDelayedTransferWrapper);
+    assert!(object::id(&capability) == object_id, EWrongDelayedTransferObject);
+
+    dof::add(&mut self.id, Wrapped {}, capability);
 }
 
 // === Scheduling / delay management ===
@@ -96,11 +129,11 @@ public fun borrow_mut<T: key + store>(wrapper: &mut DelayedTransferWrapper<T>): 
 public fun schedule_transfer<T: key + store>(
     wrapper: &mut DelayedTransferWrapper<T>,
     new_owner: address,
-    clock: &clock::Clock,
+    clock: &Clock,
     current_owner: address,
 ) {
-    assert!(option::is_none(&wrapper.pending), ETransferAlreadyScheduled);
-    let execute_after = clock::timestamp_ms(clock) + wrapper.min_delay_ms;
+    assert!(wrapper.pending.is_none(), ETransferAlreadyScheduled);
+    let execute_after = clock.timestamp_ms() + wrapper.min_delay_ms;
     option::fill(
         &mut wrapper.pending,
         PendingTransfer {
@@ -121,11 +154,11 @@ public fun schedule_transfer<T: key + store>(
 /// and delete the wrapper.
 public fun schedule_unwrap<T: key + store>(
     wrapper: &mut DelayedTransferWrapper<T>,
-    clock: &clock::Clock,
+    clock: &Clock,
     current_owner: address,
 ) {
-    assert!(option::is_none(&wrapper.pending), ETransferAlreadyScheduled);
-    let execute_after = clock::timestamp_ms(clock) + wrapper.min_delay_ms;
+    assert!(wrapper.pending.is_none(), ETransferAlreadyScheduled);
+    let execute_after = clock.timestamp_ms() + wrapper.min_delay_ms;
     option::fill(
         &mut wrapper.pending,
         PendingTransfer {
@@ -146,21 +179,14 @@ public fun schedule_unwrap<T: key + store>(
 /// emitting an `OwnershipTransferred` event.
 public fun execute_transfer<T: key + store>(
     mut wrapper: DelayedTransferWrapper<T>,
-    clock: &clock::Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let pending = if (option::is_some(&wrapper.pending)) {
-        option::extract(&mut wrapper.pending)
-    } else {
-        abort ENoPendingTransfer
-    };
+    let pending = wrapper.pending.extract_or!(abort ENoPendingTransfer);
     let PendingTransfer { mut recipient, execute_after_ms } = pending;
-    let recipient = if (option::is_some(&recipient)) {
-        option::extract(&mut recipient)
-    } else {
-        abort EWrongPendingAction
-    };
-    let now = clock::timestamp_ms(clock);
+    let recipient = recipient.extract_or!(abort EWrongPendingAction);
+
+    let now = clock.timestamp_ms();
     assert!(now >= execute_after_ms, EDelayNotElapsed);
     event::emit(OwnershipTransferred {
         wrapper_id: object::id(&wrapper),
@@ -174,22 +200,22 @@ public fun execute_transfer<T: key + store>(
 /// wrapper so the owner regains full control.
 public fun unwrap<T: key + store>(
     mut wrapper: DelayedTransferWrapper<T>,
-    clock: &clock::Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): T {
-    let pending = if (option::is_some(&wrapper.pending)) {
-        option::extract(&mut wrapper.pending)
+    let pending = if (wrapper.pending.is_some()) {
+        wrapper.pending.extract()
     } else {
         abort ENoPendingTransfer
     };
 
     let PendingTransfer { recipient, execute_after_ms } = pending;
-    assert!(option::is_none(&recipient), EWrongPendingAction);
+    assert!(recipient.is_none(), EWrongPendingAction);
 
     // The recipient must be none for an unwrap.
-    option::destroy_none(recipient);
+    recipient.destroy_none();
 
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     assert!(now >= execute_after_ms, EDelayNotElapsed);
 
     event::emit(OwnershipTransferred {
@@ -199,17 +225,15 @@ public fun unwrap<T: key + store>(
     });
 
     let DelayedTransferWrapper { id: mut wrapper_id, min_delay_ms: _, pending: _ } = wrapper;
-    let cap = dof::remove(&mut wrapper_id, WRAPPED_FIELD);
-    object::delete(wrapper_id);
+    let cap = dof::remove(&mut wrapper_id, Wrapped {});
+    wrapper_id.delete();
     cap
 }
 
 /// Cancel the currently scheduled transfer or unwrap operation, if any.
 public fun cancel<T: key + store>(wrapper: &mut DelayedTransferWrapper<T>) {
-    if (option::is_some(&wrapper.pending)) {
-        let PendingTransfer { recipient: _, execute_after_ms: _ } = option::extract(
-            &mut wrapper.pending,
-        );
+    if (wrapper.pending.is_some()) {
+        let PendingTransfer { .. } = wrapper.pending.extract();
     } else {
         abort ENoPendingTransfer
     }
