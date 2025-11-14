@@ -1,6 +1,0 @@
-# Requires environment variables (all with 0x prefix):
-#   PACKAGE_ID             -> package ID containing the modules
-#   OWNERSHIP_REQUEST_ID   -> object ID of the pending OwnershipRequestCap
---assign request_cap @${OWNERSHIP_REQUEST_ID}
---move-call ${PACKAGE_ID}::ownable::reject_ownership_request request_cap
---gas-budget 500000000
