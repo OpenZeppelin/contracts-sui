@@ -504,23 +504,38 @@ public(package) fun round_division_result(
 ///
 /// #### Returns
 /// `true` if the value should round up, `false` otherwise.
-public(package) fun log_should_round_up(value: u256, threshold_exp: u16): bool {
-    let max_small = std::u128::max_value!() as u256;
-    let fast_path = threshold_exp < 256 && value <= max_small;
+public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
+    let threshold_exp = 2 * floor_log + 1;
+    value_squared_ge_pow2(value, threshold_exp)
+}
 
-    if (fast_path) {
-        // Fast path: both value² and threshold fit in u256
+/// Test whether `value² >= 2^exponent` without approximation.
+///
+/// Calculates the square of `value` and 2^`exponent`, then compares them.
+/// Uses fast path when the compared values fit in u256, otherwise u512 arithmetic.
+///
+/// #### Parameters
+/// - `value`: The value to square and compare.
+/// - `exponent`: The power-of-two exponent for the threshold.
+///
+/// #### Returns
+/// `true` if `value² >= 2^exponent`, `false` otherwise.
+fun value_squared_ge_pow2(value: u256, exponent: u16): bool {
+    let max_small = std::u128::max_value!() as u256;
+    let fast_path = exponent < 256 && value <= max_small;
+        if (fast_path) {
+        // Fast path: both value² and exponent fit in u256
         let value_squared = value * value;
-        let threshold = 1 << (threshold_exp as u8);
+        let threshold = 1 << (exponent as u8);
         value_squared >= threshold
     } else {
-        // Slow path: use u512 for values where value² > u256::MAX or threshold >= 2^256
+        // Slow path: use u512 for values where value² > u256::MAX or exponent >= 2^256
         let value_squared = u512::mul_u256(value, value);
-        let threshold = if (threshold_exp >= 256) {
-            let shift = (threshold_exp - 256) as u8;
+        let threshold = if (exponent >= 256) {
+            let shift = (exponent - 256) as u8;
             u512::new(1u256 << shift, 0)
         } else {
-            u512::from_u256(1 << (threshold_exp as u8))
+            u512::from_u256(1 << (exponent as u8))
         };
         value_squared.ge(&threshold)
     }
