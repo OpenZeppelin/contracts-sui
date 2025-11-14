@@ -19,7 +19,7 @@ fun new_ctx(sender: address, hint: u64): sui::tx_context::TxContext {
     )
 }
 
-fun new_cap(ctx: &mut sui::tx_context::TxContext): DummyCap {
+fun new_cap(ctx: &mut TxContext): DummyCap {
     DummyCap { id: sui::object::new(ctx) }
 }
 
