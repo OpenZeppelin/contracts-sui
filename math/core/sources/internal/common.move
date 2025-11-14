@@ -10,7 +10,7 @@ module openzeppelin_math::common;
 /// powers of two (bit_width/2, bit_width/4, ..., 1). For each shift, if the upper portion is zero, the number of leading zeros increases
 /// by the shift amount. If the input value is zero, it returns bit_width. Otherwise, it returns the count of leading zero bits for the
 /// value, respecting the provided bit width.
-public(package) fun leading_zeros(val: u256, bit_width: u16): u16 {
+public(package) fun clz(val: u256, bit_width: u16): u16 {
     if (val == 0) {
         return bit_width
     };

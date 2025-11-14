@@ -158,7 +158,7 @@ public(package) macro fun mul_div<$Int>(
 /// #### Returns
 /// The number of leading zero bits as a `u16`. Returns `$bit_width` if `$value` is 0.
 public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
-    common::leading_zeros($value as u256, $bit_width)
+    common::clz($value as u256, $bit_width)
 }
 
 /// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.

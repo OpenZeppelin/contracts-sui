@@ -194,9 +194,9 @@ fun sub_u256(value: U512, other: u256): U512 {
 /// NOTE: This internal helper function expects a value that is not zero.
 fun highest_set_bit(value: &U512): u16 {
     if (value.hi != 0) {
-        511 - common::leading_zeros(value.hi, 256)
+        511 - common::clz(value.hi, 256)
     } else {
-        255 - common::leading_zeros(value.lo, 256)
+        255 - common::clz(value.lo, 256)
     }
 }
 
