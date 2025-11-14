@@ -492,7 +492,7 @@ public(package) fun round_division_result(
 }
 
 /// Nearest-integer rounding for log2 without floats.
-/// 
+///
 /// #### Parameters
 /// - `value`: The value being tested (already cast to u256).
 /// - `floor_log`: The threshold exponent for comparison.
@@ -511,7 +511,7 @@ public(package) fun round_division_result(
 ///   - else                      → round down (`floor_log`)
 ///
 /// Tie-break: equality goes up (`≥`), i.e., “round half up”.
-/// 
+///
 /// #### Returns
 /// `true` if the value should round up, `false` otherwise.
 public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
@@ -533,7 +533,7 @@ public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
 fun value_squared_ge_pow2(value: u256, exponent: u16): bool {
     let max_small = std::u128::max_value!() as u256;
     let fast_path = exponent < 256 && value <= max_small;
-        if (fast_path) {
+    if (fast_path) {
         // Fast path: both value² and exponent fit in u256
         let value_squared = value * value;
         let threshold = 1 << (exponent as u8);
