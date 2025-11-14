@@ -8,14 +8,9 @@ public struct DummyCap has key, store {
     id: sui::object::UID,
 }
 
-fun new_ctx(sender: address, hint: u64): TxContext {
-    sui::tx_context::new(
-        sender,
-        sui::tx_context::dummy_tx_hash_with_hint(hint),
-        0,
-        0,
-        0,
-    )
+public fun new_ctx(sender: address): TxContext {
+    let tx_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
+    tx_context::new(sender, tx_hash, 0, 0, 0)
 }
 
 fun new_cap(ctx: &mut TxContext): DummyCap {
@@ -25,7 +20,7 @@ fun new_cap(ctx: &mut TxContext): DummyCap {
 #[test]
 fun request_emits_event() {
     let owner = @0x1;
-    let mut ctx = new_ctx(owner, 0);
+    let mut ctx = new_ctx(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     two_step_transfer::request<DummyCap>(sui::object::id(&wrapper), owner, &mut ctx);
@@ -40,7 +35,7 @@ fun request_emits_event() {
 #[test]
 fun unwrap_returns_inner_cap() {
     let owner = @0x2;
-    let mut ctx = new_ctx(owner, 1);
+    let mut ctx = new_ctx(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     let cap = two_step_transfer::unwrap(wrapper);
