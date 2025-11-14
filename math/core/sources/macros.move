@@ -254,9 +254,7 @@ public(package) macro fun log2<$Int>(
     if (rounding_mode == rounding::up()) {
         return floor_log + 1
     };
-    // Nearest: decide whether to round up or down based on midpoint (2^n × √2)
-    let threshold_exp = 2 * floor_log + 1;
-    if (log_should_round_up(value as u256, threshold_exp)) {
+    if (log2_should_round_up(value as u256, floor_log)) {
         floor_log + 1
     } else {
         floor_log
@@ -493,15 +491,27 @@ public(package) fun round_division_result(
     }
 }
 
-/// Determine if a value should round up based on an algebraic threshold test.
-///
-/// Tests whether `value² >= 2^threshold_exp` to decide rounding without approximation.
-/// Uses fast path when both operands fit in u256, otherwise u512 arithmetic.
-///
+/// Nearest-integer rounding for log2 without floats.
+/// 
 /// #### Parameters
 /// - `value`: The value being tested (already cast to u256).
-/// - `threshold_exp`: The threshold exponent for comparison.
+/// - `floor_log`: The threshold exponent for comparison.
 ///
+/// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
+/// or keep `floor_log` by comparing `x` to the midpoint of the interval
+/// `[2^floor_log, 2^(floor_log+1))`. That midpoint is `2^(floor_log + 1/2) = 2^floor_log · √2`.
+///
+/// To avoid √2 and floating point, we square both sides:
+///   - `x ≥ 2^floor_log · √2`
+///   - `x² ≥ 2^(2·floor_log + 1)`
+///
+/// We implement this with an integer threshold test:
+/// `threshold_exp = 2 * floor_log + 1`, then:
+///   - if `x² ≥ 2^threshold_exp` → round up (`floor_log + 1`)
+///   - else                      → round down (`floor_log`)
+///
+/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+/// 
 /// #### Returns
 /// `true` if the value should round up, `false` otherwise.
 public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
