@@ -1,9 +1,9 @@
 module openzeppelin_access::delayed_tests;
 
 use openzeppelin_access::delayed_transfer;
+use std::unit_test::assert_eq;
 use sui::clock;
 use sui::event;
-use std::unit_test::assert_eq;
 
 #[test_only]
 public struct DummyCap has key, store {
