@@ -6,6 +6,11 @@ coverage:
         target: 70%
         threshold: 22% # TODO: Increase coverage to >= 90%
 
+    patch:
+      default:
+        target: 90%
+        threshold: 20%
+
 ignore:
   - "**/tests/**"
   - "**/examples/**"
