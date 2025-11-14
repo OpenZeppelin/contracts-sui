@@ -90,14 +90,14 @@ public fun wrap<T: key + store>(
 }
 
 /// Borrow the wrapped capability immutably—useful for inspection without touching the schedule.
-public fun borrow<T: key + store>(wrapper: &DelayedTransferWrapper<T>): &T {
-    dof::borrow(&wrapper.id, Wrapped {})
+public fun borrow<T: key + store>(self: &DelayedTransferWrapper<T>): &T {
+    dof::borrow(&self.id, Wrapped {})
 }
 
 /// Borrow the wrapped capability mutably when internal state needs to be tweaked without editing
 /// the pending schedule.
-public fun borrow_mut<T: key + store>(wrapper: &mut DelayedTransferWrapper<T>): &mut T {
-    dof::borrow_mut(&mut wrapper.id, Wrapped {})
+public fun borrow_mut<T: key + store>(self: &mut DelayedTransferWrapper<T>): &mut T {
+    dof::borrow_mut(&mut self.id, Wrapped {})
 }
 
 /// Take the wrapped capability from the `DelayedTransferWrapper` with a guarantee that it will be returned.
@@ -127,21 +127,21 @@ public fun return_val<T: key + store>(
 /// Schedule a new transfer to `new_owner`. Stores recipient + deadline; caller later invokes
 /// `execute_transfer` after `min_delay_ms` has passed.
 public fun schedule_transfer<T: key + store>(
-    wrapper: &mut DelayedTransferWrapper<T>,
+    self: &mut DelayedTransferWrapper<T>,
     new_owner: address,
     clock: &Clock,
     current_owner: address,
 ) {
-    assert!(wrapper.pending.is_none(), ETransferAlreadyScheduled);
-    let execute_after = clock.timestamp_ms() + wrapper.min_delay_ms;
+    assert!(self.pending.is_none(), ETransferAlreadyScheduled);
+    let execute_after = clock.timestamp_ms() + self.min_delay_ms;
     option::fill(
-        &mut wrapper.pending,
+        &mut self.pending,
         PendingTransfer {
             recipient: option::some(new_owner),
             execute_after_ms: execute_after,
         },
     );
-    let wrapper_id = object::id(wrapper);
+    let wrapper_id = object::id(self);
     event::emit(TransferScheduled {
         wrapper_id,
         current_owner,
@@ -153,21 +153,21 @@ public fun schedule_transfer<T: key + store>(
 /// Schedule an unwrap (self-recovery). After the delay, call `unwrap` to retrieve the capability
 /// and delete the wrapper.
 public fun schedule_unwrap<T: key + store>(
-    wrapper: &mut DelayedTransferWrapper<T>,
+    self: &mut DelayedTransferWrapper<T>,
     clock: &Clock,
     current_owner: address,
 ) {
-    assert!(wrapper.pending.is_none(), ETransferAlreadyScheduled);
-    let execute_after = clock.timestamp_ms() + wrapper.min_delay_ms;
+    assert!(self.pending.is_none(), ETransferAlreadyScheduled);
+    let execute_after = clock.timestamp_ms() + self.min_delay_ms;
     option::fill(
-        &mut wrapper.pending,
+        &mut self.pending,
         PendingTransfer {
             recipient: option::none(),
             execute_after_ms: execute_after,
         },
     );
     event::emit(UnwrapScheduled {
-        wrapper_id: object::id(wrapper),
+        wrapper_id: object::id(self),
         current_owner,
         execute_after_ms: execute_after,
     });
@@ -178,36 +178,32 @@ public fun schedule_unwrap<T: key + store>(
 /// Execute the pending transfer once the configured delay has elapsed, consuming the wrapper and
 /// emitting an `OwnershipTransferred` event.
 public fun execute_transfer<T: key + store>(
-    mut wrapper: DelayedTransferWrapper<T>,
+    mut self: DelayedTransferWrapper<T>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let pending = wrapper.pending.extract_or!(abort ENoPendingTransfer);
+    let pending = self.pending.extract_or!(abort ENoPendingTransfer);
     let PendingTransfer { mut recipient, execute_after_ms } = pending;
     let recipient = recipient.extract_or!(abort EWrongPendingAction);
 
     let now = clock.timestamp_ms();
     assert!(now >= execute_after_ms, EDelayNotElapsed);
     event::emit(OwnershipTransferred {
-        wrapper_id: object::id(&wrapper),
+        wrapper_id: object::id(&self),
         previous_owner: ctx.sender(),
         new_owner: recipient,
     });
-    transfer::transfer(wrapper, recipient);
+    transfer::transfer(self, recipient);
 }
 
 /// Complete a previously scheduled unwrap after the delay—return the capability and delete the
 /// wrapper so the owner regains full control.
 public fun unwrap<T: key + store>(
-    mut wrapper: DelayedTransferWrapper<T>,
+    mut self: DelayedTransferWrapper<T>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): T {
-    let pending = if (wrapper.pending.is_some()) {
-        wrapper.pending.extract()
-    } else {
-        abort ENoPendingTransfer
-    };
+    let pending = self.pending.extract_or!(abort ENoPendingTransfer);
 
     let PendingTransfer { recipient, execute_after_ms } = pending;
     assert!(recipient.is_none(), EWrongPendingAction);
@@ -219,22 +215,18 @@ public fun unwrap<T: key + store>(
     assert!(now >= execute_after_ms, EDelayNotElapsed);
 
     event::emit(OwnershipTransferred {
-        wrapper_id: object::id(&wrapper),
+        wrapper_id: object::id(&self),
         previous_owner: ctx.sender(),
         new_owner: ctx.sender(),
     });
 
-    let DelayedTransferWrapper { id: mut wrapper_id, min_delay_ms: _, pending: _ } = wrapper;
+    let DelayedTransferWrapper { id: mut wrapper_id, .. } = self;
     let cap = dof::remove(&mut wrapper_id, Wrapped {});
     wrapper_id.delete();
     cap
 }
 
 /// Cancel the currently scheduled transfer or unwrap operation, if any.
-public fun cancel<T: key + store>(wrapper: &mut DelayedTransferWrapper<T>) {
-    if (wrapper.pending.is_some()) {
-        let PendingTransfer { .. } = wrapper.pending.extract();
-    } else {
-        abort ENoPendingTransfer
-    }
+public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>) {
+    let PendingTransfer { .. } = self.pending.extract_or!(abort ENoPendingTransfer);
 }

@@ -16,11 +16,15 @@ module openzeppelin_access::two_step_transfer;
 use sui::dynamic_object_field as dof;
 use sui::event;
 
-const WRAPPED_FIELD: vector<u8> = b"wrapped";
+public struct Wrapped has copy, drop, store {}
 
 /// Transfer request does not correspond to the provided wrapper
 #[error(code = 1)]
 const EInvalidTransferRequest: vector<u8> = b"Transfer request does not match wrapper.";
+#[error(code = 2)]
+const EWrongTwoStepTransferWrapper: vector<u8> = b"Wrong two step transfer wrapper.";
+#[error(code = 3)]
+const EWrongTwoStepTransferObject: vector<u8> = b"Wrong two step transfer object.";
 
 /// Wrapper object that owns the underlying capability, stored as a dynamic object field.
 ///
@@ -36,6 +40,12 @@ public struct OwnershipTransferRequest<phantom T> has key {
     wrapper_id: ID,
     new_owner: address,
 }
+
+/// Hot potato to ensure a wrapped object was returned after being taken using
+/// the `borrow_val` call.
+public struct Borrow { wrapper_id: ID, object_id: ID }
+
+// === Events ===
 
 /// Emitted whenever an ownership request is created.
 public struct OwnershipRequested has copy, drop {
@@ -57,27 +67,49 @@ public struct OwnershipTransferred has copy, drop {
 /// field so the underlying ID can still be discovered by off-chain indexers.
 public fun wrap<T: key + store>(cap: T, ctx: &mut TxContext): TwoStepTransferWrapper<T> {
     let mut wrapper = TwoStepTransferWrapper { id: object::new(ctx) };
-    dof::add(&mut wrapper.id, WRAPPED_FIELD, cap);
+    dof::add(&mut wrapper.id, Wrapped {}, cap);
     wrapper
 }
 
 /// Borrow the wrapped capability immutably—useful for read-only inspection without touching the
 /// transfer flow.
-public fun borrow<T: key + store>(wrapper: &TwoStepTransferWrapper<T>): &T {
-    dof::borrow(&wrapper.id, WRAPPED_FIELD)
+public fun borrow<T: key + store>(self: &TwoStepTransferWrapper<T>): &T {
+    dof::borrow(&self.id, Wrapped {})
 }
 
 /// Borrow the wrapped capability mutably when maintenance needs to happen without changing the
 /// ownership state.
-public fun borrow_mut<T: key + store>(wrapper: &mut TwoStepTransferWrapper<T>): &mut T {
-    dof::borrow_mut(&mut wrapper.id, WRAPPED_FIELD)
+public fun borrow_mut<T: key + store>(self: &mut TwoStepTransferWrapper<T>): &mut T {
+    dof::borrow_mut(&mut self.id, Wrapped {})
+}
+
+/// Take the wrapped capability from the `TwoStepTransferWrapper` with a guarantee that it will be returned.
+public fun borrow_val<T: key + store>(self: &mut TwoStepTransferWrapper<T>): (T, Borrow) {
+    let cap = dof::remove(&mut self.id, Wrapped {});
+    let object_id = object::id(&cap);
+    (cap, Borrow { wrapper_id: object::id(self), object_id })
+}
+
+/// Return the borrowed capability to the `TwoStepTransferWrapper`. This method cannot be avoided
+/// if `borrow_val` is used.
+public fun return_val<T: key + store>(
+    self: &mut TwoStepTransferWrapper<T>,
+    capability: T,
+    borrow: Borrow,
+) {
+    let Borrow { wrapper_id, object_id } = borrow;
+
+    assert!(object::id(self) == wrapper_id, EWrongTwoStepTransferWrapper);
+    assert!(object::id(&capability) == object_id, EWrongTwoStepTransferObject);
+
+    dof::add(&mut self.id, Wrapped {}, capability);
 }
 
 /// Permanently unwrap the capability, deleting the wrapper. Only the current owner can call this,
 /// and it bypasses the request flow, effectively “owning” the capability again.
-public fun unwrap<T: key + store>(wrapper: TwoStepTransferWrapper<T>): T {
-    let TwoStepTransferWrapper { id: mut wrapper_id } = wrapper;
-    let cap = dof::remove(&mut wrapper_id, WRAPPED_FIELD);
+public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>): T {
+    let TwoStepTransferWrapper { id: mut wrapper_id } = self;
+    let cap = dof::remove(&mut wrapper_id, Wrapped {});
     wrapper_id.delete();
     cap
 }
@@ -103,25 +135,25 @@ public fun request<T: key + store>(wrapper_id: ID, current_owner: address, ctx: 
 /// Approve a request that was previously issued through `request_ownership`, move the wrapper to
 /// the requester, and emit an `OwnershipTransferred` event for observability.
 public fun transfer<T: key + store>(
-    wrapper: TwoStepTransferWrapper<T>,
+    self: TwoStepTransferWrapper<T>,
     request: OwnershipTransferRequest<T>,
     ctx: &mut TxContext,
 ) {
-    assert!(object::id(&wrapper) == request.wrapper_id, EInvalidTransferRequest);
-    let OwnershipTransferRequest { id, wrapper_id: _, new_owner } = request;
+    assert!(object::id(&self) == request.wrapper_id, EInvalidTransferRequest);
+    let OwnershipTransferRequest { id, new_owner, .. } = request;
     id.delete();
 
     event::emit(OwnershipTransferred {
-        wrapper_id: object::id(&wrapper),
+        wrapper_id: object::id(&self),
         previous_owner: ctx.sender(),
         new_owner,
     });
-    transfer::transfer(wrapper, new_owner);
+    transfer::transfer(self, new_owner);
 }
 
 /// Reject an ownership request by deleting it—useful when the owner wants to deny or revoke a
 /// pending request without moving the wrapper.
 public fun reject<T>(request: OwnershipTransferRequest<T>) {
-    let OwnershipTransferRequest { id, wrapper_id: _, new_owner: _ } = request;
+    let OwnershipTransferRequest { id, .. } = request;
     id.delete();
 }
