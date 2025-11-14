@@ -138,6 +138,43 @@ public(package) macro fun mul_div<$Int>(
     mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
 }
 
+/// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
+///
+/// This macro mirrors the ergonomics of `mul_div`, promoting the operands to `u256` and delegating to
+/// a shared helper that performs the computation using the most efficient implementation available.
+/// It starts from the floor of `(a * b) / 2^shift`, then applies the requested rounding mode. The
+/// overflow flag reports when the rounded value no longer fits in the `u256` range (i.e. significant
+/// bits remain above the lowest 256 bits after the shift).
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$a`, `$b`: Unsigned factors.
+/// - `$shift`: Number of bits to shift to the right. Must be less than 256.
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// `(overflow, result)` where `overflow` reports that the rounded value cannot fit in 256 bits and
+/// `result` contains the rounded quotient when no overflow occurs.
+///
+/// #### Aborts
+/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is 256 or
+/// greater.
+public(package) macro fun mul_shr<$Int>(
+    $a: $Int,
+    $b: $Int,
+    $shift: u8,
+    $rounding_mode: RoundingMode,
+): (bool, u256) {
+    let a_u256 = ($a as u256);
+    let b_u256 = ($b as u256);
+    let shift = $shift;
+    let rounding_mode = $rounding_mode;
+
+    mul_shr_inner(a_u256, b_u256, shift, rounding_mode)
+}
+
 /// Count the number of leading zero bits in an unsigned integer.
 ///
 /// Uses an iterative binary search to efficiently locate the most significant set bit by repeatedly
@@ -180,41 +217,48 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
     res
 }
 
-/// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
+/// Compute the log in base 2 of a positive value with configurable rounding.
 ///
-/// This macro mirrors the ergonomics of `mul_div`, promoting the operands to `u256` and delegating to
-/// a shared helper that performs the computation using the most efficient implementation available.
-/// It starts from the floor of `(a * b) / 2^shift`, then applies the requested rounding mode. The
-/// overflow flag reports when the rounded value no longer fits in the `u256` range (i.e. significant
-/// bits remain above the lowest 256 bits after the shift).
+/// The algorithm first computes floor(log2(value)) using count-leading-zeros, then applies the
+/// requested rounding mode. Powers of 2 return exact results without additional rounding.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
 /// #### Parameters
-/// - `$a`, `$b`: Unsigned factors.
-/// - `$shift`: Number of bits to shift to the right. Must be less than 256.
+/// - `$value`: The unsigned integer to compute the logarithm for.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
 /// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
 /// #### Returns
-/// `(overflow, result)` where `overflow` reports that the rounded value cannot fit in 256 bits and
-/// `result` contains the rounded quotient when no overflow occurs.
-///
-/// #### Aborts
-/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is 256 or
-/// greater.
-public(package) macro fun mul_shr<$Int>(
-    $a: $Int,
-    $b: $Int,
-    $shift: u8,
+/// The base-2 logarithm as a `u16`, rounded according to the specified mode.
+/// Returns `0` if `$value` is 0.
+public(package) macro fun log2<$Int>(
+    $value: $Int,
+    $bit_width: u16,
     $rounding_mode: RoundingMode,
-): (bool, u256) {
-    let a_u256 = ($a as u256);
-    let b_u256 = ($b as u256);
-    let shift = $shift;
-    let rounding_mode = $rounding_mode;
-
-    mul_shr_inner(a_u256, b_u256, shift, rounding_mode)
+): u16 {
+    let (value, bit_width, rounding_mode) = ($value, $bit_width, $rounding_mode);
+    if (value == 0 as $Int) {
+        return 0
+    };
+    let zeros = clz!(value, bit_width);
+    let floor_log = bit_width - 1 - zeros;
+    if (rounding_mode == rounding::down()) {
+        return floor_log
+    };
+    let power_of_two = (1 as $Int) << (floor_log as u8);
+    if (value == power_of_two) {
+        return floor_log
+    };
+    if (rounding_mode == rounding::up()) {
+        return floor_log + 1
+    };
+    if (log2_should_round_up(value as u256, floor_log)) {
+        floor_log + 1
+    } else {
+        floor_log
+    }
 }
 
 /// === Helper functions ===
@@ -444,5 +488,65 @@ public(package) fun round_division_result(
         (true, 0)
     } else {
         (false, result + 1)
+    }
+}
+
+/// Nearest-integer rounding for log2 without floats.
+///
+/// #### Parameters
+/// - `value`: The value being tested (already cast to u256).
+/// - `floor_log`: The threshold exponent for comparison.
+///
+/// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
+/// or keep `floor_log` by comparing `x` to the midpoint of the interval
+/// `[2^floor_log, 2^(floor_log+1))`. That midpoint is `2^(floor_log + 1/2) = 2^floor_log · √2`.
+///
+/// To avoid √2 and floating point, we square both sides:
+///   - `x ≥ 2^floor_log · √2`
+///   - `x² ≥ 2^(2·floor_log + 1)`
+///
+/// We implement this with an integer threshold test:
+/// `threshold_exp = 2 * floor_log + 1`, then:
+///   - if `x² ≥ 2^threshold_exp` → round up (`floor_log + 1`)
+///   - else                      → round down (`floor_log`)
+///
+/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+///
+/// #### Returns
+/// `true` if the value should round up, `false` otherwise.
+public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
+    let threshold_exp = 2 * floor_log + 1;
+    value_squared_ge_pow2(value, threshold_exp)
+}
+
+/// Test whether `value² >= 2^exponent` without approximation.
+///
+/// Calculates the square of `value` and 2^`exponent`, then compares them.
+/// Uses fast path when the compared values fit in u256, otherwise u512 arithmetic.
+///
+/// #### Parameters
+/// - `value`: The value to square and compare.
+/// - `exponent`: The power-of-two exponent for the threshold.
+///
+/// #### Returns
+/// `true` if `value² >= 2^exponent`, `false` otherwise.
+fun value_squared_ge_pow2(value: u256, exponent: u16): bool {
+    let max_small = std::u128::max_value!() as u256;
+    let fast_path = exponent < 256 && value <= max_small;
+    if (fast_path) {
+        // Fast path: both value² and exponent fit in u256
+        let value_squared = value * value;
+        let threshold = 1 << (exponent as u8);
+        value_squared >= threshold
+    } else {
+        // Slow path: use u512 for values where value² > u256::MAX or exponent >= 2^256
+        let value_squared = u512::mul_u256(value, value);
+        let threshold = if (exponent >= 256) {
+            let shift = (exponent - 256) as u8;
+            u512::new(1u256 << shift, 0)
+        } else {
+            u512::from_u256(1 << (exponent as u8))
+        };
+        value_squared.ge(&threshold)
     }
 }

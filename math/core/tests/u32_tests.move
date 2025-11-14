@@ -274,3 +274,96 @@ fun clz_handles_values_near_boundaries() {
     // 0x00ff_ffff (16777215) has bit 23 set, clz = 8
     assert_eq!(u32::clz(16777215), 8);
 }
+
+// === log2 ===
+
+#[test]
+fun log2_returns_zero_for_zero() {
+    // log2(0) should return 0 by convention
+    assert_eq!(u32::log2(0, rounding::down()), 0);
+    assert_eq!(u32::log2(0, rounding::up()), 0);
+    assert_eq!(u32::log2(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun log2_returns_zero_for_one() {
+    // log2(1) = 0 since 2^0 = 1
+    assert_eq!(u32::log2(1, rounding::down()), 0);
+    assert_eq!(u32::log2(1, rounding::up()), 0);
+    assert_eq!(u32::log2(1, rounding::nearest()), 0);
+}
+
+#[test]
+fun log2_handles_powers_of_two() {
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    let mut i = 0;
+    while (i < rounding_modes.length()) {
+        // for powers of 2, log2 returns the exponent regardless of rounding mode
+        let rounding = rounding_modes[i];
+        assert_eq!(u32::log2(1 << 0, rounding), 0);
+        assert_eq!(u32::log2(1 << 1, rounding), 1);
+        assert_eq!(u32::log2(1 << 8, rounding), 8);
+        assert_eq!(u32::log2(1 << 16, rounding), 16);
+        assert_eq!(u32::log2(1 << 24, rounding), 24);
+        assert_eq!(u32::log2(1 << 31, rounding), 31);
+        i = i + 1;
+    }
+}
+
+#[test]
+fun log2_rounds_down() {
+    // log2 with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(u32::log2(3, down), 1); // 1.58 → 1
+    assert_eq!(u32::log2(5, down), 2); // 2.32 → 2
+    assert_eq!(u32::log2(7, down), 2); // 2.81 → 2
+    assert_eq!(u32::log2(15, down), 3); // 3.91 → 3
+    assert_eq!(u32::log2(255, down), 7); // 7.99 → 7
+}
+
+#[test]
+fun log2_rounds_up() {
+    // log2 with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(u32::log2(3, up), 2); // 1.58 → 2
+    assert_eq!(u32::log2(5, up), 3); // 2.32 → 3
+    assert_eq!(u32::log2(7, up), 3); // 2.81 → 3
+    assert_eq!(u32::log2(15, up), 4); // 3.91 → 4
+    assert_eq!(u32::log2(255, up), 8); // 7.99 → 8
+}
+
+#[test]
+fun log2_rounds_to_nearest() {
+    // log2 with Nearest mode rounds to closest integer
+    let nearest = rounding::nearest();
+    assert_eq!(u32::log2(3, nearest), 2); // 1.58 → 2
+    assert_eq!(u32::log2(5, nearest), 2); // 2.32 → 2
+    assert_eq!(u32::log2(7, nearest), 3); // 2.81 → 3
+    assert_eq!(u32::log2(15, nearest), 4); // 3.91 → 4
+    assert_eq!(u32::log2(255, nearest), 8); // 7.99 → 8
+}
+
+#[test]
+fun log2_handles_values_near_boundaries() {
+    // test values just before and at power-of-2 boundaries
+    let down = rounding::down();
+
+    // 2^8 - 1 = 255
+    assert_eq!(u32::log2((1 << 8) - 1, down), 7);
+    // 2^8 = 256
+    assert_eq!(u32::log2(1 << 8, down), 8);
+
+    // 2^16 - 1 = 65535
+    assert_eq!(u32::log2((1 << 16) - 1, down), 15);
+    // 2^16 = 65536
+    assert_eq!(u32::log2(1 << 16, down), 16);
+}
+
+#[test]
+fun log2_handles_max_value() {
+    // max value has all bits set, so log2 = 31
+    let max = std::u32::max_value!();
+    assert_eq!(u32::log2(max, rounding::down()), 31);
+    assert_eq!(u32::log2(max, rounding::up()), 32);
+    assert_eq!(u32::log2(max, rounding::nearest()), 32);
+}
