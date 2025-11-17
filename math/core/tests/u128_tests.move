@@ -225,27 +225,23 @@ fun clz_returns_zero_for_max_value() {
 // Test all possible bit positions from 0 to 127.
 #[test]
 fun clz_handles_all_bit_positions() {
-    let mut bit_pos: u8 = 0;
-    while (bit_pos < 128) {
+    128u8.do!(|bit_pos| {
         let value = 1u128 << bit_pos;
         let expected_clz = 127 - bit_pos;
         assert_eq!(u128::clz(value), expected_clz);
-        bit_pos = bit_pos + 1;
-    };
+    });
 }
 
 // Test that lower bits have no effect on the result.
 #[test]
 fun clz_lower_bits_have_no_effect() {
-    let mut bit_pos: u8 = 0;
-    while (bit_pos < 128) {
+    128u8.do!(|bit_pos| {
         let mut value = 1u128 << bit_pos;
         // set all bits below bit_pos to 1
         value = value | (value - 1);
         let expected_clz = 127 - bit_pos;
         assert_eq!(u128::clz(value), expected_clz);
-        bit_pos = bit_pos + 1;
-    };
+    });
 }
 
 #[test]
@@ -298,10 +294,8 @@ fun log2_returns_zero_for_one() {
 #[test]
 fun log2_handles_powers_of_two() {
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
-    let mut i = 0;
-    while (i < rounding_modes.length()) {
+    rounding_modes.destroy!(|rounding| {
         // for powers of 2, log2 returns the exponent regardless of rounding mode
-        let rounding = rounding_modes[i];
         assert_eq!(u128::log2(1 << 0, rounding), 0);
         assert_eq!(u128::log2(1 << 1, rounding), 1);
         assert_eq!(u128::log2(1 << 8, rounding), 8);
@@ -310,8 +304,7 @@ fun log2_handles_powers_of_two() {
         assert_eq!(u128::log2(1 << 64, rounding), 64);
         assert_eq!(u128::log2(1 << 100, rounding), 100);
         assert_eq!(u128::log2(1 << 127, rounding), 127);
-        i = i + 1;
-    }
+    });
 }
 
 #[test]
@@ -394,9 +387,7 @@ fun log256_returns_zero_for_one() {
 fun log256_handles_powers_of_256() {
     // Test exact powers of 256
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
-    let mut i = 0;
-    while (i < rounding_modes.length()) {
-        let rounding = rounding_modes[i];
+    rounding_modes.destroy!(|rounding| {
         assert_eq!(u128::log256(1 << 8, rounding), 1); // 256^1 = 256
         assert_eq!(u128::log256(1 << 16, rounding), 2); // 256^2 = 65536
         assert_eq!(u128::log256(1 << 24, rounding), 3); // 256^3 = 16777216
@@ -404,8 +395,7 @@ fun log256_handles_powers_of_256() {
         assert_eq!(u128::log256(1 << 64, rounding), 8); // 256^8 = 2^64
         assert_eq!(u128::log256(1 << 96, rounding), 12); // 256^12 = 2^96
         assert_eq!(u128::log256(1 << 120, rounding), 15); // 256^15 = 2^120
-        i = i + 1;
-    }
+    });
 }
 
 #[test]

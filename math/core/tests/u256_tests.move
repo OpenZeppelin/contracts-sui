@@ -256,35 +256,23 @@ fun clz_returns_zero_for_max_value() {
 // Test all possible bit positions from 0 to 255.
 #[test]
 fun clz_handles_all_bit_positions() {
-    let mut bit_pos: u8 = 0;
-    loop {
-        let value = 1u256 << bit_pos;
-        let expected_clz = 255 - bit_pos;
+    256u16.do!(|bit_pos| {
+        let value = 1u256 << (bit_pos as u8);
+        let expected_clz = 255 - (bit_pos as u8);
         assert_eq!(u256::clz(value), expected_clz as u16);
-        if (bit_pos == 255) {
-            break
-        } else {
-            bit_pos = bit_pos + 1;
-        }
-    };
+    });
 }
 
 // Test that lower bits have no effect on the result.
 #[test]
 fun clz_lower_bits_have_no_effect() {
-    let mut bit_pos: u8 = 0;
-    loop {
-        let mut value = 1u256 << bit_pos;
+    256u16.do!(|bit_pos| {
+        let mut value = 1u256 << (bit_pos as u8);
         // set all bits below bit_pos to 1
         value = value | (value - 1);
-        let expected_clz = 255 - bit_pos;
+        let expected_clz = 255 - (bit_pos as u8);
         assert_eq!(u256::clz(value), expected_clz as u16);
-        if (bit_pos == 255) {
-            break
-        } else {
-            bit_pos = bit_pos + 1;
-        }
-    };
+    });
 }
 
 #[test]
@@ -343,10 +331,8 @@ fun log2_returns_zero_for_one() {
 #[test]
 fun log2_handles_powers_of_two() {
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
-    let mut i = 0;
-    while (i < rounding_modes.length()) {
+    rounding_modes.destroy!(|rounding| {
         // for powers of 2, log2 returns the exponent regardless of rounding mode
-        let rounding = rounding_modes[i];
         assert_eq!(u256::log2(1 << 0, rounding), 0);
         assert_eq!(u256::log2(1 << 1, rounding), 1);
         assert_eq!(u256::log2(1 << 7, rounding), 7);
@@ -357,8 +343,7 @@ fun log2_handles_powers_of_two() {
         assert_eq!(u256::log2(1 << 127, rounding), 127);
         assert_eq!(u256::log2(1 << 128, rounding), 128);
         assert_eq!(u256::log2(1 << 255, rounding), 255);
-        i = i + 1;
-    }
+    });
 }
 
 #[test]
@@ -454,9 +439,7 @@ fun log256_returns_zero_for_one() {
 fun log256_handles_powers_of_256() {
     // Test exact powers of 256
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
-    let mut i = 0;
-    while (i < rounding_modes.length()) {
-        let rounding = rounding_modes[i];
+    rounding_modes.destroy!(|rounding| {
         assert_eq!(u256::log256(1 << 8, rounding), 1);
         assert_eq!(u256::log256(1 << 16, rounding), 2);
         assert_eq!(u256::log256(1 << 24, rounding), 3);
@@ -464,8 +447,7 @@ fun log256_handles_powers_of_256() {
         assert_eq!(u256::log256(1 << 64, rounding), 8);
         assert_eq!(u256::log256(1 << 128, rounding), 16);
         assert_eq!(u256::log256(1 << 248, rounding), 31);
-        i = i + 1;
-    }
+    });
 }
 
 #[test]

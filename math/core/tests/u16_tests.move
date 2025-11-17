@@ -223,27 +223,23 @@ fun clz_returns_zero_for_max_value() {
 // Test all possible bit positions from 0 to 15.
 #[test]
 fun clz_handles_all_bit_positions() {
-    let mut bit_pos: u8 = 0;
-    while (bit_pos < 16) {
+    16u8.do!(|bit_pos| {
         let value = 1u16 << bit_pos;
         let expected_clz = 15 - bit_pos;
         assert_eq!(u16::clz(value), expected_clz);
-        bit_pos = bit_pos + 1;
-    };
+    });
 }
 
 // Test that lower bits have no effect on the result.
 #[test]
 fun clz_lower_bits_have_no_effect() {
-    let mut bit_pos: u8 = 0;
-    while (bit_pos < 16) {
+    16u8.do!(|bit_pos| {
         let mut value = 1u16 << bit_pos;
         // set all bits below bit_pos to 1
         value = value | (value - 1);
         let expected_clz = 15 - bit_pos;
         assert_eq!(u16::clz(value), expected_clz);
-        bit_pos = bit_pos + 1;
-    };
+    });
 }
 
 #[test]
@@ -296,18 +292,15 @@ fun log2_returns_zero_for_one() {
 #[test]
 fun log2_handles_powers_of_two() {
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
-    let mut i = 0;
-    while (i < rounding_modes.length()) {
+    rounding_modes.destroy!(|rounding| {
         // for powers of 2, log2 returns the exponent regardless of rounding mode
-        let rounding = rounding_modes[i];
         assert_eq!(u16::log2(1 << 0, rounding), 0);
         assert_eq!(u16::log2(1 << 1, rounding), 1);
         assert_eq!(u16::log2(1 << 4, rounding), 4);
         assert_eq!(u16::log2(1 << 8, rounding), 8);
         assert_eq!(u16::log2(1 << 12, rounding), 12);
         assert_eq!(u16::log2(1 << 15, rounding), 15);
-        i = i + 1;
-    }
+    });
 }
 
 #[test]

@@ -580,9 +580,7 @@ fun log256_returns_zero_for_one() {
 fun log256_handles_powers_of_256() {
     // for powers of 256, log256 returns the exponent regardless of rounding mode
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
-    let mut i = 0;
-    while (i < rounding_modes.length()) {
-        let rounding = rounding_modes[i];
+    rounding_modes.destroy!(|rounding| {
         // 256^0 = 1
         assert_eq!(macros::log256!(1u16, 16, rounding), 0);
         // 256^1 = 2^8
@@ -599,8 +597,7 @@ fun log256_handles_powers_of_256() {
         assert_eq!(macros::log256!(1u256 << 128, 256, rounding), 16);
         // 256^31 = 2^248
         assert_eq!(macros::log256!(1u256 << 248, 256, rounding), 31);
-        i = i + 1;
-    };
+    });
 }
 
 #[test]
