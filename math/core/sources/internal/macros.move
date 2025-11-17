@@ -223,7 +223,7 @@ public(package) macro fun log2<$Int>(
     if (value == 0) {
         return 0
     };
-    let zeros = clz!(value, bit_width);
+    let zeros = common::clz(value, bit_width);
     let floor_log = bit_width - 1 - zeros;
 
     if (rounding_mode == rounding::down()) {
@@ -243,7 +243,7 @@ public(package) macro fun log2<$Int>(
 /// Compute the log in base 256 of a positive value with configurable rounding.
 ///
 /// Since log₂₅₆(x) = log₂(x) / 8, the algorithm computes log₂(x) first, then divides by 8.
-/// For nearest rounding, uses the same exact algebraic test as log2.
+/// Powers of 2 return exact results without additional rounding.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -265,7 +265,7 @@ public(package) macro fun log256<$Int>(
     if (value == 0) {
         return 0
     };
-    let zeros = clz!(value, bit_width);
+    let zeros = common::clz(value, bit_width);
     let floor_log2 = bit_width - 1 - zeros;
     let floor_log256 = (floor_log2 / 8) as u8;
 
