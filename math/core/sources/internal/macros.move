@@ -520,6 +520,7 @@ public(package) fun round_division_result(
 /// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
 /// `[2^floor_log, 2^(floor_log+1))`. That midpoint is `2^(floor_log + 1/2) = 2^floor_log · √2`.
+/// Uses fast path when the compared values fit in u256, otherwise u512 arithmetic.
 ///
 /// To avoid √2 and floating point, we square both sides:
 ///   - `x ≥ 2^floor_log · √2`
@@ -536,65 +537,50 @@ public(package) fun round_division_result(
 /// `true` if the value should round up, `false` otherwise.
 public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
     let threshold_exp = 2 * floor_log + 1;
-    value_squared_ge_pow2(value, threshold_exp)
+    let max_small = std::u128::max_value!() as u256;
+    let fast_path = threshold_exp < 256 && value <= max_small;
+    if (fast_path) {
+        // Fast path: both value² and exponent fit in u256
+        let value_squared = value * value;
+        let threshold = 1 << (threshold_exp as u8);
+        value_squared >= threshold
+    } else {
+        // Slow path: use u512 for values where value² > u256::MAX or exponent >= 2^256
+        let value_squared = u512::mul_u256(value, value);
+        let threshold = if (threshold_exp >= 256) {
+            let shift = (threshold_exp - 256) as u8;
+            u512::new(1 << shift, 0)
+        } else {
+            u512::from_u256(1 << (threshold_exp as u8))
+        };
+        value_squared.ge(&threshold)
+    }
 }
 
-/// Nearest-integer rounding for log2 without floats.
+/// Nearest-integer rounding for log256 without floats.
 ///
 /// #### Parameters
 /// - `value`: The value being tested (already cast to u256).
 /// - `floor_log`: The threshold exponent for comparison.
 ///
-/// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
+/// Given `floor_log = ⌊log256(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
-/// `[2^floor_log, 2^(floor_log+1))`. That midpoint is `2^(floor_log + 1/2) = 2^floor_log · √2`.
+/// `[256^floor_log, 256^(floor_log+1))`. Using `256 = 2^8`, this midpoint is
+/// `256^(floor_log + 1/2) = 2^(8·floor_log + 4)`.
 ///
-/// To avoid √2 and floating point, we square both sides:
-///   - `x ≥ 2^floor_log · √2`
-///   - `x² ≥ 2^(2·floor_log + 1)`
-///
-/// We implement this with an integer threshold test:
-/// `threshold_exp = 2 * floor_log + 1`, then:
-///   - if `x² ≥ 2^threshold_exp` → round up (`floor_log + 1`)
-///   - else                      → round down (`floor_log`)
+/// We implement this with a direct integer threshold test:
+/// `threshold_exp = 8 * floor_log + 4`, then:
+///   - if `x ≥ 2^threshold_exp` → round up (`floor_log + 1`)
+///   - else                     → round down (`floor_log`)
 ///
 /// Tie-break: equality goes up (`≥`), i.e., “round half up”.
 ///
 /// #### Returns
 /// `true` if the value should round up, `false` otherwise.
 public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
-    let threshold_exp = 16 * floor_log + 8;
-    value_squared_ge_pow2(value, threshold_exp)
-}
-
-/// Test whether `value² >= 2^exponent` without approximation.
-///
-/// Calculates the square of `value` and 2^`exponent`, then compares them.
-/// Uses fast path when the compared values fit in u256, otherwise u512 arithmetic.
-///
-/// #### Parameters
-/// - `value`: The value to square and compare.
-/// - `exponent`: The power-of-two exponent for the threshold.
-///
-/// #### Returns
-/// `true` if `value² >= 2^exponent`, `false` otherwise.
-fun value_squared_ge_pow2(value: u256, exponent: u16): bool {
-    let max_small = std::u128::max_value!() as u256;
-    let fast_path = exponent < 256 && value <= max_small;
-    if (fast_path) {
-        // Fast path: both value² and exponent fit in u256
-        let value_squared = value * value;
-        let threshold = 1 << (exponent as u8);
-        value_squared >= threshold
-    } else {
-        // Slow path: use u512 for values where value² > u256::MAX or exponent >= 2^256
-        let value_squared = u512::mul_u256(value, value);
-        let threshold = if (exponent >= 256) {
-            let shift = (exponent - 256) as u8;
-            u512::new(1u256 << shift, 0)
-        } else {
-            u512::from_u256(1 << (exponent as u8))
-        };
-        value_squared.ge(&threshold)
-    }
+    // For u256 values, floor_log ∈ [0, 31], so `threshold_exp = 8 * floor_log + 4 ≤ 252`
+    // and the power-of-two threshold fits safely in u256.
+    let threshold_exp = 8 * floor_log + 4;
+    let threshold = 1 << (threshold_exp as u8);
+    value >= threshold
 }
