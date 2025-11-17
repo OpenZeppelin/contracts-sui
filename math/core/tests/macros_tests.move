@@ -632,17 +632,17 @@ fun log256_rounds_to_nearest() {
     // log256 with Nearest mode rounds to closest integer
     // Midpoint is 256^k × √256 = 256^k × 16
     let nearest = rounding::nearest();
-    
+
     // Between 256^0 and 256^1: midpoint is 16
     assert_eq!(macros::log256!(15u8, 8, nearest), 0); // < 16, rounds down
     assert_eq!(macros::log256!(16u8, 8, nearest), 1); // >= 16, rounds up
     assert_eq!(macros::log256!(255u16, 16, nearest), 1); // > 16, rounds up
-    
+
     // Between 256^1 and 256^2: midpoint is 256 × 16 = 4096
     assert_eq!(macros::log256!(4095u16, 16, nearest), 1); // < 4096, rounds down
     assert_eq!(macros::log256!(4096u16, 16, nearest), 2); // >= 4096, rounds up
     assert_eq!(macros::log256!(65535u32, 32, nearest), 2); // > 4096, rounds up
-    
+
     // Between 256^2 and 256^3: midpoint is 65536 × 16 = 1048576
     assert_eq!(macros::log256!(1048575u32, 32, nearest), 2); // < 1048576, rounds down
     assert_eq!(macros::log256!(1048576u32, 32, nearest), 3); // >= 1048576, rounds up
@@ -655,11 +655,11 @@ fun log256_handles_max_values() {
     assert_eq!(macros::log256!(std::u8::max_value!(), 8, rounding::down()), 0);
     assert_eq!(macros::log256!(std::u8::max_value!(), 8, rounding::up()), 1);
     assert_eq!(macros::log256!(std::u8::max_value!(), 8, rounding::nearest()), 1);
-    
+
     assert_eq!(macros::log256!(std::u64::max_value!(), 64, rounding::down()), 7);
     assert_eq!(macros::log256!(std::u64::max_value!(), 64, rounding::up()), 8);
     assert_eq!(macros::log256!(std::u64::max_value!(), 64, rounding::nearest()), 8);
-    
+
     assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::down()), 31);
     assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::up()), 32);
     assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::nearest()), 32);

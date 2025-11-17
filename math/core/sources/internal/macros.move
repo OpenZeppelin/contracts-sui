@@ -228,7 +228,8 @@ public(package) macro fun log2<$Int>(
 
     if (rounding_mode == rounding::down()) {
         floor_log
-    } else if (value == 1 << (floor_log as u8)) { // Exact power of 2
+    } else if (value == 1 << (floor_log as u8)) {
+        // Exact power of 2
         floor_log
     } else if (rounding_mode == rounding::up()) {
         floor_log + 1
@@ -270,7 +271,8 @@ public(package) macro fun log256<$Int>(
 
     if (rounding_mode == rounding::down()) {
         floor_log256
-    } else if (floor_log2 % 8 == 0 && value == 1 << (floor_log2 as u8)) { // Exact power of 256
+    } else if (floor_log2 % 8 == 0 && value == 1 << (floor_log2 as u8)) {
+        // Exact power of 256
         floor_log256
     } else if (rounding_mode == rounding::up()) {
         floor_log256 + 1
