@@ -219,26 +219,67 @@ public(package) macro fun log2<$Int>(
     $bit_width: u16,
     $rounding_mode: RoundingMode,
 ): u16 {
-    let (value, bit_width, rounding_mode) = ($value, $bit_width, $rounding_mode);
-    if (value == 0 as $Int) {
+    let (value, bit_width, rounding_mode) = ($value as u256, $bit_width, $rounding_mode);
+    if (value == 0) {
         return 0
     };
-    let zeros = clz!(value, bit_width);
+    let zeros = common::clz(value, bit_width);
     let floor_log = bit_width - 1 - zeros;
+
     if (rounding_mode == rounding::down()) {
-        return floor_log
-    };
-    let power_of_two = (1 as $Int) << (floor_log as u8);
-    if (value == power_of_two) {
-        return floor_log
-    };
-    if (rounding_mode == rounding::up()) {
-        return floor_log + 1
-    };
-    if (log2_should_round_up(value as u256, floor_log)) {
+        floor_log
+    } else if (value == 1 << (floor_log as u8)) {
+        // Exact power of 2
+        floor_log
+    } else if (rounding_mode == rounding::up()) {
+        floor_log + 1
+    } else if (log2_should_round_up(value, floor_log)) {
         floor_log + 1
     } else {
         floor_log
+    }
+}
+
+/// Compute the log in base 256 of a positive value with configurable rounding.
+///
+/// Since log₂₅₆(x) = log₂(x) / 8, the algorithm computes log₂(x) first, then divides by 8.
+/// Powers of 2 return exact results without additional rounding.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to compute the logarithm for.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The base-256 logarithm as a `u16`, rounded according to the specified mode.
+/// Returns `0` if `$value` is 0.
+public(package) macro fun log256<$Int>(
+    $value: $Int,
+    $bit_width: u16,
+    $rounding_mode: RoundingMode,
+): u8 {
+    let (value, bit_width, rounding_mode) = ($value as u256, $bit_width, $rounding_mode);
+    if (value == 0) {
+        return 0
+    };
+    let zeros = common::clz(value, bit_width);
+    let floor_log2 = bit_width - 1 - zeros;
+    let floor_log256 = (floor_log2 / 8) as u8;
+
+    if (rounding_mode == rounding::down()) {
+        floor_log256
+    } else if (floor_log2 % 8 == 0 && value == 1 << (floor_log2 as u8)) {
+        // Exact power of 256
+        floor_log256
+    } else if (rounding_mode == rounding::up()) {
+        floor_log256 + 1
+    } else if (log256_should_round_up(value, floor_log256 as u16)) {
+        floor_log256 + 1
+    } else {
+        floor_log256
     }
 }
 
@@ -481,6 +522,7 @@ public(package) fun round_division_result(
 /// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
 /// `[2^floor_log, 2^(floor_log+1))`. That midpoint is `2^(floor_log + 1/2) = 2^floor_log · √2`.
+/// Uses fast path when the compared values fit in u256, otherwise u512 arithmetic.
 ///
 /// To avoid √2 and floating point, we square both sides:
 ///   - `x ≥ 2^floor_log · √2`
@@ -497,37 +539,50 @@ public(package) fun round_division_result(
 /// `true` if the value should round up, `false` otherwise.
 public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
     let threshold_exp = 2 * floor_log + 1;
-    value_squared_ge_pow2(value, threshold_exp)
-}
-
-/// Test whether `value² >= 2^exponent` without approximation.
-///
-/// Calculates the square of `value` and 2^`exponent`, then compares them.
-/// Uses fast path when the compared values fit in u256, otherwise u512 arithmetic.
-///
-/// #### Parameters
-/// - `value`: The value to square and compare.
-/// - `exponent`: The power-of-two exponent for the threshold.
-///
-/// #### Returns
-/// `true` if `value² >= 2^exponent`, `false` otherwise.
-fun value_squared_ge_pow2(value: u256, exponent: u16): bool {
     let max_small = std::u128::max_value!() as u256;
-    let fast_path = exponent < 256 && value <= max_small;
+    let fast_path = threshold_exp < 256 && value <= max_small;
     if (fast_path) {
         // Fast path: both value² and exponent fit in u256
         let value_squared = value * value;
-        let threshold = 1 << (exponent as u8);
+        let threshold = 1 << (threshold_exp as u8);
         value_squared >= threshold
     } else {
         // Slow path: use u512 for values where value² > u256::MAX or exponent >= 2^256
         let value_squared = u512::mul_u256(value, value);
-        let threshold = if (exponent >= 256) {
-            let shift = (exponent - 256) as u8;
-            u512::new(1u256 << shift, 0)
+        let threshold = if (threshold_exp >= 256) {
+            let shift = (threshold_exp - 256) as u8;
+            u512::new(1 << shift, 0)
         } else {
-            u512::from_u256(1 << (exponent as u8))
+            u512::from_u256(1 << (threshold_exp as u8))
         };
         value_squared.ge(&threshold)
     }
+}
+
+/// Nearest-integer rounding for log256 without floats.
+///
+/// #### Parameters
+/// - `value`: The value being tested (already cast to u256).
+/// - `floor_log`: The threshold exponent for comparison.
+///
+/// Given `floor_log = ⌊log256(x)⌋`, we decide whether to round up to `floor_log + 1`
+/// or keep `floor_log` by comparing `x` to the midpoint of the interval
+/// `[256^floor_log, 256^(floor_log+1))`. Using `256 = 2^8`, this midpoint is
+/// `256^(floor_log + 1/2) = 2^(8·floor_log + 4)`.
+///
+/// We implement this with a direct integer threshold test:
+/// `threshold_exp = 8 * floor_log + 4`, then:
+///   - if `x ≥ 2^threshold_exp` → round up (`floor_log + 1`)
+///   - else                     → round down (`floor_log`)
+///
+/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+///
+/// #### Returns
+/// `true` if the value should round up, `false` otherwise.
+public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
+    // For u256 values, floor_log ∈ [0, 31], so `threshold_exp = 8 * floor_log + 4 ≤ 252`
+    // and the power-of-two threshold fits safely in u256.
+    let threshold_exp = 8 * floor_log + 4;
+    let threshold = 1 << (threshold_exp as u8);
+    value >= threshold
 }
