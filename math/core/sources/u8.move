@@ -6,6 +6,9 @@ use std::u256::try_as_u8;
 
 const BIT_WIDTH: u8 = 8;
 
+#[error(code = 0)]
+const ESafeCastOverflowedIntDowncast: vector<u8> = b"Value cannot be represented as u8";
+
 /// Compute the arithmetic mean of two `u8` values with configurable rounding.
 public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
     macros::average!(a, b, rounding_mode)
@@ -79,4 +82,13 @@ public fun log2(value: u8, rounding_mode: RoundingMode): u8 {
 /// Returns 0 if given 0.
 public fun log256(value: u8, rounding_mode: RoundingMode): u8 {
     macros::log256!(value, BIT_WIDTH as u16, rounding_mode)
+}
+
+/// Try to convert a `u256` value to a `u8`.
+///
+/// Aborts with `ESafeCastOverflowedIntDowncast` if the value cannot be represented as `u8`.
+public fun from_u256(value: u256): u8 {
+    let result = value.try_as_u8();
+    assert!(result.is_some(), ESafeCastOverflowedIntDowncast);
+    result.destroy_some()
 }

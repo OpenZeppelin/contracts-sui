@@ -432,3 +432,38 @@ fun log256_handles_max_value() {
     assert_eq!(u16::log256(max, rounding::up()), 2);
     assert_eq!(u16::log256(max, rounding::nearest()), 2);
 }
+
+// === from_u256 ===
+
+#[test]
+fun ai_from_u256_downcasts_zero() {
+    let result = u16::from_u256(0u256);
+    assert_eq!(result, 0u16);
+}
+
+#[test]
+fun ai_from_u256_downcasts_one() {
+    let result = u16::from_u256(1u256);
+    assert_eq!(result, 1u16);
+}
+
+#[test]
+fun ai_from_u256_downcasts_max_value() {
+    let max_value = std::u16::max_value!() as u256;
+    let result = u16::from_u256(max_value);
+    assert_eq!(result, std::u16::max_value!());
+}
+
+#[test, expected_failure(abort_code = u16::SafeCastOverflowedIntDowncast)]
+fun ai_from_u256_reverts_when_downcasting_2_to_16() {
+    // 2^16 = 65536, which exceeds u16 max value (65535)
+    let overflow_value = 65536u256;
+    let _unused = u16::from_u256(overflow_value);
+}
+
+#[test, expected_failure(abort_code = u16::SafeCastOverflowedIntDowncast)]
+fun ai_from_u256_reverts_when_downcasting_2_to_16_plus_1() {
+    // 2^16 + 1 = 65537, which exceeds u16 max value (65535)
+    let overflow_value = 65537u256;
+    let _unused = u16::from_u256(overflow_value);
+}

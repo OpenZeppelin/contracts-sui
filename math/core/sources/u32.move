@@ -5,6 +5,9 @@ use openzeppelin_math::rounding::RoundingMode;
 
 const BIT_WIDTH: u8 = 32;
 
+#[error(code = 0)]
+const ESafeCastOverflowedIntDowncast: vector<u8> = b"Value cannot be represented as u32";
+
 /// Compute the arithmetic mean of two `u32` values with configurable rounding.
 public fun average(a: u32, b: u32, rounding_mode: RoundingMode): u32 {
     macros::average!(a, b, rounding_mode)
@@ -78,4 +81,13 @@ public fun log2(value: u32, rounding_mode: RoundingMode): u8 {
 /// Returns 0 if given 0.
 public fun log256(value: u32, rounding_mode: RoundingMode): u8 {
     macros::log256!(value, BIT_WIDTH as u16, rounding_mode)
+}
+
+/// Try to convert a `u256` value to a `u32`.
+///
+/// Aborts with `ESafeCastOverflowedIntDowncast` if the value cannot be represented as `u32`.
+public fun from_u256(value: u256): u32 {
+    let result = value.try_as_u32();
+    assert!(result.is_some(), ESafeCastOverflowedIntDowncast);
+    result.destroy_some()
 }
