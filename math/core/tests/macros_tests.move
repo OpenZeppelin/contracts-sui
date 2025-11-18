@@ -200,6 +200,94 @@ fun mul_div_wide_detects_overflowing_quotient() {
     assert_eq!(overflow, true);
 }
 
+// === inv_mod / mod_sub / mul_mod helpers ===
+
+#[test]
+fun inv_mod_extended_impl_returns_inverse() {
+    let result = macros::inv_mod_extended_impl(3, 11);
+    assert_eq!(result, option::some(4));
+}
+
+#[test]
+fun inv_mod_extended_impl_returns_none_when_not_coprime() {
+    let result = macros::inv_mod_extended_impl(8, 12);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun inv_mod_extended_impl_modulus_one_returns_none() {
+    let result = macros::inv_mod_extended_impl(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun inv_mod_extended_impl_reduced_zero_returns_none() {
+    let result = macros::inv_mod_extended_impl(12, 4);
+    assert_eq!(result, option::none());
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun inv_mod_extended_impl_rejects_zero_modulus() {
+    macros::inv_mod_extended_impl(1, 0);
+}
+
+#[test]
+fun inv_mod_macro_matches_impl() {
+    let macro_inverse = macros::inv_mod!(3, 11);
+    assert_eq!(macro_inverse, option::some(4));
+}
+
+#[test]
+fun mod_sub_impl_wraps_underflow() {
+    let result = macros::mod_sub_impl(3, 5, 11);
+    assert_eq!(result, 9);
+}
+
+#[test]
+fun mul_mod_impl_uses_fast_path_when_small() {
+    let result = macros::mul_mod_impl(7, 9, 11);
+    assert_eq!(result, 8);
+}
+
+#[test]
+fun mul_mod_impl_returns_zero_when_operand_zero() {
+    let result = macros::mul_mod_impl(0, 123, 11);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun mul_mod_impl_handles_wide_operands() {
+    // Pick operands whose product overflows 256 bits to force the wide path.
+    let a = (1 as u256) << 200;
+    let b = ((1 as u256) << 150) + 1234;
+    let modulus = ((1 as u256) << 201) - 109;
+
+    // Baseline: compute (a * b) % modulus manually using u512 helpers.
+    let wide_product = u512::mul_u256(a, b);
+    let (_, _, expected) = u512::div_rem_u256(wide_product, modulus);
+
+    // The helper should match the reference result for wide operands.
+    let result = macros::mul_mod_impl(a, b, modulus);
+    assert_eq!(result, expected);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_impl_rejects_zero_modulus() {
+    macros::mul_mod_impl(5, 7, 0);
+}
+
+#[test]
+fun mul_mod_macro_matches_helper() {
+    let direct = macros::mul_mod_impl(123, 456, 789);
+    let via_macro = macros::mul_mod!(123, 456, 789);
+    assert_eq!(via_macro, direct as u64);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_macro_rejects_zero_modulus() {
+    macros::mul_mod!(1, 2, 0);
+}
+
 #[test]
 fun mul_div_macro_uses_fast_path_for_small_inputs() {
     let (overflow, result) = macros::mul_div!(15u8, 3u8, 4u8, rounding::down());

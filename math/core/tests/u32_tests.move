@@ -449,3 +449,35 @@ fun log256_handles_max_value() {
     assert_eq!(u32::log256(max, rounding::up()), 4);
     assert_eq!(u32::log256(max, rounding::nearest()), 4);
 }
+
+// === inv_mod ===
+
+#[test]
+fun inv_mod_returns_some() {
+    let result = u32::inv_mod(1_234_567, 1_000_003);
+    assert_eq!(result, option::some(678_286));
+}
+
+#[test]
+fun inv_mod_returns_none_when_not_coprime() {
+    let result = u32::inv_mod(100, 250);
+    assert_eq!(result, option::none());
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun inv_mod_rejects_zero_modulus() {
+    u32::inv_mod(1, 0);
+}
+
+// === mul_mod ===
+
+#[test]
+fun mul_mod_handles_large_values() {
+    let result = u32::mul_mod(123_456_789, 400_000_001, 1_000_000_007);
+    assert_eq!(result, 377_777_784);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_rejects_zero_modulus() {
+    u32::mul_mod(10, 10, 0);
+}

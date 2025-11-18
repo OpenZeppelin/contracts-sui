@@ -6,6 +6,8 @@ use openzeppelin_math::u512;
 
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
+#[error(code = 1)]
+const EZeroModulus: vector<u8> = b"Modulus must be non-zero.";
 
 /// Compute the arithmetic mean of two unsigned integers with configurable rounding.
 ///
@@ -196,6 +198,44 @@ public(package) macro fun mul_shr<$Int>(
 /// The number of leading zero bits as a `u16`. Returns `$bit_width` if `$value` is 0.
 public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
     common::clz($value as u256, $bit_width)
+}
+
+/// Compute the modular multiplicative inverse of `$value` in `Z / modulus`.
+///
+/// The helper relies on the extended Euclidean algorithm which works for any modulus as long as
+/// `$value` and `$modulus` are co-prime. If the inverse does not exist, the function returns
+/// `option::none()`.
+///
+/// #### Parameters
+/// - `$value`: Unsigned integer whose inverse is being computed.
+/// - `$modulus`: Modulus for the arithmetic; must be non-zero.
+///
+/// #### Returns
+/// `option::some(inverse)` when the inverse exists (`value * inverse ≡ 1 (mod modulus)`),
+/// otherwise `option::none()`.
+public(package) macro fun inv_mod<$Int>($value: $Int, $modulus: $Int): Option<$Int> {
+    let value_u256 = ($value as u256);
+    let modulus_u256 = ($modulus as u256);
+    let result = inv_mod_extended_impl(value_u256, modulus_u256);
+    option::map!(result, |v| v as $Int)
+}
+
+/// Multiply `$a` and `$b` modulo `$modulus`.
+///
+/// Uses the shared internal helper that automatically chooses between the fast `u256` path and
+/// the wide `u512` implementation. The modulus must be non-zero.
+///
+/// #### Parameters
+/// - `$a`, `$b`: Unsigned operands.
+/// - `$modulus`: Modulus for the arithmetic; must be non-zero.
+///
+/// #### Returns
+/// The product reduced modulo `$modulus`.
+public(package) macro fun mul_mod<$Int>($a: $Int, $b: $Int, $modulus: $Int): $Int {
+    let a_u256 = ($a as u256);
+    let b_u256 = ($b as u256);
+    let modulus_u256 = ($modulus as u256);
+    mul_mod_impl(a_u256, b_u256, modulus_u256) as $Int
 }
 
 /// Compute the log in base 2 of a positive value with configurable rounding.
@@ -417,7 +457,7 @@ public(package) fun mul_shr_u256_fast(
     };
 
     let mut result = numerator >> shift;
-    let denominator = 1u256 << shift;
+    let denominator = (1 as u256) << shift;
     let mask = denominator - 1;
     let remainder = numerator & mask;
 
@@ -472,7 +512,7 @@ public(package) fun mul_shr_u256_wide(
     let mask = (1 << shift) - 1;
     let remainder = lo & mask;
     if (remainder != 0) {
-        let denominator = 1u256 << shift;
+        let denominator = (1 as u256) << shift;
         let (overflow, rounded) = round_division_result(
             result,
             denominator,
@@ -585,4 +625,75 @@ public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
     let threshold_exp = 8 * floor_log + 4;
     let threshold = 1 << (threshold_exp as u8);
     value >= threshold
+}
+
+/// === Internal helpers for modular arithmetic ===
+
+/// Extended Euclidean algorithm that powers `inv_mod!`.
+///
+/// Keeps track of Bézout coefficients `x` and `y` such that
+/// `value * x + modulus * y = gcd(value, modulus)`. When the gcd is 1, `x` is the inverse
+/// modulo `modulus`.
+///
+/// #### Parameters
+/// - `value`: Operand whose inverse is desired.
+/// - `modulus`: Modulus, must be non-zero.
+///
+/// #### Returns
+/// `option::some(inverse)` when `value` and `modulus` are co-prime, otherwise `option::none()`.
+public(package) fun inv_mod_extended_impl(value: u256, modulus: u256): Option<u256> {
+    assert!(modulus != 0, EZeroModulus);
+    if (modulus == 1) {
+        return option::none()
+    };
+    let reduced = value % modulus;
+    if (reduced == 0) {
+        return option::none()
+    };
+
+    let mut r = modulus;
+    let mut new_r = reduced;
+    let mut t: u256 = 0;
+    let mut new_t: u256 = 1;
+
+    while (new_r != 0) {
+        let quotient = r / new_r;
+
+        let tmp_t = new_t;
+        let product = mul_mod_impl(quotient, new_t, modulus);
+        new_t = mod_sub_impl(t, product, modulus);
+        t = tmp_t;
+
+        let tmp_r = new_r;
+        new_r = r - quotient * new_r;
+        r = tmp_r;
+    };
+
+    if (r != 1) option::none() else option::some(t)
+}
+
+/// Compute `(a - b) mod modulus` without signed arithmetic.
+public(package) fun mod_sub_impl(a: u256, b: u256, modulus: u256): u256 {
+    if (a >= b) {
+        a - b
+    } else {
+        modulus - (b - a)
+    }
+}
+
+/// Compute `(a * b) mod modulus` with a 128-bit fast path.
+///
+/// Falls back to the wide (`u512`) helper when the operands exceed 128 bits so overflow cannot
+/// occur.
+public(package) fun mul_mod_impl(a: u256, b: u256, modulus: u256): u256 {
+    assert!(modulus != 0, EZeroModulus);
+    if (a == 0 || b == 0) {
+        return 0
+    };
+    if ((a >> 128) == 0 && (b >> 128) == 0) {
+        return ((a * b) % modulus)
+    };
+    let product = u512::mul_u256(a, b);
+    let (_, _, remainder) = u512::div_rem_u256(product, modulus);
+    remainder
 }

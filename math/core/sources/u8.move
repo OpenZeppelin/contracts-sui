@@ -80,3 +80,15 @@ public fun log2(value: u8, rounding_mode: RoundingMode): u8 {
 public fun log256(value: u8, rounding_mode: RoundingMode): u8 {
     macros::log256!(value, BIT_WIDTH as u16, rounding_mode)
 }
+
+/// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
+///
+/// Returns `None` when `value` and `modulus` are not co-prime. Aborts if `modulus` is zero.
+public fun inv_mod(value: u8, modulus: u8): Option<u8> {
+    macros::inv_mod!(value, modulus)
+}
+
+/// Multiply `a` and `b` modulo `modulus`. Aborts if `modulus` is zero.
+public fun mul_mod(a: u8, b: u8, modulus: u8): u8 {
+    macros::mul_mod!(a, b, modulus)
+}
