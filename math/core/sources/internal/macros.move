@@ -642,15 +642,21 @@ public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
 /// #### Returns
 /// `option::some(inverse)` when `value` and `modulus` are co-prime, otherwise `option::none()`.
 public(package) fun inv_mod_extended_impl(value: u256, modulus: u256): Option<u256> {
+    // Guard against invalid modulus values up front.
     assert!(modulus != 0, EZeroModulus);
     if (modulus == 1) {
         return option::none()
     };
+
+    // Normalise the value into the modulus range; zero implies no inverse exists.
     let reduced = value % modulus;
     if (reduced == 0) {
         return option::none()
     };
 
+    // Initialise Bézout state:
+    //   r/new_r carry the running gcd through repeated remainder steps.
+    //   t/new_t track the coefficient for `value`.
     let mut r = modulus;
     let mut new_r = reduced;
     let mut t: u256 = 0;
@@ -659,16 +665,19 @@ public(package) fun inv_mod_extended_impl(value: u256, modulus: u256): Option<u2
     while (new_r != 0) {
         let quotient = r / new_r;
 
+        // Update the coefficient for `value`, keeping it within `[0, modulus)`.
         let tmp_t = new_t;
         let product = mul_mod_impl(quotient, new_t, modulus);
         new_t = mod_sub_impl(t, product, modulus);
         t = tmp_t;
 
+        // Standard Euclidean step: shift (r, new_r) to (new_r, remainder).
         let tmp_r = new_r;
         new_r = r - quotient * new_r;
         r = tmp_r;
     };
 
+    // If gcd != 1 there is no inverse; otherwise `t` is the modular inverse.
     if (r != 1) option::none() else option::some(t)
 }
 
