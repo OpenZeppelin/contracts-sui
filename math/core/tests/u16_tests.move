@@ -454,14 +454,14 @@ fun ai_from_u256_downcasts_max_value() {
     assert_eq!(result, std::u16::max_value!());
 }
 
-#[test, expected_failure(abort_code = u16::SafeCastOverflowedIntDowncast)]
+#[test, expected_failure(abort_code = u16::ESafeCastOverflowedIntDowncast)]
 fun ai_from_u256_reverts_when_downcasting_2_to_16() {
     // 2^16 = 65536, which exceeds u16 max value (65535)
     let overflow_value = 65536u256;
     let _unused = u16::from_u256(overflow_value);
 }
 
-#[test, expected_failure(abort_code = u16::SafeCastOverflowedIntDowncast)]
+#[test, expected_failure(abort_code = u16::ESafeCastOverflowedIntDowncast)]
 fun ai_from_u256_reverts_when_downcasting_2_to_16_plus_1() {
     // 2^16 + 1 = 65537, which exceeds u16 max value (65535)
     let overflow_value = 65537u256;
