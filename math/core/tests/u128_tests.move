@@ -468,10 +468,7 @@ fun inv_mod_returns_some() {
         123456789123456789123456789u128,
         1_000_000_007u128,
     );
-    assert_eq!(
-        result,
-        option::some(372_526_364u128),
-    );
+    assert_eq!(result, option::some(372_526_364u128));
 }
 
 #[test]
