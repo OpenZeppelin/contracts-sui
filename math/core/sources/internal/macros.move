@@ -628,7 +628,7 @@ public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
 /// Since we're working with integers, dividing both sides by 2 gives us:
 /// `value - floor² <= floor`
 ///
-/// Considering that `sqrt(u256::MAX)` < `2^128`, all arithmetic operations in the function 
+/// Considering that `sqrt(u256::MAX)` < `2^128`, all arithmetic operations in the function
 /// are guaranteed to not overflow or underflow.
 ///
 /// #### Parameters
@@ -638,11 +638,15 @@ public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
 ///
 /// #### Returns
 /// The square root rounded according to the specified mode.
-public(package)fun round_sqrt_result(value: u256, floor_result: u256, rounding_mode: RoundingMode): u256 {
+public(package) fun round_sqrt_result(
+    value: u256,
+    floor_result: u256,
+    rounding_mode: RoundingMode,
+): u256 {
     if (rounding_mode == rounding::down()) {
         return floor_result
     };
-    
+
     let floor_squared = floor_result * floor_result;
     if (floor_squared == value) {
         // Perfect square, no rounding needed

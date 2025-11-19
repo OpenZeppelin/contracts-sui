@@ -604,7 +604,7 @@ fun sqrt_midpoint_behavior() {
     assert_eq!(u256::sqrt(6, nearest), 2); // 2.449, closer to 2
     assert_eq!(u256::sqrt(7, nearest), 3); // 2.646, closer to 3
     assert_eq!(u256::sqrt(8, nearest), 3); // 2.828, closer to 3
-    
+
     // Between 9 (3^2) and 16 (4^2): midpoint at 12.5
     assert_eq!(u256::sqrt(12, nearest), 3); // 3.464, closer to 3
     assert_eq!(u256::sqrt(13, nearest), 4); // 3.606, closer to 4

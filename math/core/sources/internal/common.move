@@ -33,7 +33,7 @@ public(package) fun clz(val: u256, bit_width: u16): u16 {
 
 /// Returns the square root of a number. If the number is not a perfect square, the value is rounded
 /// towards zero.
-/// 
+///
 /// This method is based on Newton's method for computing square roots. The algorithm is restricted to only
 /// using integer operations.
 public(package) fun sqrt_floor(a: u256): u256 {
