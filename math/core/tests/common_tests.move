@@ -90,7 +90,7 @@ fun msb_returns_correct_position_for_top_bit_set() {
 
 #[test]
 fun msb_returns_correct_position_for_max_value() {
-    // max value has the top bit set, so msb returns 7
+    // max value has the top bit set, so msb returns 255
     let max = std::u256::max_value!();
     let result = common::msb(max, 256);
     assert_eq!(result, 255);
