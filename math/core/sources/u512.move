@@ -117,8 +117,8 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     let mut quotient = 0u256;
     let mut remainder = zero();
 
-    // numerator is not zero, so we can safely call highest_set_bit
-    let mut idx = highest_set_bit(&numerator);
+    // numerator is not zero, so we can safely call msb
+    let mut idx = msb(&numerator);
     loop {
         remainder = shift_left1(&remainder);
         let bit = get_bit(&numerator, idx);
@@ -203,11 +203,11 @@ fun sub_u256(value: U512, other: u256): U512 {
 /// Return the index of the most significant set bit in `value`.
 ///
 /// NOTE: This internal helper function expects a value that is not zero.
-fun highest_set_bit(value: &U512): u16 {
+fun msb(value: &U512): u16 {
     if (value.hi != 0) {
-        511 - common::clz(value.hi, 256)
+        256 + (common::msb(value.hi, 256) as u16)
     } else {
-        255 - common::clz(value.lo, 256)
+        common::msb(value.lo, 256) as u16
     }
 }
 

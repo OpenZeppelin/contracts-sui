@@ -271,6 +271,80 @@ fun clz_handles_values_near_boundaries() {
     assert_eq!(u16::clz(4095), 4);
 }
 
+// === msb ===
+
+#[test]
+fun msb_returns_zero_for_zero() {
+    // msb(0) should return 0 by convention
+    let result = u16::msb(0);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun msb_returns_correct_position_for_top_bit_set() {
+    // when the most significant bit is set, msb returns 15
+    let value = 1u16 << 15;
+    let result = u16::msb(value);
+    assert_eq!(result, 15);
+}
+
+#[test]
+fun msb_returns_correct_position_for_max_value() {
+    // max value has the top bit set, so msb returns 15
+    let max = std::u16::max_value!();
+    let result = u16::msb(max);
+    assert_eq!(result, 15);
+}
+
+// Test all possible bit positions from 0 to 15.
+#[test]
+fun msb_handles_all_bit_positions() {
+    16u8.do!(|bit_pos| {
+        let value = 1u16 << bit_pos;
+        assert_eq!(u16::msb(value), bit_pos);
+    });
+}
+
+// Test that lower bits have no effect on the result.
+#[test]
+fun msb_lower_bits_have_no_effect() {
+    16u8.do!(|bit_pos| {
+        let mut value = 1u16 << bit_pos;
+        // set all bits below bit_pos to 1
+        value = value | (value - 1);
+        assert_eq!(u16::msb(value), bit_pos);
+    });
+}
+
+#[test]
+fun msb_returns_highest_bit_position() {
+    // when multiple bits are set, msb returns the position of the highest bit.
+    // 0b11 (bits 0 and 1 set) - highest is bit 1, so msb = 1
+    assert_eq!(u16::msb(3), 1);
+
+    // 0b1111 (bits 0-3 set) - highest is bit 3, so msb = 3
+    assert_eq!(u16::msb(15), 3);
+
+    // 0xff (bits 0-7 set) - highest is bit 7, so msb = 7
+    assert_eq!(u16::msb(255), 7);
+}
+
+// Test values near power-of-2 boundaries.
+#[test]
+fun msb_handles_values_near_boundaries() {
+    // 0x100 (256) has bit 8 set, msb = 8
+    assert_eq!(u16::msb(256), 8);
+
+    // 0xff (255) has bit 7 set, msb = 7
+    assert_eq!(u16::msb(255), 7);
+
+    // 0x1000 (4096) has bit 12 set, msb = 12
+    assert_eq!(u16::msb(4096), 12);
+
+    // 0x0fff (4095) has bit 11 set, msb = 11
+    assert_eq!(u16::msb(4095), 11);
+}
+
 // === log2 ===
 
 #[test]
