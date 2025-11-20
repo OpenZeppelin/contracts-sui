@@ -3,7 +3,17 @@ module openzeppelin_math::u128;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
+#[error(code = 0)]
+const EPow10ExponentTooLarge: vector<u8> = b"Power of 10 exponent is too large to fit in u128";
+
+/// The bit width of the `u128` type (128 bits).
 const BIT_WIDTH: u8 = 128;
+
+/// Maximum exponent for `pow_10` that fits in `u128`.
+///
+/// Determined by the constraint: 10^MAX_POW_10_EXPONENT <= u128::MAX < 10^(MAX_POW_10_EXPONENT+1)
+/// 10^38 = 100000000000000000000000000000000000000 ✓, 10^39 > `std::u128::max_value!()` ✗
+const MAX_POW_10_EXPONENT: u8 = 38;
 
 /// Compute the arithmetic mean of two `u128` values with configurable rounding.
 public fun average(a: u128, b: u128, rounding_mode: RoundingMode): u128 {
@@ -85,4 +95,14 @@ public fun log2(value: u128, rounding_mode: RoundingMode): u8 {
 /// Returns 0 if given 0.
 public fun log256(value: u128, rounding_mode: RoundingMode): u8 {
     macros::log256!(value, BIT_WIDTH as u16, rounding_mode)
+}
+
+/// Compute 10^exp as `u128`.
+///
+/// # Aborts
+///
+/// Aborts with `EPow10ExponentTooLarge` if `exp` > `MAX_POW_10_EXPONENT`.
+public fun pow_10(exp: u8): u128 {
+    assert!(exp <= MAX_POW_10_EXPONENT, EPow10ExponentTooLarge);
+    macros::pow_10!(exp)
 }
