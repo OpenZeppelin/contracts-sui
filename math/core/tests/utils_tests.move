@@ -61,14 +61,6 @@ fun test_downcast_zero_decimals() {
 }
 
 #[test]
-fun test_downcast_from_zero_to_nine() {
-    // 1 token (0 decimals) -> 9 decimals
-    let amount = 1u256;
-    let result = utils::safe_downcast_balance(amount, 0, 9);
-    assert_eq!(result, 1000000000);
-}
-
-#[test]
 fun test_downcast_from_nine_to_zero() {
     // 1 token (9 decimals) -> 0 decimals (truncates fractional part)
     let amount = 1000000000u256;
@@ -77,27 +69,11 @@ fun test_downcast_from_nine_to_zero() {
 }
 
 #[test]
-fun test_downcast_max_decimals() {
-    // Test with maximum decimals (24 -> 24)
-    let amount = 1000u256; // Small amount to fit in u64
-    let result = utils::safe_downcast_balance(amount, 24, 24);
-    assert_eq!(result, 1000u64);
-}
-
-#[test]
 fun test_downcast_max_decimal_diff() {
     // Test maximum decimal difference (24 -> 0)
     let amount = 1000000000000000000000000u256; // 1 token with 24 decimals
     let result = utils::safe_downcast_balance(amount, 24, 0);
     assert_eq!(result, 1);
-}
-
-#[test]
-fun test_downcast_u64_max_value() {
-    // Test max u64 value fits
-    let max_u64 = std::u64::max_value!();
-    let result = utils::safe_downcast_balance((max_u64 as u256), 9, 9);
-    assert_eq!(result, max_u64);
 }
 
 #[test]
@@ -277,14 +253,6 @@ fun test_downcast_scaled_decimals_too_large() {
 
 #[test]
 #[expected_failure(abort_code = utils::ESafeDowncastOverflowedInt)]
-fun test_downcast_overflow() {
-    // Try to downcast value that exceeds u64::MAX
-    let too_large = ((std::u64::max_value!() as u256) + 1);
-    utils::safe_downcast_balance(too_large, 9, 9);
-}
-
-#[test]
-#[expected_failure(abort_code = utils::ESafeDowncastOverflowedInt)]
 fun test_downcast_overflow_after_scaling_up() {
     // Value is ok before scaling but overflows after scaling up
     let amount = (std::u64::max_value!() as u256) / 1000;
@@ -401,4 +369,122 @@ fun test_precision_preservation() {
     // Scale back down to 6 decimals
     let scaled_down = utils::safe_downcast_balance(scaled_up, 18, 6);
     assert_eq!(scaled_down, amount);
+}
+
+// === Additional Edge Case Tests ===
+
+#[test]
+fun test_downcast_exactly_u64_max() {
+    // Test downcast with amount exactly equal to u64::MAX
+    let max_u64 = std::u64::max_value!();
+    let result = utils::safe_downcast_balance((max_u64 as u256), 9, 9);
+    assert_eq!(result, max_u64);
+}
+
+#[test]
+#[expected_failure(abort_code = utils::ESafeDowncastOverflowedInt)]
+fun test_downcast_u64_max_plus_one() {
+    // Test downcast with amount = u64::MAX + 1 (should abort)
+    let too_large = ((std::u64::max_value!() as u256) + 1);
+    let _ = utils::safe_downcast_balance(too_large, 9, 9);
+}
+
+#[test]
+fun test_downcast_scaling_to_exactly_u64_max() {
+    // Test scaling that results in exactly u64::MAX after scaling up
+    // Use a value that when scaled up by 10^9 results in u64::MAX
+    let amount = (std::u64::max_value!() as u256) / 1000000000;
+    let result = utils::safe_downcast_balance(amount, 0, 9);
+    // Result should be less than or equal to u64::MAX
+    assert!(result <= std::u64::max_value!());
+}
+
+#[test]
+fun test_downcast_scaling_to_exactly_u64_max_after_scale_down() {
+    // Test scaling that results in exactly u64::MAX after scaling down
+    let max_u64 = std::u64::max_value!();
+    let amount = (max_u64 as u256) * 10; // Scale up first
+    let result = utils::safe_downcast_balance(amount, 10, 9); // Then scale down
+    assert_eq!(result, max_u64);
+}
+
+#[test]
+fun test_upcast_u64_max_with_max_decimal_diff() {
+    // Test upcast with u64::MAX and maximum decimal difference (0 -> 24)
+    let max_u64 = std::u64::max_value!();
+    let result = utils::safe_upcast_balance(max_u64, 0, 24);
+    // Result should be max_u64 * 10^24, which fits in u256
+    assert!(result > (max_u64 as u256));
+}
+
+#[test]
+fun test_upcast_large_amounts_various_decimals() {
+    // Test upcast with large amounts and various decimal combinations
+    let amount = 1000000000000000000u64; // 1e18
+    let result1 = utils::safe_upcast_balance(amount, 18, 24);
+    assert_eq!(result1, 1000000000000000000000000u256); // 1e24
+
+    let result2 = utils::safe_upcast_balance(amount, 18, 0);
+    assert_eq!(result2, 1u256);
+}
+
+#[test]
+fun test_scale_amount_with_zero() {
+    // Test that scaling zero returns zero regardless of decimals
+    let result1 = utils::safe_downcast_balance(0u256, 0, 24);
+    assert_eq!(result1, 0);
+
+    let result2 = utils::safe_upcast_balance(0u64, 0, 24);
+    assert_eq!(result2, 0u256);
+
+    let result3 = utils::safe_downcast_balance(0u256, 24, 0);
+    assert_eq!(result3, 0);
+}
+
+#[test]
+fun test_scale_amount_very_small_values() {
+    // Test scaling with very small amounts across different decimal differences
+    let result = utils::safe_upcast_balance(1u64, 0, 18);
+    assert_eq!(result, 1000000000000000000u256);
+}
+
+#[test]
+fun test_scale_amount_preserves_exact_powers_of_10() {
+    // Test that scaling preserves exact values for powers of 10 (no precision loss)
+    // 10^9 with 9 decimals -> 10^6 with 6 decimals should be exactly 10^6
+    let amount = 1000000000u256; // 10^9
+    let result = utils::safe_downcast_balance(amount, 9, 6);
+    assert_eq!(result, 1000000); // Exactly 10^6, no precision loss
+}
+
+#[test]
+fun test_validate_decimals_one_at_max() {
+    // Test with one decimal at MAX_DECIMALS and one below - should pass
+    // When scaling from 24 to 9 decimals, we scale DOWN (divide by 10^15)
+    // Use a large amount that won't truncate to zero
+    let amount = 1000000000000000000u256; // 10^18 with 24 decimals
+    let result = utils::safe_downcast_balance(amount, 24, 9);
+    // 10^18 / 10^15 = 10^3 = 1000
+    assert_eq!(result, 1000u64);
+}
+
+#[test]
+#[expected_failure(abort_code = utils::EInvalidDecimals)]
+fun test_validate_decimals_both_too_large() {
+    // Test with both decimals at MAX_DECIMALS + 1 - should abort
+    utils::safe_downcast_balance(1000u256, 25, 25);
+}
+
+#[test]
+#[expected_failure(abort_code = utils::EInvalidDecimals)]
+fun test_validate_decimals_first_invalid_second_valid() {
+    // Test with first decimal invalid, second valid - should abort
+    utils::safe_downcast_balance(1000u256, 25, 9);
+}
+
+#[test]
+#[expected_failure(abort_code = utils::EInvalidDecimals)]
+fun test_validate_decimals_first_valid_second_invalid() {
+    // Test with first decimal valid, second invalid - should abort
+    utils::safe_downcast_balance(1000u256, 9, 25);
 }

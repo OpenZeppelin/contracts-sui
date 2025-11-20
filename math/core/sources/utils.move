@@ -1,7 +1,5 @@
 module openzeppelin_math::utils;
 
-use openzeppelin_math::u256;
-
 // === Errors ===
 
 /// Value cannot be safely cast to `u64` (exceeds `std::u64::max_value!()`).
@@ -115,12 +113,12 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
     if (target_decimals > source_decimals) {
         // Scale up: multiply by 10^(decimal_diff) to increase precision.
-        let decimal_diff = target_decimals - source_decimals;
-        amount * u256::pow_10(decimal_diff)
+        let decimal_diff: u8 = target_decimals - source_decimals;
+        amount * std::u256::pow(10, decimal_diff)
     } else if (target_decimals < source_decimals) {
         // Scale down: divide by 10^(decimal_diff) to reduce precision.
-        let decimal_diff = source_decimals - target_decimals;
-        amount / u256::pow_10(decimal_diff)
+        let decimal_diff: u8 = source_decimals - target_decimals;
+        amount / std::u256::pow(10, decimal_diff)
     } else {
         // Same decimals, no scaling needed.
         amount
