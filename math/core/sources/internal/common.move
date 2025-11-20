@@ -30,3 +30,16 @@ public(package) fun clz(val: u256, bit_width: u16): u16 {
 
     count
 }
+
+/// Return the position of the most significant bit (MSB) in an unsigned integer value of arbitrary bit width.
+///
+/// This function returns the zero-based index of the most significant set bit in a value of a given bit width
+/// (such as u8, u16, u32, u64, u128, or u256). The MSB position is calculated as `bit_width - 1 - clz(val, bit_width)`,
+/// where `clz` is the count of leading zeros. For a zero input, the function returns 0 by convention.
+public(package) fun msb(val: u256, bit_width: u16): u8 {
+    if (val == 0) {
+        return 0
+    };
+    // clz result for non-zero is guaranteed to be less than bit_width, so the subtraction is safe
+    (bit_width - 1 - clz(val, bit_width)) as u8
+}
