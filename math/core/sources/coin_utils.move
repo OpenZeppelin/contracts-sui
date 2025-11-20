@@ -26,8 +26,8 @@ const MAX_DECIMALS: u8 = 24;
 /// # Arguments
 ///
 /// * `raw_amount` - The original balance (e.g., from Ethereum with 18 decimals).
-/// * `raw_decimals` - Source chain decimal places (must be <= 24).
-/// * `scaled_decimals` - Target decimal places (must be <= 24, typically 6-9 for Sui).
+/// * `source_decimals` - Source chain decimal places (must be <= 24).
+/// * `target_decimals` - Target decimal places (must be <= 24, typically 6-9 for Sui).
 ///
 /// # Returns
 ///
@@ -46,11 +46,11 @@ const MAX_DECIMALS: u8 = 24;
 /// let sui_amount = safe_downcast_balance(1000000000000000000, 18, 9);
 /// assert!(sui_amount == 1000000000, 0);
 /// ```
-public fun safe_downcast_balance(raw_amount: u256, raw_decimals: u8, scaled_decimals: u8): u64 {
+public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_decimals: u8): u64 {
     // Validate decimal ranges.
-    validate_decimals(raw_decimals, scaled_decimals);
+    validate_decimals(source_decimals, target_decimals);
 
-    let scaled_amount = scale_amount(raw_amount, raw_decimals, scaled_decimals);
+    let scaled_amount = scale_amount(raw_amount, source_decimals, target_decimals);
 
     // Verify it fits in `u64`.
     assert!(scaled_amount <= (std::u64::max_value!() as u256), ESafeDowncastOverflowedInt);
