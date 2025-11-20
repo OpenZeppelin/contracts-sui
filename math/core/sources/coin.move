@@ -1,4 +1,4 @@
-module openzeppelin_math::utils;
+module openzeppelin_math::coin;
 
 // === Errors ===
 
