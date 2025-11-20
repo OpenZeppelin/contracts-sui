@@ -157,3 +157,12 @@ public fun reject<T>(request: OwnershipTransferRequest<T>) {
     let OwnershipTransferRequest { id, .. } = request;
     id.delete();
 }
+
+#[test_only]
+public fun test_new_request<T: key + store>(
+    wrapper_id: ID,
+    new_owner: address,
+    ctx: &mut TxContext,
+): OwnershipTransferRequest<T> {
+    OwnershipTransferRequest { id: object::new(ctx), wrapper_id, new_owner }
+}
