@@ -87,10 +87,7 @@ public fun safe_downcast_balance(raw_amount: u256, raw_decimals: u8, scaled_deci
 public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals: u8): u256 {
     // Validate decimal ranges.
     validate_decimals(source_decimals, target_decimals);
-
-    let amount_u256 = (amount as u256);
-
-    scale_amount(amount_u256, source_decimals, target_decimals)
+    scale_amount(amount as u256, source_decimals, target_decimals)
 }
 
 /// Internal helper to scale an amount between different decimal precisions.
