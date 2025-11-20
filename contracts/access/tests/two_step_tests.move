@@ -1,6 +1,7 @@
 module openzeppelin_access::two_step_tests;
 
 use openzeppelin_access::two_step_transfer;
+use std::unit_test::assert_eq;
 use sui::event;
 
 #[test_only]
@@ -26,7 +27,7 @@ fun request_emits_event() {
     two_step_transfer::request<DummyCap>(sui::object::id(&wrapper), owner, &mut ctx);
 
     let events = event::events_by_type<two_step_transfer::OwnershipRequested>();
-    assert!(std::vector::length(&events) == 1, 0);
+    assert_eq!(events.length(), 1);
 
     let DummyCap { id } = two_step_transfer::unwrap(wrapper);
     id.delete();
@@ -100,7 +101,7 @@ fun transfer_emits_event() {
     two_step_transfer::transfer(wrapper, request, &mut ctx);
 
     let events = event::events_by_type<two_step_transfer::OwnershipTransferred>();
-    assert!(events.length() == 1, 0);
+    assert_eq!(events.length(), 1);
 }
 
 #[test, expected_failure(abort_code = two_step_transfer::EInvalidTransferRequest)]
@@ -129,7 +130,7 @@ fun reject_destroys_request() {
     two_step_transfer::reject(request);
 
     let events = event::events_by_type<two_step_transfer::OwnershipTransferred>();
-    assert!(events.length() == 0, 0);
+    assert_eq!(events.length(), 0);
 
     let DummyCap { id } = two_step_transfer::unwrap(wrapper);
     id.delete();
