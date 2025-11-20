@@ -533,39 +533,3 @@ fun log256_handles_max_value() {
     assert_eq!(u128::log256(max, rounding::up()), 16);
     assert_eq!(u128::log256(max, rounding::nearest()), 16);
 }
-
-// === from_u256 ===
-
-#[test]
-fun ai_from_u256_downcasts_zero() {
-    let result = u128::from_u256(0u256);
-    assert_eq!(result, 0u128);
-}
-
-#[test]
-fun ai_from_u256_downcasts_one() {
-    let result = u128::from_u256(1u256);
-    assert_eq!(result, 1u128);
-}
-
-#[test]
-fun ai_from_u256_downcasts_max_value() {
-    let max_value = std::u128::max_value!() as u256;
-    let result = u128::from_u256(max_value);
-    assert_eq!(result, std::u128::max_value!());
-}
-
-#[test, expected_failure(abort_code = u128::ESafeCastOverflowedIntDowncast)]
-fun ai_from_u256_reverts_when_downcasting_2_to_128() {
-    // 2^128 = 340282366920938463463374607431768211456, which exceeds u128 max value
-    // We use bit shift to compute 2^128
-    let overflow_value = 1u256 << 128;
-    let _unused = u128::from_u256(overflow_value);
-}
-
-#[test, expected_failure(abort_code = u128::ESafeCastOverflowedIntDowncast)]
-fun ai_from_u256_reverts_when_downcasting_2_to_128_plus_1() {
-    // 2^128 + 1, which exceeds u128 max value
-    let overflow_value = (1u256 << 128) + 1;
-    let _unused = u128::from_u256(overflow_value);
-}
