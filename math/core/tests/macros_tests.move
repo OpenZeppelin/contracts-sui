@@ -495,3 +495,256 @@ fun clz_handles_values_near_boundaries() {
     // 2^32 - 1
     assert_eq!(macros::clz!((1u64 << 32) - 1, 64), 32);
 }
+
+// === msb ===
+
+#[test]
+fun msb_returns_zero_for_zero() {
+    // msb(0) should return 0 by convention
+    assert_eq!(macros::msb!(0u8, 8), 0);
+    assert_eq!(macros::msb!(0u16, 16), 0);
+    assert_eq!(macros::msb!(0u32, 32), 0);
+    assert_eq!(macros::msb!(0u64, 64), 0);
+    assert_eq!(macros::msb!(0u128, 128), 0);
+    assert_eq!(macros::msb!(0u256, 256), 0);
+}
+
+#[test]
+fun msb_returns_correct_position_for_top_bit_set() {
+    // when the most significant bit is set, msb returns bit_width - 1
+    assert_eq!(macros::msb!(1u8 << 7, 8), 7);
+    assert_eq!(macros::msb!(1u16 << 15, 16), 15);
+    assert_eq!(macros::msb!(1u32 << 31, 32), 31);
+    assert_eq!(macros::msb!(1u64 << 63, 64), 63);
+    assert_eq!(macros::msb!(1u128 << 127, 128), 127);
+    assert_eq!(macros::msb!(1u256 << 255, 256), 255);
+}
+
+#[test]
+fun msb_returns_correct_position_for_max_value() {
+    // max value has the top bit set, so msb returns bit_width - 1
+    assert_eq!(macros::msb!(std::u8::max_value!(), 8), 7);
+    assert_eq!(macros::msb!(std::u16::max_value!(), 16), 15);
+    assert_eq!(macros::msb!(std::u32::max_value!(), 32), 31);
+    assert_eq!(macros::msb!(std::u64::max_value!(), 64), 63);
+    assert_eq!(macros::msb!(std::u128::max_value!(), 128), 127);
+    assert_eq!(macros::msb!(std::u256::max_value!(), 256), 255);
+}
+
+#[test]
+fun msb_handles_powers_of_two() {
+    // for powers of 2, msb returns the exponent
+    assert_eq!(macros::msb!(1u8, 8), 0); // 2^0
+    assert_eq!(macros::msb!(2u8, 8), 1); // 2^1
+    assert_eq!(macros::msb!(4u8, 8), 2); // 2^2
+    assert_eq!(macros::msb!(8u8, 8), 3); // 2^3
+
+    assert_eq!(macros::msb!(1u64, 64), 0); // 2^0
+    assert_eq!(macros::msb!(256u64, 64), 8); // 2^8
+    assert_eq!(macros::msb!(65536u64, 64), 16); // 2^16
+
+    assert_eq!(macros::msb!(1u256, 256), 0); // 2^0
+    assert_eq!(macros::msb!(1u256 << 64, 256), 64); // 2^64
+    assert_eq!(macros::msb!(1u256 << 128, 256), 128); // 2^128
+}
+
+#[test]
+fun msb_lower_bits_have_no_effect() {
+    // when lower bits are set, they don't affect the msb position
+    // 0b11 = 3: highest bit is 1, so msb = 1 for u8
+    assert_eq!(macros::msb!(3u8, 8), 1);
+    // 0b111 = 7: highest bit is 2, so msb = 2 for u8
+    assert_eq!(macros::msb!(7u8, 8), 2);
+    // 0b1111 = 15: highest bit is 3, so msb = 3 for u8
+    assert_eq!(macros::msb!(15u8, 8), 3);
+
+    // For u256: 255 = 0xff (bits 0-7 set), highest is bit 7, so msb = 7
+    assert_eq!(macros::msb!(255u256, 256), 7);
+    // 65535 = 0xffff (bits 0-15 set), highest is bit 15, so msb = 15
+    assert_eq!(macros::msb!(65535u256, 256), 15);
+}
+
+#[test]
+fun msb_handles_values_near_boundaries() {
+    // test values just before and at power-of-2 boundaries
+    // 2^8 = 256
+    assert_eq!(macros::msb!(256u16, 16), 8);
+    // 2^8 - 1 = 255
+    assert_eq!(macros::msb!(255u16, 16), 7);
+
+    // 2^16 = 65536
+    assert_eq!(macros::msb!(65536u32, 32), 16);
+    // 2^16 - 1 = 65535
+    assert_eq!(macros::msb!(65535u32, 32), 15);
+
+    // 2^32
+    assert_eq!(macros::msb!(1u64 << 32, 64), 32);
+    // 2^32 - 1
+    assert_eq!(macros::msb!((1u64 << 32) - 1, 64), 31);
+}
+
+// === log2 ===
+
+#[test]
+fun log2_returns_zero_for_zero() {
+    // log2(0) should return 0 by convention
+    assert_eq!(macros::log2!(0u8, 8, rounding::down()), 0);
+    assert_eq!(macros::log2!(0u8, 8, rounding::up()), 0);
+    assert_eq!(macros::log2!(0u8, 8, rounding::nearest()), 0);
+    assert_eq!(macros::log2!(0u16, 16, rounding::down()), 0);
+    assert_eq!(macros::log2!(0u32, 32, rounding::up()), 0);
+    assert_eq!(macros::log2!(0u64, 64, rounding::nearest()), 0);
+    assert_eq!(macros::log2!(0u128, 128, rounding::down()), 0);
+    assert_eq!(macros::log2!(0u256, 256, rounding::up()), 0);
+}
+
+#[test]
+fun log2_returns_zero_for_one() {
+    // log2(1) = 0 since 2^0 = 1
+    assert_eq!(macros::log2!(1u8, 8, rounding::down()), 0);
+    assert_eq!(macros::log2!(1u8, 8, rounding::up()), 0);
+    assert_eq!(macros::log2!(1u8, 8, rounding::nearest()), 0);
+    assert_eq!(macros::log2!(1u16, 16, rounding::down()), 0);
+    assert_eq!(macros::log2!(1u32, 32, rounding::up()), 0);
+    assert_eq!(macros::log2!(1u64, 64, rounding::nearest()), 0);
+    assert_eq!(macros::log2!(1u128, 128, rounding::down()), 0);
+    assert_eq!(macros::log2!(1u256, 256, rounding::up()), 0);
+}
+
+#[test]
+fun log2_rounding_mode_nearest() {
+    let nearest = rounding::nearest();
+    assert_eq!(macros::log2!(6u8, 8, nearest), 3); // 2.585 -> 3
+    assert_eq!(macros::log2!(11u16, 16, nearest), 3); // 3.459 -> 3
+    assert_eq!(macros::log2!(12u16, 16, nearest), 4); // 3.585 -> 4
+    assert_eq!(macros::log2!(22u32, 32, nearest), 4); // 4.459 -> 4
+    assert_eq!(macros::log2!(23u32, 32, nearest), 5); // 4.524 -> 5
+    assert_eq!(macros::log2!(45u64, 64, nearest), 5); // 5.492 -> 5
+    assert_eq!(macros::log2!(46u64, 64, nearest), 6); // 5.524 -> 6
+    assert_eq!(macros::log2!(90u128, 128, nearest), 6); // 6.492 -> 6
+    assert_eq!(macros::log2!(91u128, 128, nearest), 7); // 6.508 -> 7
+    assert_eq!(macros::log2!(181u256, 256, nearest), 7); // 7.4998 -> 7
+    assert_eq!(macros::log2!(182u256, 256, nearest), 8); // 7.5078 -> 8
+}
+
+#[test]
+fun log2_rounding_mode_nearest_high_values() {
+    let val_1 = 0xB504F261779BF7325BF8F7DB0AAFE8F8227AE7E69797296F9526CCD8BBF32000u256;
+    assert_eq!(macros::log2!(val_1, 256, rounding::nearest()), 255); // 255.4999 -> 255
+    let val_2 = 0xB504FB6D10AAFE26CC0E4F709AB10D92CEBF3593218E22304000000000000000u256;
+    assert_eq!(macros::log2!(val_2, 256, rounding::nearest()), 256); // 255.500001 -> 256
+}
+
+// === log256 ===
+
+#[test]
+fun log256_returns_zero_for_zero() {
+    // log256(0) should return 0 by convention
+    assert_eq!(macros::log256!(0u8, 8, rounding::down()), 0);
+    assert_eq!(macros::log256!(0u8, 8, rounding::up()), 0);
+    assert_eq!(macros::log256!(0u8, 8, rounding::nearest()), 0);
+    assert_eq!(macros::log256!(0u16, 16, rounding::down()), 0);
+    assert_eq!(macros::log256!(0u32, 32, rounding::up()), 0);
+    assert_eq!(macros::log256!(0u64, 64, rounding::nearest()), 0);
+    assert_eq!(macros::log256!(0u128, 128, rounding::down()), 0);
+    assert_eq!(macros::log256!(0u256, 256, rounding::up()), 0);
+}
+
+#[test]
+fun log256_returns_zero_for_one() {
+    // log256(1) = 0 since 256^0 = 1
+    assert_eq!(macros::log256!(1u8, 8, rounding::down()), 0);
+    assert_eq!(macros::log256!(1u8, 8, rounding::up()), 0);
+    assert_eq!(macros::log256!(1u8, 8, rounding::nearest()), 0);
+    assert_eq!(macros::log256!(1u16, 16, rounding::down()), 0);
+    assert_eq!(macros::log256!(1u32, 32, rounding::up()), 0);
+    assert_eq!(macros::log256!(1u64, 64, rounding::nearest()), 0);
+    assert_eq!(macros::log256!(1u128, 128, rounding::down()), 0);
+    assert_eq!(macros::log256!(1u256, 256, rounding::up()), 0);
+}
+
+#[test]
+fun log256_handles_powers_of_256() {
+    // for powers of 256, log256 returns the exponent regardless of rounding mode
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        // 256^0 = 1
+        assert_eq!(macros::log256!(1u16, 16, rounding), 0);
+        // 256^1 = 2^8
+        assert_eq!(macros::log256!(1u16 << 8, 16, rounding), 1);
+        // 256^2 = 2^16
+        assert_eq!(macros::log256!(1u32 << 16, 32, rounding), 2);
+        // 256^3 = 2^24
+        assert_eq!(macros::log256!(1u32 << 24, 32, rounding), 3);
+        // 256^4 = 2^32
+        assert_eq!(macros::log256!(1u64 << 32, 64, rounding), 4);
+        // 256^8 = 2^64
+        assert_eq!(macros::log256!(1u128 << 64, 128, rounding), 8);
+        // 256^16 = 2^128
+        assert_eq!(macros::log256!(1u256 << 128, 256, rounding), 16);
+        // 256^31 = 2^248
+        assert_eq!(macros::log256!(1u256 << 248, 256, rounding), 31);
+    });
+}
+
+#[test]
+fun log256_rounds_down() {
+    // log256 with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(macros::log256!((1u16 << 8) - 1, 16, down), 0); // log256(255) < 1 → 0
+    assert_eq!(macros::log256!((1u16 << 8) + 1, 16, down), 1); // log256(257) > 1 → 1
+    assert_eq!(macros::log256!((1u32 << 16) - 1, 32, down), 1); // log256(65535) < 2 → 1
+    assert_eq!(macros::log256!((1u32 << 16) + 1, 32, down), 2); // log256(65537) > 2 → 2
+    assert_eq!(macros::log256!((1u64 << 24) - 1, 64, down), 2); // log256(16777215) < 3 → 2
+    assert_eq!(macros::log256!((1u64 << 24) + 1, 64, down), 3); // log256(16777217) > 3 → 3
+}
+
+#[test]
+fun log256_rounds_up() {
+    // log256 with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(macros::log256!((1u16 << 8) - 1, 16, up), 1); // log256(255) < 1 → 1
+    assert_eq!(macros::log256!((1u16 << 8) + 1, 16, up), 2); // log256(257) > 2 → 2
+    assert_eq!(macros::log256!((1u32 << 16) - 1, 32, up), 2); // log256(65535) < 3 → 2
+    assert_eq!(macros::log256!((1u32 << 16) + 1, 32, up), 3); // log256(65537) > 3 → 3
+    assert_eq!(macros::log256!((1u64 << 24) - 1, 64, up), 3); // log256(16777215) < 4 → 3
+    assert_eq!(macros::log256!((1u64 << 24) + 1, 64, up), 4); // log256(16777217) > 4 → 4
+}
+
+#[test]
+fun log256_rounds_to_nearest() {
+    // log256 with Nearest mode rounds to closest integer
+    // Midpoint is 256^k × √256 = 256^k × 16
+    let nearest = rounding::nearest();
+
+    // Between 256^0 and 256^1: midpoint is 16
+    assert_eq!(macros::log256!(15u8, 8, nearest), 0); // < 16, rounds down
+    assert_eq!(macros::log256!(16u8, 8, nearest), 1); // >= 16, rounds up
+    assert_eq!(macros::log256!(255u16, 16, nearest), 1); // > 16, rounds up
+
+    // Between 256^1 and 256^2: midpoint is 256 × 16 = 4096
+    assert_eq!(macros::log256!(4095u16, 16, nearest), 1); // < 4096, rounds down
+    assert_eq!(macros::log256!(4096u16, 16, nearest), 2); // >= 4096, rounds up
+    assert_eq!(macros::log256!(65535u32, 32, nearest), 2); // > 4096, rounds up
+
+    // Between 256^2 and 256^3: midpoint is 65536 × 16 = 1048576
+    assert_eq!(macros::log256!(1048575u32, 32, nearest), 2); // < 1048576, rounds down
+    assert_eq!(macros::log256!(1048576u32, 32, nearest), 3); // >= 1048576, rounds up
+    assert_eq!(macros::log256!(16777215u32, 32, nearest), 3); // > 1048576, rounds up
+}
+
+#[test]
+fun log256_handles_max_values() {
+    // Test with maximum values for different types
+    assert_eq!(macros::log256!(std::u8::max_value!(), 8, rounding::down()), 0);
+    assert_eq!(macros::log256!(std::u8::max_value!(), 8, rounding::up()), 1);
+    assert_eq!(macros::log256!(std::u8::max_value!(), 8, rounding::nearest()), 1);
+
+    assert_eq!(macros::log256!(std::u64::max_value!(), 64, rounding::down()), 7);
+    assert_eq!(macros::log256!(std::u64::max_value!(), 64, rounding::up()), 8);
+    assert_eq!(macros::log256!(std::u64::max_value!(), 64, rounding::nearest()), 8);
+
+    assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::down()), 31);
+    assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::up()), 32);
+    assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::nearest()), 32);
+}

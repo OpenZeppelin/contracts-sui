@@ -1,5 +1,6 @@
 module openzeppelin_math::macros;
 
+use openzeppelin_math::common;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
@@ -138,48 +139,6 @@ public(package) macro fun mul_div<$Int>(
     mul_div_inner(a_u256, b_u256, denominator_u256, rounding_mode)
 }
 
-/// Count the number of leading zero bits in an unsigned integer.
-///
-/// Uses an iterative binary search to efficiently locate the most significant set bit by repeatedly
-/// halving the search range. The algorithm normalizes the input to `u256` and right-shifts by
-/// progressively smaller powers of two (`bit_width/2`, `bit_width/4`, ..., `1`). When a shift
-/// produces zero, the high bit must lie in the lower half, so we increment the leading-zero count
-/// and examine the original (unshifted) portion. Otherwise, we focus on the shifted (upper) portion.
-/// For a value of zero, the helper returns the full bit width.
-///
-/// #### Generics
-/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
-///
-/// #### Parameters
-/// - `$value`: The unsigned integer to count leading zeros for.
-/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
-///
-/// #### Returns
-/// The number of leading zero bits as a `u16`. Returns `$bit_width` if `$value` is 0.
-public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
-    let value = $value;
-    let bit_width = $bit_width;
-    if (value == 0 as $Int) {
-        return bit_width
-    };
-
-    // Binary search optimized for any bit width
-    let mut res = 0;
-    let mut val = (value as u256);
-    let mut shift = (bit_width / 2) as u8;
-    while (shift > 0) {
-        let shifted = val >> shift;
-        if (shifted == 0) {
-            res = res + (shift as u16);
-        } else {
-            val = shifted;
-        };
-        shift = shift / 2;
-    };
-
-    res
-}
-
 /// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
 ///
 /// This macro mirrors the ergonomics of `mul_div`, promoting the operands to `u256` and delegating to
@@ -215,6 +174,130 @@ public(package) macro fun mul_shr<$Int>(
     let rounding_mode = $rounding_mode;
 
     mul_shr_inner(a_u256, b_u256, shift, rounding_mode)
+}
+
+/// Count the number of leading zero bits in an unsigned integer.
+///
+/// Uses an iterative binary search to efficiently locate the most significant set bit by repeatedly
+/// halving the search range. The algorithm normalizes the input to `u256` and right-shifts by
+/// progressively smaller powers of two (`bit_width/2`, `bit_width/4`, ..., `1`). When a shift
+/// produces zero, the high bit must lie in the lower half, so we increment the leading-zero count
+/// and examine the original (unshifted) portion. Otherwise, we focus on the shifted (upper) portion.
+/// For a value of zero, the helper returns the full bit width.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to count leading zeros for.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+///
+/// #### Returns
+/// The number of leading zero bits as a `u16`. Returns `$bit_width` if `$value` is 0.
+public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
+    common::clz($value as u256, $bit_width)
+}
+
+/// Return the position of the most significant bit (MSB) in an unsigned integer.
+///
+/// This macro provides a uniform API for finding the MSB position across all unsigned integer widths.
+/// It normalizes the input to `u256` and delegates to the internal helper. The MSB position is the
+/// zero-based index of the highest set bit. For a zero input, the function returns 0 by convention.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to analyze.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+///
+/// #### Returns
+/// The zero-based position of the most significant bit as a `u8`. Returns `0` if `$value` is 0.
+public(package) macro fun msb<$Int>($value: $Int, $bit_width: u16): u8 {
+    common::msb($value as u256, $bit_width)
+}
+
+/// Compute the log in base 2 of a positive value with configurable rounding.
+///
+/// The algorithm first computes floor(log2(value)) using count-leading-zeros, then applies the
+/// requested rounding mode. Powers of 2 return exact results without additional rounding.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to compute the logarithm for.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The base-2 logarithm as a `u16`, rounded according to the specified mode.
+/// Returns `0` if `$value` is 0.
+public(package) macro fun log2<$Int>(
+    $value: $Int,
+    $bit_width: u16,
+    $rounding_mode: RoundingMode,
+): u16 {
+    let (value, bit_width, rounding_mode) = ($value as u256, $bit_width, $rounding_mode);
+    if (value == 0) {
+        return 0
+    };
+    let floor_log = common::msb(value, bit_width) as u16;
+
+    if (rounding_mode == rounding::down()) {
+        floor_log
+    } else if (value == 1 << (floor_log as u8)) {
+        // Exact power of 2
+        floor_log
+    } else if (rounding_mode == rounding::up()) {
+        floor_log + 1
+    } else if (log2_should_round_up(value, floor_log)) {
+        floor_log + 1
+    } else {
+        floor_log
+    }
+}
+
+/// Compute the log in base 256 of a positive value with configurable rounding.
+///
+/// Since log₂₅₆(x) = log₂(x) / 8, the algorithm computes log₂(x) first, then divides by 8.
+/// Powers of 2 return exact results without additional rounding.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to compute the logarithm for.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The base-256 logarithm as a `u16`, rounded according to the specified mode.
+/// Returns `0` if `$value` is 0.
+public(package) macro fun log256<$Int>(
+    $value: $Int,
+    $bit_width: u16,
+    $rounding_mode: RoundingMode,
+): u8 {
+    let (value, bit_width, rounding_mode) = ($value as u256, $bit_width, $rounding_mode);
+    if (value == 0) {
+        return 0
+    };
+    let floor_log2 = common::msb(value, bit_width) as u16;
+    let floor_log256 = (floor_log2 / 8) as u8;
+
+    if (rounding_mode == rounding::down()) {
+        floor_log256
+    } else if (floor_log2 % 8 == 0 && value == 1 << (floor_log2 as u8)) {
+        // Exact power of 256
+        floor_log256
+    } else if (rounding_mode == rounding::up()) {
+        floor_log256 + 1
+    } else if (log256_should_round_up(value, floor_log256 as u16)) {
+        floor_log256 + 1
+    } else {
+        floor_log256
+    }
 }
 
 /// === Helper functions ===
@@ -445,4 +528,78 @@ public(package) fun round_division_result(
     } else {
         (false, result + 1)
     }
+}
+
+/// Nearest-integer rounding for log2 without floats.
+///
+/// #### Parameters
+/// - `value`: The value being tested (already cast to u256).
+/// - `floor_log`: The threshold exponent for comparison.
+///
+/// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
+/// or keep `floor_log` by comparing `x` to the midpoint of the interval
+/// `[2^floor_log, 2^(floor_log+1))`. That midpoint is `2^(floor_log + 1/2) = 2^floor_log · √2`.
+/// Uses fast path when the compared values fit in u256, otherwise u512 arithmetic.
+///
+/// To avoid √2 and floating point, we square both sides:
+///   - `x ≥ 2^floor_log · √2`
+///   - `x² ≥ 2^(2·floor_log + 1)`
+///
+/// We implement this with an integer threshold test:
+/// `threshold_exp = 2 * floor_log + 1`, then:
+///   - if `x² ≥ 2^threshold_exp` → round up (`floor_log + 1`)
+///   - else                      → round down (`floor_log`)
+///
+/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+///
+/// #### Returns
+/// `true` if the value should round up, `false` otherwise.
+public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
+    let threshold_exp = 2 * floor_log + 1;
+    let max_small = std::u128::max_value!() as u256;
+    let fast_path = threshold_exp < 256 && value <= max_small;
+    if (fast_path) {
+        // Fast path: both value² and exponent fit in u256
+        let value_squared = value * value;
+        let threshold = 1 << (threshold_exp as u8);
+        value_squared >= threshold
+    } else {
+        // Slow path: use u512 for values where value² > u256::MAX or exponent >= 2^256
+        let value_squared = u512::mul_u256(value, value);
+        let threshold = if (threshold_exp >= 256) {
+            let shift = (threshold_exp - 256) as u8;
+            u512::new(1 << shift, 0)
+        } else {
+            u512::from_u256(1 << (threshold_exp as u8))
+        };
+        value_squared.ge(&threshold)
+    }
+}
+
+/// Nearest-integer rounding for log256 without floats.
+///
+/// #### Parameters
+/// - `value`: The value being tested (already cast to u256).
+/// - `floor_log`: The threshold exponent for comparison.
+///
+/// Given `floor_log = ⌊log256(x)⌋`, we decide whether to round up to `floor_log + 1`
+/// or keep `floor_log` by comparing `x` to the midpoint of the interval
+/// `[256^floor_log, 256^(floor_log+1))`. Using `256 = 2^8`, this midpoint is
+/// `256^(floor_log + 1/2) = 2^(8·floor_log + 4)`.
+///
+/// We implement this with a direct integer threshold test:
+/// `threshold_exp = 8 * floor_log + 4`, then:
+///   - if `x ≥ 2^threshold_exp` → round up (`floor_log + 1`)
+///   - else                     → round down (`floor_log`)
+///
+/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+///
+/// #### Returns
+/// `true` if the value should round up, `false` otherwise.
+public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
+    // For u256 values, floor_log ∈ [0, 31], so `threshold_exp = 8 * floor_log + 4 ≤ 252`
+    // and the power-of-two threshold fits safely in u256.
+    let threshold_exp = 8 * floor_log + 4;
+    let threshold = 1 << (threshold_exp as u8);
+    value >= threshold
 }

@@ -213,27 +213,23 @@ fun clz_returns_zero_for_max_value() {
 // Test all possible bit positions from 0 to 7.
 #[test]
 fun clz_handles_all_bit_positions() {
-    let mut bit_pos: u8 = 0;
-    while (bit_pos < 8) {
+    8u8.do!(|bit_pos| {
         let value = 1u8 << bit_pos;
         let expected_clz = 7 - bit_pos;
         assert_eq!(u8::clz(value), expected_clz);
-        bit_pos = bit_pos + 1;
-    };
+    });
 }
 
 // Test that lower bits have no effect on the result.
 #[test]
 fun clz_lower_bits_have_no_effect() {
-    let mut bit_pos: u8 = 0;
-    while (bit_pos < 8) {
+    8u8.do!(|bit_pos| {
         let mut value = 1u8 << bit_pos;
         // set all bits below bit_pos to 1
         value = value | (value - 1);
         let expected_clz = 7 - bit_pos;
         assert_eq!(u8::clz(value), expected_clz);
-        bit_pos = bit_pos + 1;
-    };
+    });
 }
 
 #[test]
@@ -263,4 +259,224 @@ fun clz_handles_values_near_boundaries() {
 
     // 31 has bit 4 set, clz = 3
     assert_eq!(u8::clz(31), 3);
+}
+
+// === msb ===
+
+#[test]
+fun msb_returns_zero_for_zero() {
+    // msb(0) should return 0 by convention
+    let result = u8::msb(0);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun msb_returns_correct_position_for_top_bit_set() {
+    // when the most significant bit is set, msb returns 7
+    let value = 1u8 << 7;
+    let result = u8::msb(value);
+    assert_eq!(result, 7);
+}
+
+#[test]
+fun msb_returns_correct_position_for_max_value() {
+    // max value has the top bit set, so msb returns 7
+    let max = std::u8::max_value!();
+    let result = u8::msb(max);
+    assert_eq!(result, 7);
+}
+
+// Test all possible bit positions from 0 to 7.
+#[test]
+fun msb_handles_all_bit_positions() {
+    8u8.do!(|bit_pos| {
+        let value = 1u8 << bit_pos;
+        assert_eq!(u8::msb(value), bit_pos);
+    });
+}
+
+// Test that lower bits have no effect on the result.
+#[test]
+fun msb_lower_bits_have_no_effect() {
+    8u8.do!(|bit_pos| {
+        let mut value = 1u8 << bit_pos;
+        // set all bits below bit_pos to 1
+        value = value | (value - 1);
+        assert_eq!(u8::msb(value), bit_pos);
+    });
+}
+
+#[test]
+fun msb_returns_highest_bit_position() {
+    // when multiple bits are set, msb returns the position of the highest bit.
+    // 0b11 (bits 0 and 1 set) - highest is bit 1, so msb = 1
+    assert_eq!(u8::msb(3), 1);
+
+    // 0b1111 (bits 0-3 set) - highest is bit 3, so msb = 3
+    assert_eq!(u8::msb(15), 3);
+
+    // 0xff (bits 0-7 set) - highest is bit 7, so msb = 7
+    assert_eq!(u8::msb(255), 7);
+}
+
+// Test values near power-of-2 boundaries.
+#[test]
+fun msb_handles_values_near_boundaries() {
+    // 16 has bit 4 set, msb = 4
+    assert_eq!(u8::msb(16), 4);
+
+    // 15 has bit 3 set, msb = 3
+    assert_eq!(u8::msb(15), 3);
+
+    // 32 has bit 5 set, msb = 5
+    assert_eq!(u8::msb(32), 5);
+
+    // 31 has bit 4 set, msb = 4
+    assert_eq!(u8::msb(31), 4);
+}
+
+// === log2 ===
+
+#[test]
+fun log2_returns_zero_for_zero() {
+    // log2(0) should return 0 by convention
+    assert_eq!(u8::log2(0, rounding::down()), 0);
+    assert_eq!(u8::log2(0, rounding::up()), 0);
+    assert_eq!(u8::log2(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun log2_returns_zero_for_one() {
+    // log2(1) = 0 since 2^0 = 1
+    assert_eq!(u8::log2(1, rounding::down()), 0);
+    assert_eq!(u8::log2(1, rounding::up()), 0);
+    assert_eq!(u8::log2(1, rounding::nearest()), 0);
+}
+
+#[test]
+fun log2_handles_powers_of_two() {
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u8::log2(1 << 0, rounding), 0);
+        assert_eq!(u8::log2(1 << 1, rounding), 1);
+        assert_eq!(u8::log2(1 << 2, rounding), 2);
+        assert_eq!(u8::log2(1 << 3, rounding), 3);
+        assert_eq!(u8::log2(1 << 4, rounding), 4);
+        assert_eq!(u8::log2(1 << 5, rounding), 5);
+        assert_eq!(u8::log2(1 << 6, rounding), 6);
+        assert_eq!(u8::log2(1 << 7, rounding), 7);
+    });
+}
+
+#[test]
+fun log2_rounds_down() {
+    // log2 with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(u8::log2(3, down), 1); // 1.58 → 1
+    assert_eq!(u8::log2(5, down), 2); // 2.32 → 2
+    assert_eq!(u8::log2(7, down), 2); // 2.81 → 2
+    assert_eq!(u8::log2(15, down), 3); // 3.91 → 3
+    assert_eq!(u8::log2(127, down), 6); // 6.99 → 6
+}
+
+#[test]
+fun log2_rounds_up() {
+    // log2 with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(u8::log2(3, up), 2); // 1.58 → 2
+    assert_eq!(u8::log2(5, up), 3); // 2.32 → 3
+    assert_eq!(u8::log2(7, up), 3); // 2.81 → 3
+    assert_eq!(u8::log2(15, up), 4); // 3.91 → 4
+    assert_eq!(u8::log2(127, up), 7); // 6.99 → 7
+}
+
+#[test]
+fun log2_rounds_to_nearest() {
+    // log2 with Nearest mode rounds to closest integer
+    let nearest = rounding::nearest();
+    assert_eq!(u8::log2(3, nearest), 2); // 1.58 → 2
+    assert_eq!(u8::log2(5, nearest), 2); // 2.32 → 2
+    assert_eq!(u8::log2(7, nearest), 3); // 2.81 → 3
+    assert_eq!(u8::log2(15, nearest), 4); // 3.91 → 4
+    assert_eq!(u8::log2(127, nearest), 7); // 6.99 → 7
+}
+
+#[test]
+fun log2_handles_max_value() {
+    // max value has all bits set, so log2 = 7
+    let max = std::u8::max_value!();
+    assert_eq!(u8::log2(max, rounding::down()), 7);
+    assert_eq!(u8::log2(max, rounding::up()), 8);
+    assert_eq!(u8::log2(max, rounding::nearest()), 8);
+}
+
+// === log256 ===
+
+#[test]
+fun log256_returns_zero_for_zero() {
+    // log256(0) should return 0 by convention
+    assert_eq!(u8::log256(0, rounding::down()), 0);
+    assert_eq!(u8::log256(0, rounding::up()), 0);
+    assert_eq!(u8::log256(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun log256_returns_zero_for_one() {
+    // log256(1) = 0 since 256^0 = 1
+    assert_eq!(u8::log256(1, rounding::down()), 0);
+    assert_eq!(u8::log256(1, rounding::up()), 0);
+    assert_eq!(u8::log256(1, rounding::nearest()), 0);
+}
+
+#[test]
+fun log256_rounds_down() {
+    // log256 with Down mode truncates to floor
+    // For u8, all values are < 256, so log256(x) is in range [0, 1)
+    let down = rounding::down();
+    assert_eq!(u8::log256(2, down), 0); // 0.125 → 0
+    assert_eq!(u8::log256(15, down), 0); // 0.488 → 0
+    assert_eq!(u8::log256(16, down), 0); // 0.5 → 0
+    assert_eq!(u8::log256(100, down), 0); // 0.830 → 0
+    assert_eq!(u8::log256(127, down), 0); // 0.874 → 0
+    assert_eq!(u8::log256(200, down), 0); // 0.955 → 0
+    assert_eq!(u8::log256(255, down), 0); // 0.999 → 0
+}
+
+#[test]
+fun log256_rounds_up() {
+    // log256 with Up mode rounds to ceiling
+    // For non-power-of-256 values, this rounds up to 1
+    let up = rounding::up();
+    assert_eq!(u8::log256(2, up), 1); // 0.125 → 1
+    assert_eq!(u8::log256(15, up), 1); // 0.488 → 1
+    assert_eq!(u8::log256(16, up), 1); // 0.5 → 1
+    assert_eq!(u8::log256(100, up), 1); // 0.830 → 1
+    assert_eq!(u8::log256(127, up), 1); // 0.874 → 1
+    assert_eq!(u8::log256(200, up), 1); // 0.955 → 1
+    assert_eq!(u8::log256(255, up), 1); // 0.999 → 1
+}
+
+#[test]
+fun log256_rounds_to_nearest() {
+    // log256 with Nearest mode rounds to closest integer
+    // Midpoint is at √256 = 16
+    // Values < 16 round down to 0, values >= 16 round up to 1
+    let nearest = rounding::nearest();
+    assert_eq!(u8::log256(2, nearest), 0); // 0.125 < midpoint → 0
+    assert_eq!(u8::log256(15, nearest), 0); // 0.488 < midpoint → 0
+    assert_eq!(u8::log256(16, nearest), 1); // 0.5 >= midpoint → 1
+    assert_eq!(u8::log256(17, nearest), 1); // 0.515 > midpoint → 1
+    assert_eq!(u8::log256(100, nearest), 1); // 0.830 → 1
+    assert_eq!(u8::log256(127, nearest), 1); // 0.874 → 1
+    assert_eq!(u8::log256(200, nearest), 1); // 0.955 → 1
+    assert_eq!(u8::log256(255, nearest), 1); // 0.999 → 1
+}
+
+#[test]
+fun log256_handles_max_value() {
+    // max value (255) is less than 256, so log256 is less than 1
+    let max = std::u8::max_value!();
+    assert_eq!(u8::log256(max, rounding::down()), 0);
+    assert_eq!(u8::log256(max, rounding::up()), 1);
+    assert_eq!(u8::log256(max, rounding::nearest()), 1);
 }

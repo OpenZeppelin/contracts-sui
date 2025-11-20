@@ -1,9 +1,10 @@
-//! This module provides a 512-bit unsigned integer type that is intended to be used as an
-//! intermediary step for u256 operations that may overflow, rather than being used directly
-//! like other integer types. It enables safe handling of intermediate calculations that exceed
-//! u256 bounds before being reduced back to u256.
-
+/// This module provides a 512-bit unsigned integer type that is intended to be used as an
+/// intermediary step for u256 operations that may overflow, rather than being used directly
+/// like other integer types. It enables safe handling of intermediate calculations that exceed
+/// u256 bounds before being reduced back to u256.
 module openzeppelin_math::u512;
+
+use openzeppelin_math::common;
 
 /// Represents a 512-bit unsigned integer as two 256-bit words.
 public struct U512 has copy, drop, store {
@@ -46,6 +47,17 @@ public fun hi(value: &U512): u256 {
 /// Accessor for the low 256 bits.
 public fun lo(value: &U512): u256 {
     value.lo
+}
+
+/// Check whether `value` is greater than or equal to another `U512` value.
+public fun ge(value: &U512, other: &U512): bool {
+    if (value.hi > other.hi) {
+        true
+    } else if (value.hi < other.hi) {
+        false
+    } else {
+        value.lo >= other.lo
+    }
 }
 
 /// Multiply two `u256` integers and return the full 512-bit product using cross-limb accumulation.
@@ -98,12 +110,16 @@ public fun mul_u256(a: u256, b: u256): U512 {
 public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     assert!(divisor != 0, EDivideByZero);
 
+    if (numerator.hi == 0 && numerator.lo == 0) {
+        return (false, 0, 0)
+    };
+
     let mut quotient = 0u256;
     let mut remainder = zero();
 
-    let mut i: u16 = 0;
-    while (i < 512) {
-        let idx = 511 - i;
+    // numerator is not zero, so we can safely call msb
+    let mut idx = msb(&numerator);
+    loop {
         remainder = shift_left1(&remainder);
         let bit = get_bit(&numerator, idx);
         if (bit == 1) {
@@ -118,7 +134,10 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
             quotient = quotient | (1u256 << (idx as u8));
         };
 
-        i = i + 1;
+        if (idx == 0) {
+            break
+        };
+        idx = idx - 1;
     };
 
     assert!(remainder.hi == 0, EInvalidRemainder);
@@ -126,6 +145,11 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
 }
 
 /// === Internal helpers ===
+
+/// Check whether `value` is greater than or equal to a `u256` scalar.
+fun ge_u256(value: &U512, other: u256): bool {
+    if (value.hi != 0) true else value.lo >= other
+}
 
 /// Split a `u256` into two `u128` halves (hi, lo).
 fun split_u256(value: u256): (u128, u128) {
@@ -162,11 +186,6 @@ fun get_bit(value: &U512, idx: u16): u8 {
     }
 }
 
-/// Check whether `value` is greater than or equal to a `u256` scalar.
-fun ge_u256(value: &U512, other: u256): bool {
-    if (value.hi != 0) true else value.lo >= other
-}
-
 /// Subtract a `u256` scalar from a `U512`, handling a potential borrow from the high limb.
 fun sub_u256(value: U512, other: u256): U512 {
     if (value.lo >= other) {
@@ -178,6 +197,17 @@ fun sub_u256(value: U512, other: u256): U512 {
         let complement = (std::u256::max_value!() - other) + 1;
         let new_lo = value.lo + complement;
         U512 { hi, lo: new_lo }
+    }
+}
+
+/// Return the index of the most significant set bit in `value`.
+///
+/// NOTE: This internal helper function expects a value that is not zero.
+fun msb(value: &U512): u16 {
+    if (value.hi != 0) {
+        256 + (common::msb(value.hi, 256) as u16)
+    } else {
+        common::msb(value.lo, 256) as u16
     }
 }
 

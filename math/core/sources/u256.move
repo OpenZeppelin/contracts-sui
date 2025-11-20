@@ -59,3 +59,24 @@ public fun mul_shr(a: u256, b: u256, shift: u8, rounding_mode: RoundingMode): Op
 public fun clz(value: u256): u16 {
     macros::clz!(value, BIT_WIDTH)
 }
+
+/// Return the position of the most significant bit in the value.
+///
+/// Returns 0 if given 0.
+public fun msb(value: u256): u8 {
+    macros::msb!(value, BIT_WIDTH)
+}
+
+/// Compute the log in base 2 of a positive value with configurable rounding.
+///
+/// Returns 0 if given 0.
+public fun log2(value: u256, rounding_mode: RoundingMode): u16 {
+    macros::log2!(value, BIT_WIDTH, rounding_mode)
+}
+
+/// Compute the log in base 256 of a positive value with configurable rounding.
+///
+/// Returns 0 if given 0.
+public fun log256(value: u256, rounding_mode: RoundingMode): u8 {
+    macros::log256!(value, BIT_WIDTH, rounding_mode)
+}
