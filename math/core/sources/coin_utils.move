@@ -1,4 +1,4 @@
-module openzeppelin_math::coin;
+module openzeppelin_math::coin_utils;
 
 // === Errors ===
 
@@ -54,6 +54,7 @@ public fun safe_downcast_balance(raw_amount: u256, raw_decimals: u8, scaled_deci
 
     // Verify it fits in `u64`.
     assert!(scaled_amount <= (std::u64::max_value!() as u256), ESafeDowncastOverflowedInt);
+
     (scaled_amount as u64)
 }
 
@@ -87,7 +88,6 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
     // Validate decimal ranges.
     validate_decimals(source_decimals, target_decimals);
 
-    // Convert to u256 for arithmetic operations (u64 -> u256 upcast is always safe).
     let amount_u256 = (amount as u256);
 
     scale_amount(amount_u256, source_decimals, target_decimals)
@@ -111,21 +111,26 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 /// * Scaling down: amount=1000000000, source=9, target=6 → 1000000.
 /// * Same: amount=1000000000, source=9, target=9 → 1000000000.
 fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
+    // Fast path: same decimals, no scaling needed.
+    if (source_decimals == target_decimals) {
+        return amount
+    };
+
     if (target_decimals > source_decimals) {
         // Scale up: multiply by 10^(decimal_diff) to increase precision.
-        let decimal_diff: u8 = target_decimals - source_decimals;
+        let decimal_diff = target_decimals - source_decimals;
         amount * std::u256::pow(10, decimal_diff)
-    } else if (target_decimals < source_decimals) {
-        // Scale down: divide by 10^(decimal_diff) to reduce precision.
-        let decimal_diff: u8 = source_decimals - target_decimals;
-        amount / std::u256::pow(10, decimal_diff)
     } else {
-        // Same decimals, no scaling needed.
-        amount
+        // Scale down: divide by 10^(decimal_diff) to reduce precision.
+        let decimal_diff = source_decimals - target_decimals;
+        amount / std::u256::pow(10, decimal_diff)
     }
 }
 
 /// Validate that both decimal values are within acceptable range.
+///
+/// This function validates both decimal values in a single call for efficiency.
+/// If either value exceeds `MAX_DECIMALS`, the function aborts with `EInvalidDecimals`.
 ///
 /// # Aborts
 ///
