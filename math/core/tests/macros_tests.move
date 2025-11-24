@@ -584,6 +584,93 @@ fun clz_handles_values_near_boundaries() {
     assert_eq!(macros::clz!((1u64 << 32) - 1, 64), 32);
 }
 
+// === msb ===
+
+#[test]
+fun msb_returns_zero_for_zero() {
+    // msb(0) should return 0 by convention
+    assert_eq!(macros::msb!(0u8, 8), 0);
+    assert_eq!(macros::msb!(0u16, 16), 0);
+    assert_eq!(macros::msb!(0u32, 32), 0);
+    assert_eq!(macros::msb!(0u64, 64), 0);
+    assert_eq!(macros::msb!(0u128, 128), 0);
+    assert_eq!(macros::msb!(0u256, 256), 0);
+}
+
+#[test]
+fun msb_returns_correct_position_for_top_bit_set() {
+    // when the most significant bit is set, msb returns bit_width - 1
+    assert_eq!(macros::msb!(1u8 << 7, 8), 7);
+    assert_eq!(macros::msb!(1u16 << 15, 16), 15);
+    assert_eq!(macros::msb!(1u32 << 31, 32), 31);
+    assert_eq!(macros::msb!(1u64 << 63, 64), 63);
+    assert_eq!(macros::msb!(1u128 << 127, 128), 127);
+    assert_eq!(macros::msb!(1u256 << 255, 256), 255);
+}
+
+#[test]
+fun msb_returns_correct_position_for_max_value() {
+    // max value has the top bit set, so msb returns bit_width - 1
+    assert_eq!(macros::msb!(std::u8::max_value!(), 8), 7);
+    assert_eq!(macros::msb!(std::u16::max_value!(), 16), 15);
+    assert_eq!(macros::msb!(std::u32::max_value!(), 32), 31);
+    assert_eq!(macros::msb!(std::u64::max_value!(), 64), 63);
+    assert_eq!(macros::msb!(std::u128::max_value!(), 128), 127);
+    assert_eq!(macros::msb!(std::u256::max_value!(), 256), 255);
+}
+
+#[test]
+fun msb_handles_powers_of_two() {
+    // for powers of 2, msb returns the exponent
+    assert_eq!(macros::msb!(1u8, 8), 0); // 2^0
+    assert_eq!(macros::msb!(2u8, 8), 1); // 2^1
+    assert_eq!(macros::msb!(4u8, 8), 2); // 2^2
+    assert_eq!(macros::msb!(8u8, 8), 3); // 2^3
+
+    assert_eq!(macros::msb!(1u64, 64), 0); // 2^0
+    assert_eq!(macros::msb!(256u64, 64), 8); // 2^8
+    assert_eq!(macros::msb!(65536u64, 64), 16); // 2^16
+
+    assert_eq!(macros::msb!(1u256, 256), 0); // 2^0
+    assert_eq!(macros::msb!(1u256 << 64, 256), 64); // 2^64
+    assert_eq!(macros::msb!(1u256 << 128, 256), 128); // 2^128
+}
+
+#[test]
+fun msb_lower_bits_have_no_effect() {
+    // when lower bits are set, they don't affect the msb position
+    // 0b11 = 3: highest bit is 1, so msb = 1 for u8
+    assert_eq!(macros::msb!(3u8, 8), 1);
+    // 0b111 = 7: highest bit is 2, so msb = 2 for u8
+    assert_eq!(macros::msb!(7u8, 8), 2);
+    // 0b1111 = 15: highest bit is 3, so msb = 3 for u8
+    assert_eq!(macros::msb!(15u8, 8), 3);
+
+    // For u256: 255 = 0xff (bits 0-7 set), highest is bit 7, so msb = 7
+    assert_eq!(macros::msb!(255u256, 256), 7);
+    // 65535 = 0xffff (bits 0-15 set), highest is bit 15, so msb = 15
+    assert_eq!(macros::msb!(65535u256, 256), 15);
+}
+
+#[test]
+fun msb_handles_values_near_boundaries() {
+    // test values just before and at power-of-2 boundaries
+    // 2^8 = 256
+    assert_eq!(macros::msb!(256u16, 16), 8);
+    // 2^8 - 1 = 255
+    assert_eq!(macros::msb!(255u16, 16), 7);
+
+    // 2^16 = 65536
+    assert_eq!(macros::msb!(65536u32, 32), 16);
+    // 2^16 - 1 = 65535
+    assert_eq!(macros::msb!(65535u32, 32), 15);
+
+    // 2^32
+    assert_eq!(macros::msb!(1u64 << 32, 64), 32);
+    // 2^32 - 1
+    assert_eq!(macros::msb!((1u64 << 32) - 1, 64), 31);
+}
+
 // === log2 ===
 
 #[test]

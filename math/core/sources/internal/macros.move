@@ -238,6 +238,25 @@ public(package) macro fun mul_mod<$Int>($a: $Int, $b: $Int, $modulus: $Int): $In
     mul_mod_impl(a_u256, b_u256, modulus_u256) as $Int
 }
 
+/// Return the position of the most significant bit (MSB) in an unsigned integer.
+///
+/// This macro provides a uniform API for finding the MSB position across all unsigned integer widths.
+/// It normalizes the input to `u256` and delegates to the internal helper. The MSB position is the
+/// zero-based index of the highest set bit. For a zero input, the function returns 0 by convention.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to analyze.
+/// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
+///
+/// #### Returns
+/// The zero-based position of the most significant bit as a `u8`. Returns `0` if `$value` is 0.
+public(package) macro fun msb<$Int>($value: $Int, $bit_width: u16): u8 {
+    common::msb($value as u256, $bit_width)
+}
+
 /// Compute the log in base 2 of a positive value with configurable rounding.
 ///
 /// The algorithm first computes floor(log2(value)) using count-leading-zeros, then applies the
@@ -263,8 +282,7 @@ public(package) macro fun log2<$Int>(
     if (value == 0) {
         return 0
     };
-    let zeros = common::clz(value, bit_width);
-    let floor_log = bit_width - 1 - zeros;
+    let floor_log = common::msb(value, bit_width) as u16;
 
     if (rounding_mode == rounding::down()) {
         floor_log
@@ -305,8 +323,7 @@ public(package) macro fun log256<$Int>(
     if (value == 0) {
         return 0
     };
-    let zeros = common::clz(value, bit_width);
-    let floor_log2 = bit_width - 1 - zeros;
+    let floor_log2 = common::msb(value, bit_width) as u16;
     let floor_log256 = (floor_log2 / 8) as u8;
 
     if (rounding_mode == rounding::down()) {
