@@ -273,6 +273,80 @@ fun clz_handles_values_near_boundaries() {
     assert_eq!(u64::clz((1 << 52) - 1), 12);
 }
 
+// === msb ===
+
+#[test]
+fun msb_returns_zero_for_zero() {
+    // msb(0) should return 0 by convention
+    let result = u64::msb(0);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun msb_returns_correct_position_for_top_bit_set() {
+    // when the most significant bit is set, msb returns 63
+    let value = 1u64 << 63;
+    let result = u64::msb(value);
+    assert_eq!(result, 63);
+}
+
+#[test]
+fun msb_returns_correct_position_for_max_value() {
+    // max value has the top bit set, so msb returns 63
+    let max = std::u64::max_value!();
+    let result = u64::msb(max);
+    assert_eq!(result, 63);
+}
+
+// Test all possible bit positions from 0 to 63.
+#[test]
+fun msb_handles_all_bit_positions() {
+    64u8.do!(|bit_pos| {
+        let value = 1u64 << bit_pos;
+        assert_eq!(u64::msb(value), bit_pos);
+    });
+}
+
+// Test that lower bits have no effect on the result.
+#[test]
+fun msb_lower_bits_have_no_effect() {
+    64u8.do!(|bit_pos| {
+        let mut value = 1u64 << bit_pos;
+        // set all bits below bit_pos to 1
+        value = value | (value - 1);
+        assert_eq!(u64::msb(value), bit_pos);
+    });
+}
+
+#[test]
+fun msb_returns_highest_bit_position() {
+    // when multiple bits are set, msb returns the position of the highest bit.
+    // 0b11 (bits 0 and 1 set) - highest is bit 1, so msb = 1
+    assert_eq!(u64::msb(3), 1);
+
+    // 0b1111 (bits 0-3 set) - highest is bit 3, so msb = 3
+    assert_eq!(u64::msb(15), 3);
+
+    // 0xff (bits 0-7 set) - highest is bit 7, so msb = 7
+    assert_eq!(u64::msb(255), 7);
+}
+
+// Test values near power-of-2 boundaries.
+#[test]
+fun msb_handles_values_near_boundaries() {
+    // 0x0001_0000_0000 (2^32) has bit 32 set, msb = 32
+    assert_eq!(u64::msb(1 << 32), 32);
+
+    // 0xffff_ffff (2^32 - 1) has bit 31 set, msb = 31
+    assert_eq!(u64::msb((1 << 32) - 1), 31);
+
+    // 0x0010_0000_0000_0000 (2^52) has bit 52 set, msb = 52
+    assert_eq!(u64::msb(1 << 52), 52);
+
+    // 0x000f_ffff_ffff_ffff (2^52 - 1) has bit 51 set, msb = 51
+    assert_eq!(u64::msb((1 << 52) - 1), 51);
+}
+
 // === log2 ===
 
 #[test]

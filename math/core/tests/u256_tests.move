@@ -310,6 +310,86 @@ fun clz_handles_values_near_boundaries() {
     assert_eq!(u256::clz((1 << 64) - 1), 192);
 }
 
+// === msb ===
+
+#[test]
+fun msb_returns_zero_for_zero() {
+    // msb(0) should return 0 by convention
+    let result = u256::msb(0);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun msb_returns_correct_position_for_top_bit_set() {
+    // when the most significant bit is set, msb returns 255
+    let value = 1u256 << 255;
+    let result = u256::msb(value);
+    assert_eq!(result, 255);
+}
+
+#[test]
+fun msb_returns_correct_position_for_max_value() {
+    // max value has the top bit set, so msb returns 255
+    let max = std::u256::max_value!();
+    let result = u256::msb(max);
+    assert_eq!(result, 255);
+}
+
+// Test all possible bit positions from 0 to 255.
+#[test]
+fun msb_handles_all_bit_positions() {
+    256u16.do!(|bit_pos| {
+        let value = 1u256 << (bit_pos as u8);
+        assert_eq!(u256::msb(value), bit_pos as u8);
+    });
+}
+
+// Test that lower bits have no effect on the result.
+#[test]
+fun msb_lower_bits_have_no_effect() {
+    256u16.do!(|bit_pos| {
+        let mut value = 1u256 << (bit_pos as u8);
+        // set all bits below bit_pos to 1
+        value = value | (value - 1);
+        assert_eq!(u256::msb(value), bit_pos as u8);
+    });
+}
+
+#[test]
+fun msb_returns_highest_bit_position() {
+    // when multiple bits are set, msb returns the position of the highest bit.
+    // 0b11 (bits 0 and 1 set) - highest is bit 1, so msb = 1
+    assert_eq!(u256::msb(3), 1);
+
+    // 0b1111 (bits 0-3 set) - highest is bit 3, so msb = 3
+    assert_eq!(u256::msb(15), 3);
+
+    // 0xff (bits 0-7 set) - highest is bit 7, so msb = 7
+    assert_eq!(u256::msb(255), 7);
+}
+
+// Test values near power-of-2 boundaries.
+#[test]
+fun msb_handles_values_near_boundaries() {
+    // 0x100 (256) has bit 8 set, msb = 8
+    assert_eq!(u256::msb(1 << 8), 8);
+
+    // 0xff (255) has bit 7 set, msb = 7
+    assert_eq!(u256::msb((1 << 8) - 1), 7);
+
+    // 0x1_0000 (65536) has bit 16 set, msb = 16
+    assert_eq!(u256::msb(1 << 16), 16);
+
+    // 0xffff (65535) has bit 15 set, msb = 15
+    assert_eq!(u256::msb((1 << 16) - 1), 15);
+
+    // 0x1_0000_0000_0000_0000 (2^64) has bit 64 set, msb = 64
+    assert_eq!(u256::msb(1 << 64), 64);
+
+    // 0xffff_ffff_ffff_ffff (2^64 - 1) has bit 63 set, msb = 63
+    assert_eq!(u256::msb((1 << 64) - 1), 63);
+}
+
 // === log2 ===
 
 #[test]

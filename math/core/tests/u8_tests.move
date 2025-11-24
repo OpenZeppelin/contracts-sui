@@ -261,6 +261,80 @@ fun clz_handles_values_near_boundaries() {
     assert_eq!(u8::clz(31), 3);
 }
 
+// === msb ===
+
+#[test]
+fun msb_returns_zero_for_zero() {
+    // msb(0) should return 0 by convention
+    let result = u8::msb(0);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun msb_returns_correct_position_for_top_bit_set() {
+    // when the most significant bit is set, msb returns 7
+    let value = 1u8 << 7;
+    let result = u8::msb(value);
+    assert_eq!(result, 7);
+}
+
+#[test]
+fun msb_returns_correct_position_for_max_value() {
+    // max value has the top bit set, so msb returns 7
+    let max = std::u8::max_value!();
+    let result = u8::msb(max);
+    assert_eq!(result, 7);
+}
+
+// Test all possible bit positions from 0 to 7.
+#[test]
+fun msb_handles_all_bit_positions() {
+    8u8.do!(|bit_pos| {
+        let value = 1u8 << bit_pos;
+        assert_eq!(u8::msb(value), bit_pos);
+    });
+}
+
+// Test that lower bits have no effect on the result.
+#[test]
+fun msb_lower_bits_have_no_effect() {
+    8u8.do!(|bit_pos| {
+        let mut value = 1u8 << bit_pos;
+        // set all bits below bit_pos to 1
+        value = value | (value - 1);
+        assert_eq!(u8::msb(value), bit_pos);
+    });
+}
+
+#[test]
+fun msb_returns_highest_bit_position() {
+    // when multiple bits are set, msb returns the position of the highest bit.
+    // 0b11 (bits 0 and 1 set) - highest is bit 1, so msb = 1
+    assert_eq!(u8::msb(3), 1);
+
+    // 0b1111 (bits 0-3 set) - highest is bit 3, so msb = 3
+    assert_eq!(u8::msb(15), 3);
+
+    // 0xff (bits 0-7 set) - highest is bit 7, so msb = 7
+    assert_eq!(u8::msb(255), 7);
+}
+
+// Test values near power-of-2 boundaries.
+#[test]
+fun msb_handles_values_near_boundaries() {
+    // 16 has bit 4 set, msb = 4
+    assert_eq!(u8::msb(16), 4);
+
+    // 15 has bit 3 set, msb = 3
+    assert_eq!(u8::msb(15), 3);
+
+    // 32 has bit 5 set, msb = 5
+    assert_eq!(u8::msb(32), 5);
+
+    // 31 has bit 4 set, msb = 4
+    assert_eq!(u8::msb(31), 4);
+}
+
 // === log2 ===
 
 #[test]
