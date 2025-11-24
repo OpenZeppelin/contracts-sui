@@ -86,3 +86,10 @@ public fun log2(value: u128, rounding_mode: RoundingMode): u8 {
 public fun log256(value: u128, rounding_mode: RoundingMode): u8 {
     macros::log256!(value, BIT_WIDTH as u16, rounding_mode)
 }
+
+/// Compute the square root of a value with configurable rounding.
+///
+/// Returns 0 if given 0.
+public fun sqrt(value: u128, rounding_mode: RoundingMode): u128 {
+    macros::sqrt!(value, rounding_mode)
+}

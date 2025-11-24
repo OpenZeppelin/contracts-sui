@@ -505,6 +505,28 @@ public(package) fun mul_shr_u256_wide(
     (false, result)
 }
 
+/// Compute the square root of an unsigned integer with configurable rounding.
+///
+/// This macro provides a uniform API for `sqrt` across all unsigned integer widths. It normalises
+/// the input to `u256`, calculates the integer square root, and applies the requested rounding mode.
+/// The algorithm uses a binary search to find the floor of the square root, then determines whether
+/// to round up based on the rounding mode.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to calculate the square root of.
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The square root of `$value` rounded according to `$rounding_mode`, cast back to `$Int`.
+public(package) macro fun sqrt<$Int>($value: $Int, $rounding_mode: RoundingMode): $Int {
+    let (value, rounding_mode) = ($value as u256, $rounding_mode);
+    let floor_res = common::sqrt_floor(value);
+    round_sqrt_result(value, floor_res, rounding_mode) as $Int
+}
+
 /// Determine whether rounding up is required after dividing and apply it to `result`.
 /// Returns `(overflow, result)` where `overflow` is `true` if the rounded value cannot be represented as `u256`.
 public(package) fun round_division_result(
@@ -602,4 +624,55 @@ public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
     let threshold_exp = 8 * floor_log + 4;
     let threshold = 1 << (threshold_exp as u8);
     value >= threshold
+}
+
+/// Apply rounding mode to the floor result of a square root calculation.
+///
+/// For nearest rounding, compares the distance from `value` to `floor²` versus the distance
+/// to `ceil²` where `ceil = floor + 1`.
+///
+/// Given:
+/// - `distance_to_floor = value - floor²`
+/// - `distance_to_ceil = (floor + 1)² - value = floor² + 2·floor + 1 - value`
+///
+/// We want to round down if `distance_to_floor < distance_to_ceil`, which expands to:
+/// ```
+/// value - floor² < floor² + 2·floor + 1 - value
+/// 2·value < 2·floor² + 2·floor + 1
+/// 2·(value - floor²) < 2·floor + 1
+/// ```
+///
+/// Since we're working with integers, dividing both sides by 2 gives us:
+/// `value - floor² <= floor`
+///
+/// Considering that `sqrt(u256::MAX)` < `2^128`, all arithmetic operations in the function
+/// are guaranteed to not overflow or underflow.
+///
+/// #### Parameters
+/// - `value`: The original value whose square root was calculated.
+/// - `floor_result`: The floor of the square root.
+/// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The square root rounded according to the specified mode.
+public(package) fun round_sqrt_result(
+    value: u256,
+    floor_result: u256,
+    rounding_mode: RoundingMode,
+): u256 {
+    if (rounding_mode == rounding::down()) {
+        return floor_result
+    };
+
+    let floor_squared = floor_result * floor_result;
+    if (floor_squared == value) {
+        // Perfect square, no rounding needed
+        floor_result
+    } else if (rounding_mode == rounding::up()) {
+        floor_result + 1
+    } else if (value - floor_squared <= floor_result) {
+        floor_result
+    } else {
+        floor_result + 1
+    }
 }
