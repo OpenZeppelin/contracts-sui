@@ -534,6 +534,111 @@ fun log256_handles_max_value() {
     assert_eq!(u128::log256(max, rounding::nearest()), 16);
 }
 
+// === sqrt ===
+
+#[test]
+fun sqrt_returns_zero_for_zero() {
+    // sqrt(0) = 0 by definition
+    assert_eq!(u128::sqrt(0, rounding::down()), 0);
+    assert_eq!(u128::sqrt(0, rounding::up()), 0);
+    assert_eq!(u128::sqrt(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun sqrt_handles_perfect_squares() {
+    // Perfect squares should return exact result regardless of rounding mode
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u128::sqrt(1, rounding), 1);
+        assert_eq!(u128::sqrt(4, rounding), 2);
+        assert_eq!(u128::sqrt(9, rounding), 3);
+        assert_eq!(u128::sqrt(16, rounding), 4);
+        assert_eq!(u128::sqrt(100, rounding), 10);
+        assert_eq!(u128::sqrt(65536, rounding), 256);
+        assert_eq!(u128::sqrt(1 << 64, rounding), 1 << 32); // (2^32)^2 = 2^64
+    });
+}
+
+#[test]
+fun sqrt_rounds_down() {
+    // sqrt with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(u128::sqrt(2, down), 1); // 1.414 → 1
+    assert_eq!(u128::sqrt(3, down), 1); // 1.732 → 1
+    assert_eq!(u128::sqrt(5, down), 2); // 2.236 → 2
+    assert_eq!(u128::sqrt(99, down), 9); // 9.950 → 9
+    assert_eq!(u128::sqrt(1000000, down), 1000);
+    assert_eq!(u128::sqrt(1 << 64, down), 1 << 32); // sqrt(2^64) = 2^32
+    assert_eq!(u128::sqrt(std::u128::max_value!(), down), std::u64::max_value!() as u128);
+}
+
+#[test]
+fun sqrt_rounds_up() {
+    // sqrt with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(u128::sqrt(2, up), 2); // 1.414 → 2
+    assert_eq!(u128::sqrt(3, up), 2); // 1.732 → 2
+    assert_eq!(u128::sqrt(5, up), 3); // 2.236 → 3
+    assert_eq!(u128::sqrt(99, up), 10); // 9.950 → 10
+    assert_eq!(u128::sqrt(1000001, up), 1001);
+    assert_eq!(u128::sqrt((1 << 64) + 1, up), (1 << 32) + 1); // sqrt(2^64 + 1) = 2^32 + 1
+    assert_eq!(u128::sqrt(std::u128::max_value!(), up), (std::u64::max_value!() as u128) + 1);
+}
+
+#[test]
+fun sqrt_rounds_to_nearest() {
+    // sqrt with Nearest mode rounds to closest integer
+    let nearest = rounding::nearest();
+    assert_eq!(u128::sqrt(2, nearest), 1); // 1.414 → 1
+    assert_eq!(u128::sqrt(3, nearest), 2); // 1.732 → 2
+    assert_eq!(u128::sqrt(5, nearest), 2); // 2.236 → 2
+    assert_eq!(u128::sqrt(7, nearest), 3); // 2.646 → 3
+    assert_eq!(u128::sqrt(99, nearest), 10); // 9.950 → 10
+    assert_eq!(u128::sqrt(1002000, nearest), 1001);
+    assert_eq!(u128::sqrt(std::u128::max_value!(), nearest), (std::u64::max_value!() as u128) + 1);
+}
+
+#[test]
+fun sqrt_handles_powers_of_four() {
+    // Powers of 4 (perfect squares of powers of 2)
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u128::sqrt(1, rounding), 1);
+        assert_eq!(u128::sqrt(4, rounding), 2);
+        assert_eq!(u128::sqrt(16, rounding), 4);
+        assert_eq!(u128::sqrt(64, rounding), 8);
+        assert_eq!(u128::sqrt(256, rounding), 16);
+        assert_eq!(u128::sqrt(1 << 20, rounding), 1024);
+        assert_eq!(u128::sqrt(1 << 40, rounding), 1 << 20);
+        assert_eq!(u128::sqrt(1 << 64, rounding), 1 << 32);
+        assert_eq!(u128::sqrt(1 << 100, rounding), 1 << 50);
+        assert_eq!(u128::sqrt(1 << 126, rounding), 1 << 63);
+    });
+}
+
+#[test]
+fun sqrt_midpoint_behavior() {
+    // Test values exactly between two perfect squares
+    let nearest = rounding::nearest();
+    assert_eq!(u128::sqrt(5, nearest), 2); // 2.236, closer to 2
+    assert_eq!(u128::sqrt(6, nearest), 2); // 2.449, closer to 2
+    assert_eq!(u128::sqrt(7, nearest), 3); // 2.646, closer to 3
+    assert_eq!(u128::sqrt(8, nearest), 3); // 2.828, closer to 3
+
+    // Between 9 (3^2) and 16 (4^2): midpoint at 12.5
+    assert_eq!(u128::sqrt(12, nearest), 3); // 3.464, closer to 3
+    assert_eq!(u128::sqrt(13, nearest), 4); // 3.606, closer to 4
+}
+
+#[test]
+fun sqrt_handles_max_value() {
+    let max = std::u128::max_value!();
+    let max_u64 = std::u64::max_value!() as u128;
+    assert_eq!(u128::sqrt(max, rounding::down()), max_u64);
+    assert_eq!(u128::sqrt(max, rounding::up()), max_u64 + 1);
+    assert_eq!(u128::sqrt(max, rounding::nearest()), max_u64 + 1);
+}
+
 // === inv_mod ===
 
 #[test]
