@@ -474,7 +474,7 @@ public(package) fun mul_shr_u256_fast(
     };
 
     let mut result = numerator >> shift;
-    let denominator = (1 as u256) << shift;
+    let denominator = 1u256 << shift;
     let mask = denominator - 1;
     let remainder = numerator & mask;
 
@@ -529,7 +529,7 @@ public(package) fun mul_shr_u256_wide(
     let mask = (1 << shift) - 1;
     let remainder = lo & mask;
     if (remainder != 0) {
-        let denominator = (1 as u256) << shift;
+        let denominator = 1u256 << shift;
         let (overflow, rounded) = round_division_result(
             result,
             denominator,

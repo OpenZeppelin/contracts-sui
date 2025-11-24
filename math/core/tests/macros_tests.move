@@ -258,9 +258,9 @@ fun mul_mod_impl_returns_zero_when_operand_zero() {
 #[test]
 fun mul_mod_impl_handles_wide_operands() {
     // Pick operands whose product overflows 256 bits to force the wide path.
-    let a = (1 as u256) << 200;
-    let b = ((1 as u256) << 150) + 1234;
-    let modulus = ((1 as u256) << 201) - 109;
+    let a = 1u256 << 200;
+    let b = (1u256 << 150) + 1234;
+    let modulus = (1u256 << 201) - 109;
 
     // Baseline: compute (a * b) % modulus manually using u512 helpers.
     let wide_product = u512::mul_u256(a, b);

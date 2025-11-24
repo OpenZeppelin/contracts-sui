@@ -34,7 +34,7 @@ fun checked_shl_returns_some() {
     // Shift to the top bit while staying within range.
     let value: u256 = 1;
     let result = u256::checked_shl(value, 255);
-    assert_eq!(result, option::some((1 as u256) << 255));
+    assert_eq!(result, option::some(1u256 << 255));
 }
 
 #[test]
@@ -45,7 +45,7 @@ fun checked_shl_zero_input_returns_zero() {
 #[test]
 fun checked_shl_returns_same_for_zero_shift() {
     // Shifting by zero should return the same value.
-    let value = (1 as u256) << 255;
+    let value = 1u256 << 255;
     let result = u256::checked_shl(value, 0);
     assert_eq!(result, option::some(value));
 }
@@ -53,7 +53,7 @@ fun checked_shl_returns_same_for_zero_shift() {
 #[test]
 fun checked_shl_detects_high_bits() {
     // Highest bit already set — shifting again should fail.
-    let result = u256::checked_shl((1 as u256) << 255, 1);
+    let result = u256::checked_shl(1u256 << 255, 1);
     assert_eq!(result, option::none());
 }
 
@@ -69,7 +69,7 @@ fun checked_shl_rejects_large_shift() {
 #[test]
 fun checked_shr_returns_some() {
     // Shift a high limb filled with zeros: 1 << 200 >> 200 == 1.
-    let value = (1 as u256) << 200;
+    let value = 1u256 << 200;
     let result = u256::checked_shr(value, 200);
     assert_eq!(result, option::some(1));
 }
@@ -82,7 +82,7 @@ fun checked_shr_zero_input_returns_zero() {
 #[test]
 fun checked_shr_handles_top_bit() {
     // The very top bit (1 << 255) can move to the least-significant position.
-    let value = (1 as u256) << 255;
+    let value = 1u256 << 255;
     let result = u256::checked_shr(value, 255);
     assert_eq!(result, option::some(1));
 }
@@ -97,7 +97,7 @@ fun checked_shr_detects_set_bits() {
 #[test]
 fun checked_shr_detects_large_shift_loss() {
     // Reject when shifting by 255 would drop non-zero bits.
-    let value = (3 as u256) << 254;
+    let value = 3u256 << 254;
     let result = u256::checked_shr(value, 255);
     assert_eq!(result, option::none());
 }
@@ -241,7 +241,7 @@ fun clz_returns_bit_width_for_zero() {
 #[test]
 fun clz_returns_zero_for_top_bit_set() {
     // when the most significant bit is set, there are no leading zeros.
-    let value = (1 as u256) << 255;
+    let value = 1u256 << 255;
     let result = u256::clz(value);
     assert_eq!(result, 0);
 }
@@ -258,7 +258,7 @@ fun clz_returns_zero_for_max_value() {
 #[test]
 fun clz_handles_all_bit_positions() {
     256u16.do!(|bit_pos| {
-        let value = (1 as u256) << (bit_pos as u8);
+        let value = 1u256 << (bit_pos as u8);
         let expected_clz = 255 - (bit_pos as u8);
         assert_eq!(u256::clz(value), expected_clz as u16);
     });
@@ -268,7 +268,7 @@ fun clz_handles_all_bit_positions() {
 #[test]
 fun clz_lower_bits_have_no_effect() {
     256u16.do!(|bit_pos| {
-        let mut value = (1 as u256) << (bit_pos as u8);
+        let mut value = 1u256 << (bit_pos as u8);
         // set all bits below bit_pos to 1
         value = value | (value - 1);
         let expected_clz = 255 - (bit_pos as u8);
@@ -616,9 +616,9 @@ fun inv_mod_rejects_zero_modulus() {
 
 #[test]
 fun mul_mod_handles_wide_operands() {
-    let a = (1 as u256) << 200;
-    let b = ((1 as u256) << 180) + 12345;
-    let modulus = ((1 as u256) << 201) - 109;
+    let a = 1u256 << 200;
+    let b = (1u256 << 180) + 12345;
+    let modulus = (1u256 << 201) - 109;
     let wide_product = u512::mul_u256(a, b);
     let (_, _, expected) = u512::div_rem_u256(wide_product, modulus);
     let result = u256::mul_mod(a, b, modulus);
