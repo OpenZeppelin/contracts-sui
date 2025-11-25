@@ -85,7 +85,7 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
     // Verify it fits in `u64`.
     assert!(scaled_amount <= (std::u64::max_value!() as u256), ESafeDowncastOverflowedInt);
 
-    (scaled_amount as u64)
+    scaled_amount as u64
 }
 
 /// Upcast a `u64` balance to `u256`, handling decimal scaling.
