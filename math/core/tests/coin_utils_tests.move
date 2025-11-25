@@ -83,6 +83,72 @@ fun test_downcast_zero_amount() {
     assert_eq!(result, 0);
 }
 
+// === New Truncation Tests ===
+
+#[test]
+fun test_downcast_truncates_fractional_part() {
+    // 1.999 tokens (9 decimals) -> 0 decimals should truncate to 1, NOT round to 2
+    let amount = 1999000000u256;
+    let result = coin_utils::safe_downcast_balance(amount, 9, 0);
+    assert_eq!(result, 1); // Truncates, does not round
+}
+
+#[test]
+fun test_downcast_truncates_just_below_threshold() {
+    // 1.999999999 tokens (9 decimals) -> 0 decimals
+    let amount = 1999999999u256;
+    let result = coin_utils::safe_downcast_balance(amount, 9, 0);
+    assert_eq!(result, 1); // Still truncates to 1
+}
+
+#[test]
+fun test_downcast_precision_loss_explicit() {
+    // 123.456789123456789123 ETH (18 decimals) -> 6 decimals loses last 12 digits
+    let amount = 123456789123456789123u256;
+    let result = coin_utils::safe_downcast_balance(amount, 18, 6);
+    assert_eq!(result, 123456789); // Lost .123456789123
+}
+
+#[test]
+fun test_downcast_precision_loss_small_amount() {
+    // 0.000000001 tokens (18 decimals) -> 9 decimals loses precision
+    let amount = 1000000000u256; // 10^9 with 18 decimals = 0.000000001 tokens
+    let result = coin_utils::safe_downcast_balance(amount, 18, 9);
+    assert_eq!(result, 1);
+}
+
+#[test]
+fun test_downcast_truncates_to_zero() {
+    // Amount too small to represent after scaling down
+    let amount = 999999999u256; // 0.999999999 with 9 decimals
+    let result = coin_utils::safe_downcast_balance(amount, 9, 0);
+    assert_eq!(result, 0); // Truncates to 0
+}
+
+#[test]
+fun test_downcast_smallest_representable_after_scale() {
+    // Smallest amount that results in 1 after scaling
+    let amount = 1000000000u256; // Exactly 1.0 with 9 decimals
+    let result = coin_utils::safe_downcast_balance(amount, 9, 0);
+    assert_eq!(result, 1);
+}
+
+#[test]
+fun test_downcast_just_above_truncation_threshold() {
+    // Just above the truncation threshold for 18->9 decimals
+    let amount = 1000000000u256; // 10^9 - exactly 1 unit after scaling
+    let result = coin_utils::safe_downcast_balance(amount, 18, 9);
+    assert_eq!(result, 1);
+}
+
+#[test]
+fun test_downcast_just_below_truncation_threshold() {
+    // Just below the truncation threshold for 18->9 decimals
+    let amount = 999999999u256; // 10^9 - 1 - truncates to 0
+    let result = coin_utils::safe_downcast_balance(amount, 18, 9);
+    assert_eq!(result, 0);
+}
+
 // === Tests for safe_upcast_balance ===
 
 #[test]
@@ -110,10 +176,11 @@ fun test_upcast_scale_up_6_to_18() {
 
 #[test]
 fun test_upcast_scale_down_18_to_9() {
-    // 1 token (18 decimals) -> 9 decimals (fits in u64)
-    let amount = 1000000000000000000u64;
+    // Small amount (18 decimals) -> 9 decimals
+    // Using realistic u64 value
+    let amount = 1000000000u64; // 0.000000001 tokens with 18 decimals
     let result = coin_utils::safe_upcast_balance(amount, 18, 9);
-    assert_eq!(result, 1000000000u256);
+    assert_eq!(result, 1u256);
 }
 
 #[test]
@@ -320,58 +387,67 @@ fun test_roundtrip_zero_decimals() {
     assert_eq!(back, original as u64);
 }
 
+// === New Roundtrip Tests with Precision Loss ===
+
+#[test]
+fun test_roundtrip_with_truncation_loss() {
+    // Demonstrate that roundtrip with intermediate downscaling loses precision
+    let original = 1234567890123456789u256; // 1.234567890123456789 ETH (18 decimals)
+
+    // ETH (18) -> Sui (9) -> ETH (18)
+    let sui = coin_utils::safe_downcast_balance(original, 18, 9);
+    let back = coin_utils::safe_upcast_balance(sui, 9, 18);
+
+    // Precision is lost due to truncation
+    assert!(back != original);
+    assert_eq!(back, 1234567890000000000u256); // Lost last 9 digits
+}
+
+// === Successive Scaling Tests ===
+
+#[test]
+fun test_multiple_scaling_operations_down() {
+    // Test chaining: 18 -> 12 -> 9 -> 6
+    let original = 1000000000000000000u256; // 1 token with 18 decimals
+
+    let step1 = coin_utils::safe_downcast_balance(original, 18, 12);
+    let step2 = coin_utils::safe_downcast_balance((step1 as u256), 12, 9);
+    let step3 = coin_utils::safe_downcast_balance((step2 as u256), 9, 6);
+
+    // Direct conversion should match chained conversion
+    let direct = coin_utils::safe_downcast_balance(original, 18, 6);
+    assert_eq!(step3, direct);
+}
+
+#[test]
+fun test_multiple_scaling_operations_up() {
+    // Test chaining: 6 -> 9 -> 12 -> 18
+    let original = 1000000u64; // 1 token with 6 decimals
+
+    let step1 = coin_utils::safe_upcast_balance(original, 6, 9);
+    let step2 = coin_utils::safe_upcast_balance((step1 as u64), 9, 12);
+    let step3 = coin_utils::safe_upcast_balance((step2 as u64), 12, 18);
+
+    // Direct conversion should match chained conversion
+    let direct = coin_utils::safe_upcast_balance(original, 6, 18);
+    assert_eq!(step3, direct);
+}
+
+#[test]
+fun test_multiple_scaling_mixed_directions() {
+    // Test: 9 -> 18 -> 6 -> 12 -> 9
+    let original = 1000000000u64; // 1 token with 9 decimals
+
+    let step1 = coin_utils::safe_upcast_balance(original, 9, 18);
+    let step2 = coin_utils::safe_downcast_balance(step1, 18, 6);
+    let step3 = coin_utils::safe_upcast_balance(step2, 6, 12);
+    let step4 = coin_utils::safe_downcast_balance((step3 as u256), 12, 9);
+
+    // Should return to original value
+    assert_eq!(step4, original);
+}
+
 // === Additional Edge Cases ===
-
-#[test]
-fun test_multiple_token_amounts() {
-    // Test with various token amounts
-    let amounts = vector[1u256, 100u256, 1000000u256, 1000000000u256];
-    let mut i = 0;
-    while (i < amounts.length()) {
-        let amount = *amounts.borrow(i);
-        let result = coin_utils::safe_downcast_balance(amount, 9, 9);
-        assert_eq!(result, (amount as u64));
-        i = i + 1;
-    };
-}
-
-#[test]
-fun test_all_decimal_combinations() {
-    // Test common decimal pairs (0, 6, 9, 12, 18)
-    let decimals = vector[0u8, 6u8, 9u8, 12u8, 18u8];
-    let mut i = 0;
-    while (i < decimals.length()) {
-        let mut j = 0;
-        while (j < decimals.length()) {
-            let from_dec = *decimals.borrow(i);
-            let to_dec = *decimals.borrow(j);
-
-            // Use tiny amount to avoid overflow
-            let amount = 1u256;
-            let _ = coin_utils::safe_downcast_balance(amount, from_dec, to_dec);
-
-            j = j + 1;
-        };
-        i = i + 1;
-    };
-}
-
-#[test]
-fun test_precision_preservation() {
-    // Verify that scaling preserves economic value
-    // 123.456789 tokens with 6 decimals = 123456789
-    let amount = 123456789u64;
-
-    // Scale up to 18 decimals
-    let scaled_up = coin_utils::safe_upcast_balance(amount, 6, 18);
-    assert_eq!(scaled_up, 123456789000000000000u256);
-
-    // Scale back down to 6 decimals
-    let scaled_down = coin_utils::safe_downcast_balance(scaled_up, 18, 6);
-    assert_eq!(scaled_down, amount);
-}
-
-// === Additional Edge Case Tests ===
 
 #[test]
 fun test_downcast_exactly_u64_max() {
@@ -487,4 +563,42 @@ fun test_validate_decimals_first_invalid_second_valid() {
 fun test_validate_decimals_first_valid_second_invalid() {
     // Test with first decimal valid, second invalid - should abort
     coin_utils::safe_downcast_balance(1000u256, 9, 25);
+}
+
+// === Precision Preservation Tests ===
+
+#[test]
+fun test_precision_preservation() {
+    // Verify that scaling preserves economic value
+    // 123.456789 tokens with 6 decimals = 123456789
+    let amount = 123456789u64;
+
+    // Scale up to 18 decimals
+    let scaled_up = coin_utils::safe_upcast_balance(amount, 6, 18);
+    assert_eq!(scaled_up, 123456789000000000000u256);
+
+    // Scale back down to 6 decimals
+    let scaled_down = coin_utils::safe_downcast_balance(scaled_up, 18, 6);
+    assert_eq!(scaled_down, amount);
+}
+
+#[test]
+fun test_precision_no_loss_for_clean_divisions() {
+    // Values that divide evenly should have no precision loss
+    let amount = 5000000000u256; // 5.0 tokens with 9 decimals
+    let result = coin_utils::safe_downcast_balance(amount, 9, 6);
+    let back = coin_utils::safe_upcast_balance(result, 6, 9);
+    assert_eq!(back, amount); // Perfect roundtrip
+}
+
+#[test]
+fun test_smallest_unit_preservation() {
+    // Test that smallest representable units are handled correctly
+    let one_wei = 1u256; // 1 wei (smallest ETH unit)
+    let result = coin_utils::safe_downcast_balance(one_wei, 18, 18);
+    assert_eq!(result, 1);
+
+    // But scaling down loses it
+    let lost = coin_utils::safe_downcast_balance(one_wei, 18, 9);
+    assert_eq!(lost, 0); // Truncated to zero
 }

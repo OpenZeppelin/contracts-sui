@@ -13,7 +13,16 @@ const EInvalidDecimals: vector<u8> = b"Decimals value is invalid (must be <= 24)
 // === Constants ===
 
 /// Maximum decimals supported for cross-chain transfers.
-/// Covers all known real-world tokens with a safety margin.
+///
+/// Set to 24 to cover all known blockchain token standards with safety margin:
+/// - Ethereum/EVM chains: typically 18 decimals (ETH, most ERC-20 tokens)
+/// - Sui/Move chains: typically 6-9 decimals
+/// - Stablecoins: typically 6 decimals (USDC, USDT)
+/// - Bitcoin: effectively 8 decimals (satoshi)
+/// - Solana: typically 9 decimals
+///
+/// The value 24 provides significant headroom beyond the practical maximum
+/// of 18-19 decimals used in production systems.
 const MAX_DECIMALS: u8 = 24;
 
 // === Public Functions ===
@@ -22,6 +31,14 @@ const MAX_DECIMALS: u8 = 24;
 ///
 /// This function converts token amounts between different decimal precisions,
 /// preserving economic value while fitting within `u64` constraints.
+///
+/// **IMPORTANT: When scaling down (`source_decimals` > `target_decimals`), this
+/// function TRUNCATES fractional parts rather than rounding.** For example:
+/// - 1.999 tokens → 1 token (NOT 2)
+/// - 0.999 tokens → 0 tokens (NOT 1)
+///
+/// This behavior is standard in blockchain systems to prevent inflation but
+/// means precision is permanently lost when scaling to lower decimal places.
 ///
 /// # Arguments
 ///
@@ -35,16 +52,29 @@ const MAX_DECIMALS: u8 = 24;
 ///
 /// # Aborts
 ///
-/// * `EInvalidDecimals` - If decimals are greater than `MAX_DECIMALS`.
+/// * `EInvalidDecimals` - If either decimal value exceeds `MAX_DECIMALS` (24).
 /// * `ESafeDowncastOverflowedInt` - If scaled amount exceeds `std::u64::max_value!()`.
 ///
 /// # Examples
 ///
 /// ```
-/// // Ethereum: 1 token with 18 decimals = 1000000000000000000
-/// // Sui: 1 token with 9 decimals = 1000000000
+/// // Scaling down: Ethereum to Sui (precision preserved for clean values)
+/// // 1.0 token with 18 decimals = 1000000000000000000
+/// // 1.0 token with 9 decimals = 1000000000
 /// let sui_amount = safe_downcast_balance(1000000000000000000, 18, 9);
 /// assert!(sui_amount == 1000000000, 0);
+///
+/// // Scaling down with truncation (fractional part lost)
+/// // 1.999999999 tokens with 9 decimals = 1999999999
+/// // Scaled to 0 decimals = 1 (NOT 2 - truncates, does not round)
+/// let truncated = safe_downcast_balance(1999999999, 9, 0);
+/// assert!(truncated == 1, 0);
+///
+/// // Scaling up: Sui to Ethereum (no precision loss)
+/// // 1.0 token with 9 decimals = 1000000000
+/// // 1.0 token with 18 decimals = 1000000000000000000
+/// let eth_amount = safe_downcast_balance(1000000000, 9, 18);
+/// assert!(eth_amount == 1000000000000000000, 0);
 /// ```
 public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_decimals: u8): u64 {
     // Validate decimal ranges.
@@ -60,7 +90,15 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
 
 /// Upcast a `u64` balance to `u256`, handling decimal scaling.
 ///
-/// This function converts token amounts from different decimal precisions, preserving economic value.
+/// This function converts token amounts from different decimal precisions,
+/// preserving economic value.
+///
+/// **IMPORTANT: When scaling down (source_decimals > target_decimals), this
+/// function TRUNCATES fractional parts.** See `safe_downcast_balance` for details
+/// on truncation behavior.
+///
+/// When scaling up, precision is preserved perfectly. When scaling down,
+/// the fractional part is permanently lost (truncated, not rounded).
 ///
 /// # Arguments
 ///
@@ -74,15 +112,22 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
 ///
 /// # Aborts
 ///
-/// * `EInvalidDecimals` - If decimals are greater than `MAX_DECIMALS`.
+/// * `EInvalidDecimals` - If either decimal value exceeds `MAX_DECIMALS` (24).
 ///
 /// # Examples
 ///
 /// ```
-/// // Sui: 1 token with 9 decimals = 1000000000
-/// // Ethereum: 1 token with 18 decimals = 1000000000000000000
+/// // Scaling up: Sui to Ethereum (no precision loss)
+/// // 1.0 token with 9 decimals = 1000000000
+/// // 1.0 token with 18 decimals = 1000000000000000000
 /// let eth_amount = safe_upcast_balance(1000000000, 9, 18);
 /// assert!(eth_amount == 1000000000000000000, 0);
+///
+/// // Scaling down with truncation (fractional part lost)
+/// // 1.999 tokens with 9 decimals = 1999000000
+/// // Scaled to 0 decimals = 1 (truncated)
+/// let truncated = safe_upcast_balance(1999000000, 9, 0);
+/// assert!(truncated == 1, 0);
 /// ```
 public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals: u8): u256 {
     // Validate decimal ranges.
@@ -92,6 +137,18 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 
 /// Internal helper to scale an amount between different decimal precisions.
 ///
+/// # Truncation Behavior
+///
+/// When scaling down (source_decimals > target_decimals), this function uses
+/// integer division which TRUNCATES the result. Fractional parts are discarded,
+/// not rounded:
+/// - 1999 / 1000 = 1 (not 2)
+/// - 999 / 1000 = 0 (not 1)
+///
+/// This is the standard behavior in blockchain systems to prevent inflation
+/// through rounding errors, but users must be aware that precision is permanently
+/// lost when converting to lower decimal places.
+///
 /// # Arguments
 ///
 /// * `amount` - The amount to scale (as `u256`).
@@ -100,13 +157,14 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 ///
 /// # Returns
 ///
-/// The scaled amount preserving economic value.
+/// The scaled amount preserving economic value (subject to truncation when scaling down).
 ///
 /// # Examples
 ///
-/// * Scaling up: amount=1000000, source=6, target=9 → 1000000000.
-/// * Scaling down: amount=1000000000, source=9, target=6 → 1000000.
-/// * Same: amount=1000000000, source=9, target=9 → 1000000000.
+/// * Scaling up: amount=1000000, source=6, target=9 → 1000000000 (no precision loss).
+/// * Scaling down: amount=1000000000, source=9, target=6 → 1000000 (fractional part lost).
+/// * Same decimals: amount=1000000000, source=9, target=9 → 1000000000 (no conversion).
+/// * Truncation example: amount=1999000000, source=9, target=0 → 1 (not 2).
 fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
     // Fast path: same decimals, no scaling needed.
     if (source_decimals == target_decimals) {
@@ -115,10 +173,13 @@ fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
 
     if (target_decimals > source_decimals) {
         // Scale up: multiply by 10^(decimal_diff) to increase precision.
+        // No precision loss when scaling up.
         let decimal_diff = target_decimals - source_decimals;
         amount * std::u256::pow(10, decimal_diff)
     } else {
         // Scale down: divide by 10^(decimal_diff) to reduce precision.
+        // IMPORTANT: Integer division truncates fractional parts.
+        // Example: 1999 / 1000 = 1 (truncated, not rounded to 2)
         let decimal_diff = source_decimals - target_decimals;
         amount / std::u256::pow(10, decimal_diff)
     }
@@ -127,7 +188,13 @@ fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
 /// Validate that both decimal values are within acceptable range.
 ///
 /// This function validates both decimal values in a single call for efficiency.
-/// If either value exceeds `MAX_DECIMALS`, the function aborts with `EInvalidDecimals`.
+/// Both values must be <= `MAX_DECIMALS` (24). If either value exceeds this limit,
+/// the function aborts with `EInvalidDecimals`.
+///
+/// # Arguments
+///
+/// * `decimal_a` - First decimal value to validate.
+/// * `decimal_b` - Second decimal value to validate.
 ///
 /// # Aborts
 ///
