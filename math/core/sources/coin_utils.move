@@ -168,10 +168,8 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
     // Fast path: same decimals, no scaling needed.
     if (source_decimals == target_decimals) {
-        return amount
-    };
-
-    if (target_decimals > source_decimals) {
+        amount
+    } else if (target_decimals > source_decimals) {
         // Scale up: multiply by 10^(decimal_diff) to increase precision.
         // No precision loss when scaling up.
         let decimal_diff = target_decimals - source_decimals;
