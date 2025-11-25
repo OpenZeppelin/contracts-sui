@@ -789,10 +789,13 @@ public(package) fun mul_mod_impl(a: u256, b: u256, modulus: u256): u256 {
     if (a == 0 || b == 0) {
         return 0
     };
-    if ((a >> 128) == 0 && (b >> 128) == 0) {
-        return ((a * b) % modulus)
-    };
-    let product = u512::mul_u256(a, b);
-    let (_, _, remainder) = u512::div_rem_u256(product, modulus);
-    remainder
+
+    let max_small = std::u128::max_value!() as u256;
+    if (a > max_small || b > max_small) {
+        let product = u512::mul_u256(a, b);
+        let (_, _, remainder) = u512::div_rem_u256(product, modulus);
+        remainder
+    } else {
+        ((a * b) % modulus)
+    }
 }
