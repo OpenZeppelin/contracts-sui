@@ -6,7 +6,7 @@ use std::unit_test::assert_eq;
 // === Test Helpers ===
 
 /// Build a test value with specified base and decimal places.
-/// 
+///
 /// # Examples
 /// - `value(1, 18)` = 1 token with 18 decimals = 1000000000000000000
 /// - `value(5, 9)` = 5 tokens with 9 decimals = 5000000000
@@ -14,7 +14,6 @@ use std::unit_test::assert_eq;
 fun value(base: u64, decimals: u8): u256 {
     (base as u256) * std::u256::pow(10, decimals)
 }
-
 
 // === Tests for safe_downcast_balance ===
 
@@ -406,11 +405,11 @@ fun test_roundtrip_zero_decimals() {
 fun test_roundtrip_with_truncation_loss() {
     // Demonstrate that roundtrip with intermediate downscaling loses precision
     let original = 1234567890123456789u256; // 1.234567890123456789 ETH (18 decimals)
-    
+
     // ETH (18) -> Sui (9) -> ETH (18)
     let sui = coin_utils::safe_downcast_balance(original, 18, 9);
     let back = coin_utils::safe_upcast_balance(sui, 9, 18);
-    
+
     // Precision is lost due to truncation
     assert!(back != original);
     assert_eq!(back, value(123456789, 10)); // Lost last 9 digits
@@ -422,11 +421,11 @@ fun test_roundtrip_with_truncation_loss() {
 fun test_multiple_scaling_operations_down() {
     // Test chaining: 18 -> 12 -> 9 -> 6
     let original = value(1, 18); // 1 token with 18 decimals
-    
+
     let step1 = coin_utils::safe_downcast_balance(original, 18, 12);
     let step2 = coin_utils::safe_downcast_balance((step1 as u256), 12, 9);
     let step3 = coin_utils::safe_downcast_balance((step2 as u256), 9, 6);
-    
+
     // Direct conversion should match chained conversion
     let direct = coin_utils::safe_downcast_balance(original, 18, 6);
     assert_eq!(step3, direct);
@@ -436,11 +435,11 @@ fun test_multiple_scaling_operations_down() {
 fun test_multiple_scaling_operations_up() {
     // Test chaining: 6 -> 9 -> 12 -> 18
     let original = value(1, 6) as u64; // 1 token with 6 decimals
-    
+
     let step1 = coin_utils::safe_upcast_balance(original, 6, 9);
     let step2 = coin_utils::safe_upcast_balance((step1 as u64), 9, 12);
     let step3 = coin_utils::safe_upcast_balance((step2 as u64), 12, 18);
-    
+
     // Direct conversion should match chained conversion
     let direct = coin_utils::safe_upcast_balance(original, 6, 18);
     assert_eq!(step3, direct);
@@ -450,12 +449,12 @@ fun test_multiple_scaling_operations_up() {
 fun test_multiple_scaling_mixed_directions() {
     // Test: 9 -> 18 -> 6 -> 12 -> 9
     let original = value(1, 9) as u64; // 1 token with 9 decimals
-    
+
     let step1 = coin_utils::safe_upcast_balance(original, 9, 18);
     let step2 = coin_utils::safe_downcast_balance(step1, 18, 6);
     let step3 = coin_utils::safe_upcast_balance(step2, 6, 12);
     let step4 = coin_utils::safe_downcast_balance((step3 as u256), 12, 9);
-    
+
     // Should return to original value
     assert_eq!(step4, original);
 }
@@ -610,7 +609,7 @@ fun test_smallest_unit_preservation() {
     let one_wei = 1u256; // 1 wei (smallest ETH unit)
     let result = coin_utils::safe_downcast_balance(one_wei, 18, 18);
     assert_eq!(result, 1);
-    
+
     // But scaling down loses it
     let lost = coin_utils::safe_downcast_balance(one_wei, 18, 9);
     assert_eq!(lost, 0); // Truncated to zero
@@ -620,11 +619,11 @@ fun test_smallest_unit_preservation() {
 fun test_pow_10_zero_edge_case() {
     // Verify that 10^0 = 1 is handled correctly
     let amount = 123456789u256;
-    
+
     // 0 -> 0 should be identity operation
     let result1 = coin_utils::safe_downcast_balance(amount, 0, 0);
     assert_eq!(result1, (amount as u64));
-    
+
     // Multiplying/dividing by 10^0 = 1 should preserve value
     let result2 = coin_utils::safe_upcast_balance((amount as u64), 0, 0);
     assert_eq!(result2, amount);
