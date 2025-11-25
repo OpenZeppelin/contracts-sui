@@ -170,16 +170,16 @@ fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
     if (source_decimals == target_decimals) {
         amount
     } else if (target_decimals > source_decimals) {
-        // Scale up: multiply by 10^(decimal_diff) to increase precision.
+        // Scale up: multiply by 10^(decimals_diff) to increase precision.
         // No precision loss when scaling up.
-        let decimal_diff = target_decimals - source_decimals;
-        amount * std::u256::pow(10, decimal_diff)
+        let decimals_diff = target_decimals - source_decimals;
+        amount * std::u256::pow(10, decimals_diff)
     } else {
-        // Scale down: divide by 10^(decimal_diff) to reduce precision.
+        // Scale down: divide by 10^(decimals_diff) to reduce precision.
         // IMPORTANT: Integer division truncates fractional parts.
         // Example: 1999 / 1000 = 1 (truncated, not rounded to 2)
-        let decimal_diff = source_decimals - target_decimals;
-        amount / std::u256::pow(10, decimal_diff)
+        let decimals_diff = source_decimals - target_decimals;
+        amount / std::u256::pow(10, decimals_diff)
     }
 }
 
@@ -191,13 +191,13 @@ fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
 ///
 /// # Arguments
 ///
-/// * `decimal_a` - First decimal value to validate.
-/// * `decimal_b` - Second decimal value to validate.
+/// * `decimals_a` - First decimal value to validate.
+/// * `decimals_b` - Second decimal value to validate.
 ///
 /// # Aborts
 ///
 /// Aborts with `EInvalidDecimals` if either decimal exceeds `MAX_DECIMALS`.
-fun validate_decimals(decimal_a: u8, decimal_b: u8) {
-    assert!(decimal_a <= MAX_DECIMALS, EInvalidDecimals);
-    assert!(decimal_b <= MAX_DECIMALS, EInvalidDecimals);
+fun validate_decimals(decimals_a: u8, decimals_b: u8) {
+    assert!(decimals_a <= MAX_DECIMALS, EInvalidDecimals);
+    assert!(decimals_b <= MAX_DECIMALS, EInvalidDecimals);
 }
