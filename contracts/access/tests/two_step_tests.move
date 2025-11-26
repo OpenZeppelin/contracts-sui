@@ -9,11 +9,13 @@ public struct DummyCap has key, store {
     id: sui::object::UID,
 }
 
-public fun new_ctx(sender: address): TxContext {
+#[test_only]
+public fun dummy_ctx_with_sender(sender: address): TxContext {
     let tx_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
     tx_context::new(sender, tx_hash, 0, 0, 0)
 }
 
+#[test_only]
 fun new_cap(ctx: &mut TxContext): DummyCap {
     DummyCap { id: sui::object::new(ctx) }
 }
@@ -21,7 +23,7 @@ fun new_cap(ctx: &mut TxContext): DummyCap {
 #[test]
 fun request_emits_event() {
     let owner = @0x1;
-    let mut ctx = new_ctx(owner);
+    let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     two_step_transfer::request<DummyCap>(sui::object::id(&wrapper), owner, &mut ctx);
@@ -36,7 +38,7 @@ fun request_emits_event() {
 #[test]
 fun unwrap_returns_inner_cap() {
     let owner = @0x2;
-    let mut ctx = new_ctx(owner);
+    let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     let cap = two_step_transfer::unwrap(wrapper);
@@ -48,7 +50,7 @@ fun unwrap_returns_inner_cap() {
 fun borrow_and_return_roundtrip() {
     // Owner wraps a cap, borrows it temporarily, and returns it before unwrapping again.
     let owner = @0xA;
-    let mut ctx = new_ctx(owner);
+    let mut ctx = dummy_ctx_with_sender(owner);
     let mut wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     let readonly = two_step_transfer::borrow(&wrapper);
@@ -68,7 +70,7 @@ fun borrow_and_return_roundtrip() {
 fun return_val_rejects_wrong_wrapper() {
     // Borrow from one wrapper but attempt to return into another—should abort.
     let owner = @0xB;
-    let mut ctx = new_ctx(owner);
+    let mut ctx = dummy_ctx_with_sender(owner);
     let first = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
     let second = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
@@ -79,7 +81,7 @@ fun return_val_rejects_wrong_wrapper() {
 fun return_val_rejects_wrong_capability() {
     // Returning a different capability than the one borrowed must fail.
     let owner = @0xC;
-    let mut ctx = new_ctx(owner);
+    let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     expect_capability_mismatch(wrapper, &mut ctx);
@@ -90,7 +92,7 @@ fun transfer_emits_event() {
     // Owner approves a valid transfer request and emits OwnershipTransferred.
     let owner = @0xD;
     let new_owner = @0xE;
-    let mut ctx = new_ctx(owner);
+    let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     let request = two_step_transfer::test_new_request<DummyCap>(
@@ -108,7 +110,7 @@ fun transfer_emits_event() {
 fun transfer_rejects_mismatched_request() {
     // Passing a request that references a different wrapper must abort.
     let owner = @0xF;
-    let mut ctx = new_ctx(owner);
+    let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
     let other_wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
@@ -119,7 +121,7 @@ fun transfer_rejects_mismatched_request() {
 fun reject_destroys_request() {
     // Owner can discard a pending request without emitting transfer events.
     let owner = @0x10;
-    let mut ctx = new_ctx(owner);
+    let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     let request = two_step_transfer::test_new_request<DummyCap>(
