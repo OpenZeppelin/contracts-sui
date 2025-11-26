@@ -3,6 +3,7 @@ module openzeppelin_math::u256_tests;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u256;
+use openzeppelin_math::u512;
 use std::unit_test::assert_eq;
 
 // === average ===
@@ -31,7 +32,7 @@ fun average_is_commutative() {
 #[test]
 fun checked_shl_returns_some() {
     // Shift to the top bit while staying within range.
-    let value = 1u256;
+    let value: u256 = 1;
     let result = u256::checked_shl(value, 255);
     assert_eq!(result, option::some(1u256 << 255));
 }
@@ -590,4 +591,148 @@ fun log256_handles_max_value() {
     assert_eq!(u256::log256(max, rounding::down()), 31);
     assert_eq!(u256::log256(max, rounding::up()), 32);
     assert_eq!(u256::log256(max, rounding::nearest()), 32);
+}
+
+// === sqrt ===
+
+#[test]
+fun sqrt_returns_zero_for_zero() {
+    // sqrt(0) = 0 by definition
+    assert_eq!(u256::sqrt(0, rounding::down()), 0);
+    assert_eq!(u256::sqrt(0, rounding::up()), 0);
+    assert_eq!(u256::sqrt(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun sqrt_handles_perfect_squares() {
+    // Perfect squares should return exact result regardless of rounding mode
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u256::sqrt(1, rounding), 1);
+        assert_eq!(u256::sqrt(4, rounding), 2);
+        assert_eq!(u256::sqrt(9, rounding), 3);
+        assert_eq!(u256::sqrt(16, rounding), 4);
+        assert_eq!(u256::sqrt(100, rounding), 10);
+        assert_eq!(u256::sqrt(65536, rounding), 256);
+        assert_eq!(u256::sqrt(1 << 64, rounding), 1 << 32);
+        assert_eq!(u256::sqrt(1 << 128, rounding), 1 << 64);
+        assert_eq!(u256::sqrt(1 << 254, rounding), 1 << 127); // (2^127)^2 = 2^254
+    });
+}
+
+#[test]
+fun sqrt_rounds_down() {
+    // sqrt with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(u256::sqrt(2, down), 1); // 1.414 → 1
+    assert_eq!(u256::sqrt(3, down), 1); // 1.732 → 1
+    assert_eq!(u256::sqrt(5, down), 2); // 2.236 → 2
+    assert_eq!(u256::sqrt(99, down), 9); // 9.950 → 9
+    assert_eq!(u256::sqrt(1000000, down), 1000);
+    assert_eq!(u256::sqrt(1 << 128, down), 1 << 64);
+    assert_eq!(u256::sqrt(std::u256::max_value!(), down), std::u128::max_value!() as u256);
+}
+
+#[test]
+fun sqrt_rounds_up() {
+    // sqrt with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(u256::sqrt(2, up), 2); // 1.414 → 2
+    assert_eq!(u256::sqrt(3, up), 2); // 1.732 → 2
+    assert_eq!(u256::sqrt(5, up), 3); // 2.236 → 3
+    assert_eq!(u256::sqrt(99, up), 10); // 9.950 → 10
+    assert_eq!(u256::sqrt(1000001, up), 1001);
+    assert_eq!(u256::sqrt((1 << 128) + 1, up), (1 << 64) + 1);
+    assert_eq!(u256::sqrt(std::u256::max_value!(), up), (std::u128::max_value!() as u256) + 1);
+}
+
+#[test]
+fun sqrt_rounds_to_nearest() {
+    // sqrt with Nearest mode rounds to closest integer
+    let nearest = rounding::nearest();
+    assert_eq!(u256::sqrt(2, nearest), 1); // 1.414 → 1
+    assert_eq!(u256::sqrt(3, nearest), 2); // 1.732 → 2
+    assert_eq!(u256::sqrt(5, nearest), 2); // 2.236 → 2
+    assert_eq!(u256::sqrt(7, nearest), 3); // 2.646 → 3
+    assert_eq!(u256::sqrt(99, nearest), 10); // 9.950 → 10
+    assert_eq!(u256::sqrt(1002000, nearest), 1001);
+    assert_eq!(u256::sqrt(std::u256::max_value!(), nearest), (std::u128::max_value!() as u256) + 1); // sqrt(u256::MAX) = 2^128
+}
+
+#[test]
+fun sqrt_handles_powers_of_four() {
+    // Powers of 4 (perfect squares of powers of 2)
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u256::sqrt(1, rounding), 1);
+        assert_eq!(u256::sqrt(4, rounding), 2);
+        assert_eq!(u256::sqrt(16, rounding), 4);
+        assert_eq!(u256::sqrt(64, rounding), 8);
+        assert_eq!(u256::sqrt(256, rounding), 16);
+        assert_eq!(u256::sqrt(1 << 20, rounding), 1024);
+        assert_eq!(u256::sqrt(1 << 64, rounding), 1 << 32);
+        assert_eq!(u256::sqrt(1 << 128, rounding), 1 << 64);
+        assert_eq!(u256::sqrt(1 << 200, rounding), 1 << 100);
+        assert_eq!(u256::sqrt(1 << 254, rounding), 1 << 127);
+    });
+}
+
+#[test]
+fun sqrt_midpoint_behavior() {
+    // Test values exactly between two perfect squares
+    let nearest = rounding::nearest();
+    assert_eq!(u256::sqrt(5, nearest), 2); // 2.236, closer to 2
+    assert_eq!(u256::sqrt(6, nearest), 2); // 2.449, closer to 2
+    assert_eq!(u256::sqrt(7, nearest), 3); // 2.646, closer to 3
+    assert_eq!(u256::sqrt(8, nearest), 3); // 2.828, closer to 3
+
+    // Between 9 (3^2) and 16 (4^2): midpoint at 12.5
+    assert_eq!(u256::sqrt(12, nearest), 3); // 3.464, closer to 3
+    assert_eq!(u256::sqrt(13, nearest), 4); // 3.606, closer to 4
+}
+
+#[test]
+fun sqrt_handles_max_value() {
+    let max = std::u256::max_value!();
+    let max_u128 = std::u128::max_value!() as u256;
+    assert_eq!(u256::sqrt(max, rounding::down()), max_u128);
+    assert_eq!(u256::sqrt(max, rounding::up()), max_u128 + 1);
+    assert_eq!(u256::sqrt(max, rounding::nearest()), max_u128 + 1);
+}
+
+// === inv_mod ===
+
+#[test]
+fun inv_mod_returns_some() {
+    let result = u256::inv_mod(19, 1_000_000_007);
+    assert_eq!(result, option::some(157_894_738));
+}
+
+#[test]
+fun inv_mod_returns_none_when_not_coprime() {
+    let result = u256::inv_mod(50, 100);
+    assert_eq!(result, option::none());
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun inv_mod_rejects_zero_modulus() {
+    u256::inv_mod(1, 0);
+}
+
+// === mul_mod ===
+
+#[test]
+fun mul_mod_handles_wide_operands() {
+    let a = 1u256 << 200;
+    let b = (1u256 << 180) + 12345;
+    let modulus = (1u256 << 201) - 109;
+    let wide_product = u512::mul_u256(a, b);
+    let (_, _, expected) = u512::div_rem_u256(wide_product, modulus);
+    let result = u256::mul_mod(a, b, modulus);
+    assert_eq!(result, expected);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_rejects_zero_modulus() {
+    u256::mul_mod(2, 3, 0);
 }

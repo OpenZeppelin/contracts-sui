@@ -80,3 +80,23 @@ public fun log2(value: u256, rounding_mode: RoundingMode): u16 {
 public fun log256(value: u256, rounding_mode: RoundingMode): u8 {
     macros::log256!(value, BIT_WIDTH, rounding_mode)
 }
+
+/// Compute the square root of a value with configurable rounding.
+///
+/// Returns 0 if given 0.
+public fun sqrt(value: u256, rounding_mode: RoundingMode): u256 {
+    macros::sqrt!(value, rounding_mode)
+}
+
+/// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
+///
+/// Returns the element `x` that satisfies `value * x ≡ 1 (mod modulus)` when it exists. Returns
+/// `None` if `value` and `modulus` are not co-prime and aborts when `modulus` is zero.
+public fun inv_mod(value: u256, modulus: u256): Option<u256> {
+    macros::inv_mod!(value, modulus)
+}
+
+/// Multiply `a` and `b` modulo `modulus`. Aborts if `modulus` is zero.
+public fun mul_mod(a: u256, b: u256, modulus: u256): u256 {
+    macros::mul_mod!(a, b, modulus)
+}

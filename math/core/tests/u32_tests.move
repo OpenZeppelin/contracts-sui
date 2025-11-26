@@ -523,3 +523,145 @@ fun log256_handles_max_value() {
     assert_eq!(u32::log256(max, rounding::up()), 4);
     assert_eq!(u32::log256(max, rounding::nearest()), 4);
 }
+
+// === sqrt ===
+
+#[test]
+fun sqrt_returns_zero_for_zero() {
+    // sqrt(0) = 0 by definition
+    assert_eq!(u32::sqrt(0, rounding::down()), 0);
+    assert_eq!(u32::sqrt(0, rounding::up()), 0);
+    assert_eq!(u32::sqrt(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun sqrt_handles_perfect_squares() {
+    // Perfect squares should return exact result regardless of rounding mode
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u32::sqrt(1, rounding), 1);
+        assert_eq!(u32::sqrt(4, rounding), 2);
+        assert_eq!(u32::sqrt(9, rounding), 3);
+        assert_eq!(u32::sqrt(16, rounding), 4);
+        assert_eq!(u32::sqrt(100, rounding), 10);
+        assert_eq!(u32::sqrt(256, rounding), 16);
+        assert_eq!(u32::sqrt(65536, rounding), 256);
+        assert_eq!(u32::sqrt(1000000, rounding), 1000);
+        assert_eq!(u32::sqrt(4194304, rounding), 2048); // 2048^2 = 4194304
+        assert_eq!(u32::sqrt(4294836225, rounding), 65535); // 65535^2 = 4294836225
+    });
+}
+
+#[test]
+fun sqrt_rounds_down() {
+    // sqrt with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(u32::sqrt(2, down), 1); // 1.414 → 1
+    assert_eq!(u32::sqrt(3, down), 1); // 1.732 → 1
+    assert_eq!(u32::sqrt(5, down), 2); // 2.236 → 2
+    assert_eq!(u32::sqrt(8, down), 2); // 2.828 → 2
+    assert_eq!(u32::sqrt(99, down), 9); // 9.950 → 9
+    assert_eq!(u32::sqrt(10000, down), 100); // 100.0 → 100
+    assert_eq!(u32::sqrt(1000000, down), 1000); // 1000.0 → 1000
+    assert_eq!(u32::sqrt(4294967295, down), 65535); // 65535.999999 → 65535
+}
+
+#[test]
+fun sqrt_rounds_up() {
+    // sqrt with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(u32::sqrt(2, up), 2); // 1.414 → 2
+    assert_eq!(u32::sqrt(3, up), 2); // 1.732 → 2
+    assert_eq!(u32::sqrt(5, up), 3); // 2.236 → 3
+    assert_eq!(u32::sqrt(8, up), 3); // 2.828 → 3
+    assert_eq!(u32::sqrt(99, up), 10); // 9.950 → 10
+    assert_eq!(u32::sqrt(10001, up), 101); // 100.005 → 101
+    assert_eq!(u32::sqrt(1000001, up), 1001); // 1000.0005 → 1001
+    assert_eq!(u32::sqrt(4294967295, up), 65536); // 65535.999999 → 65536
+}
+
+#[test]
+fun sqrt_rounds_to_nearest() {
+    // sqrt with Nearest mode rounds to closest integer
+    let nearest = rounding::nearest();
+    assert_eq!(u32::sqrt(2, nearest), 1); // 1.414 → 1
+    assert_eq!(u32::sqrt(3, nearest), 2); // 1.732 → 2
+    assert_eq!(u32::sqrt(5, nearest), 2); // 2.236 → 2
+    assert_eq!(u32::sqrt(7, nearest), 3); // 2.646 → 3
+    assert_eq!(u32::sqrt(99, nearest), 10); // 9.950 → 10
+    assert_eq!(u32::sqrt(10000, nearest), 100); // 100.0 → 100
+    assert_eq!(u32::sqrt(1002000, nearest), 1001); // 1000.999 → 1001
+    assert_eq!(u32::sqrt(4294967295, nearest), 65536); // 65535.999999 → 65536
+}
+
+#[test]
+fun sqrt_handles_powers_of_four() {
+    // Powers of 4 (perfect squares of powers of 2)
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u32::sqrt(1, rounding), 1);
+        assert_eq!(u32::sqrt(4, rounding), 2);
+        assert_eq!(u32::sqrt(16, rounding), 4);
+        assert_eq!(u32::sqrt(64, rounding), 8);
+        assert_eq!(u32::sqrt(256, rounding), 16);
+        assert_eq!(u32::sqrt(1024, rounding), 32);
+        assert_eq!(u32::sqrt(4096, rounding), 64);
+        assert_eq!(u32::sqrt(65536, rounding), 256);
+        assert_eq!(u32::sqrt(1 << 20, rounding), 1024);
+        assert_eq!(u32::sqrt(1 << 30, rounding), 1 << 15);
+    });
+}
+
+#[test]
+fun sqrt_midpoint_behavior() {
+    // Test values exactly between two perfect squares
+    let nearest = rounding::nearest();
+    assert_eq!(u32::sqrt(5, nearest), 2); // 2.236, closer to 2
+    assert_eq!(u32::sqrt(6, nearest), 2); // 2.449, closer to 2
+    assert_eq!(u32::sqrt(7, nearest), 3); // 2.646, closer to 3
+    assert_eq!(u32::sqrt(8, nearest), 3); // 2.828, closer to 3
+
+    // Between 9 (3^2) and 16 (4^2): midpoint at 12.5
+    assert_eq!(u32::sqrt(12, nearest), 3); // 3.464, closer to 3
+    assert_eq!(u32::sqrt(13, nearest), 4); // 3.606, closer to 4
+}
+
+#[test]
+fun sqrt_handles_max_value() {
+    let max = std::u32::max_value!();
+    assert_eq!(u32::sqrt(max, rounding::down()), 65535);
+    assert_eq!(u32::sqrt(max, rounding::up()), 65536);
+    assert_eq!(u32::sqrt(max, rounding::nearest()), 65536);
+}
+
+// === inv_mod ===
+
+#[test]
+fun inv_mod_returns_some() {
+    let result = u32::inv_mod(1_234_567, 1_000_003);
+    assert_eq!(result, option::some(678_286));
+}
+
+#[test]
+fun inv_mod_returns_none_when_not_coprime() {
+    let result = u32::inv_mod(100, 250);
+    assert_eq!(result, option::none());
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun inv_mod_rejects_zero_modulus() {
+    u32::inv_mod(1, 0);
+}
+
+// === mul_mod ===
+
+#[test]
+fun mul_mod_handles_large_values() {
+    let result = u32::mul_mod(123_456_789, 400_000_001, 1_000_000_007);
+    assert_eq!(result, 377_777_784);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_rejects_zero_modulus() {
+    u32::mul_mod(10, 10, 0);
+}

@@ -200,6 +200,88 @@ fun mul_div_wide_detects_overflowing_quotient() {
     assert_eq!(overflow, true);
 }
 
+// === inv_mod / mod_sub / mul_mod helpers ===
+
+#[test]
+fun inv_mod_extended_impl_returns_inverse() {
+    let result = macros::inv_mod_extended_impl(3, 11);
+    assert_eq!(result, option::some(4));
+}
+
+#[test]
+fun inv_mod_extended_impl_returns_none_when_not_coprime() {
+    let result = macros::inv_mod_extended_impl(8, 12);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun inv_mod_extended_impl_modulus_one_returns_none() {
+    let result = macros::inv_mod_extended_impl(5, 1);
+    assert_eq!(result, option::none());
+}
+
+#[test]
+fun inv_mod_extended_impl_reduced_zero_returns_none() {
+    let result = macros::inv_mod_extended_impl(12, 4);
+    assert_eq!(result, option::none());
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun inv_mod_extended_impl_rejects_zero_modulus() {
+    macros::inv_mod_extended_impl(1, 0);
+}
+
+#[test]
+fun inv_mod_macro_matches_impl() {
+    let macro_inverse = macros::inv_mod!(3, 11);
+    assert_eq!(macro_inverse, option::some(4));
+}
+
+#[test]
+fun mod_sub_impl_wraps_underflow() {
+    let result = macros::mod_sub_impl(3, 5, 11);
+    assert_eq!(result, 9);
+}
+
+#[test]
+fun mul_mod_impl_returns_zero_when_operand_zero() {
+    let result = macros::mul_mod_impl(0, 123, 11);
+    assert_eq!(result, 0);
+}
+
+#[test]
+fun mul_mod_impl_handles_wide_operands() {
+    // Pick operands whose product overflows 256 bits to force the wide path.
+    let a = 1u256 << 200;
+    let b = (1u256 << 150) + 1234;
+    let modulus = (1u256 << 201) - 109;
+
+    // Baseline: compute (a * b) % modulus manually using u512 helpers.
+    let wide_product = u512::mul_u256(a, b);
+    let (_, _, expected) = u512::div_rem_u256(wide_product, modulus);
+
+    // The helper should match the reference result for wide operands.
+    let result = macros::mul_mod_impl(a, b, modulus);
+    assert_eq!(result, expected);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_impl_rejects_zero_modulus() {
+    macros::mul_mod_impl(5, 7, 0);
+}
+
+#[test]
+fun mul_mod_macro_matches_helper() {
+    let direct = macros::mul_mod_impl(123, 456, 789);
+    let via_macro = macros::mul_mod!(123, 456, 789);
+    assert_eq!(via_macro, direct as u64);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_macro_rejects_zero_modulus() {
+    macros::mul_mod!(1, 2, 0);
+}
+
 #[test]
 fun mul_div_macro_uses_fast_path_for_small_inputs() {
     let (overflow, result) = macros::mul_div!(15u8, 3u8, 4u8, rounding::down());
@@ -747,4 +829,172 @@ fun log256_handles_max_values() {
     assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::down()), 31);
     assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::up()), 32);
     assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::nearest()), 32);
+}
+
+// === sqrt ===
+
+#[test]
+fun sqrt_returns_zero_for_zero() {
+    // sqrt(0) = 0 by definition
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(macros::sqrt!(0u8, rounding), 0);
+        assert_eq!(macros::sqrt!(0u16, rounding), 0);
+        assert_eq!(macros::sqrt!(0u32, rounding), 0);
+        assert_eq!(macros::sqrt!(0u64, rounding), 0);
+        assert_eq!(macros::sqrt!(0u128, rounding), 0);
+        assert_eq!(macros::sqrt!(0u256, rounding), 0);
+    });
+}
+
+#[test]
+fun sqrt_handles_perfect_squares() {
+    // Perfect squares should return exact result regardless of rounding mode
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(macros::sqrt!(1u32, rounding), 1);
+        assert_eq!(macros::sqrt!(4u32, rounding), 2);
+        assert_eq!(macros::sqrt!(9u32, rounding), 3);
+        assert_eq!(macros::sqrt!(16u32, rounding), 4);
+        assert_eq!(macros::sqrt!(25u32, rounding), 5);
+        assert_eq!(macros::sqrt!(64u32, rounding), 8);
+        assert_eq!(macros::sqrt!(100u32, rounding), 10);
+        assert_eq!(macros::sqrt!(144u32, rounding), 12);
+        assert_eq!(macros::sqrt!(256u32, rounding), 16);
+        assert_eq!(macros::sqrt!(65536u64, rounding), 256);
+        assert_eq!(macros::sqrt!(1u256 << 254, rounding), 1 << 127);
+    });
+}
+
+#[test]
+fun sqrt_rounds_down() {
+    // sqrt with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(macros::sqrt!(2u32, down), 1); // sqrt(2) ≈ 1.414 → 1
+    assert_eq!(macros::sqrt!(3u32, down), 1); // sqrt(3) ≈ 1.732 → 1
+    assert_eq!(macros::sqrt!(5u32, down), 2); // sqrt(5) ≈ 2.236 → 2
+    assert_eq!(macros::sqrt!(8u32, down), 2); // sqrt(8) ≈ 2.828 → 2
+    assert_eq!(macros::sqrt!(10u32, down), 3); // sqrt(10) ≈ 3.162 → 3
+    assert_eq!(macros::sqrt!(15u32, down), 3); // sqrt(15) ≈ 3.873 → 3
+    assert_eq!(macros::sqrt!(24u32, down), 4); // sqrt(24) ≈ 4.899 → 4
+    assert_eq!(macros::sqrt!(99u32, down), 9); // sqrt(99) ≈ 9.950 → 9
+    assert_eq!(macros::sqrt!(255u32, down), 15); // sqrt(255) ≈ 15.969 → 15
+}
+
+#[test]
+fun sqrt_rounds_up() {
+    // sqrt with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(macros::sqrt!(2u32, up), 2); // sqrt(2) ≈ 1.414 → 2
+    assert_eq!(macros::sqrt!(3u32, up), 2); // sqrt(3) ≈ 1.732 → 2
+    assert_eq!(macros::sqrt!(5u32, up), 3); // sqrt(5) ≈ 2.236 → 3
+    assert_eq!(macros::sqrt!(8u32, up), 3); // sqrt(8) ≈ 2.828 → 3
+    assert_eq!(macros::sqrt!(10u32, up), 4); // sqrt(10) ≈ 3.162 → 4
+    assert_eq!(macros::sqrt!(15u32, up), 4); // sqrt(15) ≈ 3.873 → 4
+    assert_eq!(macros::sqrt!(24u32, up), 5); // sqrt(24) ≈ 4.899 → 5
+    assert_eq!(macros::sqrt!(99u32, up), 10); // sqrt(99) ≈ 9.950 → 10
+    assert_eq!(macros::sqrt!(255u32, up), 16); // sqrt(255) ≈ 15.969 → 16
+}
+
+#[test]
+fun sqrt_rounds_to_nearest() {
+    // sqrt with Nearest mode rounds to closest integer
+    let nearest = rounding::nearest();
+    assert_eq!(macros::sqrt!(2u32, nearest), 1); // sqrt(2) ≈ 1.414 → 1
+    assert_eq!(macros::sqrt!(3u32, nearest), 2); // sqrt(3) ≈ 1.732 → 2
+    assert_eq!(macros::sqrt!(5u32, nearest), 2); // sqrt(5) ≈ 2.236 → 2
+    assert_eq!(macros::sqrt!(7u32, nearest), 3); // sqrt(7) ≈ 2.646 → 3
+    assert_eq!(macros::sqrt!(8u32, nearest), 3); // sqrt(8) ≈ 2.828 → 3
+    assert_eq!(macros::sqrt!(10u32, nearest), 3); // sqrt(10) ≈ 3.162 → 3
+    assert_eq!(macros::sqrt!(13u32, nearest), 4); // sqrt(13) ≈ 3.606 → 4
+    assert_eq!(macros::sqrt!(15u32, nearest), 4); // sqrt(15) ≈ 3.873 → 4
+    assert_eq!(macros::sqrt!(24u32, nearest), 5); // sqrt(24) ≈ 4.899 → 5
+    assert_eq!(macros::sqrt!(99u32, nearest), 10); // sqrt(99) ≈ 9.950 → 10
+    assert_eq!(macros::sqrt!(255u32, nearest), 16); // sqrt(255) ≈ 15.969 → 16
+}
+
+#[test]
+fun sqrt_handles_small_values() {
+    // Test edge cases for small values
+    assert_eq!(macros::sqrt!(1u8, rounding::down()), 1);
+    assert_eq!(macros::sqrt!(1u8, rounding::up()), 1);
+    assert_eq!(macros::sqrt!(1u8, rounding::nearest()), 1);
+
+    assert_eq!(macros::sqrt!(2u8, rounding::down()), 1);
+    assert_eq!(macros::sqrt!(2u8, rounding::up()), 2);
+    assert_eq!(macros::sqrt!(2u8, rounding::nearest()), 1);
+
+    assert_eq!(macros::sqrt!(3u8, rounding::down()), 1);
+    assert_eq!(macros::sqrt!(3u8, rounding::up()), 2);
+    assert_eq!(macros::sqrt!(3u8, rounding::nearest()), 2);
+}
+
+#[test]
+fun sqrt_handles_large_values() {
+    // Test with larger values across different types
+    let down = rounding::down();
+    let up = rounding::up();
+    let nearest = rounding::nearest();
+
+    // u64 tests
+    assert_eq!(macros::sqrt!(1000000u64, down), 1000);
+    assert_eq!(macros::sqrt!(1000001u64, down), 1000);
+    assert_eq!(macros::sqrt!(1000001u64, up), 1001);
+    assert_eq!(macros::sqrt!(1002000u64, nearest), 1001);
+
+    // u128 tests
+    assert_eq!(macros::sqrt!(1u128 << 64, down), 1 << 32); // 2^64
+    assert_eq!(macros::sqrt!(std::u128::max_value!(), down), std::u64::max_value!() as u128);
+
+    // u256 tests
+    let large = 1 << 128;
+    assert_eq!(macros::sqrt!(large, down), 1u256 << 64);
+    assert_eq!(macros::sqrt!(large, up), 1u256 << 64);
+    assert_eq!(macros::sqrt!(large, nearest), 1u256 << 64);
+}
+
+#[test]
+fun sqrt_handles_powers_of_two() {
+    // Powers of 4 (perfect squares of powers of 2)
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(macros::sqrt!(1u64 << 0, rounding), 1); // sqrt(1) = 1
+        assert_eq!(macros::sqrt!(1u64 << 2, rounding), 2); // sqrt(4) = 2
+        assert_eq!(macros::sqrt!(1u64 << 4, rounding), 4); // sqrt(16) = 4
+        assert_eq!(macros::sqrt!(1u64 << 6, rounding), 8); // sqrt(64) = 8
+        assert_eq!(macros::sqrt!(1u64 << 8, rounding), 16); // sqrt(256) = 16
+        assert_eq!(macros::sqrt!(1u64 << 10, rounding), 32); // sqrt(1024) = 32
+        assert_eq!(macros::sqrt!(1u64 << 20, rounding), 1024); // sqrt(2^20) = 1024
+    });
+}
+
+#[test]
+fun sqrt_midpoint_behavior() {
+    // Test values exactly between two perfect squares
+    // Between 4 (2^2) and 9 (3^2): midpoint is around 6.5 (since 2.5^2 = 6.25)
+    // sqrt(5) ≈ 2.236, closer to 2
+    assert_eq!(macros::sqrt!(5u32, rounding::nearest()), 2);
+    // sqrt(6) ≈ 2.449, closer to 2
+    assert_eq!(macros::sqrt!(6u32, rounding::nearest()), 2);
+    // sqrt(7) ≈ 2.646, closer to 3
+    assert_eq!(macros::sqrt!(7u32, rounding::nearest()), 3);
+    // sqrt(8) ≈ 2.828, closer to 3
+    assert_eq!(macros::sqrt!(8u32, rounding::nearest()), 3);
+
+    // Between 9 (3^2) and 16 (4^2): midpoint at 12.5
+    // sqrt(12) ≈ 3.464, closer to 3
+    assert_eq!(macros::sqrt!(12u32, rounding::nearest()), 3);
+    // sqrt(13) ≈ 3.606, closer to 4
+    assert_eq!(macros::sqrt!(13u32, rounding::nearest()), 4);
+}
+
+#[test]
+fun sqrt_works_with_different_widths() {
+    // Verify the macro works correctly across all unsigned integer types
+    assert_eq!(macros::sqrt!(100u8, rounding::down()), 10u8);
+    assert_eq!(macros::sqrt!(1000u16, rounding::down()), 31u16);
+    assert_eq!(macros::sqrt!(10000u32, rounding::down()), 100u32);
+    assert_eq!(macros::sqrt!(100000u64, rounding::down()), 316u64);
+    assert_eq!(macros::sqrt!(1000000u128, rounding::down()), 1000u128);
+    assert_eq!(macros::sqrt!(10000000u256, rounding::down()), 3162u256);
 }
