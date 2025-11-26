@@ -1,6 +1,6 @@
 # Access Package
 
-Opinionated access control primitives for Sui smart contracts.
+Transfer policies for safely handing capabilities to new owners.
 
 ---
 
@@ -8,32 +8,34 @@ Opinionated access control primitives for Sui smart contracts.
 
 | Module | Summary |
 |--------|---------|
-| `ownable` | Single-owner capability handler that guards per-module/per-package privileged entry points. |
+| `two_step_transfer` | Wraps a capability behind a request/approve flow to avoid accidental handoffs. |
+| `delayed_transfer` | Enforces a minimum delay between scheduling and executing transfers or unwrapping. |
 
 ---
 
-## `ownable` at a Glance
+## `two_step_transfer` at a Glance
 
-1. **Initialization**
-   - During module initialization, call `new_owner` (immediate policy) or `new_two_step_owner` (two-step policy) with the one-time witness.
-   - These helpers mint an `OwnerCap<OTW>` and transfer it to `ctx.sender()`.
-2. **Transfer Policies**
-   - **Immediate:** `transfer_ownership` moves the capability directly to a new address. Every transfer emits `OwnershipTransferred`.
-   - **Two-step:** The prospective owner calls `request_ownership` to create an `OwnershipRequestCap`. The current owner must explicitly accept (`transfer_requested_ownership`) or reject (`reject_ownership_request`), keeping accidental handoffs in check.
-3. **Additional APIs**
-   - `build_ownership` / `finalize` — low-level hooks that power the helpers.
-   - `request_ownership` / `reject_ownership_request` — manage pending handoffs.
-   - `renounce_ownership` — deletes the capability, permanently locking restricted entry points.
+1. **Wrap**
+   - Call `wrap<T>` to move a capability under a `TwoStepTransferWrapper<T>`. The wrapper owns the capability via a dynamic object field.
+2. **Borrow**
+   - Use `borrow`, `borrow_mut`, or `borrow_val`/`return_val` to read or temporarily mutate the capability without changing ownership.
+3. **Transfer**
+   - A prospective owner invokes `request` to emit `OwnershipRequested` and hand an `OwnershipTransferRequest` to the current owner.
+   - The owner must call `transfer` with the wrapper + request to emit `OwnershipTransferred` and hand off the wrapper, or `reject` to delete the pending request.
+4. **Unwrap**
+   - Owners can reclaim the underlying capability immediately via `unwrap`, destroying the wrapper.
 
 ---
 
-## Learn by Example
+## `delayed_transfer` at a Glance
 
-Hands-on walkthroughs live in the [`examples/`](examples/) folder:
-
-| Example | Pattern | Highlights |
-|---------|---------|------------|
-| [`gift_box_v1`](examples/gift_box_v1/) | Immediate transfer | Owner capability moves in a single transaction. |
-| [`gift_box_v2`](examples/gift_box_v2/) | Two-step transfer | Request + approval flow using `OwnershipRequestCap`. |
-
-Each example pairs a Move module with PTB scripts that you can run end-to-end; see the README inside each folder for a full quickstart.
+1. **Wrap**
+   - `wrap<T>(cap, min_delay_ms, ctx)` produces a `DelayedTransferWrapper<T>` that stores the capability and minimum delay.
+2. **Borrow**
+   - Access the capability through `borrow`, `borrow_mut`, or the `borrow_val` / `return_val` pair for temporary moves.
+3. **Schedule**
+   - Call `schedule_transfer` with a recipient, clock, and owner to emit `TransferScheduled`. The wrapper tracks the scheduled action.
+   - Call `schedule_unwrap` to plan a delayed unwrap; the wrapper emits `UnwrapScheduled`.
+4. **Execute or Cancel**
+   - After `clock.timestamp_ms() >= execute_after_ms`, call `execute_transfer` or `unwrap` to emit `OwnershipTransferred`, consume the wrapper, and deliver the capability.
+   - Use `cancel_schedule` to drop a pending action prior to execution.
