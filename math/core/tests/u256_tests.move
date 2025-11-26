@@ -3,6 +3,7 @@ module openzeppelin_math::u256_tests;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u256;
+use openzeppelin_math::u512;
 use std::unit_test::assert_eq;
 
 // === average ===
@@ -31,7 +32,7 @@ fun average_is_commutative() {
 #[test]
 fun checked_shl_returns_some() {
     // Shift to the top bit while staying within range.
-    let value = 1u256;
+    let value: u256 = 1;
     let result = u256::checked_shl(value, 255);
     assert_eq!(result, option::some(1u256 << 255));
 }
@@ -697,4 +698,41 @@ fun sqrt_handles_max_value() {
     assert_eq!(u256::sqrt(max, rounding::down()), max_u128);
     assert_eq!(u256::sqrt(max, rounding::up()), max_u128 + 1);
     assert_eq!(u256::sqrt(max, rounding::nearest()), max_u128 + 1);
+}
+
+// === inv_mod ===
+
+#[test]
+fun inv_mod_returns_some() {
+    let result = u256::inv_mod(19, 1_000_000_007);
+    assert_eq!(result, option::some(157_894_738));
+}
+
+#[test]
+fun inv_mod_returns_none_when_not_coprime() {
+    let result = u256::inv_mod(50, 100);
+    assert_eq!(result, option::none());
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun inv_mod_rejects_zero_modulus() {
+    u256::inv_mod(1, 0);
+}
+
+// === mul_mod ===
+
+#[test]
+fun mul_mod_handles_wide_operands() {
+    let a = 1u256 << 200;
+    let b = (1u256 << 180) + 12345;
+    let modulus = (1u256 << 201) - 109;
+    let wide_product = u512::mul_u256(a, b);
+    let (_, _, expected) = u512::div_rem_u256(wide_product, modulus);
+    let result = u256::mul_mod(a, b, modulus);
+    assert_eq!(result, expected);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_rejects_zero_modulus() {
+    u256::mul_mod(2, 3, 0);
 }

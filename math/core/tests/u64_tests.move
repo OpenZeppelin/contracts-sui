@@ -637,3 +637,35 @@ fun sqrt_handles_max_value() {
     assert_eq!(u64::sqrt(max, rounding::up()), 4294967296);
     assert_eq!(u64::sqrt(max, rounding::nearest()), 4294967296);
 }
+
+// === inv_mod ===
+
+#[test]
+fun inv_mod_returns_some() {
+    let result = u64::inv_mod(19, 1_000_000_007);
+    assert_eq!(result, option::some(157_894_738));
+}
+
+#[test]
+fun inv_mod_returns_none_when_not_coprime() {
+    let result = u64::inv_mod(20, 100);
+    assert_eq!(result, option::none());
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun inv_mod_rejects_zero_modulus() {
+    u64::inv_mod(1, 0);
+}
+
+// === mul_mod ===
+
+#[test]
+fun mul_mod_handles_large_values() {
+    let result = u64::mul_mod(987_654_321, 123_456_789, 1_000_000_007);
+    assert_eq!(result, 259_106_859);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_rejects_zero_modulus() {
+    u64::mul_mod(3, 4, 0);
+}
