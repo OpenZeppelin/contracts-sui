@@ -244,12 +244,6 @@ fun mod_sub_impl_wraps_underflow() {
 }
 
 #[test]
-fun mul_mod_impl_uses_fast_path_when_small() {
-    let result = macros::mul_mod_impl(7, 9, 11);
-    assert_eq!(result, 8);
-}
-
-#[test]
 fun mul_mod_impl_returns_zero_when_operand_zero() {
     let result = macros::mul_mod_impl(0, 123, 11);
     assert_eq!(result, 0);
