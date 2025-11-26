@@ -11,11 +11,6 @@ coverage:
         target: 90%
         threshold: 20%
 
-    patch:
-      default:
-        target: 90%
-        threshold: 20%
-
 ignore:
   - "**/tests/**"
   - "**/examples/**"

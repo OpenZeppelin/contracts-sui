@@ -67,25 +67,25 @@ public struct OwnershipTransferred has copy, drop {
 /// field so the underlying ID can still be discovered by off-chain indexers.
 public fun wrap<T: key + store>(cap: T, ctx: &mut TxContext): TwoStepTransferWrapper<T> {
     let mut wrapper = TwoStepTransferWrapper { id: object::new(ctx) };
-    dof::add(&mut wrapper.id, Wrapped {}, cap);
+    dof::add(&mut wrapper.id, WrappedKey(), cap);
     wrapper
 }
 
 /// Borrow the wrapped capability immutably—useful for read-only inspection without touching the
 /// transfer flow.
 public fun borrow<T: key + store>(self: &TwoStepTransferWrapper<T>): &T {
-    dof::borrow(&self.id, Wrapped {})
+    dof::borrow(&self.id, WrappedKey())
 }
 
 /// Borrow the wrapped capability mutably when maintenance needs to happen without changing the
 /// ownership state.
 public fun borrow_mut<T: key + store>(self: &mut TwoStepTransferWrapper<T>): &mut T {
-    dof::borrow_mut(&mut self.id, Wrapped {})
+    dof::borrow_mut(&mut self.id, WrappedKey())
 }
 
 /// Take the wrapped capability from the `TwoStepTransferWrapper` with a guarantee that it will be returned.
 public fun borrow_val<T: key + store>(self: &mut TwoStepTransferWrapper<T>): (T, Borrow) {
-    let cap = dof::remove(&mut self.id, Wrapped {});
+    let cap = dof::remove(&mut self.id, WrappedKey());
     let object_id = object::id(&cap);
     (cap, Borrow { wrapper_id: object::id(self), object_id })
 }
@@ -102,14 +102,14 @@ public fun return_val<T: key + store>(
     assert!(object::id(self) == wrapper_id, EWrongTwoStepTransferWrapper);
     assert!(object::id(&capability) == object_id, EWrongTwoStepTransferObject);
 
-    dof::add(&mut self.id, Wrapped {}, capability);
+    dof::add(&mut self.id, WrappedKey(), capability);
 }
 
 /// Permanently unwrap the capability, deleting the wrapper. Only the current owner can call this,
 /// and it bypasses the request flow, effectively “owning” the capability again.
 public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>): T {
     let TwoStepTransferWrapper { id: mut wrapper_id } = self;
-    let cap = dof::remove(&mut wrapper_id, Wrapped {});
+    let cap = dof::remove(&mut wrapper_id, WrappedKey());
     wrapper_id.delete();
     cap
 }
