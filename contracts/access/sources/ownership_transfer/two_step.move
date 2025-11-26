@@ -16,7 +16,7 @@ module openzeppelin_access::two_step_transfer;
 use sui::dynamic_object_field as dof;
 use sui::event;
 
-public struct Wrapped has copy, drop, store {}
+public struct WrappedKey() has copy, drop, store;
 
 /// Transfer request does not correspond to the provided wrapper
 #[error(code = 1)]
