@@ -14,7 +14,7 @@ use sui::dynamic_object_field as dof;
 use sui::event;
 
 /// Dynamic field key for a wrapped object.
-public struct Wrapped has copy, drop, store {}
+public struct WrappedKey() has copy, drop, store;
 
 #[error(code = 0)]
 const ETransferAlreadyScheduled: vector<u8> = b"Transfer already scheduled.";
