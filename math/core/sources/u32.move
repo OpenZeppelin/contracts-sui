@@ -82,6 +82,13 @@ public fun log256(value: u32, rounding_mode: RoundingMode): u8 {
     macros::log256!(value, BIT_WIDTH as u16, rounding_mode)
 }
 
+/// Compute the log in base 10 of a positive value with configurable rounding.
+///
+/// Returns 0 if given 0.
+public fun log10(value: u32, rounding_mode: RoundingMode): u8 {
+    macros::log10!(value, rounding_mode)
+}
+
 /// Compute the square root of a value with configurable rounding.
 ///
 /// Returns 0 if given 0.
