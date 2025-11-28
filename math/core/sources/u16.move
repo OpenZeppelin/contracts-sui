@@ -39,22 +39,17 @@ public fun checked_shr(value: u16, shift: u8): Option<u16> {
 }
 
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
-/// Returns `(overflow, result)` where `overflow` signals that the rounded quotient cannot be
-/// represented as `u16`.
-public fun mul_div(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode): (bool, u16) {
+///
+/// Returns `None` for the following cases:
+/// - the rounded quotient cannot be represented as `u16`
+public fun mul_div(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode): Option<u16> {
     let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
-
-    // Check if the result fits in u16
-    if (result > (std::u16::max_value!() as u256)) {
-        (true, 0)
-    } else {
-        (false, result as u16)
-    }
+    result.try_as_u16()
 }
 
 /// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
 ///
-/// Returns None for the following cases:
+/// Returns `None` for the following cases:
 /// - the rounded quotient cannot be represented as `u16`
 public fun mul_shr(a: u16, b: u16, shift: u8, rounding_mode: RoundingMode): Option<u16> {
     let (_, result) = macros::mul_shr!(a, b, shift, rounding_mode);

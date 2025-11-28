@@ -96,30 +96,26 @@ fun checked_shr_rejects_large_shift() {
 // Sanity-check rounding before we switch to the wide helper.
 #[test]
 fun mul_div_rounding_modes() {
-    let (down_overflow, down) = u128::mul_div(70, 10, 4, rounding::down());
-    assert_eq!(down_overflow, false);
-    assert_eq!(down, 175);
+    let down = u128::mul_div(70, 10, 4, rounding::down());
+    assert_eq!(down, option::some(175));
 
-    let (up_overflow, up) = u128::mul_div(5, 3, 4, rounding::up());
-    assert_eq!(up_overflow, false);
-    assert_eq!(up, 4);
+    let up = u128::mul_div(5, 3, 4, rounding::up());
+    assert_eq!(up, option::some(4));
 
-    let (nearest_overflow, nearest) = u128::mul_div(
+    let nearest = u128::mul_div(
         7,
         10,
         4,
         rounding::nearest(),
     );
-    assert_eq!(nearest_overflow, false);
-    assert_eq!(nearest, 18);
+    assert_eq!(nearest, option::some(18));
 }
 
 // Straightforward division should not be perturbed by rounding.
 #[test]
 fun mul_div_exact_division() {
-    let (overflow, exact) = u128::mul_div(8_000, 2, 4, rounding::up());
-    assert_eq!(overflow, false);
-    assert_eq!(exact, 4_000);
+    let exact = u128::mul_div(8_000, 2, 4, rounding::up());
+    assert_eq!(exact, option::some(4_000));
 }
 
 // Keep coverage over the shared macro guard.
@@ -128,17 +124,16 @@ fun mul_div_rejects_zero_denominator() {
     u128::mul_div(1, 1, 0, rounding::down());
 }
 
-// Casting down from u256 must still flag when values exceed u128’s range.
+// Casting down from u256 must still flag when values exceed u128's range.
 #[test]
 fun mul_div_detects_overflow() {
-    let (overflow, result) = u128::mul_div(
+    let result = u128::mul_div(
         std::u128::max_value!(),
         2,
         1,
         rounding::down(),
     );
-    assert_eq!(overflow, true);
-    assert_eq!(result, 0);
+    assert_eq!(result, option::none());
 }
 
 // === mul_shr ===

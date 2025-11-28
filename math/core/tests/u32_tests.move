@@ -94,30 +94,26 @@ fun checked_shr_rejects_large_shift() {
 // Exercise rounding logic now that values comfortably stay in the fast path.
 #[test]
 fun mul_div_rounding_modes() {
-    let (down_overflow, down) = u32::mul_div(70, 10, 4, rounding::down());
-    assert_eq!(down_overflow, false);
-    assert_eq!(down, 175);
+    let down = u32::mul_div(70, 10, 4, rounding::down());
+    assert_eq!(down, option::some(175));
 
-    let (up_overflow, up) = u32::mul_div(5, 3, 4, rounding::up());
-    assert_eq!(up_overflow, false);
-    assert_eq!(up, 4);
+    let up = u32::mul_div(5, 3, 4, rounding::up());
+    assert_eq!(up, option::some(4));
 
-    let (nearest_overflow, nearest) = u32::mul_div(
+    let nearest = u32::mul_div(
         7,
         10,
         4,
         rounding::nearest(),
     );
-    assert_eq!(nearest_overflow, false);
-    assert_eq!(nearest, 18);
+    assert_eq!(nearest, option::some(18));
 }
 
 // Basic exact-case regression.
 #[test]
 fun mul_div_exact_division() {
-    let (overflow, exact) = u32::mul_div(8_000, 2, 4, rounding::up());
-    assert_eq!(overflow, false);
-    assert_eq!(exact, 4_000);
+    let exact = u32::mul_div(8_000, 2, 4, rounding::up());
+    assert_eq!(exact, option::some(4_000));
 }
 
 // Division by zero still bubbles the macro error.
@@ -129,14 +125,13 @@ fun mul_div_rejects_zero_denominator() {
 // Cast back to u32 must trip when the result no longer fits.
 #[test]
 fun mul_div_detects_overflow() {
-    let (overflow, result) = u32::mul_div(
+    let result = u32::mul_div(
         std::u32::max_value!(),
         2,
         1,
         rounding::down(),
     );
-    assert_eq!(overflow, true);
-    assert_eq!(result, 0);
+    assert_eq!(result, option::none());
 }
 
 // === mul_shr ===
