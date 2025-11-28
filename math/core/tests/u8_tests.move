@@ -700,3 +700,35 @@ fun sqrt_handles_max_value() {
     assert_eq!(u8::sqrt(max, rounding::up()), 16);
     assert_eq!(u8::sqrt(max, rounding::nearest()), 16);
 }
+
+// === inv_mod ===
+
+#[test]
+fun inv_mod_returns_some() {
+    let result = u8::inv_mod(3, 5);
+    assert_eq!(result, option::some(2));
+}
+
+#[test]
+fun inv_mod_returns_none_when_not_coprime() {
+    let result = u8::inv_mod(6, 15);
+    assert_eq!(result, option::none());
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun inv_mod_rejects_zero_modulus() {
+    u8::inv_mod(1, 0);
+}
+
+// === mul_mod ===
+
+#[test]
+fun mul_mod_fast_path() {
+    let result = u8::mul_mod(7, 9, 11);
+    assert_eq!(result, 8);
+}
+
+#[test, expected_failure(abort_code = macros::EZeroModulus)]
+fun mul_mod_rejects_zero_modulus() {
+    u8::mul_mod(2, 3, 0);
+}

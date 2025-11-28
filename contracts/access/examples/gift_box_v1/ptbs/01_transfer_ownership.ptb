@@ -1,8 +1,0 @@
-# Requires environment variables (all with 0x prefix):
-#   PACKAGE_ID          -> package ID containing the modules
-#   OWNER_CAP_ID        -> object ID of the OwnerCap<GIFT_BOX_V1> you currently hold
-#   NEW_OWNER_ADDRESS   -> address that should receive ownership
---assign owner_cap @${OWNER_CAP_ID}
---assign new_owner @${NEW_OWNER_ADDRESS}
---move-call ${PACKAGE_ID}::ownable::transfer_ownership <${PACKAGE_ID}::gift_box_v1::GIFT_BOX_V1> owner_cap new_owner
---gas-budget 500000000

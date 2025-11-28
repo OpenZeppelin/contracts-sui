@@ -100,3 +100,15 @@ public fun log10(value: u32, rounding_mode: RoundingMode): u8 {
 public fun sqrt(value: u32, rounding_mode: RoundingMode): u32 {
     macros::sqrt!(value, rounding_mode)
 }
+
+/// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
+///
+/// Returns `None` when `value` and `modulus` are not co-prime. Aborts if `modulus` is zero.
+public fun inv_mod(value: u32, modulus: u32): Option<u32> {
+    macros::inv_mod!(value, modulus)
+}
+
+/// Multiply `a` and `b` modulo `modulus`. Aborts if `modulus` is zero.
+public fun mul_mod(a: u32, b: u32, modulus: u32): u32 {
+    macros::mul_mod!(a, b, modulus)
+}
