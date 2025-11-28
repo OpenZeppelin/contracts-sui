@@ -749,6 +749,177 @@ fun log256_handles_max_values() {
     assert_eq!(macros::log256!(std::u256::max_value!(), 256, rounding::nearest()), 32);
 }
 
+// === log10 ===
+
+#[test]
+fun log10_returns_zero_for_zero() {
+    // log10(0) should return 0 by convention
+    assert_eq!(macros::log10!(0u8, rounding::down()), 0);
+    assert_eq!(macros::log10!(0u8, rounding::up()), 0);
+    assert_eq!(macros::log10!(0u8, rounding::nearest()), 0);
+    assert_eq!(macros::log10!(0u16, rounding::down()), 0);
+    assert_eq!(macros::log10!(0u32, rounding::up()), 0);
+    assert_eq!(macros::log10!(0u64, rounding::nearest()), 0);
+    assert_eq!(macros::log10!(0u128, rounding::down()), 0);
+    assert_eq!(macros::log10!(0u256, rounding::up()), 0);
+}
+
+#[test]
+fun log10_handles_powers_of_10() {
+    // for powers of 10, log10 returns the exponent regardless of rounding mode
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(macros::log10!(1u8, rounding), 0); // 10^0
+        assert_eq!(macros::log10!(10u8, rounding), 1); // 10^1
+        assert_eq!(macros::log10!(100u16, rounding), 2); // 10^2
+        assert_eq!(macros::log10!(1000u16, rounding), 3); // 10^3
+        assert_eq!(macros::log10!(10000u32, rounding), 4); // 10^4
+        assert_eq!(macros::log10!(100000u32, rounding), 5); // 10^5
+        assert_eq!(macros::log10!(1000000u32, rounding), 6); // 10^6
+        assert_eq!(macros::log10!(1000000000u64, rounding), 9); // 10^9
+        assert_eq!(macros::log10!(1000000000000u64, rounding), 12); // 10^12
+        assert_eq!(macros::log10!(10000000000000000u128, rounding), 16); // 10^16
+    });
+}
+
+#[test]
+fun log10_rounds_down() {
+    // log10 with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(macros::log10!(9u8, down), 0); // log10(9) < 1 → 0
+    assert_eq!(macros::log10!(11u8, down), 1); // log10(11) > 1 → 1
+    assert_eq!(macros::log10!(99u8, down), 1); // log10(99) < 2 → 1
+    assert_eq!(macros::log10!(101u16, down), 2); // log10(101) > 2 → 2
+    assert_eq!(macros::log10!(999u16, down), 2); // log10(999) < 3 → 2
+    assert_eq!(macros::log10!(1001u16, down), 3); // log10(1001) > 3 → 3
+    assert_eq!(macros::log10!(9999u32, down), 3); // log10(9999) < 4 → 3
+    assert_eq!(macros::log10!(10001u32, down), 4); // log10(10001) > 4 → 4
+}
+
+#[test]
+fun log10_rounds_up() {
+    // log10 with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(macros::log10!(9u8, up), 1); // log10(9) < 1 → 1
+    assert_eq!(macros::log10!(11u8, up), 2); // log10(11) > 1 → 2
+    assert_eq!(macros::log10!(99u8, up), 2); // log10(99) < 2 → 2
+    assert_eq!(macros::log10!(101u16, up), 3); // log10(101) > 2 → 3
+    assert_eq!(macros::log10!(999u16, up), 3); // log10(999) < 3 → 3
+    assert_eq!(macros::log10!(1001u16, up), 4); // log10(1001) > 3 → 4
+    assert_eq!(macros::log10!(9999u32, up), 4); // log10(9999) < 4 → 4
+    assert_eq!(macros::log10!(10001u32, up), 5); // log10(10001) > 4 → 5
+}
+
+#[test]
+fun log10_rounds_to_nearest() {
+    // log10 with Nearest mode rounds to closest integer
+    // Midpoint between 10^k and 10^(k+1) is √10 · 10^k ≈ 3.162 · 10^k
+    let nearest = rounding::nearest();
+
+    // Between 10^0 and 10^1: midpoint at √10 ≈ 3.162
+    assert_eq!(macros::log10!(3u8, nearest), 0); // log10(3) ≈ 0.477, < 0.5 → 0
+    assert_eq!(macros::log10!(4u8, nearest), 1); // log10(4) ≈ 0.602, > 0.5 → 1
+    assert_eq!(macros::log10!(9u8, nearest), 1); // log10(9) ≈ 0.954, > 0.5 → 1
+
+    // Between 10^1 and 10^2: midpoint at 10 × √10 ≈ 31.62
+    assert_eq!(macros::log10!(31u8, nearest), 1); // < 31.62, rounds down
+    assert_eq!(macros::log10!(32u8, nearest), 2); // > 31.62, rounds up
+    assert_eq!(macros::log10!(99u8, nearest), 2); // > 31.62, rounds up
+
+    // Between 10^2 and 10^3: midpoint at 100 × √10 ≈ 316.2
+    assert_eq!(macros::log10!(316u16, nearest), 2); // ≈ 316.2, rounds down
+    assert_eq!(macros::log10!(317u16, nearest), 3); // > 316.2, rounds up
+    assert_eq!(macros::log10!(999u16, nearest), 3); // > 316.2, rounds up
+
+    // Between 10^3 and 10^4: midpoint at 1000 × √10 ≈ 3162
+    assert_eq!(macros::log10!(3162u16, nearest), 3); // ≈ 3162, rounds down
+    assert_eq!(macros::log10!(3163u16, nearest), 4); // > 3162, rounds up
+    assert_eq!(macros::log10!(9999u32, nearest), 4); // > 3162, rounds up
+
+    // Between 10^4 and 10^5: midpoint at 10000 × √10 ≈ 31622
+    assert_eq!(macros::log10!(31622u32, nearest), 4); // ≈ 31622, rounds down
+    assert_eq!(macros::log10!(31623u32, nearest), 5); // > 31622, rounds up
+}
+
+#[test]
+fun log10_handles_max_values() {
+    // Test with maximum values for different types
+    // u8::MAX = 255, log10(255) ≈ 2.407
+    assert_eq!(macros::log10!(std::u8::max_value!(), rounding::down()), 2);
+    assert_eq!(macros::log10!(std::u8::max_value!(), rounding::up()), 3);
+    assert_eq!(macros::log10!(std::u8::max_value!(), rounding::nearest()), 2);
+
+    // u16::MAX = 65535, log10(65535) ≈ 4.816
+    assert_eq!(macros::log10!(std::u16::max_value!(), rounding::down()), 4);
+    assert_eq!(macros::log10!(std::u16::max_value!(), rounding::up()), 5);
+    assert_eq!(macros::log10!(std::u16::max_value!(), rounding::nearest()), 5);
+
+    // u32::MAX = 4294967295, log10(2^32-1) ≈ 9.633
+    assert_eq!(macros::log10!(std::u32::max_value!(), rounding::down()), 9);
+    assert_eq!(macros::log10!(std::u32::max_value!(), rounding::up()), 10);
+    assert_eq!(macros::log10!(std::u32::max_value!(), rounding::nearest()), 10);
+
+    // u64::MAX, log10(2^64-1) ≈ 19.266
+    assert_eq!(macros::log10!(std::u64::max_value!(), rounding::down()), 19);
+    assert_eq!(macros::log10!(std::u64::max_value!(), rounding::up()), 20);
+    assert_eq!(macros::log10!(std::u64::max_value!(), rounding::nearest()), 19);
+
+    // u128::MAX, log10(2^128-1) ≈ 38.531
+    assert_eq!(macros::log10!(std::u128::max_value!(), rounding::down()), 38);
+    assert_eq!(macros::log10!(std::u128::max_value!(), rounding::up()), 39);
+    assert_eq!(macros::log10!(std::u128::max_value!(), rounding::nearest()), 39);
+
+    // u256::MAX, log10(2^256-1) ≈ 77.064
+    assert_eq!(macros::log10!(std::u256::max_value!(), rounding::down()), 77);
+    assert_eq!(macros::log10!(std::u256::max_value!(), rounding::up()), 78);
+    assert_eq!(macros::log10!(std::u256::max_value!(), rounding::nearest()), 77);
+}
+
+#[test]
+fun log10_handles_edge_cases_near_powers() {
+    // Test values just before and after powers of 10
+    let down = rounding::down();
+    let up = rounding::up();
+
+    // Around 10^2 = 100
+    assert_eq!(macros::log10!(99u8, down), 1);
+    assert_eq!(macros::log10!(100u8, down), 2);
+    assert_eq!(macros::log10!(101u16, down), 2);
+
+    assert_eq!(macros::log10!(99u8, up), 2);
+    assert_eq!(macros::log10!(100u8, up), 2);
+    assert_eq!(macros::log10!(101u16, up), 3);
+
+    // Around 10^3 = 1000
+    assert_eq!(macros::log10!(999u16, down), 2);
+    assert_eq!(macros::log10!(1000u16, down), 3);
+    assert_eq!(macros::log10!(1001u16, down), 3);
+
+    assert_eq!(macros::log10!(999u16, up), 3);
+    assert_eq!(macros::log10!(1000u16, up), 3);
+    assert_eq!(macros::log10!(1001u16, up), 4);
+
+    // Around 10^6 = 1000000
+    assert_eq!(macros::log10!(999999u32, down), 5);
+    assert_eq!(macros::log10!(1000000u32, down), 6);
+    assert_eq!(macros::log10!(1000001u32, down), 6);
+}
+
+#[test]
+fun log10_large_u256_values() {
+    // Test value that goes through fast path
+    let value = std::u256::pow(10, 38) + 1; // 10^38 + 1
+    assert_eq!(macros::log10!(value, rounding::down()), 38);
+    assert_eq!(macros::log10!(value, rounding::up()), 39);
+    assert_eq!(macros::log10!(value, rounding::nearest()), 38);
+
+    // Test larger value that require u512 arithmetic
+    let value = std::u256::pow(10, 77) + 1; // 10^77 + 1
+    assert_eq!(macros::log10!(value, rounding::down()), 77);
+    assert_eq!(macros::log10!(value, rounding::up()), 78);
+    assert_eq!(macros::log10!(value, rounding::nearest()), 77);
+}
+
 // === sqrt ===
 
 #[test]
