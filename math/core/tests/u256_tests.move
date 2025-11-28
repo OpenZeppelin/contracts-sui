@@ -592,6 +592,127 @@ fun log256_handles_max_value() {
     assert_eq!(u256::log256(max, rounding::nearest()), 32);
 }
 
+// === log10 ===
+
+#[test]
+fun log10_returns_zero_for_zero() {
+    // log10(0) should return 0 by convention
+    assert_eq!(u256::log10(0, rounding::down()), 0);
+    assert_eq!(u256::log10(0, rounding::up()), 0);
+    assert_eq!(u256::log10(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun log10_handles_powers_of_10() {
+    // for powers of 10, log10 returns the exponent regardless of rounding mode
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u256::log10(1, rounding), 0); // 10^0
+        assert_eq!(u256::log10(10, rounding), 1); // 10^1
+        assert_eq!(u256::log10(100, rounding), 2); // 10^2
+        assert_eq!(u256::log10(1000, rounding), 3); // 10^3
+        assert_eq!(u256::log10(std::u256::pow(10, 38), rounding), 38); // 10^38
+        assert_eq!(u256::log10(std::u256::pow(10, 44), rounding), 44); // 10^44
+    });
+}
+
+#[test]
+fun log10_rounds_down() {
+    // log10 with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(u256::log10(9, down), 0); // ≈ 0.954 → 0
+    assert_eq!(u256::log10(99, down), 1); // ≈ 1.996 → 1
+    assert_eq!(u256::log10(999, down), 2); // ≈ 2.9996 → 2
+    assert_eq!(u256::log10(9999, down), 3); // ≈ 3.9999 → 3
+}
+
+#[test]
+fun log10_rounds_up() {
+    // log10 with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(u256::log10(9, up), 1); // ≈ 0.954 → 1
+    assert_eq!(u256::log10(99, up), 2); // ≈ 1.996 → 2
+    assert_eq!(u256::log10(999, up), 3); // ≈ 2.9996 → 3
+    assert_eq!(u256::log10(9999, up), 4); // ≈ 3.9999 → 4
+}
+
+#[test]
+fun log10_rounds_to_nearest() {
+    let nearest = rounding::nearest();
+    
+    // Between 10^0 and 10^1: midpoint at √10 ≈ 3.162
+    assert_eq!(u256::log10(3, nearest), 0); // < 3.162, rounds down
+    assert_eq!(u256::log10(4, nearest), 1); // > 3.162, rounds up
+    
+    // Between 10^1 and 10^2: midpoint at 10 × √10 ≈ 31.62
+    assert_eq!(u256::log10(31, nearest), 1); // < 31.62, rounds down
+    assert_eq!(u256::log10(32, nearest), 2); // > 31.62, rounds up
+}
+
+#[test]
+fun log10_handles_edge_cases_near_powers() {
+    // Test values just before and after powers of 10
+    let down = rounding::down();
+    let up = rounding::up();
+    let nearest = rounding::nearest();
+    
+    // Around 10^1 = 10
+    assert_eq!(u256::log10(9, down), 0);
+    assert_eq!(u256::log10(10, down), 1);
+    assert_eq!(u256::log10(11, down), 1);
+    
+    assert_eq!(u256::log10(9, up), 1);
+    assert_eq!(u256::log10(10, up), 1);
+    assert_eq!(u256::log10(11, up), 2);
+
+    assert_eq!(u256::log10(9, nearest), 1);
+    assert_eq!(u256::log10(10, nearest), 1);
+    assert_eq!(u256::log10(11, nearest), 1);
+    
+    // Around 10^38
+    let pow38 = std::u256::pow(10, 38);
+    assert_eq!(u256::log10(pow38 - 1, down), 37);
+    assert_eq!(u256::log10(pow38, down), 38);
+    assert_eq!(u256::log10(pow38 + 1, down), 38);
+    
+    assert_eq!(u256::log10(pow38 - 1, up), 38);
+    assert_eq!(u256::log10(pow38, up), 38);
+    assert_eq!(u256::log10(pow38 + 1, up), 39);
+
+    assert_eq!(u256::log10(pow38 - 1, nearest), 38);
+    assert_eq!(u256::log10(pow38, nearest), 38);
+    assert_eq!(u256::log10(pow38 + 1, nearest), 38);
+}
+
+#[test]
+fun log10_handles_max_value() {
+    // max value has log10 ≈ 77.064
+    let max = std::u256::max_value!();
+    assert_eq!(u256::log10(max, rounding::down()), 77);
+    assert_eq!(u256::log10(max, rounding::up()), 78);
+    assert_eq!(u256::log10(max, rounding::nearest()), 77);
+}
+
+#[test]
+fun log10_large_values() {
+    // Test with very large u256 values that require u512 arithmetic
+    let up = rounding::up();
+    let down = rounding::down();
+    let nearest = rounding::nearest();
+    
+    // 10^38 is around the threshold for the fast/slow path
+    let value = std::u256::pow(10, 38) + 1;
+    assert_eq!(u256::log10(value, up), 39);
+    assert_eq!(u256::log10(value, down), 38);
+    assert_eq!(u256::log10(value, nearest), 38);
+    
+    // Test larger values that require u512 arithmetic
+    let value = std::u256::pow(10, 77) + 1; // 10^77 + 1
+    assert_eq!(u256::log10(value, up), 78);
+    assert_eq!(u256::log10(value, down), 77);
+    assert_eq!(u256::log10(value, nearest), 77);
+}
+
 // === sqrt ===
 
 #[test]

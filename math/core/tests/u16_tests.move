@@ -507,6 +507,111 @@ fun log256_handles_max_value() {
     assert_eq!(u16::log256(max, rounding::nearest()), 2);
 }
 
+// === log10 ===
+
+#[test]
+fun log10_returns_zero_for_zero() {
+    // log10(0) should return 0 by convention
+    assert_eq!(u16::log10(0, rounding::down()), 0);
+    assert_eq!(u16::log10(0, rounding::up()), 0);
+    assert_eq!(u16::log10(0, rounding::nearest()), 0);
+}
+
+#[test]
+fun log10_handles_powers_of_10() {
+    // for powers of 10, log10 returns the exponent regardless of rounding mode
+    let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
+    rounding_modes.destroy!(|rounding| {
+        assert_eq!(u16::log10(1, rounding), 0); // 10^0
+        assert_eq!(u16::log10(10, rounding), 1); // 10^1
+        assert_eq!(u16::log10(100, rounding), 2); // 10^2
+        assert_eq!(u16::log10(1000, rounding), 3); // 10^3
+        assert_eq!(u16::log10(10000, rounding), 4); // 10^4
+    });
+}
+
+#[test]
+fun log10_rounds_down() {
+    // log10 with Down mode truncates to floor
+    let down = rounding::down();
+    assert_eq!(u16::log10(9, down), 0); // ≈ 0.954 → 0
+    assert_eq!(u16::log10(99, down), 1); // ≈ 1.996 → 1
+    assert_eq!(u16::log10(999, down), 2); // ≈ 2.9996 → 2
+    assert_eq!(u16::log10(9999, down), 3); // ≈ 3.9999 → 3
+    assert_eq!(u16::log10(65535, down), 4); // ≈ 4.816 → 4
+}
+
+#[test]
+fun log10_rounds_up() {
+    // log10 with Up mode rounds to ceiling
+    let up = rounding::up();
+    assert_eq!(u16::log10(9, up), 1); // ≈ 0.954 → 1
+    assert_eq!(u16::log10(99, up), 2); // ≈ 1.996 → 2
+    assert_eq!(u16::log10(999, up), 3); // ≈ 2.9996 → 3
+    assert_eq!(u16::log10(9999, up), 4); // ≈ 3.9999 → 4
+    assert_eq!(u16::log10(65535, up), 5); // ≈ 4.816 → 5
+}
+
+#[test]
+fun log10_rounds_to_nearest() {
+    let nearest = rounding::nearest();
+    
+    // Between 10^0 and 10^1: midpoint at √10 ≈ 3.162
+    assert_eq!(u16::log10(3, nearest), 0); // < 3.162, rounds down
+    assert_eq!(u16::log10(4, nearest), 1); // > 3.162, rounds up
+    
+    // Between 10^2 and 10^3: midpoint at 100 × √10 ≈ 316.2
+    assert_eq!(u16::log10(316, nearest), 2); // ≈ 316.2, rounds down
+    assert_eq!(u16::log10(317, nearest), 3); // > 316.2, rounds up
+    
+    // Between 10^3 and 10^4: midpoint at 1000 × √10 ≈ 3162
+    assert_eq!(u16::log10(3162, nearest), 3); // ≈ 3162, rounds down
+    assert_eq!(u16::log10(3163, nearest), 4); // > 3162, rounds up
+}
+
+#[test]
+fun log10_handles_edge_cases_near_powers() {
+    // Test values just before and after powers of 10
+    let down = rounding::down();
+    let up = rounding::up();
+    let nearest = rounding::nearest();
+    
+    // Around 10^1 = 10
+    assert_eq!(u16::log10(9, down), 0);
+    assert_eq!(u16::log10(10, down), 1);
+    assert_eq!(u16::log10(11, down), 1);
+    
+    assert_eq!(u16::log10(9, up), 1);
+    assert_eq!(u16::log10(10, up), 1);
+    assert_eq!(u16::log10(11, up), 2);
+
+    assert_eq!(u16::log10(9, nearest), 1);
+    assert_eq!(u16::log10(10, nearest), 1);
+    assert_eq!(u16::log10(11, nearest), 1);
+    
+    // Around 10^3 = 1000
+    assert_eq!(u16::log10(999, down), 2);
+    assert_eq!(u16::log10(1000, down), 3);
+    assert_eq!(u16::log10(1001, down), 3);
+    
+    assert_eq!(u16::log10(999, up), 3);
+    assert_eq!(u16::log10(1000, up), 3);
+    assert_eq!(u16::log10(1001, up), 4);
+
+    assert_eq!(u16::log10(999, nearest), 3);
+    assert_eq!(u16::log10(1000, nearest), 3);
+    assert_eq!(u16::log10(1001, nearest), 3);
+}
+
+#[test]
+fun log10_handles_max_value() {
+    // max value (65535) has log10 ≈ 4.816
+    let max = std::u16::max_value!();
+    assert_eq!(u16::log10(max, rounding::down()), 4);
+    assert_eq!(u16::log10(max, rounding::up()), 5);
+    assert_eq!(u16::log10(max, rounding::nearest()), 5);
+}
+
 // === sqrt ===
 
 #[test]
