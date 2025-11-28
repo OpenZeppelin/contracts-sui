@@ -104,38 +104,34 @@ fun checked_shr_detects_large_shift_loss() {
 
 // === mul_div ===
 
-// At the top level, the wrapper should mirror the macro’s behaviour.
+// At the top level, the wrapper should mirror the macro's behaviour.
 #[test]
 fun mul_div_rounding_modes() {
-    let (down_overflow, down) = u256::mul_div(70, 10, 4, rounding::down());
-    assert_eq!(down_overflow, false);
-    assert_eq!(down, 175);
+    let down = u256::mul_div(70, 10, 4, rounding::down());
+    assert_eq!(down, option::some(175));
 
-    let (up_overflow, up) = u256::mul_div(5, 3, 4, rounding::up());
-    assert_eq!(up_overflow, false);
-    assert_eq!(up, 4);
+    let up = u256::mul_div(5, 3, 4, rounding::up());
+    assert_eq!(up, option::some(4));
 
-    let (nearest_overflow, nearest) = u256::mul_div(
+    let nearest = u256::mul_div(
         7,
         10,
         4,
         rounding::nearest(),
     );
-    assert_eq!(nearest_overflow, false);
-    assert_eq!(nearest, 18);
+    assert_eq!(nearest, option::some(18));
 }
 
 // Verify the wrapper delegates to the wide path when required.
 #[test]
 fun mul_div_handles_wide_operands() {
     let large = (std::u128::max_value!() as u256) + 1;
-    let (overflow, result) = u256::mul_div(
+    let result = u256::mul_div(
         large,
         large,
         7,
         rounding::down(),
     );
-    assert_eq!(overflow, false);
     let (wide_overflow, expected) = macros::mul_div_u256_wide(
         large,
         large,
@@ -143,7 +139,7 @@ fun mul_div_handles_wide_operands() {
         rounding::down(),
     );
     assert_eq!(wide_overflow, false);
-    assert_eq!(result, expected);
+    assert_eq!(result, option::some(expected));
 }
 
 // Division-by-zero guard enforced at the macro layer.
@@ -152,18 +148,17 @@ fun mul_div_rejects_zero_denominator() {
     u256::mul_div(1, 1, 0, rounding::down());
 }
 
-// Even u256 should flag when the macro’s output overflows 256 bits.
+// Even u256 should flag when the macro's output overflows 256 bits.
 #[test]
 fun mul_div_detects_overflow() {
     let max = std::u256::max_value!();
-    let (overflow, result) = u256::mul_div(
+    let result = u256::mul_div(
         max,
         max,
         1,
         rounding::down(),
     );
-    assert_eq!(overflow, true);
-    assert_eq!(result, 0);
+    assert_eq!(result, option::none());
 }
 
 // === mul_shr ===
