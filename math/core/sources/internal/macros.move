@@ -315,10 +315,7 @@ public(package) macro fun log256<$Int>(
 /// #### Returns
 /// The base-10 logarithm as a `u8`, rounded according to the specified mode.
 /// Returns `0` if `$value` is 0.
-public(package) macro fun log10<$Int>(
-    $value: $Int,
-    $rounding_mode: RoundingMode,
-): u8 {
+public(package) macro fun log10<$Int>($value: $Int, $rounding_mode: RoundingMode): u8 {
     let (value, rounding_mode) = ($value as u256, $rounding_mode);
     if (value == 0) {
         return 0
@@ -750,7 +747,7 @@ public(package) fun round_log10_to_nearest(value: u256, floor_log: u8): u8 {
     // Nearest-integer rounding for log10: check if value² ≥ 10^(2*floor_log + 1)
     // Given floor_log = ⌊log10(x)⌋, we compare x to the midpoint 10^(floor_log + 0.5).
     // To avoid √10, we square both sides: x² ≥ 10^(2*floor_log + 1)
-    
+
     // Fast path condition:
     // - floor_log ≤ 38 ensures threshold_exp = 2*38 + 1 = 77, and 10^77 is the largest
     //   power of 10 that fits in u256 (10^77 < 2^256 < 10^78).

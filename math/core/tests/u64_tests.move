@@ -584,11 +584,11 @@ fun log10_rounds_up() {
 #[test]
 fun log10_rounds_to_nearest() {
     let nearest = rounding::nearest();
-    
+
     // Between 10^0 and 10^1: midpoint at √10 ≈ 3.162
     assert_eq!(u64::log10(3, nearest), 0); // < 3.162, rounds down
     assert_eq!(u64::log10(4, nearest), 1); // > 3.162, rounds up
-    
+
     // Between 10^1 and 10^2: midpoint at 10 × √10 ≈ 31.62
     assert_eq!(u64::log10(31, nearest), 1); // < 31.62, rounds down
     assert_eq!(u64::log10(32, nearest), 2); // > 31.62, rounds up
@@ -600,12 +600,12 @@ fun log10_handles_edge_cases_near_powers() {
     let down = rounding::down();
     let up = rounding::up();
     let nearest = rounding::nearest();
-    
+
     // Around 10^1 = 10
     assert_eq!(u64::log10(9, down), 0);
     assert_eq!(u64::log10(10, down), 1);
     assert_eq!(u64::log10(11, down), 1);
-    
+
     assert_eq!(u64::log10(9, up), 1);
     assert_eq!(u64::log10(10, up), 1);
     assert_eq!(u64::log10(11, up), 2);
@@ -613,12 +613,12 @@ fun log10_handles_edge_cases_near_powers() {
     assert_eq!(u64::log10(9, nearest), 1);
     assert_eq!(u64::log10(10, nearest), 1);
     assert_eq!(u64::log10(11, nearest), 1);
-    
+
     // Around 10^12 = 1000000000000
     assert_eq!(u64::log10(999999999999, down), 11);
     assert_eq!(u64::log10(1000000000000, down), 12);
     assert_eq!(u64::log10(1000000000001, down), 12);
-    
+
     assert_eq!(u64::log10(999999999999, up), 12);
     assert_eq!(u64::log10(1000000000000, up), 12);
     assert_eq!(u64::log10(1000000000001, up), 13);
