@@ -340,6 +340,91 @@ public(package) macro fun log256<$Int>(
     }
 }
 
+/// Compute the log in base 10 of a positive value with configurable rounding.
+///
+/// The algorithm first computes floor(log10(value)), then applies the requested
+/// rounding mode. Powers of 10 return exact results without additional rounding.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$value`: The unsigned integer to compute the logarithm for.
+/// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
+///
+/// #### Returns
+/// The base-10 logarithm as a `u8`, rounded according to the specified mode.
+/// Returns `0` if `$value` is 0.
+public(package) macro fun log10<$Int>($value: $Int, $rounding_mode: RoundingMode): u8 {
+    let (value, rounding_mode) = ($value as u256, $rounding_mode);
+    if (value == 0) {
+        return 0
+    };
+    let floor_result = log10_floor(value);
+    if (rounding_mode == rounding::down()) {
+        floor_result
+    } else if (value == std::u256::pow(10, floor_result)) {
+        // Exact power of 10
+        floor_result
+    } else if (rounding_mode == rounding::up()) {
+        floor_result + 1
+    } else {
+        round_log10_to_nearest(value, floor_result)
+    }
+}
+
+const MAX_LOG_10: u8 = 77;
+const TEN_POW_2: u256 = 100;
+const TEN_POW_4: u256 = TEN_POW_2 * TEN_POW_2;
+const TEN_POW_8: u256 = TEN_POW_4 * TEN_POW_4;
+const TEN_POW_16: u256 = TEN_POW_8 * TEN_POW_8;
+const TEN_POW_32: u256 = TEN_POW_16 * TEN_POW_16;
+const TEN_POW_64: u256 = TEN_POW_32 * TEN_POW_32;
+
+/// Compute floor(log10(value)) using binary search over powers of 10.
+///
+/// This helper uses precomputed constants (`TEN_POW_2`, `TEN_POW_4`, etc.) to efficiently
+/// determine the magnitude of the input value. The algorithm repeatedly divides by higher
+/// powers of 10 (64, 32, 16, 8, 4, 2, 1) to narrow down the floor logarithm.
+///
+/// #### Parameters
+/// - `value`: The input value as a `u256`.
+///
+/// #### Returns
+/// The floor of log10(value) as a `u8`. For `value = 0`, returns `0` by convention.
+public(package) fun log10_floor(value: u256): u8 {
+    let mut value = value;
+    let mut result = 0;
+    if (value >= TEN_POW_64) {
+        value = value / TEN_POW_64;
+        result = result + 64;
+    };
+    if (value >= TEN_POW_32) {
+        value = value / TEN_POW_32;
+        result = result + 32;
+    };
+    if (value >= TEN_POW_16) {
+        value = value / TEN_POW_16;
+        result = result + 16;
+    };
+    if (value >= TEN_POW_8) {
+        value = value / TEN_POW_8;
+        result = result + 8;
+    };
+    if (value >= TEN_POW_4) {
+        value = value / TEN_POW_4;
+        result = result + 4;
+    };
+    if (value >= TEN_POW_2) {
+        value = value / TEN_POW_2;
+        result = result + 2;
+    };
+    if (value >= 10) {
+        result = result + 1;
+    };
+    result
+}
+
 /// === Helper functions ===
 
 /// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
@@ -596,7 +681,7 @@ public(package) fun round_division_result(
 ///
 /// #### Parameters
 /// - `value`: The value being tested (already cast to u256).
-/// - `floor_log`: The threshold exponent for comparison.
+/// - `floor_log`: The floor of log2(value), i.e., log2(value)⌋.
 ///
 /// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
@@ -642,7 +727,7 @@ public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
 ///
 /// #### Parameters
 /// - `value`: The value being tested (already cast to u256).
-/// - `floor_log`: The threshold exponent for comparison.
+/// - `floor_log`: The floor of log256(value), i.e., ⌊log256(value)⌋.
 ///
 /// Given `floor_log = ⌊log256(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
@@ -664,6 +749,70 @@ public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
     let threshold_exp = 8 * floor_log + 4;
     let threshold = 1 << (threshold_exp as u8);
     value >= threshold
+}
+
+/// Apply nearest-integer rounding to log10 without floats.
+///
+/// #### Parameters
+/// - `value`: The value being tested (already cast to u256).
+/// - `floor_log`: The floor of log10(value), i.e., ⌊log10(value)⌋.
+///
+/// Given `floor_log = ⌊log10(x)⌋`, we decide whether to round up to `floor_log + 1`
+/// or keep `floor_log` by comparing `x` to the midpoint of the interval
+/// `[10^floor_log, 10^(floor_log+1))`. This midpoint is `10^(floor_log + 0.5) = √(10) · 10^floor_log`.
+///
+/// To avoid computing square roots, we square both sides of the comparison:
+/// - Round up if: `x ≥ 10^(floor_log + 0.5)`
+/// - Equivalent to: `x² ≥ 10^(2·floor_log + 1)`
+///
+/// This transforms the problem into an integer comparison that preserves the rounding decision.
+///
+/// The implementation uses two paths:
+/// - **Fast path** (u256 arithmetic): When both `value²` and `10^(2·floor_log + 1)` fit in u256.
+///   This occurs when `floor_log ≤ 38` (ensuring `10^77` fits) and `value ≤ 2^128 - 1`
+///   (ensuring `value²` fits).
+/// - **Slow path** (u512 arithmetic): For larger values where intermediate computations would
+///   overflow u256, we use 512-bit arithmetic.
+///
+/// Tie-break: equality goes up (`≥`), i.e., "round half up".
+///
+/// #### Returns
+/// The rounded log10 value: either `floor_log` or `floor_log + 1`.
+public(package) fun round_log10_to_nearest(value: u256, floor_log: u8): u8 {
+    // Boundary check: log10(u256::MAX) ≈ 77.06, so floor_log ≤ 77.
+    // If floor_log ≥ 77, it's already at the maximum possible log10 value with nearest rounding.
+    if (floor_log >= MAX_LOG_10) {
+        return floor_log
+    };
+    // Nearest-integer rounding for log10: check if value² ≥ 10^(2*floor_log + 1)
+    // Given floor_log = ⌊log10(x)⌋, we compare x to the midpoint 10^(floor_log + 0.5).
+    // To avoid √10, we square both sides: x² ≥ 10^(2*floor_log + 1)
+
+    // Fast path condition:
+    // - floor_log ≤ 38 ensures threshold_exp = 2*38 + 1 = 77, and 10^77 is the largest
+    //   power of 10 that fits in u256 (10^77 < 2^256 < 10^78).
+    // - value ≤ u128::MAX ensures value² fits in u256, since (2^128 - 1)² < 2^256.
+    let is_fast_path = floor_log <= 38 && value <= std::u128::max_value!() as u256;
+    let should_round_up = if (is_fast_path) {
+        // Fast path: compute entirely in u256 space
+        let value_squared = value * value;
+        let threshold_exp = 2 * floor_log + 1;
+        let threshold = std::u256::pow(10, threshold_exp);
+        value_squared >= threshold
+    } else {
+        // Slow path: use u512 arithmetic for large values
+        let value_squared = u512::mul_u256(value, value);
+        // Compute 10^(2*floor_log + 1) = 10 · 10^floor_log · 10^floor_log
+        // Factor as (10 · 10^floor_log) · 10^floor_log to minimize u256 operations
+        let floor_log_pow10 = std::u256::pow(10, floor_log);
+        let threshold = u512::mul_u256(10 * floor_log_pow10, floor_log_pow10);
+        value_squared.ge(&threshold)
+    };
+    if (should_round_up) {
+        floor_log + 1
+    } else {
+        floor_log
+    }
 }
 
 /// Apply rounding mode to the floor result of a square root calculation.
