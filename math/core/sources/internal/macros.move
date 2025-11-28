@@ -252,7 +252,8 @@ public(package) macro fun mul_mod<$Int>($a: $Int, $b: $Int, $modulus: $Int): $In
 /// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
 ///
 /// #### Returns
-/// The zero-based position of the most significant bit as a `u8`. Returns `0` if `$value` is 0.
+/// The zero-based position of the most significant bit as a `u8`.
+/// Returns `0` if `$value` is 0.
 public(package) macro fun msb<$Int>($value: $Int, $bit_width: u16): u8 {
     common::msb($value as u256, $bit_width)
 }
@@ -291,10 +292,8 @@ public(package) macro fun log2<$Int>(
         floor_log
     } else if (rounding_mode == rounding::up()) {
         floor_log + 1
-    } else if (log2_should_round_up(value, floor_log)) {
-        floor_log + 1
     } else {
-        floor_log
+        round_log2_to_nearest(value, floor_log)
     }
 }
 
@@ -312,7 +311,7 @@ public(package) macro fun log2<$Int>(
 /// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
 /// #### Returns
-/// The base-256 logarithm as a `u16`, rounded according to the specified mode.
+/// The base-256 logarithm as a `u8`, rounded according to the specified mode.
 /// Returns `0` if `$value` is 0.
 public(package) macro fun log256<$Int>(
     $value: $Int,
@@ -323,8 +322,8 @@ public(package) macro fun log256<$Int>(
     if (value == 0) {
         return 0
     };
-    let floor_log2 = common::msb(value, bit_width) as u16;
-    let floor_log256 = (floor_log2 / 8) as u8;
+    let floor_log2 = common::msb(value, bit_width);
+    let floor_log256 = floor_log2 / 8;
 
     if (rounding_mode == rounding::down()) {
         floor_log256
@@ -333,10 +332,8 @@ public(package) macro fun log256<$Int>(
         floor_log256
     } else if (rounding_mode == rounding::up()) {
         floor_log256 + 1
-    } else if (log256_should_round_up(value, floor_log256 as u16)) {
-        floor_log256 + 1
     } else {
-        floor_log256
+        round_log256_to_nearest(value, floor_log256)
     }
 }
 
@@ -701,11 +698,11 @@ public(package) fun round_division_result(
 ///
 /// #### Returns
 /// `true` if the value should round up, `false` otherwise.
-public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
+public(package) fun round_log2_to_nearest(value: u256, floor_log: u16): u16 {
     let threshold_exp = 2 * floor_log + 1;
     let max_small = std::u128::max_value!() as u256;
     let fast_path = threshold_exp < 256 && value <= max_small;
-    if (fast_path) {
+    let should_round_up = if (fast_path) {
         // Fast path: both value² and exponent fit in u256
         let value_squared = value * value;
         let threshold = 1 << (threshold_exp as u8);
@@ -720,7 +717,8 @@ public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
             u512::from_u256(1 << (threshold_exp as u8))
         };
         value_squared.ge(&threshold)
-    }
+    };
+    if (should_round_up) { floor_log + 1 } else { floor_log }
 }
 
 /// Nearest-integer rounding for log256 without floats.
@@ -743,12 +741,12 @@ public(package) fun log2_should_round_up(value: u256, floor_log: u16): bool {
 ///
 /// #### Returns
 /// `true` if the value should round up, `false` otherwise.
-public(package) fun log256_should_round_up(value: u256, floor_log: u16): bool {
+public(package) fun round_log256_to_nearest(value: u256, floor_log: u8): u8 {
     // For u256 values, floor_log ∈ [0, 31], so `threshold_exp = 8 * floor_log + 4 ≤ 252`
     // and the power-of-two threshold fits safely in u256.
     let threshold_exp = 8 * floor_log + 4;
-    let threshold = 1 << (threshold_exp as u8);
-    value >= threshold
+    let threshold = 1 << threshold_exp;
+    if (value >= threshold) { floor_log + 1 } else { floor_log }
 }
 
 /// Apply nearest-integer rounding to log10 without floats.
