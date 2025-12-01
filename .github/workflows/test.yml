@@ -128,7 +128,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           file: ./${{ matrix.package }}/lcov-all.info
-          flags: all,${{ matrix.package }}
+          flags: ${{ matrix.package }}
           name: ${{ matrix.package }}-all
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -138,14 +138,14 @@ jobs:
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report (ai)
-        run: sui move coverage lcov > lcov-ai.info
+        run: sui move coverage lcov > lcov-ai-${{ matrix.package }}.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov (ai)
         uses: codecov/codecov-action@v5
         with:
-          file: ./${{ matrix.package }}/lcov-ai.info
-          flags: ai,${{ matrix.package }}
+          file: ./${{ matrix.package }}/lcov-ai-${{ matrix.package }}.info
+          flags: ${{ matrix.package }}-ai
           name: ${{ matrix.package }}-ai
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -155,14 +155,14 @@ jobs:
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report (dev)
-        run: sui move coverage lcov > lcov-dev.info
+        run: sui move coverage lcov > lcov-dev-${{ matrix.package }}.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov (dev)
         uses: codecov/codecov-action@v5
         with:
-          file: ./${{ matrix.package }}/lcov-dev.info
-          flags: dev,${{ matrix.package }}
+          file: ./${{ matrix.package }}/lcov-dev-${{ matrix.package }}.info
+          flags: ${{ matrix.package }}-dev
           name: ${{ matrix.package }}-dev
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
