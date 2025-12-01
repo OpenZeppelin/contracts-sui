@@ -16,3 +16,7 @@ logs/
 # Temporary folders
 tmp/
 temp/
+
+**/*lcov*
+
+**/traces
