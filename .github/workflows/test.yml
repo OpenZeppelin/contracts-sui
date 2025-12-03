@@ -138,13 +138,13 @@ jobs:
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report (ai)
-        run: sui move coverage lcov > lcov-ai-${{ matrix.package }}.info
+        run: sui move coverage lcov > lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov (ai)
         uses: codecov/codecov-action@v5
         with:
-          file: ./${{ matrix.package }}/lcov-ai-${{ matrix.package }}.info
+          file: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
           flags: ${{ matrix.package }}-ai
           name: ${{ matrix.package }}-ai
           fail_ci_if_error: true
@@ -155,13 +155,13 @@ jobs:
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report (dev)
-        run: sui move coverage lcov > lcov-dev-${{ matrix.package }}.info
+        run: sui move coverage lcov > lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov (dev)
         uses: codecov/codecov-action@v5
         with:
-          file: ./${{ matrix.package }}/lcov-dev-${{ matrix.package }}.info
+          file: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
           flags: ${{ matrix.package }}-dev
           name: ${{ matrix.package }}-dev
           fail_ci_if_error: true
