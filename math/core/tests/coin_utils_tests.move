@@ -18,13 +18,6 @@ fun value(base: u64, decimals: u8): u256 {
 // === Tests for safe_downcast_balance ===
 
 #[test]
-fun ai_TMP_test_downcast_same_decimals() {
-    let amount = value(1, 9); // 1 token with 9 decimals
-    let result = coin_utils::safe_downcast_balance(amount, 9, 9);
-    assert_eq!(result, value(1, 9) as u64);
-}
-
-#[test]
 fun test_downcast_same_decimals() {
     let amount = value(1, 9); // 1 token with 9 decimals
     let result = coin_utils::safe_downcast_balance(amount, 9, 9);

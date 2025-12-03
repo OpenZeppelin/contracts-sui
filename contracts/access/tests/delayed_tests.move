@@ -22,29 +22,6 @@ fun new_cap(ctx: &mut TxContext): DummyCap {
 }
 
 #[test]
-fun ai_TMP_schedule_and_execute_transfer() {
-    let owner = @0x1;
-    let recipient = @0x2;
-    let mut ctx = dummy_ctx_with_sender(owner);
-    let mut wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 5, &mut ctx);
-
-    let mut clk = clock::create_for_testing(&mut ctx);
-    clock::set_for_testing(&mut clk, 1);
-
-    delayed_transfer::schedule_transfer(&mut wrapper, recipient, &clk, owner);
-    let scheduled = event::events_by_type<delayed_transfer::TransferScheduled>();
-    assert_eq!(scheduled.length(), 1);
-
-    clock::set_for_testing(&mut clk, 10);
-    delayed_transfer::execute_transfer(wrapper, &clk, &mut ctx);
-
-    let executed = event::events_by_type<delayed_transfer::OwnershipTransferred>();
-    assert_eq!(executed.length(), 1);
-
-    clock::destroy_for_testing(clk);
-}
-
-#[test]
 fun schedule_and_execute_transfer() {
     let owner = @0x1;
     let recipient = @0x2;
