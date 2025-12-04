@@ -87,6 +87,13 @@ jobs:
         with:
           version: ${{ env.SUI_VERSION }}
 
+      - name: Set package slug
+        id: set-slug
+        run: |
+          package_slug="${{ matrix.package }}"
+          package_slug="${package_slug//\//-}"
+          echo "package_slug=$package_slug" >> $GITHUB_OUTPUT
+
       - name: Lint
         run: sui move build --lint --warnings-are-errors
         working-directory: ./${{ matrix.package }}
@@ -134,14 +141,23 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run AI-only tests
-        run: sui move test --trace --coverage '::ai_'
+        id: ai-tests
+        run: |
+          sui move test --trace --coverage '::ai_'
+          if [ -f ./.trace ]; then
+            echo "trace_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "trace_found=false" >> $GITHUB_OUTPUT
+          fi
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report (ai)
+        if: ${{ steps.ai-tests.outputs.trace_found == 'true' }}
         run: sui move coverage lcov > lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov (ai)
+        if: ${{ steps.ai-tests.outputs.trace_found == 'true' }}
         uses: codecov/codecov-action@v5
         with:
           file: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
@@ -151,14 +167,23 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run dev-only tests
-        run: sui move test --trace --coverage '::([^a][^:]*|a[^i][^:]*|ai[^_][^:]*)$'
+        id: dev-tests
+        run: |
+          sui move test --trace --coverage '::([^a][^:]*|a[^i][^:]*|ai[^_][^:]*)$'
+          if [ -f ./.trace ]; then
+            echo "trace_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "trace_found=false" >> $GITHUB_OUTPUT
+          fi
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report (dev)
+        if: ${{ steps.dev-tests.outputs.trace_found == 'true' }}
         run: sui move coverage lcov > lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov (dev)
+        if: ${{ steps.dev-tests.outputs.trace_found == 'true' }}
         uses: codecov/codecov-action@v5
         with:
           file: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
