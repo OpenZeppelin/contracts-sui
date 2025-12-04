@@ -87,13 +87,6 @@ jobs:
         with:
           version: ${{ env.SUI_VERSION }}
 
-      - name: Set package slug
-        id: set-slug
-        run: |
-          package_slug="${{ matrix.package }}"
-          package_slug="${package_slug//\//-}"
-          echo "package_slug=$package_slug" >> $GITHUB_OUTPUT
-
       - name: Lint
         run: sui move build --lint --warnings-are-errors
         working-directory: ./${{ matrix.package }}
@@ -123,6 +116,13 @@ jobs:
         with:
           version: ${{ env.SUI_VERSION }}
 
+      - name: Set package slug
+        id: set-slug
+        run: |
+          package_slug="${{ matrix.package }}"
+          package_slug="${package_slug//\//-}"
+          echo "package_slug=$package_slug" >> $GITHUB_OUTPUT
+
       - name: Run all tests
         run: sui move test --trace --coverage
         working-directory: ./${{ matrix.package }}
@@ -134,7 +134,7 @@ jobs:
       - name: Upload coverage to Codecov (all)
         uses: codecov/codecov-action@v5
         with:
-          file: ./${{ matrix.package }}/lcov-all.info
+          files: ./${{ matrix.package }}/lcov-all.info
           flags: ${{ matrix.package }}
           name: ${{ matrix.package }}-all
           fail_ci_if_error: true
@@ -160,7 +160,7 @@ jobs:
         if: ${{ steps.ai-tests.outputs.trace_found == 'true' }}
         uses: codecov/codecov-action@v5
         with:
-          file: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
+          files: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
           flags: ${{ matrix.package }}-ai
           name: ${{ matrix.package }}-ai
           fail_ci_if_error: true
@@ -186,7 +186,7 @@ jobs:
         if: ${{ steps.dev-tests.outputs.trace_found == 'true' }}
         uses: codecov/codecov-action@v5
         with:
-          file: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
+          files: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
           flags: ${{ matrix.package }}-dev
           name: ${{ matrix.package }}-dev
           fail_ci_if_error: true
