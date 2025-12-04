@@ -2,7 +2,7 @@ name: Lint and Test
 
 on:
   push:
-    branches: [main, v*]
+    branches: [main, v*, "codecov-ai-tests-flag"]
   pull_request:
     branches: [main, v*]
 
