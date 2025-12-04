@@ -87,6 +87,13 @@ jobs:
         with:
           version: ${{ env.SUI_VERSION }}
 
+      - name: Set package slug
+        id: set-slug
+        run: |
+          package_slug="${{ matrix.package }}"
+          package_slug="${package_slug//\//-}"
+          echo "package_slug=$package_slug" >> $GITHUB_OUTPUT
+
       - name: Lint
         run: sui move build --lint --warnings-are-errors
         working-directory: ./${{ matrix.package }}
