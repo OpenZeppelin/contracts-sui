@@ -144,20 +144,13 @@ jobs:
         id: ai-tests
         run: |
           sui move test --trace --coverage '::ai_'
-          if [ -f ./.trace ]; then
-            echo "trace_found=true" >> $GITHUB_OUTPUT
-          else
-            echo "trace_found=false" >> $GITHUB_OUTPUT
-          fi
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report (ai)
-        if: ${{ steps.ai-tests.outputs.trace_found == 'true' }}
         run: sui move coverage lcov > lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov (ai)
-        if: ${{ steps.ai-tests.outputs.trace_found == 'true' }}
         uses: codecov/codecov-action@v5
         with:
           files: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
@@ -170,20 +163,13 @@ jobs:
         id: dev-tests
         run: |
           sui move test --trace --coverage '::([^a][^:]*|a[^i][^:]*|ai[^_][^:]*)$'
-          if [ -f ./.trace ]; then
-            echo "trace_found=true" >> $GITHUB_OUTPUT
-          else
-            echo "trace_found=false" >> $GITHUB_OUTPUT
-          fi
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report (dev)
-        if: ${{ steps.dev-tests.outputs.trace_found == 'true' }}
         run: sui move coverage lcov > lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov (dev)
-        if: ${{ steps.dev-tests.outputs.trace_found == 'true' }}
         uses: codecov/codecov-action@v5
         with:
           files: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
