@@ -123,7 +123,7 @@ jobs:
           package_slug="${package_slug//\//-}"
           echo "package_slug=$package_slug" >> $GITHUB_OUTPUT
 
-      - name: Run all tests
+      - name: Run tests (all)
         run: sui move test --trace --coverage
         working-directory: ./${{ matrix.package }}
 
@@ -140,7 +140,7 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Run AI-only tests
+      - name: Run tests (ai)
         id: ai-tests
         run: |
           sui move test --trace --coverage '::ai_'
@@ -166,7 +166,7 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Run dev-only tests
+      - name: Run tests (dev)
         id: dev-tests
         run: |
           sui move test --trace --coverage '::([^a][^:]*|a[^i][^:]*|ai[^_][^:]*)$'
