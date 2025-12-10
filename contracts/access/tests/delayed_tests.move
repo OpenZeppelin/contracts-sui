@@ -1,22 +1,16 @@
+#[test_only]
 module openzeppelin_access::delayed_tests;
 
 use openzeppelin_access::delayed_transfer;
+use openzeppelin_access::test_helpers::dummy_ctx_with_sender;
 use std::unit_test::assert_eq;
 use sui::clock;
 use sui::event;
 
-#[test_only]
 public struct DummyCap has key, store {
     id: sui::object::UID,
 }
 
-#[test_only]
-public fun dummy_ctx_with_sender(sender: address): TxContext {
-    let tx_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
-    tx_context::new(sender, tx_hash, 0, 0, 0)
-}
-
-#[test_only]
 fun new_cap(ctx: &mut TxContext): DummyCap {
     DummyCap { id: sui::object::new(ctx) }
 }
