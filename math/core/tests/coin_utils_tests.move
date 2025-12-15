@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_math::coin_utils_tests;
 
 use openzeppelin_math::coin_utils;
