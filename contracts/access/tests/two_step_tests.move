@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_access::two_step_tests;
 
 use openzeppelin_access::two_step_transfer;

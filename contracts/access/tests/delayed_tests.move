@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_access::delayed_tests;
 
 use openzeppelin_access::delayed_transfer;
