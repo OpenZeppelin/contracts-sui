@@ -776,3 +776,23 @@ fun mul_mod_handles_large_values() {
 fun mul_mod_rejects_zero_modulus() {
     u128::mul_mod(2, 3, 0);
 }
+
+// === is_power_of_ten ===
+
+#[test]
+fun is_power_of_ten_basic() {
+    assert_eq!(u128::is_power_of_ten(1), true);
+    assert_eq!(u128::is_power_of_ten(10), true);
+    assert_eq!(u128::is_power_of_ten(100), true);
+    assert_eq!(u128::is_power_of_ten(1000), true);
+    assert_eq!(u128::is_power_of_ten(10000), true);
+    assert_eq!(u128::is_power_of_ten(100000000000000000000), true); // 10^20
+    assert_eq!(u128::is_power_of_ten(100000000000000000000000000000000000000), true); // 10^38 (max for u128)
+    assert_eq!(u128::is_power_of_ten(0), false);
+    assert_eq!(u128::is_power_of_ten(2), false);
+    assert_eq!(u128::is_power_of_ten(11), false);
+    assert_eq!(u128::is_power_of_ten(101), false);
+    assert_eq!(u128::is_power_of_ten(1234567890), false);
+    assert_eq!(u128::is_power_of_ten(99999999999999999999), false);
+    assert_eq!(u128::is_power_of_ten(100000000000000000001), false);
+}
