@@ -768,3 +768,20 @@ fun mul_mod_handles_large_values() {
 fun mul_mod_rejects_zero_modulus() {
     u64::mul_mod(3, 4, 0);
 }
+
+// === is_power_of_ten ===
+
+#[test]
+fun is_power_of_ten_basic() {
+    assert_eq!(u64::is_power_of_ten(1), true);
+    assert_eq!(u64::is_power_of_ten(10), true);
+    assert_eq!(u64::is_power_of_ten(100), true);
+    assert_eq!(u64::is_power_of_ten(1000), true);
+    assert_eq!(u64::is_power_of_ten(10000), true);
+    assert_eq!(u64::is_power_of_ten(0), false);
+    assert_eq!(u64::is_power_of_ten(2), false);
+    assert_eq!(u64::is_power_of_ten(11), false);
+    assert_eq!(u64::is_power_of_ten(101), false);
+    assert_eq!(u64::is_power_of_ten(1234567890), false);
+    assert_eq!(u64::is_power_of_ten(10000000000000000000), true);
+}

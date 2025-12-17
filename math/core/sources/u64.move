@@ -108,3 +108,16 @@ public fun inv_mod(value: u64, modulus: u64): Option<u64> {
 public fun mul_mod(a: u64, b: u64, modulus: u64): u64 {
     macros::mul_mod!(a, b, modulus)
 }
+
+/// Returns true if the value is a power of ten (1, 10, 100, ...)
+public fun is_power_of_ten(n: u64): bool {
+    let mut num = n;
+    if (num < 1) {
+        false
+    } else {
+        while (num % 10 == 0) {
+            num = num / 10;
+        };
+        num == 1
+    }
+}
