@@ -784,4 +784,7 @@ fun is_power_of_ten_basic() {
     assert_eq!(u64::is_power_of_ten(101), false);
     assert_eq!(u64::is_power_of_ten(1234567890), false);
     assert_eq!(u64::is_power_of_ten(10000000000000000000), true);
+    assert_eq!(u64::is_power_of_ten(20), false);
+    assert_eq!(u64::is_power_of_ten(500), false);
+    assert_eq!(u64::is_power_of_ten(3000), false);
 }
