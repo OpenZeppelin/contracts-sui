@@ -7,7 +7,7 @@ use sui::event;
 
 #[test_only]
 public struct DummyCap has key, store {
-    id: sui::object::UID,
+    id: object::UID,
 }
 
 #[test_only]
@@ -18,7 +18,7 @@ public fun dummy_ctx_with_sender(sender: address): TxContext {
 
 #[test_only]
 fun new_cap(ctx: &mut TxContext): DummyCap {
-    DummyCap { id: sui::object::new(ctx) }
+    DummyCap { id: object::new(ctx) }
 }
 
 #[test]
@@ -27,12 +27,12 @@ fun request_emits_event() {
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
-    two_step_transfer::request<DummyCap>(sui::object::id(&wrapper), owner, &mut ctx);
+    two_step_transfer::request<DummyCap>(object::id(&wrapper), owner, &mut ctx);
 
     let events = event::events_by_type<two_step_transfer::OwnershipRequested>();
     assert_eq!(events.length(), 1);
 
-    let DummyCap { id } = two_step_transfer::unwrap(wrapper);
+    let DummyCap { id } = wrapper.unwrap();
     id.delete();
 }
 
@@ -42,7 +42,7 @@ fun unwrap_returns_inner_cap() {
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
-    let cap = two_step_transfer::unwrap(wrapper);
+    let cap = wrapper.unwrap();
     let DummyCap { id } = cap;
     id.delete();
 }
@@ -54,16 +54,13 @@ fun borrow_and_return_roundtrip() {
     let mut ctx = dummy_ctx_with_sender(owner);
     let mut wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
-    let readonly = two_step_transfer::borrow(&wrapper);
-    std::unit_test::assert_eq!(
-        sui::object::id(readonly),
-        sui::object::id(two_step_transfer::borrow_mut(&mut wrapper)),
-    );
+    let readonly = wrapper.borrow();
+    std::unit_test::assert_eq!(object::id(readonly), object::id(wrapper.borrow_mut()));
 
-    let (cap, borrow_token) = two_step_transfer::borrow_val(&mut wrapper);
-    two_step_transfer::return_val(&mut wrapper, cap, borrow_token);
+    let (cap, borrow_token) = wrapper.borrow_val();
+    wrapper.return_val(cap, borrow_token);
 
-    let DummyCap { id } = two_step_transfer::unwrap(wrapper);
+    let DummyCap { id } = wrapper.unwrap();
     id.delete();
 }
 
@@ -97,11 +94,11 @@ fun transfer_emits_event() {
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     let request = two_step_transfer::test_new_request<DummyCap>(
-        sui::object::id(&wrapper),
+        object::id(&wrapper),
         new_owner,
         &mut ctx,
     );
-    two_step_transfer::transfer(wrapper, request, &mut ctx);
+    wrapper.transfer(request, &mut ctx);
 
     let events = event::events_by_type<two_step_transfer::OwnershipTransferred>();
     assert_eq!(events.length(), 1);
@@ -126,7 +123,7 @@ fun reject_destroys_request() {
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
     let request = two_step_transfer::test_new_request<DummyCap>(
-        sui::object::id(&wrapper),
+        object::id(&wrapper),
         owner,
         &mut ctx,
     );
@@ -135,7 +132,7 @@ fun reject_destroys_request() {
     let events = event::events_by_type<two_step_transfer::OwnershipTransferred>();
     assert_eq!(events.length(), 0);
 
-    let DummyCap { id } = two_step_transfer::unwrap(wrapper);
+    let DummyCap { id } = wrapper.unwrap();
     id.delete();
 }
 
@@ -143,12 +140,12 @@ fun expect_wrapper_mismatch(
     mut first: two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     mut second: two_step_transfer::TwoStepTransferWrapper<DummyCap>,
 ) {
-    let (cap, borrow_token) = two_step_transfer::borrow_val(&mut first);
-    two_step_transfer::return_val(&mut second, cap, borrow_token);
+    let (cap, borrow_token) = first.borrow_val();
+    second.return_val(cap, borrow_token);
 
-    let DummyCap { id } = two_step_transfer::unwrap(first);
+    let DummyCap { id } = first.unwrap();
     id.delete();
-    let DummyCap { id } = two_step_transfer::unwrap(second);
+    let DummyCap { id } = second.unwrap();
     id.delete();
 }
 
@@ -156,13 +153,13 @@ fun expect_capability_mismatch(
     mut wrapper: two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     ctx: &mut TxContext,
 ) {
-    let (borrowed_cap, borrow_token) = two_step_transfer::borrow_val(&mut wrapper);
+    let (borrowed_cap, borrow_token) = wrapper.borrow_val();
     let DummyCap { id } = borrowed_cap;
     id.delete();
     let bogus_cap = new_cap(ctx);
-    two_step_transfer::return_val(&mut wrapper, bogus_cap, borrow_token);
+    wrapper.return_val(bogus_cap, borrow_token);
 
-    let DummyCap { id } = two_step_transfer::unwrap(wrapper);
+    let DummyCap { id } = wrapper.unwrap();
     id.delete();
 }
 
@@ -173,12 +170,12 @@ fun expect_mismatched_request(
     ctx: &mut TxContext,
 ) {
     let bad_request = two_step_transfer::test_new_request<DummyCap>(
-        sui::object::id(&other_wrapper),
+        object::id(&other_wrapper),
         owner,
         ctx,
     );
-    two_step_transfer::transfer(wrapper, bad_request, ctx);
+    wrapper.transfer(bad_request, ctx);
 
-    let DummyCap { id } = two_step_transfer::unwrap(other_wrapper);
+    let DummyCap { id } = other_wrapper.unwrap();
     id.delete();
 }
