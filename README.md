@@ -1,5 +1,6 @@
 # OpenZeppelin Contracts for Sui
 
+[![Github Release](https://img.shields.io/github/v/tag/OpenZeppelin/contracts-sui.svg?filter=v*&sort=semver&label=github)](https://github.com/OpenZeppelin/contracts-sui/releases/latest)
 [![Lint and Test](https://github.com/OpenZeppelin/contracts-sui/actions/workflows/test.yml/badge.svg)](https://github.com/OpenZeppelin/contracts-sui/actions/workflows/test.yml)
 [![Coverage Status](https://codecov.io/gh/OpenZeppelin/contracts-sui/graph/badge.svg)](https://codecov.io/gh/OpenZeppelin/contracts-sui)
 [![License](https://img.shields.io/github/license/OpenZeppelin/contracts-sui)](https://github.com/OpenZeppelin/contracts-sui/blob/main/LICENSE)
