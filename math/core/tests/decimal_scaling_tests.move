@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_math::decimal_scaling_tests;
 
 use openzeppelin_math::decimal_scaling;

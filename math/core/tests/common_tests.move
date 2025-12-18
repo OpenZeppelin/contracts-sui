@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_math::common_tests;
 
 use openzeppelin_math::common;
