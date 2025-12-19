@@ -43,11 +43,11 @@ public use fun openzeppelin_fp_math::ud30x9_base::xor as UD30x9.xor;
 // === Casting helpers ===
 
 /// Wraps a `u128` number into a `UD30x9` value type.
-public(package) fun wrap(x: u128): UD30x9 {
+public fun wrap(x: u128): UD30x9 {
     UD30x9(x)
 }
 
 /// Unwraps a `UD30x9` value into a `u128`.
-public(package) fun unwrap(x: UD30x9): u128 {
+public fun unwrap(x: UD30x9): u128 {
     x.0
 }

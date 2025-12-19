@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_fp_math::ud30x9_tests;
 
 use openzeppelin_fp_math::casting_u128;
@@ -6,9 +7,13 @@ use std::unit_test::assert_eq;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 
+// ==== Helpers ====
+
 fun fixed(value: u128): UD30x9 {
     ud30x9::wrap(value)
 }
+
+// ==== Tests ====
 
 #[test]
 fun wrap_and_unwrap_roundtrip() {
