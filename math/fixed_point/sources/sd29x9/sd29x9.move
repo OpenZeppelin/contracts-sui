@@ -1,7 +1,7 @@
 /// # SD29x9 Fixed-Point Type
 ///
 /// This module defines the `SD29x9` decimal fixed-point type, which represents
-/// signed real numbers using an 2-complement `u128` scaled by `10^9`.
+/// signed real numbers using a 2-complement `u128` scaled by `10^9`.
 ///
 /// ## Why SD29x9
 /// - Matches Sui’s native coin decimals (9), making conversions from token
@@ -21,14 +21,14 @@ public struct SD29x9(u128) has copy, drop, store;
 // === Constants ===
 
 const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
-const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^128 in two's complement
+const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
 
 // === Errors ===
 
 /// Value cannot be safely cast to `SD29x9` after apply
 #[error(code = 0)]
-const EValueOver2Power127: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
+const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
 
 // === Functions ===
 
@@ -84,7 +84,7 @@ public fun wrap(x: u128, is_negative: bool): SD29x9 {
         return zero()
     } else if (x > MAX_POSITIVE_VALUE) {
         // The value is too large to be represented as a positive SD29x9
-        abort EValueOver2Power127
+        abort EOverflow
     } else if (is_negative) {
         // The conversion to two's complement cannot overflow: zero is handled separately
         // before any bit manipulation, and otherwise the range is restricted to values

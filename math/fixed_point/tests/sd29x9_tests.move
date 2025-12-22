@@ -73,10 +73,13 @@ fun shifts_cover_positive_negative_and_large_offsets() {
     let neg_value = neg(8);
     let pos_value = pos(4);
 
+    expect(pos_value.lshift(0), pos_value);
     expect(pos_value.lshift(1), pos(8));
     expect(neg_value.lshift(1), neg(16));
+    assert!(pos_value.lshift(128).is_zero());
     assert!(pos_value.lshift(129).is_zero());
 
+    expect(pos_value.rshift(0), pos_value);
     expect(pos_value.rshift(1), pos(2));
     expect(neg_value.rshift(1), neg(4));
     expect(neg_value.rshift(0), neg_value);
@@ -90,11 +93,30 @@ fun shifts_cover_positive_negative_and_large_offsets() {
     );
 }
 
+#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+fun checked_add_overflow_aborts() {
+    let max = sd29x9::max();
+    let one = pos(1);
+    max.add(one);
+}
+
+#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+fun checked_sub_overflow_aborts() {
+    let min_val = sd29x9::min();
+    let one = pos(1);
+    min_val.sub(one);
+}
+
 #[test]
 fun modulo_tracks_dividend_sign() {
     expect(pos(100).mod_(pos(15)), pos(10));
     expect(neg(100).mod_(pos(15)), neg(10));
     expect(pos(42).mod_(neg(21)), sd29x9::zero());
+}
+
+#[test, expected_failure]
+fun modulo_with_zero_divisor_aborts() {
+    pos(10).mod_(sd29x9::zero());
 }
 
 #[test]

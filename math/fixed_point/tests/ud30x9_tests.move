@@ -85,11 +85,40 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
     let inverted = value.not();
     assert_eq!(inverted.unwrap(), MAX_VALUE ^ raw);
 
+    let left_zero = value.lshift(0);
+    assert_eq!(left_zero.unwrap(), raw);
     let left_shifted = value.lshift(4);
     assert_eq!(left_shifted.unwrap(), raw << 4);
 
+    let right_zero = value.rshift(0);
+    assert_eq!(right_zero.unwrap(), raw);
     let right_shifted = value.rshift(4);
     assert_eq!(right_shifted.unwrap(), raw >> 4);
+}
+
+#[test, expected_failure]
+fun checked_add_overflow_aborts() {
+    fixed(MAX_VALUE).add(fixed(1));
+}
+
+#[test, expected_failure]
+fun checked_sub_underflow_aborts() {
+    fixed(0).sub(fixed(1));
+}
+
+#[test, expected_failure]
+fun modulo_with_zero_divisor_aborts() {
+    fixed(10).mod_(fixed(0));
+}
+
+#[test, expected_failure]
+fun lshift_by_128_aborts() {
+    fixed(1).lshift(128);
+}
+
+#[test, expected_failure]
+fun rshift_by_128_aborts() {
+    fixed(1).rshift(128);
 }
 
 #[test]
