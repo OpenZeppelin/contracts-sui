@@ -798,14 +798,14 @@ fun is_power_of_ten_edge_cases() {
     assert_eq!(u32::is_power_of_ten(9999999), false);
     assert_eq!(u32::is_power_of_ten(99999999), false);
     assert_eq!(u32::is_power_of_ten(999999999), false);
-    
+
     // Test numbers just above powers of ten
     assert_eq!(u32::is_power_of_ten(11), false);
     assert_eq!(u32::is_power_of_ten(101), false);
     assert_eq!(u32::is_power_of_ten(10001), false);
     assert_eq!(u32::is_power_of_ten(100001), false);
     assert_eq!(u32::is_power_of_ten(1000001), false);
-    
+
     // Test multiples of 10 that aren't powers of 10
     assert_eq!(u32::is_power_of_ten(20), false);
     assert_eq!(u32::is_power_of_ten(30), false);
@@ -814,7 +814,7 @@ fun is_power_of_ten_edge_cases() {
     assert_eq!(u32::is_power_of_ten(500), false);
     assert_eq!(u32::is_power_of_ten(5000), false);
     assert_eq!(u32::is_power_of_ten(50000), false);
-    
+
     // Test max u32 value
     assert_eq!(u32::is_power_of_ten(4294967295), false);
 }

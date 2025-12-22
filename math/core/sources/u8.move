@@ -110,7 +110,7 @@ public fun mul_mod(a: u8, b: u8, modulus: u8): u8 {
 }
 
 /// Returns true if the value is a power of ten (1, 10, 100)
-/// 
+///
 /// For u8, only 1, 10, and 100 are powers of ten within range.
 public fun is_power_of_ten(n: u8): bool {
     n == 1 || n == 10 || n == 100

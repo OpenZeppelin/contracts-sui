@@ -808,7 +808,7 @@ fun is_power_of_ten_edge_cases() {
     assert_eq!(u128::is_power_of_ten(1000000000000000000), true); // 10^18
     assert_eq!(u128::is_power_of_ten(10000000000000000000), true); // 10^19
     assert_eq!(u128::is_power_of_ten(1000000000000000000000), true); // 10^21
-    
+
     // Test numbers just below and above powers of ten
     assert_eq!(u128::is_power_of_ten(9), false);
     assert_eq!(u128::is_power_of_ten(99), false);
@@ -817,7 +817,7 @@ fun is_power_of_ten_edge_cases() {
     assert_eq!(u128::is_power_of_ten(1001), false);
     assert_eq!(u128::is_power_of_ten(10001), false);
     assert_eq!(u128::is_power_of_ten(100001), false);
-    
+
     // Test multiples of 10 that aren't powers of 10
     assert_eq!(u128::is_power_of_ten(20), false);
     assert_eq!(u128::is_power_of_ten(50), false);
@@ -833,11 +833,11 @@ fun is_power_of_ten_binary_search_paths() {
     assert_eq!(u128::is_power_of_ten(10000000000000), true); // 10^13 - middle
     assert_eq!(u128::is_power_of_ten(1000000000000000000000000), true); // 10^24 - upper middle
     assert_eq!(u128::is_power_of_ten(10000000000000000000000000000000), true); // 10^31 - upper range
-    
+
     // Test non-powers at various positions to exercise binary search failure paths
     assert_eq!(u128::is_power_of_ten(3), false); // Less than first non-1 power
     assert_eq!(u128::is_power_of_ten(15), false); // Between 10 and 100
-    assert_eq!(u128::is_power_of_ten(150), false); // Between 100 and 1000  
+    assert_eq!(u128::is_power_of_ten(150), false); // Between 100 and 1000
     assert_eq!(u128::is_power_of_ten(15000), false); // Between 10^4 and 10^5
     assert_eq!(u128::is_power_of_ten(5000000000), false); // Between 10^9 and 10^10
     assert_eq!(u128::is_power_of_ten(50000000000000000000), false); // Between 10^19 and 10^20

@@ -114,7 +114,7 @@ public fun mul_mod(a: u256, b: u256, modulus: u256): u256 {
 }
 
 /// Returns true if the value is a power of ten (1, 10, 100, ...)
-/// 
+///
 /// Uses a lookup table with binary search for efficiency.
 /// For u256, valid powers of ten range from 10^0 to 10^76.
 public fun is_power_of_ten(n: u256): bool {
@@ -198,15 +198,15 @@ public fun is_power_of_ten(n: u256): bool {
         1000000000000000000000000000000000000000000000000000000000000000000000000000u256,
         10000000000000000000000000000000000000000000000000000000000000000000000000000u256,
     ];
-    
+
     // Binary search
     let mut left = 0;
     let mut right = powers.length();
-    
+
     while (left < right) {
         let mid = left + (right - left) / 2;
         let mid_val = *powers.borrow(mid);
-        
+
         if (mid_val == n) {
             return true
         } else if (mid_val < n) {
@@ -215,6 +215,6 @@ public fun is_power_of_ten(n: u256): bool {
             right = mid;
         }
     };
-    
+
     false
 }

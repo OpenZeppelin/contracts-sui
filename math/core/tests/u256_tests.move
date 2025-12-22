@@ -864,7 +864,12 @@ fun is_power_of_ten_basic() {
     assert_eq!(u256::is_power_of_ten(10000), true);
     assert_eq!(u256::is_power_of_ten(100000000000000000000), true); // 10^20
     assert_eq!(u256::is_power_of_ten(1000000000000000000000000000000), true); // 10^30
-    assert_eq!(u256::is_power_of_ten(10000000000000000000000000000000000000000000000000000000000000000000000000000), true); // 10^76 (max for u256)
+    assert_eq!(
+        u256::is_power_of_ten(
+            10000000000000000000000000000000000000000000000000000000000000000000000000000,
+        ),
+        true,
+    ); // 10^76 (max for u256)
     assert_eq!(u256::is_power_of_ten(0), false);
     assert_eq!(u256::is_power_of_ten(2), false);
     assert_eq!(u256::is_power_of_ten(11), false);
@@ -884,7 +889,7 @@ fun is_power_of_ten_edge_cases() {
     assert_eq!(u256::is_power_of_ten(10000000000), true); // 10^10
     assert_eq!(u256::is_power_of_ten(1000000000000000000), true); // 10^18
     assert_eq!(u256::is_power_of_ten(10000000000000000000), true); // 10^19
-    
+
     // Test numbers just below and above powers of ten
     assert_eq!(u256::is_power_of_ten(9), false);
     assert_eq!(u256::is_power_of_ten(99), false);
@@ -893,7 +898,7 @@ fun is_power_of_ten_edge_cases() {
     assert_eq!(u256::is_power_of_ten(1001), false);
     assert_eq!(u256::is_power_of_ten(10001), false);
     assert_eq!(u256::is_power_of_ten(100001), false);
-    
+
     // Test multiples of 10 that aren't powers of 10
     assert_eq!(u256::is_power_of_ten(20), false);
     assert_eq!(u256::is_power_of_ten(50), false);
@@ -910,7 +915,7 @@ fun is_power_of_ten_binary_search_paths() {
     assert_eq!(u256::is_power_of_ten(100000000000000000000000000000000), true); // 10^32 - upper middle
     assert_eq!(u256::is_power_of_ten(1000000000000000000000000000000000000000), true); // 10^39 - upper range
     assert_eq!(u256::is_power_of_ten(10000000000000000000000000000000000000000000000000000), true); // 10^52 - high range
-    
+
     // Test non-powers at various positions to exercise binary search failure paths
     assert_eq!(u256::is_power_of_ten(3), false); // Less than first non-1 power
     assert_eq!(u256::is_power_of_ten(15), false); // Between 10 and 100
