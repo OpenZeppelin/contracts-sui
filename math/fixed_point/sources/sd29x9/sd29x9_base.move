@@ -49,6 +49,12 @@ public fun is_zero(x: SD29x9): bool {
 }
 
 /// Implements the left shift operation (<<) for SD29x9 type.
+///
+/// This shift is performed on the raw two's-complement bits.
+/// - If `bits >= 128`, returns zero (all bits cleared).
+/// - Otherwise, shifts the raw bits left by `bits` and masks to 128 bits.
+/// - This is a logical left shift; it does not preserve the sign and can
+///   move 1s into the sign bit.
 public fun lshift(x: SD29x9, bits: u8): SD29x9 {
     if (bits >= 128) {
         return sd29x9::zero()
@@ -94,6 +100,13 @@ public fun or(x: SD29x9, y: SD29x9): SD29x9 {
 }
 
 /// Implements the right shift operation (>>) for SD29x9 type.
+///
+/// This shift is performed on the raw two's-complement bits and preserves sign.
+/// - If `bits == 0`, returns the original value unchanged.
+/// - If `bits >= 128`, returns all 1s for negative values and zero for non-negative values.
+/// - Otherwise, performs an arithmetic right shift:
+///   - For non-negative values, this is a logical right shift.
+///   - For negative values, the shifted value is sign-extended with 1s.
 public fun rshift(x: SD29x9, bits: u8): SD29x9 {
     if (bits == 0) {
         return x
