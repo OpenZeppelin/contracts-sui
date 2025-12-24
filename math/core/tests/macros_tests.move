@@ -1326,9 +1326,36 @@ fun binary_search_works_with_u256() {
 fun binary_search_handles_large_sorted_vector() {
     // Test with a larger vector to ensure binary search efficiency
     let haystack = vector[
-        1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        1u64,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
     ];
     assert_eq!(macros::binary_search!(haystack, 1u64), true);
     assert_eq!(macros::binary_search!(haystack, 15u64), true);
@@ -1363,14 +1390,14 @@ fun binary_search_handles_powers_of_ten() {
         1000000000000000000,
         10000000000000000000,
     ];
-    
+
     // All powers should be found
     assert_eq!(macros::binary_search!(powers, 1u64), true);
     assert_eq!(macros::binary_search!(powers, 10u64), true);
     assert_eq!(macros::binary_search!(powers, 1000u64), true);
     assert_eq!(macros::binary_search!(powers, 1000000u64), true);
     assert_eq!(macros::binary_search!(powers, 10000000000000000000u64), true);
-    
+
     // Non-powers should not be found
     assert_eq!(macros::binary_search!(powers, 2u64), false);
     assert_eq!(macros::binary_search!(powers, 11u64), false);

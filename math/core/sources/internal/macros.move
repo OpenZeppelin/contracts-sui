@@ -965,7 +965,7 @@ public(package) fun mul_mod_impl(a: u256, b: u256, modulus: u256): u256 {
 public(package) macro fun binary_search<$Int>($haystack: vector<$Int>, $needle: $Int): bool {
     let haystack = $haystack;
     let needle = $needle;
-    
+
     let mut left = 0;
     let mut right = haystack.length();
 
