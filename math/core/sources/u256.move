@@ -199,22 +199,5 @@ public fun is_power_of_ten(n: u256): bool {
         10000000000000000000000000000000000000000000000000000000000000000000000000000u256,
     ];
 
-    // Binary search
-    let mut left = 0;
-    let mut right = powers.length();
-
-    while (left < right) {
-        let mid = left + (right - left) / 2;
-        let mid_val = *powers.borrow(mid);
-
-        if (mid_val == n) {
-            return true
-        } else if (mid_val < n) {
-            left = mid + 1;
-        } else {
-            right = mid;
-        }
-    };
-
-    false
+    macros::binary_search!(powers, n)
 }
