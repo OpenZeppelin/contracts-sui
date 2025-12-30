@@ -1,4 +1,4 @@
-module openzeppelin_math::coin_utils;
+module openzeppelin_math::decimal_scaling;
 
 // === Errors ===
 
