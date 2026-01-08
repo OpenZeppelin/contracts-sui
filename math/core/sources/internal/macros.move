@@ -946,3 +946,41 @@ public(package) fun mul_mod_impl(a: u256, b: u256, modulus: u256): u256 {
         ((a * b) % modulus)
     }
 }
+
+/// Perform binary search on a sorted vector to find if `$needle` exists in the vector.
+///
+/// The helper works across all unsigned widths and performs a standard iterative binary
+/// search on a sorted vector. It compares the search value against the middle element
+/// at each iteration until either the value is found or the search space is exhausted.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$haystack`: A sorted vector of unsigned integers to search through.
+/// - `$needle`: The value to search for in the vector.
+///
+/// #### Returns
+/// `true` if `$needle` exists in `$haystack`, `false` otherwise.
+public(package) macro fun binary_search<$Int>($haystack: vector<$Int>, $needle: $Int): bool {
+    let haystack = $haystack;
+    let needle = $needle;
+
+    let mut left = 0;
+    let mut right = haystack.length();
+
+    while (left < right) {
+        let mid = left + (right - left) / 2;
+        let mid_val = *haystack.borrow(mid);
+
+        if (mid_val == needle) {
+            return true
+        } else if (mid_val < needle) {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
+    };
+
+    false
+}
