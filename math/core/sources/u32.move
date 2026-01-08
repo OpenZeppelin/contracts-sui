@@ -107,3 +107,11 @@ public fun inv_mod(value: u32, modulus: u32): Option<u32> {
 public fun mul_mod(a: u32, b: u32, modulus: u32): u32 {
     macros::mul_mod!(a, b, modulus)
 }
+
+/// Returns true if the value is a power of ten (1, 10, 100, ...)
+///
+/// For u32, valid powers of ten are: 1, 10, 100, ..., 10^9 (1000000000)
+public fun is_power_of_ten(n: u32): bool {
+    n == 1 || n == 10 || n == 100 || n == 1000 || n == 10000 ||
+    n == 100000 || n == 1000000 || n == 10000000 || n == 100000000 || n == 1000000000
+}
