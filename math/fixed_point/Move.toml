@@ -1,0 +1,6 @@
+[package]
+name = "openzeppelin_fp_math"
+edition = "2024"
+
+[addresses]
+openzeppelin_fp_math = "0x0"
