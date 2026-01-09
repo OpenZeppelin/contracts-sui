@@ -42,7 +42,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::is_zero as SD29x9.is_zero;
 public use fun openzeppelin_fp_math::sd29x9_base::lshift as SD29x9.lshift;
 public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
 public use fun openzeppelin_fp_math::sd29x9_base::lte as SD29x9.lte;
-public use fun openzeppelin_fp_math::sd29x9_base::mod_ as SD29x9.mod_;
+public use fun openzeppelin_fp_math::sd29x9_base::mod as SD29x9.mod;
 public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
 public use fun openzeppelin_fp_math::sd29x9_base::not as SD29x9.not;
 public use fun openzeppelin_fp_math::sd29x9_base::or as SD29x9.or;

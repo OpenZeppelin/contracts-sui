@@ -73,15 +73,11 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
 }
 
 /// Implements the checked modulo operation (%) for SD29x9 type.
-public fun mod_(x: SD29x9, y: SD29x9): SD29x9 {
+public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
     let x_components = decompose(x.unwrap());
     let y_components = decompose(y.unwrap());
     let remainder = x_components.mag % y_components.mag;
-    if (remainder == 0) {
-        sd29x9::zero()
-    } else {
-        wrap_components(Components { neg: x_components.neg, mag: remainder })
-    }
+    wrap_components(Components { neg: x_components.neg, mag: remainder })
 }
 
 /// Implements the not equal operation (!=) for SD29x9 type.
@@ -210,23 +206,10 @@ fun greater_than_bits(x_bits: u128, y_bits: u128): bool {
     let y_components = decompose(y_bits);
 
     if (x_components.neg != y_components.neg) {
-        return !x_components.neg
-    };
-
-    if (!x_components.neg) {
+        !x_components.neg
+    } else if (!x_components.neg) {
         x_components.mag > y_components.mag
     } else {
         x_components.mag < y_components.mag
     }
-}
-
-/// Unwraps an SD29x9 value to its bits.
-public fun unwrap(x: SD29x9): u128 {
-    x.unwrap()
-}
-
-/// Wraps integer and negativity into an SD29x9 value;
-/// this function is missing in the original and needed for arithmetic helpers.
-public fun wrap(mag: u128, neg: bool): SD29x9 {
-    sd29x9::wrap(mag, neg)
 }

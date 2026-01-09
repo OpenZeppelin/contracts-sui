@@ -36,7 +36,7 @@ fun checked_arithmetic_matches_integers() {
     let diff = left.sub(right);
     assert_eq!(diff.unwrap(), 400);
 
-    let remainder = left.mod_(right);
+    let remainder = left.mod(right);
     assert_eq!(remainder.unwrap(), 400);
 }
 
@@ -108,7 +108,7 @@ fun checked_sub_underflow_aborts() {
 
 #[test, expected_failure]
 fun modulo_with_zero_divisor_aborts() {
-    fixed(10).mod_(fixed(0));
+    fixed(10).mod(fixed(0));
 }
 
 #[test, expected_failure]
@@ -148,10 +148,10 @@ fun unchecked_subtraction_wraps_both_directions() {
 fun modulo_and_zero_helpers_match_u128() {
     let dividend = fixed(100);
     let divisor = fixed(25);
-    assert_eq!(dividend.mod_(divisor).unwrap(), 0);
+    assert_eq!(dividend.mod(divisor).unwrap(), 0);
 
     let odd_dividend = fixed(101);
-    let remainder = odd_dividend.mod_(divisor);
+    let remainder = odd_dividend.mod(divisor);
     assert_eq!(remainder.unwrap(), 1);
 
     assert!(!dividend.is_zero());

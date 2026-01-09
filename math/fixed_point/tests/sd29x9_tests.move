@@ -34,6 +34,18 @@ fun addition_and_subtraction_cover_signs() {
 }
 
 #[test]
+fun sum_can_reach_minimum_value() {
+    let min_val = sd29x9::min();
+    let min_plus_one = min_val.add(pos(1));
+    let zero = sd29x9::zero();
+
+    // 0 + min = min (should work with checked add)
+    expect(zero.add(min_val), min_val);
+    // (min + 1) + (-1) = min
+    expect(min_plus_one.add(neg(1)), min_val);
+}
+
+#[test]
 fun comparison_helpers_handle_all_cases() {
     let neg_two = neg(2);
     let neg_four = neg(4);
@@ -109,14 +121,14 @@ fun checked_sub_overflow_aborts() {
 
 #[test]
 fun modulo_tracks_dividend_sign() {
-    expect(pos(100).mod_(pos(15)), pos(10));
-    expect(neg(100).mod_(pos(15)), neg(10));
-    expect(pos(42).mod_(neg(21)), sd29x9::zero());
+    expect(pos(100).mod(pos(15)), pos(10));
+    expect(neg(100).mod(pos(15)), neg(10));
+    expect(pos(42).mod(neg(21)), sd29x9::zero());
 }
 
 #[test, expected_failure]
 fun modulo_with_zero_divisor_aborts() {
-    pos(10).mod_(sd29x9::zero());
+    pos(10).mod(sd29x9::zero());
 }
 
 #[test]

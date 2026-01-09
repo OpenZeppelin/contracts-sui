@@ -30,7 +30,7 @@ public use fun openzeppelin_fp_math::ud30x9_base::is_zero as UD30x9.is_zero;
 public use fun openzeppelin_fp_math::ud30x9_base::lshift as UD30x9.lshift;
 public use fun openzeppelin_fp_math::ud30x9_base::lt as UD30x9.lt;
 public use fun openzeppelin_fp_math::ud30x9_base::lte as UD30x9.lte;
-public use fun openzeppelin_fp_math::ud30x9_base::mod_ as UD30x9.mod_;
+public use fun openzeppelin_fp_math::ud30x9_base::mod as UD30x9.mod;
 public use fun openzeppelin_fp_math::ud30x9_base::neq as UD30x9.neq;
 public use fun openzeppelin_fp_math::ud30x9_base::not as UD30x9.not;
 public use fun openzeppelin_fp_math::ud30x9_base::or as UD30x9.or;

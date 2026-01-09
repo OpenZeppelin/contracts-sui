@@ -62,7 +62,7 @@ public fun lte(x: UD30x9, y: UD30x9): bool {
 }
 
 /// Implements the checked modulo operation (%) for UD30x9 type.
-public fun mod_(x: UD30x9, y: UD30x9): UD30x9 {
+public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() % y.unwrap())
 }
 
