@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_math::u512_tests;
 
 use openzeppelin_math::u512::{Self, U512};

@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_math::u8_tests;
 
 use openzeppelin_math::macros;
@@ -726,4 +727,19 @@ fun mul_mod_fast_path() {
 #[test, expected_failure(abort_code = macros::EZeroModulus)]
 fun mul_mod_rejects_zero_modulus() {
     u8::mul_mod(2, 3, 0);
+}
+
+// === is_power_of_ten ===
+
+#[test]
+fun is_power_of_ten_basic() {
+    assert_eq!(u8::is_power_of_ten(1), true);
+    assert_eq!(u8::is_power_of_ten(10), true);
+    assert_eq!(u8::is_power_of_ten(100), true);
+    assert_eq!(u8::is_power_of_ten(0), false);
+    assert_eq!(u8::is_power_of_ten(2), false);
+    assert_eq!(u8::is_power_of_ten(11), false);
+    assert_eq!(u8::is_power_of_ten(99), false);
+    assert_eq!(u8::is_power_of_ten(101), false);
+    assert_eq!(u8::is_power_of_ten(255), false);
 }

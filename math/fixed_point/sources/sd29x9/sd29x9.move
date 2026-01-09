@@ -81,7 +81,7 @@ public fun max(): SD29x9 {
 /// NOTE: This function can't be used to obtain the minimum value, use `min()` instead.
 public fun wrap(x: u128, is_negative: bool): SD29x9 {
     if (x == 0) {
-        return zero()
+        zero()
     } else if (x > MAX_POSITIVE_VALUE) {
         // The value is too large to be represented as a positive SD29x9
         abort EOverflow
