@@ -12,8 +12,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- `UD30x9` fixed-point type with `wrap`, `unwrap`, `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`, `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`, `and`, `and2`, `or`, `xor`, `not`, `lshift`, and `rshift`.
-- `SD29x9` fixed-point type with `zero`, `min`, `max`, `wrap`, `unwrap`, `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`, `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`, `and`, `and2`, `or`, `xor`, `not`, `lshift`, and `rshift`.
+- `UD30x9` fixed-point type with:
+  - Core: `wrap`, `unwrap`
+  - Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
+  - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
+  - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
+- `SD29x9` fixed-point type with:
+  - Constants: `zero`, `min`, `max`
+  - Core: `wrap`, `unwrap`
+  - Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
+  - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
+  - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
 - `casting_u128` helpers for `UD30x9` and `SD29x9`.
 
 ### `openzeppelin_math`
