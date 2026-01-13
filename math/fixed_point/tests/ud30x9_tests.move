@@ -1,9 +1,12 @@
+
 #[test_only]
 module openzeppelin_fp_math::ud30x9_tests;
 
-use openzeppelin_fp_math::casting_u128;
+use openzeppelin_fp_math::casting_u128::into_UD30x9;
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 use std::unit_test::assert_eq;
+
+use fun into_UD30x9 as u128.into_UD30x9;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 
@@ -160,7 +163,7 @@ fun modulo_and_zero_helpers_match_u128() {
 #[test]
 fun casting_from_u128_matches_wrap() {
     let raw = 987_654_321u128;
-    let casted = casting_u128::into_UD30x9(raw);
+    let casted = raw.into_UD30x9();
     assert_eq!(casted.unwrap(), raw);
 
     let manual = fixed(raw);
