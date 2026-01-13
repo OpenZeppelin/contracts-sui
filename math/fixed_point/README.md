@@ -4,8 +4,8 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 ## Types
 
-- `UD30x9`: Unsigned decimal fixed-point (0 to 2^128 - 1, scaled by 10^9)
-- `SD29x9`: Signed decimal fixed-point (two's complement, -2^127 to 2^127 - 1, scaled by 10^9)
+- `UD30x9`: Unsigned decimal fixed-point (internal: 0 to 2^128 - 1; decimal: 0 to ~3.4e29)
+- `SD29x9`: Signed decimal fixed-point (two's complement, internal: -2^127 to 2^127 - 1; decimal: ~-1.7e29 to ~1.7e29)
 
 ## Operations
 
