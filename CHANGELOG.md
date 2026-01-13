@@ -8,6 +8,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_fp_math`
+
+#### Added
+
+- `UD30x9` fixed-point type with `wrap`, `unwrap`, `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`, `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`, `and`, `and2`, `or`, `xor`, `not`, `lshift`, and `rshift`.
+- `SD29x9` fixed-point type with `zero`, `min`, `max`, `wrap`, `unwrap`, `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`, `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`, `and`, `and2`, `or`, `xor`, `not`, `lshift`, and `rshift`.
+- `casting_u128` helpers for `UD30x9` and `SD29x9`.
+
+### `openzeppelin_math`
+
+#### Added
+
+- `is_power_of_ten` helpers for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`.
+
 ##  1.0.0-rc.0 (28-11-2025)
 
 ### `openzeppelin_math`
