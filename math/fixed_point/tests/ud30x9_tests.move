@@ -1,4 +1,3 @@
-
 #[test_only]
 module openzeppelin_fp_math::ud30x9_tests;
 
