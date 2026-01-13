@@ -1,5 +1,6 @@
 module openzeppelin_math::u32;
 
+use openzeppelin_math::common;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
@@ -114,4 +115,10 @@ public fun mul_mod(a: u32, b: u32, modulus: u32): u32 {
 public fun is_power_of_ten(n: u32): bool {
     n == 1 || n == 10 || n == 100 || n == 1000 || n == 10000 ||
     n == 100000 || n == 1000000 || n == 10000000 || n == 100000000 || n == 1000000000
+}
+
+/// Sort a vector of u32 values in ascending order using quicksort algorithm.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public fun quick_sort(data: vector<u32>): vector<u32> {
+    common::quick_sort_u32(data)
 }

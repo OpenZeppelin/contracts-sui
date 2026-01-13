@@ -743,3 +743,89 @@ fun is_power_of_ten_basic() {
     assert_eq!(u8::is_power_of_ten(101), false);
     assert_eq!(u8::is_power_of_ten(255), false);
 }
+
+// === quick_sort ===
+
+#[test]
+fun quick_sort_empty_vector() {
+    let data: vector<u8> = vector[];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted.length(), 0);
+}
+
+#[test]
+fun quick_sort_single_element() {
+    let data = vector[42u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted.length(), 1);
+    assert_eq!(sorted[0], 42);
+}
+
+#[test]
+fun quick_sort_already_sorted() {
+    let data = vector[1u8, 2u8, 3u8, 4u8, 5u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 1);
+    assert_eq!(sorted[1], 2);
+    assert_eq!(sorted[2], 3);
+    assert_eq!(sorted[3], 4);
+    assert_eq!(sorted[4], 5);
+}
+
+#[test]
+fun quick_sort_reverse_sorted() {
+    let data = vector[5u8, 4u8, 3u8, 2u8, 1u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 1);
+    assert_eq!(sorted[1], 2);
+    assert_eq!(sorted[2], 3);
+    assert_eq!(sorted[3], 4);
+    assert_eq!(sorted[4], 5);
+}
+
+#[test]
+fun quick_sort_unsorted() {
+    let data = vector[3u8, 1u8, 4u8, 1u8, 5u8, 9u8, 2u8, 6u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 1);
+    assert_eq!(sorted[1], 1);
+    assert_eq!(sorted[2], 2);
+    assert_eq!(sorted[3], 3);
+    assert_eq!(sorted[4], 4);
+    assert_eq!(sorted[5], 5);
+    assert_eq!(sorted[6], 6);
+    assert_eq!(sorted[7], 9);
+}
+
+#[test]
+fun quick_sort_duplicates() {
+    let data = vector[5u8, 2u8, 5u8, 1u8, 2u8, 5u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 1);
+    assert_eq!(sorted[1], 2);
+    assert_eq!(sorted[2], 2);
+    assert_eq!(sorted[3], 5);
+    assert_eq!(sorted[4], 5);
+    assert_eq!(sorted[5], 5);
+}
+
+#[test]
+fun quick_sort_all_same() {
+    let data = vector[7u8, 7u8, 7u8, 7u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 7);
+    assert_eq!(sorted[1], 7);
+    assert_eq!(sorted[2], 7);
+    assert_eq!(sorted[3], 7);
+}
+
+#[test]
+fun quick_sort_with_zeros() {
+    let data = vector[5u8, 0u8, 3u8, 0u8, 1u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 0);
+    assert_eq!(sorted[1], 0);
+    assert_eq!(sorted[2], 1);
+    assert_eq!(sorted[3], 3);
+    assert_eq!(sorted[4], 5);
+}

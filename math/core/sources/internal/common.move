@@ -155,3 +155,187 @@ public(package) fun sqrt_floor(a: u256): u256 {
         xn
     }
 }
+
+// === Quicksort Implementation ===
+// Note: Move macros cannot be recursive, so we provide type-specific implementations
+// that share the same three-way partitioning algorithm.
+
+/// Quicksort implementation for u8 values.
+/// Recursively sorts a vector of u8 values in ascending order.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public(package) fun quick_sort_u8(data: vector<u8>): vector<u8> {
+    if (data.length() <= 1) {
+        return data
+    };
+
+    let pivot = data[0];
+    let mut less = vector<u8>[];
+    let mut equal = vector<u8>[];
+    let mut greater = vector<u8>[];
+
+    data.do!(|value| {
+        if (value < pivot) {
+            less.push_back(value);
+        } else if (value == pivot) {
+            equal.push_back(value);
+        } else {
+            greater.push_back(value);
+        };
+    });
+
+    let mut sorted_data = vector<u8>[];
+    sorted_data.append(quick_sort_u8(less));
+    sorted_data.append(equal);
+    sorted_data.append(quick_sort_u8(greater));
+    sorted_data
+}
+
+/// Quicksort implementation for u16 values.
+/// Recursively sorts a vector of u16 values in ascending order.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public(package) fun quick_sort_u16(data: vector<u16>): vector<u16> {
+    if (data.length() <= 1) {
+        return data
+    };
+
+    let pivot = data[0];
+    let mut less = vector<u16>[];
+    let mut equal = vector<u16>[];
+    let mut greater = vector<u16>[];
+
+    data.do!(|value| {
+        if (value < pivot) {
+            less.push_back(value);
+        } else if (value == pivot) {
+            equal.push_back(value);
+        } else {
+            greater.push_back(value);
+        };
+    });
+
+    let mut sorted_data = vector<u16>[];
+    sorted_data.append(quick_sort_u16(less));
+    sorted_data.append(equal);
+    sorted_data.append(quick_sort_u16(greater));
+    sorted_data
+}
+
+/// Quicksort implementation for u32 values.
+/// Recursively sorts a vector of u32 values in ascending order.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public(package) fun quick_sort_u32(data: vector<u32>): vector<u32> {
+    if (data.length() <= 1) {
+        return data
+    };
+
+    let pivot = data[0];
+    let mut less = vector<u32>[];
+    let mut equal = vector<u32>[];
+    let mut greater = vector<u32>[];
+
+    data.do!(|value| {
+        if (value < pivot) {
+            less.push_back(value);
+        } else if (value == pivot) {
+            equal.push_back(value);
+        } else {
+            greater.push_back(value);
+        };
+    });
+
+    let mut sorted_data = vector<u32>[];
+    sorted_data.append(quick_sort_u32(less));
+    sorted_data.append(equal);
+    sorted_data.append(quick_sort_u32(greater));
+    sorted_data
+}
+
+/// Quicksort implementation for u64 values.
+/// Recursively sorts a vector of u64 values in ascending order.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public(package) fun quick_sort_u64(data: vector<u64>): vector<u64> {
+    if (data.length() <= 1) {
+        return data
+    };
+
+    let pivot = data[0];
+    let mut less = vector<u64>[];
+    let mut equal = vector<u64>[];
+    let mut greater = vector<u64>[];
+
+    data.do!(|value| {
+        if (value < pivot) {
+            less.push_back(value);
+        } else if (value == pivot) {
+            equal.push_back(value);
+        } else {
+            greater.push_back(value);
+        };
+    });
+
+    let mut sorted_data = vector<u64>[];
+    sorted_data.append(quick_sort_u64(less));
+    sorted_data.append(equal);
+    sorted_data.append(quick_sort_u64(greater));
+    sorted_data
+}
+
+/// Quicksort implementation for u128 values.
+/// Recursively sorts a vector of u128 values in ascending order.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public(package) fun quick_sort_u128(data: vector<u128>): vector<u128> {
+    if (data.length() <= 1) {
+        return data
+    };
+
+    let pivot = data[0];
+    let mut less = vector<u128>[];
+    let mut equal = vector<u128>[];
+    let mut greater = vector<u128>[];
+
+    data.do!(|value| {
+        if (value < pivot) {
+            less.push_back(value);
+        } else if (value == pivot) {
+            equal.push_back(value);
+        } else {
+            greater.push_back(value);
+        };
+    });
+
+    let mut sorted_data = vector<u128>[];
+    sorted_data.append(quick_sort_u128(less));
+    sorted_data.append(equal);
+    sorted_data.append(quick_sort_u128(greater));
+    sorted_data
+}
+
+/// Quicksort implementation for u256 values.
+/// Recursively sorts a vector of u256 values in ascending order.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public(package) fun quick_sort_u256(data: vector<u256>): vector<u256> {
+    if (data.length() <= 1) {
+        return data
+    };
+
+    let pivot = data[0];
+    let mut less = vector<u256>[];
+    let mut equal = vector<u256>[];
+    let mut greater = vector<u256>[];
+
+    data.do!(|value| {
+        if (value < pivot) {
+            less.push_back(value);
+        } else if (value == pivot) {
+            equal.push_back(value);
+        } else {
+            greater.push_back(value);
+        };
+    });
+
+    let mut sorted_data = vector<u256>[];
+    sorted_data.append(quick_sort_u256(less));
+    sorted_data.append(equal);
+    sorted_data.append(quick_sort_u256(greater));
+    sorted_data
+}

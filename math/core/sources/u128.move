@@ -1,5 +1,6 @@
 module openzeppelin_math::u128;
 
+use openzeppelin_math::common;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
@@ -157,4 +158,10 @@ public fun is_power_of_ten(n: u128): bool {
     ];
 
     macros::binary_search!(powers, n)
+}
+
+/// Sort a vector of u128 values in ascending order using quicksort algorithm.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public fun quick_sort(data: vector<u128>): vector<u128> {
+    common::quick_sort_u128(data)
 }

@@ -1,5 +1,6 @@
 module openzeppelin_math::u64;
 
+use openzeppelin_math::common;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
@@ -119,4 +120,10 @@ public fun is_power_of_ten(n: u64): bool {
     n == 10000000000000 || n == 100000000000000 || n == 1000000000000000 ||
     n == 10000000000000000 || n == 100000000000000000 ||
     n == 1000000000000000000 || n == 10000000000000000000
+}
+
+/// Sort a vector of u64 values in ascending order using quicksort algorithm.
+/// Time complexity: O(n log n) average, O(n²) worst case.
+public fun quick_sort(data: vector<u64>): vector<u64> {
+    common::quick_sort_u64(data)
 }
