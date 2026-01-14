@@ -119,5 +119,5 @@ public fun is_power_of_ten(n: u16): bool {
 /// Sort a vector of u16 values in ascending order using quicksort algorithm.
 /// Time complexity: O(n log n) average, O(n²) worst case.
 public fun quick_sort(data: vector<u16>): vector<u16> {
-    common::quick_sort_u16(data)
+    abort // TODO#q
 }

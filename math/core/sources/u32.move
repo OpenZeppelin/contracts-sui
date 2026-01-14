@@ -120,5 +120,5 @@ public fun is_power_of_ten(n: u32): bool {
 /// Sort a vector of u32 values in ascending order using quicksort algorithm.
 /// Time complexity: O(n log n) average, O(n²) worst case.
 public fun quick_sort(data: vector<u32>): vector<u32> {
-    common::quick_sort_u32(data)
+    abort // TODO#q
 }

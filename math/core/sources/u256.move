@@ -206,5 +206,5 @@ public fun is_power_of_ten(n: u256): bool {
 /// Sort a vector of u256 values in ascending order using quicksort algorithm.
 /// Time complexity: O(n log n) average, O(n²) worst case.
 public fun quick_sort(data: vector<u256>): vector<u256> {
-    common::quick_sort_u256(data)
+    abort // TODO#q
 }
