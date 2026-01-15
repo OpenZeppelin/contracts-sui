@@ -156,36 +156,76 @@ public(package) fun sqrt_floor(a: u256): u256 {
     }
 }
 
-// === Quicksort Implementation ===
-// Note: Move macros cannot be recursive, so we provide type-specific implementations
-// that share the same three-way partitioning algorithm.
+/// Sort array `data` in-place.
+public(package) fun quick_sort_u8(data: &mut vector<u8>) {
+    let len = data.length();
+    quick_sort_u8_inner(data, 0, len)
+}
 
-/// Quicksort implementation for u8 values.
-/// Recursively sorts a vector of u8 values in ascending order.
-/// Time complexity: O(n log n) average, O(n²) worst case.
-public(package) fun quick_sort_u8(data: vector<u8>): vector<u8> {
-    if (data.length() <= 1) {
-        return data
+/// In-place quicksort based on "Lomuto" partition scheme.
+fun quick_sort_u8_inner(data: &mut vector<u8>, start: u64, end: u64) {
+    // Ensure we have at least two elements in vector.
+    if (start + 1 >= end) {
+        return
     };
 
-    let pivot = data[0];
-    let mut less = vector<u8>[];
-    let mut equal = vector<u8>[];
-    let mut greater = vector<u8>[];
-
-    data.do!(|value| {
-        if (value < pivot) {
-            less.push_back(value);
-        } else if (value == pivot) {
-            equal.push_back(value);
-        } else {
-            greater.push_back(value);
+    // Chose last element as a pivot.
+    let pivot_index = end - 1;
+    let mut i = start;
+    let mut j = start;
+    while (j < pivot_index) {
+        if (data[j] <= data[pivot_index]) {
+            data.swap(i, j);
+            i = i + 1;
         };
-    });
+        j = j + 1;
+    };
 
-    let mut sorted_data = vector<u8>[];
-    sorted_data.append(quick_sort_u8(less));
-    sorted_data.append(equal);
-    sorted_data.append(quick_sort_u8(greater));
-    sorted_data
+    // Swap pivot back.
+    data.swap(i, pivot_index);
+
+    quick_sort_u8_inner(data, start, i);
+    quick_sort_u8_inner(data, i + 1, end);
 }
+
+// public(package) fun quick_sort_u8(mut data: vector<u8>): vector<u8> {
+//     let len = data.length();
+//     if (len <= 1) return data;
+
+//     let mut stack_low = vector[0u64];
+//     let mut stack_high = vector[len - 1];
+
+//     while (!stack_low.is_empty()) {
+//         let low = stack_low.pop_back();
+//         let high = stack_high.pop_back();
+//         if (low >= high) continue;
+
+//         let pivot = data[low + (high - low) / 2];
+//         let mut i = low;
+//         let mut j = low;
+//         let mut k = high;
+
+//         while (j <= k) {
+//             if (data[j] < pivot) {
+//                 data.swap(i, j);
+//                 i = i + 1;
+//                 j = j + 1;
+//             } else if (data[j] > pivot) {
+//                 data.swap(j, k);
+//                 k = k - 1;
+//             } else {
+//                 j = j + 1;
+//             };
+//         };
+
+//         if (i > 0 && low < i - 1) {
+//             stack_low.push_back(low);
+//             stack_high.push_back(i - 1);
+//         };
+//         if (k < high && k + 1 < high) {
+//             stack_low.push_back(k + 1);
+//             stack_high.push_back(high);
+//         };
+//     };
+//     data
+// }

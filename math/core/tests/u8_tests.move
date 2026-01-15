@@ -829,3 +829,73 @@ fun quick_sort_with_zeros() {
     assert_eq!(sorted[3], 3);
     assert_eq!(sorted[4], 5);
 }
+
+#[test]
+fun quick_sort_smoke() {
+    let data = vector[1u8, 1u8, 0u8, 0u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 0);
+    assert_eq!(sorted[1], 0);
+    assert_eq!(sorted[2], 1);
+    assert_eq!(sorted[3], 1);
+}
+
+#[test]
+fun quick_sort_three_same_one_diff() {
+    // This case can expose partitioning issues when pivot selection is poor
+    let data = vector[1u8, 1u8, 1u8, 0u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 0);
+    assert_eq!(sorted[1], 1);
+    assert_eq!(sorted[2], 1);
+    assert_eq!(sorted[3], 1);
+}
+
+#[test]
+fun quick_sort_two_twos() {
+    // Edge case: exactly 2 elements that are the same
+    let data = vector[2u8, 2u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 2);
+    assert_eq!(sorted[1], 2);
+}
+
+#[test]
+fun quick_sort_alternating_pattern() {
+    // Pattern that can cause issues: [small, large, small, large]
+    let data = vector[0u8, 5u8, 0u8, 5u8, 0u8, 5u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 0);
+    assert_eq!(sorted[1], 0);
+    assert_eq!(sorted[2], 0);
+    assert_eq!(sorted[3], 5);
+    assert_eq!(sorted[4], 5);
+    assert_eq!(sorted[5], 5);
+}
+
+#[test]
+fun quick_sort_mostly_same_with_outlier() {
+    // Many identical values with one outlier - tests partition efficiency
+    let data = vector[5u8, 5u8, 5u8, 5u8, 5u8, 5u8, 5u8, 5u8, 5u8, 1u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 1);
+    assert_eq!(sorted[1], 5);
+    assert_eq!(sorted[2], 5);
+    assert_eq!(sorted[3], 5);
+    assert_eq!(sorted[4], 5);
+    assert_eq!(sorted[5], 5);
+    assert_eq!(sorted[6], 5);
+    assert_eq!(sorted[7], 5);
+    assert_eq!(sorted[8], 5);
+    assert_eq!(sorted[9], 5);
+}
+
+#[test]
+fun quick_sort_ascending_three() {
+    // This will cause infinite recursion when pivot is first element
+    let data = vector[1u8, 2u8, 3u8];
+    let sorted = u8::quick_sort(data);
+    assert_eq!(sorted[0], 1);
+    assert_eq!(sorted[1], 2);
+    assert_eq!(sorted[2], 3);
+}

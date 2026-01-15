@@ -119,6 +119,7 @@ public fun is_power_of_ten(n: u8): bool {
 
 /// Sort a vector of u8 values in ascending order using quicksort algorithm.
 /// Time complexity: O(n log n) average, O(n²) worst case.
-public fun quick_sort(data: vector<u8>): vector<u8> {
-    common::quick_sort_u8(data)
+public fun quick_sort(mut data: vector<u8>): vector<u8> {
+    common::quick_sort_u8(&mut data);
+    data
 }
