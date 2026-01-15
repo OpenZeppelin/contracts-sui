@@ -169,7 +169,17 @@ fun quick_sort_u8_inner(data: &mut vector<u8>, start: u64, end: u64) {
         return
     };
 
-    // Chose last element as a pivot.
+    // Partition the array and get the pivot index.
+    let i = partition(data, start, end);
+
+    // Recursively sort rest two partitions.
+    quick_sort_u8_inner(data, start, i);
+    quick_sort_u8_inner(data, i + 1, end);
+}
+
+/// Divides array into two partitions
+fun partition(data: &mut vector<u8>, start: u64, end: u64): u64 {
+    // Chose the last element as a pivot.
     let pivot_index = end - 1;
     let mut i = start;
     let mut j = start;
@@ -181,11 +191,9 @@ fun quick_sort_u8_inner(data: &mut vector<u8>, start: u64, end: u64) {
         j = j + 1;
     };
 
-    // Swap pivot back.
+    // Swap pivot to the partition index.
     data.swap(i, pivot_index);
-
-    quick_sort_u8_inner(data, start, i);
-    quick_sort_u8_inner(data, i + 1, end);
+    i
 }
 
 // public(package) fun quick_sort_u8(mut data: vector<u8>): vector<u8> {
