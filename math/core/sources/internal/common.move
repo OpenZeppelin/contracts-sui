@@ -156,25 +156,31 @@ public(package) fun sqrt_floor(a: u256): u256 {
     }
 }
 
-/// Sort array `data` in-place.
+/// Sort array `data` in-place based on "Lomuto" partition scheme.
 public(package) fun quick_sort_u8(data: &mut vector<u8>) {
     let len = data.length();
-    quick_sort_u8_inner(data, 0, len)
-}
 
-/// In-place quicksort based on "Lomuto" partition scheme.
-fun quick_sort_u8_inner(data: &mut vector<u8>, start: u64, end: u64) {
-    // Ensure we have at least two elements in vector.
-    if (start + 1 >= end) {
-        return
+    let mut stack_start = vector[0];
+    let mut stack_end = vector[len];
+
+    while (!stack_start.is_empty()) {
+        let start = stack_start.pop_back();
+        let end = stack_end.pop_back();
+
+        // Ensure we have at least two elements in vector.
+        if (start + 1 >= end) {
+            continue
+        };
+
+        // Partition the array and get the pivot index.
+        let i = partition(data, start, end);
+
+        stack_start.push_back(start);
+        stack_end.push_back(i);
+
+        stack_start.push_back(i + 1);
+        stack_end.push_back(end);
     };
-
-    // Partition the array and get the pivot index.
-    let i = partition(data, start, end);
-
-    // Recursively sort rest two partitions.
-    quick_sort_u8_inner(data, start, i);
-    quick_sort_u8_inner(data, i + 1, end);
 }
 
 /// Divides array into two partitions
