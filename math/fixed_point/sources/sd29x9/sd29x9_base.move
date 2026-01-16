@@ -9,8 +9,15 @@ use openzeppelin_fp_math::sd29x9::{Self, SD29x9, from_bits};
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
 const MIN_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const SIGN_BIT: u128 = 1u128 << 127;
+const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Public Functions ===
+
+public fun abs(x: SD29x9): SD29x9 {
+    let mut components = decompose(x.unwrap());
+    components.neg = false;
+    wrap_components(components)
+}
 
 /// Implements the checked addition operation (+) for the SD29x9 type.
 public fun add(x: SD29x9, y: SD29x9): SD29x9 {
@@ -28,9 +35,39 @@ public fun and2(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(x.unwrap() & y.unwrap())
 }
 
+public fun ceil(x: SD29x9): SD29x9 {
+    let Components { neg, mag} = decompose(x.unwrap());
+    let fractional = mag % SCALE;
+    if (fractional == 0) {
+        return x
+    };    
+    let int_part = mag / SCALE; 
+    let result = if (!neg) {
+        Components { mag: (int_part + 1) * SCALE, neg: false }
+    } else {
+        Components { mag: int_part * SCALE, neg: true }
+    };
+    wrap_components(result)
+}
+
 /// Implements the equal operation (==) for SD29x9 type.
 public fun eq(x: SD29x9, y: SD29x9): bool {
     x.unwrap() == y.unwrap()
+}
+
+public fun floor(x: SD29x9): SD29x9 {
+    let Components { neg, mag} = decompose(x.unwrap());
+    let fractional = mag % SCALE;
+    if (fractional == 0) {
+        return x
+    };
+    let int_part = mag / SCALE;
+    let result = if (!neg) {
+        Components { mag: int_part * SCALE, neg: false }
+    } else {
+        Components { mag: (int_part + 1) * SCALE, neg: true }
+    };
+    wrap_components(result)
 }
 
 /// Implements the greater than operation (>) for SD29x9 type.
