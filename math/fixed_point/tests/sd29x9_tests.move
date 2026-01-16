@@ -152,6 +152,54 @@ fun logical_helpers_match_sd29x9_interface() {
     expect(pos(5), pos(5));
 }
 
+// === abs ===
+
+#[test]
+fun abs_preserves_positive_values() {
+    // 5.0 -> 5.0
+    expect(pos(5 * SCALE).abs(), pos(5 * SCALE));
+    // 5.5 -> 5.5
+    expect(pos(5 * SCALE + 500_000_000).abs(), pos(5 * SCALE + 500_000_000));
+    // 0.1 -> 0.1
+    expect(pos(100_000_000).abs(), pos(100_000_000));
+}
+
+#[test]
+fun abs_converts_negative_to_positive() {
+    // -5.0 -> 5.0
+    expect(neg(5 * SCALE).abs(), pos(5 * SCALE));
+    // -5.5 -> 5.5
+    expect(neg(5 * SCALE + 500_000_000).abs(), pos(5 * SCALE + 500_000_000));
+    // -0.1 -> 0.1
+    expect(neg(100_000_000).abs(), pos(100_000_000));
+    // -1.0 -> 1.0
+    expect(neg(SCALE).abs(), pos(SCALE));
+}
+
+#[test]
+fun abs_handles_zero() {
+    // 0.0 -> 0.0
+    expect(sd29x9::zero().abs(), sd29x9::zero());
+}
+
+#[test]
+fun abs_handles_edge_cases() {
+    // Very small positive: 0.000000001 -> 0.000000001
+    expect(pos(1).abs(), pos(1));
+
+    // Very small negative: -0.000000001 -> 0.000000001
+    expect(neg(1).abs(), pos(1));
+
+    // Large positive value: 1000000.5 -> 1000000.5
+    expect(pos(1000000 * SCALE + 500_000_000).abs(), pos(1000000 * SCALE + 500_000_000));
+
+    // Large negative value: -1000000.5 -> 1000000.5
+    expect(neg(1000000 * SCALE + 500_000_000).abs(), pos(1000000 * SCALE + 500_000_000));
+
+    // Max positive value remains unchanged
+    expect(sd29x9::max().abs(), sd29x9::max());
+}
+
 // === ceil ===
 
 #[test]
