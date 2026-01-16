@@ -72,12 +72,12 @@ fun comparison_helpers_cover_all_outcomes() {
 
 #[test]
 fun bitwise_and_shift_helpers_behave_like_u128() {
-    let raw = 0xF0F0u128;
-    let other_raw = 0x00FFu128;
+    let raw = 0xF0F0;
+    let other_raw = 0x00FF;
     let value = fixed(raw);
     let other = fixed(other_raw);
 
-    assert_eq!(value.and(0x0FF0u128).unwrap(), raw & 0x0FF0u128);
+    assert_eq!(value.and(0x0FF0).unwrap(), raw & 0x0FF0);
     assert_eq!(value.and2(other).unwrap(), raw & other_raw);
     assert_eq!(value.or(other).unwrap(), raw | other_raw);
     assert_eq!(value.xor(other).unwrap(), raw ^ other_raw);

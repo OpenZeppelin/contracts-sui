@@ -36,12 +36,12 @@ public fun and2(x: SD29x9, y: SD29x9): SD29x9 {
 }
 
 public fun ceil(x: SD29x9): SD29x9 {
-    let Components { neg, mag} = decompose(x.unwrap());
+    let Components { neg, mag } = decompose(x.unwrap());
     let fractional = mag % SCALE;
     if (fractional == 0) {
         return x
-    };    
-    let int_part = mag / SCALE; 
+    };
+    let int_part = mag / SCALE;
     let result = if (!neg) {
         Components { mag: (int_part + 1) * SCALE, neg: false }
     } else {
@@ -56,7 +56,7 @@ public fun eq(x: SD29x9, y: SD29x9): bool {
 }
 
 public fun floor(x: SD29x9): SD29x9 {
-    let Components { neg, mag} = decompose(x.unwrap());
+    let Components { neg, mag } = decompose(x.unwrap());
     let fractional = mag % SCALE;
     if (fractional == 0) {
         return x
