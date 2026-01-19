@@ -115,10 +115,3 @@ public fun mul_mod(a: u8, b: u8, modulus: u8): u8 {
 public fun is_power_of_ten(n: u8): bool {
     n == 1 || n == 10 || n == 100
 }
-
-/// Sort a vector of u8 values in ascending order using quicksort algorithm.
-/// Time complexity: O(n log n) average, O(n²) worst case.
-public fun quick_sort(mut data: vector<u8>): vector<u8> {
-    macros::quick_sort!(&mut data);
-    data
-}

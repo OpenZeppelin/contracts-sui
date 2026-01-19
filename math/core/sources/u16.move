@@ -114,9 +114,3 @@ public fun mul_mod(a: u16, b: u16, modulus: u16): u16 {
 public fun is_power_of_ten(n: u16): bool {
     n == 1 || n == 10 || n == 100 || n == 1000 || n == 10000
 }
-
-/// Sort a vector of u16 values in ascending order using quicksort algorithm.
-/// Time complexity: O(n log n) average, O(n²) worst case.
-public fun quick_sort(data: vector<u16>): vector<u16> {
-    abort // TODO#q
-}
