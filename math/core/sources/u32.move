@@ -1,6 +1,5 @@
 module openzeppelin_math::u32;
 
-use openzeppelin_math::common;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 

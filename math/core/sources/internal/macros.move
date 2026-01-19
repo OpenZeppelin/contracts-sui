@@ -984,3 +984,54 @@ public(package) macro fun binary_search<$Int>($haystack: vector<$Int>, $needle: 
 
     false
 }
+
+/// Sort array `data` in-place based on "Lomuto" partition scheme.
+public(package) macro fun quick_sort<$Int>($data: &mut vector<$Int>) {
+    let data = $data;
+    let len = data.length();
+
+    let mut stack_start = vector[0];
+    let mut stack_end = vector[len];
+
+    while (!stack_start.is_empty()) {
+        let start = stack_start.pop_back();
+        let end = stack_end.pop_back();
+
+        // Ensure we have at least two elements in vector.
+        if (start + 1 >= end) {
+            continue
+        };
+
+        // Partition the array and get the pivot index.
+        let i = partition!(data, start, end);
+
+        stack_start.push_back(start);
+        stack_end.push_back(i);
+
+        stack_start.push_back(i + 1);
+        stack_end.push_back(end);
+    };
+}
+
+/// Divides array into two partitions
+public(package) macro fun partition<$Int>($data: &mut vector<$Int>, $start: u64, $end: u64): u64 {
+    let data = $data;
+    let start = $start;
+    let end = $end;
+
+    // Chose the last element as a pivot.
+    let pivot_index = end - 1;
+    let mut i = start;
+    let mut j = start;
+    while (j < pivot_index) {
+        if (data[j] <= data[pivot_index]) {
+            data.swap(i, j);
+            i = i + 1;
+        };
+        j = j + 1;
+    };
+
+    // Swap pivot to the partition index.
+    data.swap(i, pivot_index);
+    i
+}

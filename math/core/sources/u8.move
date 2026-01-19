@@ -1,6 +1,5 @@
 module openzeppelin_math::u8;
 
-use openzeppelin_math::common;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 use std::u256::try_as_u8;
@@ -120,6 +119,6 @@ public fun is_power_of_ten(n: u8): bool {
 /// Sort a vector of u8 values in ascending order using quicksort algorithm.
 /// Time complexity: O(n log n) average, O(n²) worst case.
 public fun quick_sort(mut data: vector<u8>): vector<u8> {
-    common::quick_sort_u8(&mut data);
+    macros::quick_sort!(&mut data);
     data
 }
