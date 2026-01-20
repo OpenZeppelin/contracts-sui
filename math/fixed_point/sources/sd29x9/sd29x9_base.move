@@ -13,6 +13,7 @@ const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Public Functions ===
 
+/// Returns the absolute value of a SD29x9.
 public fun abs(x: SD29x9): SD29x9 {
     let mut components = decompose(x.unwrap());
     components.neg = false;
@@ -35,6 +36,7 @@ public fun and2(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(x.unwrap() & y.unwrap())
 }
 
+/// Rounds up a SD29x9 to the nearest integer (towards positive infinity).
 public fun ceil(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     let fractional = mag % SCALE;
@@ -55,6 +57,7 @@ public fun eq(x: SD29x9, y: SD29x9): bool {
     x.unwrap() == y.unwrap()
 }
 
+/// Rounds down a SD29x9 to the nearest integer (towards negative infinity).
 public fun floor(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     let fractional = mag % SCALE;
