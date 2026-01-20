@@ -117,7 +117,7 @@ jobs:
           version: ${{ env.SUI_VERSION }}
 
       - name: Run tests
-        run: sui move test --trace
+        run: sui move test
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report
