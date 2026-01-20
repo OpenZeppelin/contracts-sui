@@ -990,12 +990,10 @@ public(package) macro fun binary_search<$Int>($haystack: vector<$Int>, $needle: 
 /// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
 /// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
 /// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
-/// selected as the pivot. 
-/// 
-/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making 
-/// it suitable for arbitrarily large vectors. The algorithm maintains
-/// stability through careful partition handling and processes the left partition first to
-/// minimize stack space usage.
+/// selected as the pivot.
+///
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
+/// it suitable for arbitrarily large vectors.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).

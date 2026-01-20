@@ -1854,9 +1854,7 @@ fun quick_sort_produces_sorted_output() {
     let len = vec.length();
     let mut i = 0;
     while (i + 1 < len) {
-        assert!(vec
-        [i] <= vec
-        [i + 1]);
+        assert!(vec[i] <= vec[i + 1]);
         i = i + 1;
     };
 }
