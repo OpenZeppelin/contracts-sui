@@ -6,11 +6,16 @@ use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 use std::unit_test::assert_eq;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
+const SCALE: u128 = 1_000_000_000;
 
 // ==== Helpers ====
 
 fun fixed(value: u128): UD30x9 {
     ud30x9::wrap(value)
+}
+
+fun expect(left: UD30x9, right: UD30x9) {
+    assert_eq!(left.unwrap(), right.unwrap());
 }
 
 // ==== Tests ====
@@ -165,4 +170,173 @@ fun casting_from_u128_matches_wrap() {
 
     let manual = fixed(raw);
     assert_eq!(manual.unwrap(), raw);
+}
+
+// === abs ===
+
+#[test]
+fun abs_returns_same_value_for_unsigned() {
+    // 5.0 -> 5.0
+    let value = fixed(5 * SCALE);
+    assert_eq!(value.abs().unwrap(), value.unwrap());
+
+    // 5.5 -> 5.5
+    let value = fixed(5 * SCALE + 500_000_000);
+    assert_eq!(value.abs().unwrap(), value.unwrap());
+
+    // 0.1 -> 0.1
+    let value = fixed(100_000_000);
+    assert_eq!(value.abs().unwrap(), value.unwrap());
+}
+
+#[test]
+fun abs_handles_zero() {
+    // 0.0 -> 0.0
+    let zero = ud30x9::zero();
+    assert_eq!(zero.abs().unwrap(), 0);
+}
+
+#[test]
+fun abs_handles_edge_cases() {
+    // 0.000000001 -> 0.000000001
+    let tiny = fixed(1);
+    expect(tiny.abs(), tiny);
+
+    // 1000000.5 -> 1000000.5
+    let large = fixed(1000000 * SCALE + 500_000_000);
+    expect(large.abs(), large);
+
+    // Max value remains unchanged
+    let max = ud30x9::max();
+    assert_eq!(max.abs().unwrap(), MAX_VALUE);
+}
+
+// === ceil ===
+
+#[test]
+fun ceil_rounds_up_fractional_values() {
+    // 5.3 -> 6.0
+    let value = fixed(5 * SCALE + 300_000_000);
+    expect(value.ceil(), fixed(6 * SCALE));
+
+    // 5.9 -> 6.0
+    let value = fixed(5 * SCALE + 900_000_000);
+    expect(value.ceil(), fixed(6 * SCALE));
+
+    // 1.1 -> 2.0
+    let value = fixed(SCALE + 100_000_000);
+    expect(value.ceil(), fixed(2 * SCALE));
+
+    // 0.5 -> 1.0
+    let value = fixed(500_000_000);
+    expect(value.ceil(), fixed(SCALE));
+
+    // 0.1 -> 1.0
+    let value = fixed(100_000_000);
+    expect(value.ceil(), fixed(SCALE));
+}
+
+#[test]
+fun ceil_preserves_integer_values() {
+    // 5.0 -> 5.0
+    let value = fixed(5 * SCALE);
+    expect(value.ceil(), fixed(5 * SCALE));
+
+    // 0.0 -> 0.0
+    let zero = fixed(0);
+    expect(zero.ceil(), fixed(0));
+
+    // 100.0 -> 100.0
+    let value = fixed(100 * SCALE);
+    expect(value.ceil(), fixed(100 * SCALE));
+
+    // 1.0 -> 1.0
+    let value = fixed(SCALE);
+    expect(value.ceil(), fixed(SCALE));
+}
+
+#[test]
+fun ceil_handles_edge_cases() {
+    // 0.000000001 -> 1.0
+    let tiny = fixed(1);
+    expect(tiny.ceil(), fixed(SCALE));
+
+    // 1000000000.5 -> 1000000000.0
+    let large = fixed(1_000_000_000 * SCALE + 500_000_000);
+    expect(large.ceil(), fixed(1_000_000_001 * SCALE));
+
+    // 5.999999999 -> 6.0
+    let almost = fixed(6 * SCALE - 1);
+    expect(almost.ceil(), fixed(6 * SCALE));
+}
+
+#[test, expected_failure]
+fun ceil_fails_for_max() {
+    ud30x9::max().ceil();
+}
+
+// === floor ===
+
+#[test]
+fun floor_truncates_fractional_values() {
+    // 5.3 -> 5.0
+    let value = fixed(5 * SCALE + 300_000_000);
+    expect(value.floor(), fixed(5 * SCALE));
+
+    // 5.9 -> 5.0
+    let value = fixed(5 * SCALE + 900_000_000);
+    expect(value.floor(), fixed(5 * SCALE));
+
+    // 1.1 -> 1.0
+    let value = fixed(SCALE + 100_000_000);
+    expect(value.floor(), fixed(SCALE));
+
+    // 0.5 -> 0.0
+    let value = fixed(500_000_000);
+    expect(value.floor(), fixed(0));
+
+    // 0.1 -> 0.0
+    let value = fixed(100_000_000);
+    expect(value.floor(), fixed(0));
+}
+
+#[test]
+fun floor_preserves_integer_values() {
+    // 5.0 -> 5.0
+    let value = fixed(5 * SCALE);
+    expect(value.floor(), fixed(5 * SCALE));
+
+    // 0.0 -> 0.0
+    let zero = fixed(0);
+    expect(zero.floor(), fixed(0));
+
+    // 100.0 -> 100.0
+    let value = fixed(100 * SCALE);
+    expect(value.floor(), fixed(100 * SCALE));
+
+    // 1.0 -> 1.0
+    let value = fixed(SCALE);
+    expect(value.floor(), fixed(SCALE));
+}
+
+#[test]
+fun floor_handles_edge_cases() {
+    // 0.000000001 -> 0.0
+    let tiny = fixed(1);
+    expect(tiny.floor(), fixed(0));
+
+    // 1000000000.5 -> 1000000000.0
+    let large = fixed(1_000_000_000 * SCALE + 500_000_000);
+    expect(large.floor(), fixed(1_000_000_000 * SCALE));
+
+    // 5.000000001 -> 5.0
+    let almost = fixed(5 * SCALE + 1);
+    expect(almost.floor(), fixed(5 * SCALE));
+}
+
+#[test]
+fun floor_handles_max() {
+    let max = ud30x9::max();
+    let expected = MAX_VALUE - MAX_VALUE % SCALE;
+    expect(max.floor(), fixed(expected));
 }

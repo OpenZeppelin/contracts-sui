@@ -5,6 +5,8 @@ use openzeppelin_fp_math::sd29x9::{Self, SD29x9, from_bits};
 use std::unit_test::assert_eq;
 
 const ALL_ONES: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
+const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
+const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const SCALE: u128 = 1_000_000_000;
 
 // ==== Helpers ====
@@ -190,11 +192,17 @@ fun abs_handles_edge_cases() {
     // Very small negative: -0.000000001 -> 0.000000001
     expect(neg(1).abs(), pos(1));
 
-    // Large positive value: 1000000.5 -> 1000000.5
-    expect(pos(1000000 * SCALE + 500_000_000).abs(), pos(1000000 * SCALE + 500_000_000));
+    // Large positive value: 1000000000.5 -> 1000000000.5
+    expect(
+        pos(1_000_000_000 * SCALE + 500_000_000).abs(),
+        pos(1_000_000_000 * SCALE + 500_000_000),
+    );
 
-    // Large negative value: -1000000.5 -> 1000000.5
-    expect(neg(1000000 * SCALE + 500_000_000).abs(), pos(1000000 * SCALE + 500_000_000));
+    // Large negative value: -1000000000.5 -> 1000000000.5
+    expect(
+        neg(1_000_000_000 * SCALE + 500_000_000).abs(),
+        pos(1_000_000_000 * SCALE + 500_000_000),
+    );
 
     // Max positive value remains unchanged
     expect(sd29x9::max().abs(), sd29x9::max());
@@ -250,8 +258,20 @@ fun ceil_handles_edge_cases() {
     // Very small negative fractional: -0.000000001 -> ceil: 0.0
     expect(neg(1).ceil(), sd29x9::zero());
 
-    // Large value with fraction: 1000.5 -> ceil: 1001.0
-    expect(pos(1000 * SCALE + 500_000_000).ceil(), pos(1001 *SCALE));
+    // Large value with fraction: 1000000000.5 -> ceil: 1000000001.0
+    expect(pos(1_000_000_000 * SCALE + 500_000_000).ceil(), pos(1_000_000_001 * SCALE));
+}
+
+#[test, expected_failure]
+fun ceil_fails_for_max() {
+    sd29x9::max().ceil();
+}
+
+#[test]
+fun ceil_handles_min() {
+    let min = sd29x9::min();
+    let expected = MIN_NEGATIVE_VALUE - MIN_NEGATIVE_VALUE % SCALE;
+    expect(min.ceil(), neg(expected));
 }
 
 // === floor ===
@@ -304,6 +324,18 @@ fun floor_handles_edge_cases() {
     // Very small negative fractional: -0.000000001 -> floor: -1.0
     expect(neg(1).floor(), neg(SCALE));
 
-    // Large value with fraction: 1000.5 -> floor: 1000.0
-    expect(pos(1000 * SCALE + 500_000_000).floor(), pos(1000 * SCALE));
+    // Large value with fraction: 1000000000.5 -> floor: 1000000000.0
+    expect(pos(1_000_000_000 * SCALE + 500_000_000).floor(), pos(1_000_000_000 * SCALE));
+}
+
+#[test]
+fun floor_handles_max() {
+    let max = sd29x9::max();
+    let expected = MAX_POSITIVE_VALUE - MAX_POSITIVE_VALUE % SCALE;
+    expect(max.floor(), pos(expected));
+}
+
+#[test, expected_failure]
+fun floor_fails_for_min() {
+    sd29x9::min().floor();
 }
