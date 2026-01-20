@@ -985,11 +985,35 @@ public(package) macro fun binary_search<$Int>($haystack: vector<$Int>, $needle: 
     false
 }
 
-/// Sort array `data` in-place based on "Lomuto" partition scheme.
-public(package) macro fun quick_sort<$Int>($data: &mut vector<$Int>) {
-    let data = $data;
-    let len = data.length();
+/// Sort an unsigned integer vector in-place using the quicksort algorithm.
+///
+/// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
+/// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
+/// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
+/// selected as the pivot. 
+/// 
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making 
+/// it suitable for arbitrarily large vectors. The algorithm maintains
+/// stability through careful partition handling and processes the left partition first to
+/// minimize stack space usage.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$vec`: A mutable reference to the vector to be sorted in-place.
+///
+/// #### Example
+/// ```move
+/// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
+/// macros::quick_sort!(&mut vec);
+/// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
+/// ```
+public(package) macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
+    let vec = $vec;
+    let len = vec.length();
 
+    // Recursive implementation based on stack (vector) type.
     let mut stack_start = vector[0];
     let mut stack_end = vector[len];
 
@@ -1003,19 +1027,39 @@ public(package) macro fun quick_sort<$Int>($data: &mut vector<$Int>) {
         };
 
         // Partition the array and get the pivot index.
-        let i = partition!(data, start, end);
+        let i = partition!(vec, start, end);
 
+        // Put first partition to stack for recursive processing.
         stack_start.push_back(start);
         stack_end.push_back(i);
 
+        // Put second partition to stack for recursive processing.
         stack_start.push_back(i + 1);
         stack_end.push_back(end);
     };
 }
 
-/// Divides array into two partitions
-public(package) macro fun partition<$Int>($data: &mut vector<$Int>, $start: u64, $end: u64): u64 {
-    let data = $data;
+/// Partitions a subarray using the Lomuto partition scheme and returns the partition index.
+///
+/// This helper macro is used internally by `quick_sort!` to divide an array into two parts:
+/// elements less than or equal to a pivot on the left, and elements greater than the pivot
+/// on the right. The partition index is then used by quicksort to recursively sort the two
+/// resulting subarrays.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$vec`: A mutable reference to the vector being partitioned.
+/// - `$start`: The starting index (inclusive) of the subarray to partition.
+/// - `$end`: The ending index (exclusive) of the subarray to partition.
+///
+/// #### Returns
+/// The index of the pivot in its final sorted position within the range `[start, end)`.
+/// All elements in `[start, pivot_index)` are ≤ `vec[pivot_index]`, and all elements
+/// in `(pivot_index, end)` are > `vec[pivot_index]`.
+public(package) macro fun partition<$Int>($vec: &mut vector<$Int>, $start: u64, $end: u64): u64 {
+    let vec = $vec;
     let start = $start;
     let end = $end;
 
@@ -1024,14 +1068,17 @@ public(package) macro fun partition<$Int>($data: &mut vector<$Int>, $start: u64,
     let mut i = start;
     let mut j = start;
     while (j < pivot_index) {
-        if (data[j] <= data[pivot_index]) {
-            data.swap(i, j);
+        // If second index (j) is smaller (or eq) than pivot,
+        if (vec[j] <= vec[pivot_index]) {
+            // swap it with element from the first partition.
+            vec.swap(i, j);
             i = i + 1;
         };
         j = j + 1;
     };
 
-    // Swap pivot to the partition index.
-    data.swap(i, pivot_index);
+    // Swap pivot to the partition index. Swapped element will be greater,
+    // than a pivot since it was already processed.
+    vec.swap(i, pivot_index);
     i
 }
