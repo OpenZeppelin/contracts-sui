@@ -32,10 +32,13 @@ const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed
 
 // === Functions ===
 
+public use fun openzeppelin_fp_math::sd29x9_base::abs as SD29x9.abs;
 public use fun openzeppelin_fp_math::sd29x9_base::add as SD29x9.add;
 public use fun openzeppelin_fp_math::sd29x9_base::and as SD29x9.and;
 public use fun openzeppelin_fp_math::sd29x9_base::and2 as SD29x9.and2;
+public use fun openzeppelin_fp_math::sd29x9_base::ceil as SD29x9.ceil;
 public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
+public use fun openzeppelin_fp_math::sd29x9_base::floor as SD29x9.floor;
 public use fun openzeppelin_fp_math::sd29x9_base::gt as SD29x9.gt;
 public use fun openzeppelin_fp_math::sd29x9_base::gte as SD29x9.gte;
 public use fun openzeppelin_fp_math::sd29x9_base::is_zero as SD29x9.is_zero;
@@ -57,7 +60,7 @@ public fun zero(): SD29x9 {
     SD29x9(0)
 }
 
-/// Returns the representation of -2^128 in SD29x9
+/// Returns the representation of -2^127 in SD29x9
 public fun min(): SD29x9 {
     SD29x9(MIN_NEGATIVE_VALUE)
 }
