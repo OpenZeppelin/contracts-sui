@@ -8,6 +8,7 @@ use openzeppelin_fp_math::ud30x9::{UD30x9, wrap};
 // === Constants ===
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
+const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Public Functions ===
 
@@ -26,9 +27,39 @@ public fun and2(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() & y.unwrap())
 }
 
+/// Returns the absolute value of a UD30x9. For unsigned types, this is always the value itself.
+public fun abs(x: UD30x9): UD30x9 {
+    x
+}
+
+/// Rounds up a UD30x9 to the nearest integer (towards positive infinity).
+public fun ceil(x: UD30x9): UD30x9 {
+    let value = x.unwrap();
+    let fractional = value % SCALE;
+
+    if (fractional == 0) {
+        x
+    } else {
+        let int_part = value - fractional;
+        wrap(int_part + SCALE)
+    }
+}
+
 /// Implements the equal operation (==) for UD30x9 type.
 public fun eq(x: UD30x9, y: UD30x9): bool {
     x.unwrap() == y.unwrap()
+}
+
+/// Rounds down a UD30x9 to the nearest integer (towards zero).
+public fun floor(x: UD30x9): UD30x9 {
+    let value = x.unwrap();
+    let fractional = value % SCALE;
+
+    if (fractional == 0) {
+        x
+    } else {
+        wrap(value - fractional)
+    }
 }
 
 /// Implements the greater than operation (>) for UD30x9 type.
