@@ -20,10 +20,13 @@ public struct UD30x9(u128) has copy, drop, store;
 
 // === Functions ===
 
+public use fun openzeppelin_fp_math::ud30x9_base::abs as UD30x9.abs;
 public use fun openzeppelin_fp_math::ud30x9_base::add as UD30x9.add;
 public use fun openzeppelin_fp_math::ud30x9_base::and as UD30x9.and;
 public use fun openzeppelin_fp_math::ud30x9_base::and2 as UD30x9.and2;
+public use fun openzeppelin_fp_math::ud30x9_base::ceil as UD30x9.ceil;
 public use fun openzeppelin_fp_math::ud30x9_base::eq as UD30x9.eq;
+public use fun openzeppelin_fp_math::ud30x9_base::floor as UD30x9.floor;
 public use fun openzeppelin_fp_math::ud30x9_base::gt as UD30x9.gt;
 public use fun openzeppelin_fp_math::ud30x9_base::gte as UD30x9.gte;
 public use fun openzeppelin_fp_math::ud30x9_base::is_zero as UD30x9.is_zero;
@@ -39,6 +42,16 @@ public use fun openzeppelin_fp_math::ud30x9_base::sub as UD30x9.sub;
 public use fun openzeppelin_fp_math::ud30x9_base::unchecked_add as UD30x9.unchecked_add;
 public use fun openzeppelin_fp_math::ud30x9_base::unchecked_sub as UD30x9.unchecked_sub;
 public use fun openzeppelin_fp_math::ud30x9_base::xor as UD30x9.xor;
+
+/// Returns a `UD30x9` value of zero.
+public fun zero(): UD30x9 {
+    UD30x9(0)
+}
+
+/// Returns the maximum value for `UD30x9`
+public fun max(): UD30x9 {
+    UD30x9(std::u128::max_value!())
+}
 
 // === Casting helpers ===
 
