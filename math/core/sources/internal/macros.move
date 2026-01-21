@@ -1052,3 +1052,37 @@ public(package) macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
         stack_end.push_back(end);
     };
 }
+
+/// Compute the median of an unsigned integer vector.
+///
+/// The helper consumes the input vector, sorts it in-place with `quick_sort`, and
+/// returns the middle element. For even-length vectors, it returns the arithmetic
+/// mean of the two central values rounded down to the nearest integer.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$vec`: Vector of unsigned integers whose median is desired.
+///
+/// #### Returns
+/// The median value. Returns `0` when called with an empty vector.
+public(package) macro fun median<$Int>($vec: vector<$Int>): $Int {
+    let mut vec = $vec;
+    let len = vec.length();
+
+    if (len == 0) {
+        return 0 as $Int
+    };
+
+    quick_sort!(&mut vec);
+
+    let mid = len / 2;
+    if (len % 2 == 1) {
+        *vec.borrow(mid)
+    } else {
+        let lower = *vec.borrow(mid - 1);
+        let upper = *vec.borrow(mid);
+        average!(lower, upper, rounding::down())
+    }
+}
