@@ -1011,7 +1011,7 @@ public(package) macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
     let vec = $vec;
     let len = vec.length();
 
-    // Recursive implementation based on stack (vector) type.
+    // Iterative implementation based on stack data structure (vector).
     let mut stack_start = vector[0];
     let mut stack_end = vector[len];
 
@@ -1024,12 +1024,27 @@ public(package) macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
             continue
         };
 
-        // Partition the array and get the pivot index.
+        // Pivot index is the last element.
         let pivot_index = end - 1;
+
+        // Choose median-of-three (start, mid, pivot_index) as a pivot 
+        // and place it on the last position.
+        let mid = (start + end) / 2;
+        if (vec[start] > vec[mid]) {
+            vec.swap(start, mid);
+        };
+        if (vec[start] > vec[pivot_index]) {
+            vec.swap(start, pivot_index)
+        };
+        if (vec[mid] < vec[pivot_index]) {
+            vec.swap(mid, pivot_index);
+        };
+
+        // Partition vector around pivot_index.
         let mut i = start;
         let mut j = start;
         while (j < pivot_index) {
-            // If second index `j` is smaller (or eq) than pivot,
+            // If second index `j` is smaller (or equal) than pivot,
             if (vec[j] <= vec[pivot_index]) {
                 // swap it with element from the first partition.
                 vec.swap(i, j);
@@ -1040,15 +1055,28 @@ public(package) macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 
         // Swap pivot to the partition index. Swapped element will be greater,
         // than a pivot since it was already processed.
-        // `i` now partition index.
+        // Index `i` is now partition index.
         vec.swap(i, pivot_index);
 
-        // Put first partition to stack for recursive processing.
-        stack_start.push_back(start);
-        stack_end.push_back(i);
+        // Push partitions: larger first, smaller second.
+        // Since we use pop_back, smaller will be processed first.
+        let left_size = i - start;
+        let right_size = end - (i + 1);
 
-        // Put second partition to stack for recursive processing.
-        stack_start.push_back(i + 1);
-        stack_end.push_back(end);
+        if (left_size <= right_size) {
+            // Left ≤ right: push right (larger) first, left (smaller) second.
+            stack_start.push_back(i + 1);
+            stack_end.push_back(end);
+
+            stack_start.push_back(start);
+            stack_end.push_back(i);
+        } else {
+            // Left > right: push left (larger) first, right (smaller) second.
+            stack_start.push_back(start);
+            stack_end.push_back(i);
+
+            stack_start.push_back(i + 1);
+            stack_end.push_back(end);
+        };
     };
 }
