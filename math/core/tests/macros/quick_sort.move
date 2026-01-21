@@ -1,14 +1,14 @@
 #[test_only]
 module openzeppelin_math::quick_sort;
 
-use openzeppelin_math::macros;
+use openzeppelin_math::vector;
 use std::unit_test::assert_eq;
 
 #[test]
 fun quick_sort_empty_vector() {
     // Sorting an empty vector should remain empty
     let mut vec = vector<u64>[];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector<u64>[]);
 }
 
@@ -16,7 +16,7 @@ fun quick_sort_empty_vector() {
 fun quick_sort_single_element() {
     // A vector with a single element should remain unchanged
     let mut vec = vector[42u64];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[42u64]);
 }
 
@@ -24,7 +24,7 @@ fun quick_sort_single_element() {
 fun quick_sort_two_elements_ascending() {
     // Two elements already in order should remain in order
     let mut vec = vector[1u64, 2];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2]);
 }
 
@@ -32,7 +32,7 @@ fun quick_sort_two_elements_ascending() {
 fun quick_sort_two_elements_descending() {
     // Two elements in reverse order should be sorted
     let mut vec = vector[2u64, 1];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2]);
 }
 
@@ -40,7 +40,7 @@ fun quick_sort_two_elements_descending() {
 fun quick_sort_three_elements() {
     // Three elements in random order
     let mut vec = vector[3u64, 1, 2];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3]);
 }
 
@@ -48,7 +48,7 @@ fun quick_sort_three_elements() {
 fun quick_sort_already_sorted() {
     // A vector that is already sorted should remain unchanged
     let mut vec = vector[1u32, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 }
 
@@ -56,7 +56,7 @@ fun quick_sort_already_sorted() {
 fun quick_sort_reverse_sorted() {
     // A vector sorted in reverse order should be fully sorted
     let mut vec = vector[10u32, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 }
 
@@ -64,7 +64,7 @@ fun quick_sort_reverse_sorted() {
 fun quick_sort_random_small_vector() {
     // Small random vector
     let mut vec = vector[5u64, 2, 8, 1, 9, 3, 7, 4, 6];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 6, 7, 8, 9]);
 }
 
@@ -72,7 +72,7 @@ fun quick_sort_random_small_vector() {
 fun quick_sort_with_duplicates() {
     // Vector with duplicate values
     let mut vec = vector[5u32, 2, 5, 1, 5, 2, 3, 5, 1];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 1, 2, 2, 3, 5, 5, 5, 5]);
 }
 
@@ -80,7 +80,7 @@ fun quick_sort_with_duplicates() {
 fun quick_sort_all_same_values() {
     // Vector where all elements are the same
     let mut vec = vector[7u64, 7, 7, 7, 7, 7, 7];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[7u64, 7, 7, 7, 7, 7, 7]);
 }
 
@@ -88,7 +88,7 @@ fun quick_sort_all_same_values() {
 fun quick_sort_two_distinct_values() {
     // Vector with only two distinct values
     let mut vec = vector[2u32, 1, 2, 1, 2, 1, 1, 2];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 1, 1, 1, 2, 2, 2, 2]);
 }
 
@@ -96,7 +96,7 @@ fun quick_sort_two_distinct_values() {
 fun quick_sort_medium_vector() {
     // Medium-sized vector with random values
     let mut vec = vector[45u64, 23, 87, 12, 56, 34, 78, 90, 11, 33, 22, 67, 88, 15, 42];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[11u64, 12, 15, 22, 23, 33, 34, 42, 45, 56, 67, 78, 87, 88, 90]);
 }
 
@@ -135,7 +135,7 @@ fun quick_sort_large_vector() {
         57,
         47,
     ];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(
         vec,
         vector[
@@ -177,7 +177,7 @@ fun quick_sort_large_vector() {
 fun quick_sort_u8_values() {
     // Test with u8 type
     let mut vec = vector[255u8, 127, 0, 64, 192, 32, 96, 200];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[0u8, 32, 64, 96, 127, 192, 200, 255]);
 }
 
@@ -185,7 +185,7 @@ fun quick_sort_u8_values() {
 fun quick_sort_u16_values() {
     // Test with u16 type
     let mut vec = vector[65535u16, 32768, 0, 16384, 49152, 8192, 24576, 57344];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[0u16, 8192, 16384, 24576, 32768, 49152, 57344, 65535]);
 }
 
@@ -193,7 +193,7 @@ fun quick_sort_u16_values() {
 fun quick_sort_u32_values() {
     // Test with u32 type
     let mut vec = vector[1000000u32, 500000, 250000, 750000, 100, 50, 900000, 200];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[50u32, 100, 200, 250000, 500000, 750000, 900000, 1000000]);
 }
 
@@ -210,7 +210,7 @@ fun quick_sort_u128_values() {
         900000000000,
         200,
     ];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(
         vec,
         vector[
@@ -239,7 +239,7 @@ fun quick_sort_u256_values() {
         900000000000000000,
         200,
     ];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(
         vec,
         vector[
@@ -259,7 +259,7 @@ fun quick_sort_u256_values() {
 fun quick_sort_partition_edge_case_pivot() {
     // Test a case where pivot selection matters
     let mut vec = vector[1u64, 2, 3, 4, 5];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3, 4, 5]);
 }
 
@@ -267,7 +267,7 @@ fun quick_sort_partition_edge_case_pivot() {
 fun quick_sort_alternating_values() {
     // Alternating high and low values
     let mut vec = vector[1u64, 100, 2, 99, 3, 98, 4, 97, 5, 96];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 96, 97, 98, 99, 100]);
 }
 
@@ -275,7 +275,7 @@ fun quick_sort_alternating_values() {
 fun quick_sort_mostly_sorted_with_one_outlier() {
     // Mostly sorted vector with one element out of place at the beginning
     let mut vec = vector[100u64, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100]);
 }
 
@@ -283,7 +283,7 @@ fun quick_sort_mostly_sorted_with_one_outlier() {
 fun quick_sort_mostly_sorted_with_one_outlier_at_end() {
     // Mostly sorted vector with one element out of place at the end
     let mut vec = vector[1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[0u64, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 }
 
@@ -291,7 +291,7 @@ fun quick_sort_mostly_sorted_with_one_outlier_at_end() {
 fun quick_sort_saw_tooth_pattern() {
     // Saw-tooth pattern: goes up then down repeatedly
     let mut vec = vector[1u64, 3, 2, 4, 3, 5, 4, 6, 5, 7, 6, 8];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8]);
 }
 
@@ -299,7 +299,7 @@ fun quick_sort_saw_tooth_pattern() {
 fun quick_sort_ascending_gap_then_descending() {
     // Values go up then have a big gap then go down
     let mut vec = vector[1u64, 2, 3, 100, 99, 98];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3, 98, 99, 100]);
 }
 
@@ -307,7 +307,7 @@ fun quick_sort_ascending_gap_then_descending() {
 fun quick_sort_extreme_range_values() {
     // Test with extreme range values
     let mut vec = vector[0u64, std::u64::max_value!(), 1, std::u64::max_value!() - 1];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[0u64, 1, std::u64::max_value!() - 1, std::u64::max_value!()]);
 }
 
@@ -315,7 +315,7 @@ fun quick_sort_extreme_range_values() {
 fun quick_sort_many_duplicates_spread_throughout() {
     // Many duplicate values spread throughout
     let mut vec = vector[5u32, 1, 5, 2, 5, 3, 5, 4, 5, 5];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 2, 3, 4, 5, 5, 5, 5, 5, 5]);
 }
 
@@ -323,7 +323,7 @@ fun quick_sort_many_duplicates_spread_throughout() {
 fun quick_sort_pairs_of_duplicates() {
     // Pairs of duplicates
     let mut vec = vector[2u64, 2, 1, 1, 4, 4, 3, 3];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 1, 2, 2, 3, 3, 4, 4]);
 }
 
@@ -331,7 +331,7 @@ fun quick_sort_pairs_of_duplicates() {
 fun quick_sort_pyramid_pattern() {
     // Pyramid pattern: increases to middle then decreases
     let mut vec = vector[1u32, 5, 3, 2, 4, 5, 1];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 1, 2, 3, 4, 5, 5]);
 }
 
@@ -339,7 +339,7 @@ fun quick_sort_pyramid_pattern() {
 fun quick_sort_single_large_value_at_start() {
     // Single large value at the start
     let mut vec = vector[1000u64, 1, 2, 3, 4, 5];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 1000]);
 }
 
@@ -347,7 +347,7 @@ fun quick_sort_single_large_value_at_start() {
 fun quick_sort_single_small_value_at_end() {
     // Single small value at the end
     let mut vec = vector[5u64, 4, 3, 2, 1, 0];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[0u64, 1, 2, 3, 4, 5]);
 }
 
@@ -355,7 +355,7 @@ fun quick_sort_single_small_value_at_end() {
 fun quick_sort_three_equal_one_different() {
     // Three equal values and one different
     let mut vec = vector[5u64, 5, 5, 1];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 5, 5, 5]);
 }
 
@@ -363,7 +363,7 @@ fun quick_sort_three_equal_one_different() {
 fun quick_sort_one_different_three_equal() {
     // One different value and three equal
     let mut vec = vector[1u64, 5, 5, 5];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 5, 5, 5]);
 }
 
@@ -371,7 +371,7 @@ fun quick_sort_one_different_three_equal() {
 fun quick_sort_maintains_stability_like_behavior() {
     // While quicksort is not guaranteed to be stable, verify correct ordering
     let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6, 5, 3];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 1, 2, 3, 3, 4, 5, 5, 6, 9]);
 }
 
@@ -384,7 +384,7 @@ fun quick_sort_very_large_values() {
         4611686018427387904u64, // Near quarter
         13835058055282163712u64, // Near three-quarters
     ];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(
         vec,
         vector[
@@ -400,7 +400,7 @@ fun quick_sort_very_large_values() {
 fun quick_sort_sequential_with_shuffle() {
     // Sequential values that are shuffled
     let mut vec = vector[7u32, 1, 3, 6, 2, 8, 4, 9, 5, 10];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 }
 
@@ -408,7 +408,7 @@ fun quick_sort_sequential_with_shuffle() {
 fun quick_sort_nested_ranges() {
     // Multiple ranges: [1-3], [10-12], [20-22]
     let mut vec = vector[22u64, 1, 11, 2, 21, 3, 12, 20, 10];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u64, 2, 3, 10, 11, 12, 20, 21, 22]);
 }
 
@@ -416,7 +416,7 @@ fun quick_sort_nested_ranges() {
 fun quick_sort_binary_like_pattern() {
     // Powers of 2 in random order
     let mut vec = vector[256u32, 1, 4, 32, 2, 128, 8, 64, 16];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 2, 4, 8, 16, 32, 64, 128, 256]);
 }
 
@@ -424,7 +424,7 @@ fun quick_sort_binary_like_pattern() {
 fun quick_sort_high_to_low_middle_low() {
     // High values first, then low values mixed in middle
     let mut vec = vector[100u64, 90, 80, 5, 10, 70, 15, 60];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[5u64, 10, 15, 60, 70, 80, 90, 100]);
 }
 
@@ -434,8 +434,8 @@ fun quick_sort_returns_consistent_results() {
     let mut data1 = vector[42u64, 17, 93, 8, 54, 31, 67, 22, 85, 11];
     let mut data2 = vector[42u64, 17, 93, 8, 54, 31, 67, 22, 85, 11];
 
-    macros::quick_sort!(&mut data1);
-    macros::quick_sort!(&mut data2);
+    vector::quick_sort!(&mut data1);
+    vector::quick_sort!(&mut data2);
 
     assert_eq!(data1, data2);
 }
@@ -444,7 +444,7 @@ fun quick_sort_returns_consistent_results() {
 fun quick_sort_produces_sorted_output() {
     // Verify output is actually sorted by checking each element <= next element
     let mut vec = vector[89u32, 12, 76, 45, 23, 98, 34, 67, 1, 55];
-    macros::quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
 
     let len = vec.length();
     let mut i = 0;
@@ -459,7 +459,7 @@ fun quick_sort_preserves_all_elements() {
     // Verify that all original elements are still present after sorting
     let original = vector[7u64, 2, 9, 1, 5, 8, 3, 6, 4];
     let mut sorted = original;
-    macros::quick_sort!(&mut sorted);
+    vector::quick_sort!(&mut sorted);
 
     // Check that sorted contains all elements from original
     let len = sorted.length();
