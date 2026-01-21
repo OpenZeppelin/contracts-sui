@@ -1,15 +1,71 @@
-/// # SD29x9 Base Functions
+/// # SD29x9 Fixed-Point Type
 ///
-/// Base utilities tailored to the signed SD29x9
-/// representation (two's complement stored in `u128` with 9 decimal places).
-module openzeppelin_fp_math::sd29x9_base;
+/// This module defines the `SD29x9` decimal fixed-point type, which represents
+/// signed real numbers using a 2-complement `u128` scaled by `10^9`.
+///
+/// ## Why SD29x9
+/// - Matches Sui’s native coin decimals (9), making conversions from token
+///   amounts straightforward and less error-prone.
+/// - Uses a decimal scale that is intuitive for humans, UIs, and offchain
+///   systems, avoiding binary fixed-point surprises.
+/// - Fits efficiently in `u128`, keeping storage and arithmetic lightweight
+///   compared to `u256`-based decimal types.
+/// - Useful wherever signed fixed-point arithmetic is needed for things like balance adjustments,
+///   deltas, or calculations involving both increases and decreases. Allows precise tracking of
+///   values that might dip below zero, unlike unsigned types.
+module openzeppelin_fp_math::sd29x9;
 
-use openzeppelin_fp_math::sd29x9::{Self, SD29x9, from_bits};
+/// The `SD29x9` decimal fixed-point type.
+public struct SD29x9(u128) has copy, drop, store;
 
-const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
-const MIN_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
+// === Constants ===
+
+const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
+const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
+const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const SIGN_BIT: u128 = 1u128 << 127;
 const SCALE: u128 = 1_000_000_000; // 10^9
+
+// === Errors ===
+
+/// Value cannot be safely cast to `SD29x9` after apply
+#[error(code = 0)]
+const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
+
+// === Casting ===
+
+/// Unwraps a `SD29x9` value into a raw `u128` value.
+public fun unwrap(x: SD29x9): u128 {
+    x.0
+}
+
+/// Converts an unsigned 128-bit integer (`u128`) into an `SD29x9` value type,
+/// given the intended sign.
+///
+/// The input `x` must be a pure magnitude and must not already include a sign bit.
+/// If `is_negative` is `true`, the value is converted to its two's complement
+/// form to represent a negative SD29x9.
+///
+/// Aborts if `x` exceeds the SD29x9 magnitude bounds for a signed 128-bit integer.
+///
+/// NOTE: This function can't be used to obtain the minimum value, use `min()` instead.
+public fun wrap(x: u128, is_negative: bool): SD29x9 {
+    if (x == 0) {
+        zero()
+    } else if (x > MAX_POSITIVE_VALUE) {
+        // The value is too large to be represented as a positive SD29x9
+        abort EOverflow
+    } else if (is_negative) {
+        // The conversion to two's complement cannot overflow: zero is handled separately
+        // before any bit manipulation, and otherwise the range is restricted to values
+        // up to `2^127-1` (the maximum positive signed value). As a result, there is
+        // always room to represent the negative result within 128 bits, and the process
+        // is unambiguous and safe.
+        from_bits(two_complement(x))
+    } else {
+        from_bits(x)
+    }
+}
 
 // === Public Functions ===
 
@@ -97,9 +153,9 @@ public fun is_zero(x: SD29x9): bool {
 ///   move 1s into the sign bit.
 public fun lshift(x: SD29x9, bits: u8): SD29x9 {
     if (bits >= 128) {
-        return sd29x9::zero()
+        return zero()
     };
-    from_bits((x.unwrap() << bits) & MAX_VALUE)
+    from_bits((x.unwrap() << bits) & U128_MAX_VALUE)
 }
 
 /// Implements the lower than operation (<) for SD29x9 type.
@@ -110,6 +166,16 @@ public fun lt(x: SD29x9, y: SD29x9): bool {
 /// Implements the lower than or equal to operation (<=) for SD29x9 type.
 public fun lte(x: SD29x9, y: SD29x9): bool {
     !gt(x, y)
+}
+
+/// Returns the representation of -2^127 in SD29x9
+public fun min(): SD29x9 {
+    from_bits(MIN_NEGATIVE_VALUE)
+}
+
+/// Returns the representation of 2^127 - 1 in SD29x9
+public fun max(): SD29x9 {
+    from_bits(MAX_POSITIVE_VALUE)
 }
 
 /// Implements the checked modulo operation (%) for SD29x9 type.
@@ -127,7 +193,7 @@ public fun neq(x: SD29x9, y: SD29x9): bool {
 
 /// Implements the NOT (~) bitwise operation for SD29x9 type.
 public fun not(x: SD29x9): SD29x9 {
-    from_bits(x.unwrap() ^ MAX_VALUE)
+    from_bits(x.unwrap() ^ U128_MAX_VALUE)
 }
 
 /// Implements the OR (|) bitwise operation for SD29x9 type.
@@ -148,9 +214,9 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
         return x
     } else if (bits >= 128) {
         return if ((x.unwrap() & SIGN_BIT) != 0) {
-            from_bits(MAX_VALUE)
+            from_bits(U128_MAX_VALUE)
         } else {
-            sd29x9::zero()
+            zero()
         }
     };
 
@@ -159,7 +225,7 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
         from_bits(raw >> bits)
     } else {
         let shifted = raw >> bits;
-        let mask = MAX_VALUE << (128 - bits);
+        let mask = U128_MAX_VALUE << (128 - bits);
         from_bits(shifted | mask)
     }
 }
@@ -186,6 +252,11 @@ public fun xor(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(x.unwrap() ^ y.unwrap())
 }
 
+/// Returns a `SD29x9` value of zero.
+public fun zero(): SD29x9 {
+    from_bits(0)
+}
+
 // === Internal helpers ===
 
 public struct Components has copy, drop {
@@ -193,9 +264,13 @@ public struct Components has copy, drop {
     mag: u128,
 }
 
+public(package) fun from_bits(bits: u128): SD29x9 {
+    SD29x9(bits)
+}
+
 fun decompose(bits: u128): Components {
     if ((bits & SIGN_BIT) != 0) {
-        Components { neg: true, mag: sd29x9::two_complement(bits) }
+        Components { neg: true, mag: two_complement(bits) }
     } else {
         Components { neg: false, mag: bits }
     }
@@ -221,21 +296,21 @@ fun add_components(x: Components, y: Components): Components {
 
 fun wrap_components(value: Components): SD29x9 {
     if (value.mag == 0) {
-        sd29x9::zero()
-    } else if (value.neg && value.mag == MIN_VALUE) {
-        sd29x9::min()
+        zero()
+    } else if (value.neg && value.mag == MIN_NEGATIVE_VALUE) {
+        min()
     } else {
-        sd29x9::wrap(value.mag, value.neg)
+        wrap(value.mag, value.neg)
     }
 }
 
 fun wrapping_add_bits(a: u128, b: u128): u128 {
     let sum = (a as u256) + (b as u256);
-    (sum & (MAX_VALUE as u256)) as u128
+    (sum & (U128_MAX_VALUE as u256)) as u128
 }
 
 fun wrapping_sub_bits(a: u128, b: u128): u128 {
-    wrapping_add_bits(a, sd29x9::two_complement(b))
+    wrapping_add_bits(a, two_complement(b))
 }
 
 fun greater_than_bits(x_bits: u128, y_bits: u128): bool {
@@ -252,4 +327,9 @@ fun greater_than_bits(x_bits: u128, y_bits: u128): bool {
     } else {
         x_components.mag < y_components.mag
     }
+}
+
+fun two_complement(x: u128): u128 {
+    let bitwise_not = x ^ U128_MAX_VALUE;
+    bitwise_not + 1
 }
