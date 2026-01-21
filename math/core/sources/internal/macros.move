@@ -1027,7 +1027,7 @@ public(package) macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
         // Pivot index is the last element.
         let pivot_index = end - 1;
 
-        // Choose median-of-three (start, mid, pivot_index) as a pivot 
+        // Choose median-of-three (start, mid, pivot_index) as a pivot
         // and place it on the last position.
         let mid = (start + end) / 2;
         if (vec[start] > vec[mid]) {
