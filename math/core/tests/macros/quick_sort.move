@@ -4,6 +4,8 @@ module openzeppelin_math::quick_sort;
 use openzeppelin_math::vector;
 use std::unit_test::assert_eq;
 
+// === quick_sort ===
+
 #[test]
 fun quick_sort_empty_vector() {
     // Sorting an empty vector should remain empty
@@ -496,6 +498,8 @@ fun quick_sort_preserves_all_elements() {
     };
 }
 
+// === quick_sort_by ===
+
 #[test]
 fun quick_sort_by_descending_basic() {
     // Descending order using a custom comparator
@@ -518,4 +522,134 @@ fun quick_sort_by_descending_already_sorted() {
     let mut vec = vector[10u32, 9, 8, 7, 6, 5, 4, 3, 2, 1];
     vector::quick_sort_by!(&mut vec, |x: &u32, y: &u32| *x >= *y);
     assert_eq!(vec, vector[10u32, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+}
+
+#[test_only]
+public struct Transfer has drop, copy {
+    id: u8, // Transfer identifier
+    value: u64, // Transfer value in smallest unit
+}
+
+#[test]
+fun quick_sort_by_struct_member_ascending() {
+    // Sort transfers by value member in ascending order
+    let transfer1 = Transfer { id: 1, value: 3000 };
+    let transfer2 = Transfer { id: 2, value: 2500 };
+    let transfer3 = Transfer { id: 3, value: 3500 };
+    let transfer4 = Transfer { id: 4, value: 2000 };
+
+    let mut vec = vector[transfer1, transfer2, transfer3, transfer4];
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value <= y.value);
+
+    assert_eq!(vec[0].value, 2000);
+    assert_eq!(vec[1].value, 2500);
+    assert_eq!(vec[2].value, 3000);
+    assert_eq!(vec[3].value, 3500);
+}
+
+#[test]
+fun quick_sort_by_struct_member_descending() {
+    // Sort transfers by value member in descending order
+    let transfer1 = Transfer { id: 1, value: 3000 };
+    let transfer2 = Transfer { id: 2, value: 2500 };
+    let transfer3 = Transfer { id: 3, value: 3500 };
+    let transfer4 = Transfer { id: 4, value: 2000 };
+
+    let mut vec = vector[transfer1, transfer2, transfer3, transfer4];
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value >= y.value);
+
+    assert_eq!(vec[0].value, 3500);
+    assert_eq!(vec[1].value, 3000);
+    assert_eq!(vec[2].value, 2500);
+    assert_eq!(vec[3].value, 2000);
+}
+
+#[test]
+fun quick_sort_by_struct_member_with_duplicates() {
+    // Sort transfers by value when multiple have the same value
+    let transfer1 = Transfer { id: 1, value: 3000 };
+    let transfer2 = Transfer { id: 2, value: 2500 };
+    let transfer3 = Transfer { id: 3, value: 3000 };
+    let transfer4 = Transfer { id: 4, value: 2500 };
+    let transfer5 = Transfer { id: 5, value: 3500 };
+
+    let mut vec = vector[transfer1, transfer2, transfer3, transfer4, transfer5];
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value <= y.value);
+
+    assert_eq!(vec[0].value, 2500);
+    assert_eq!(vec[1].value, 2500);
+    assert_eq!(vec[2].value, 3000);
+    assert_eq!(vec[3].value, 3000);
+    assert_eq!(vec[4].value, 3500);
+}
+
+#[test]
+fun quick_sort_by_struct_member_already_sorted() {
+    // Vector of transfers already sorted by value should remain unchanged
+    let transfer1 = Transfer { id: 1, value: 2000 };
+    let transfer2 = Transfer { id: 2, value: 2500 };
+    let transfer3 = Transfer { id: 3, value: 3000 };
+    let transfer4 = Transfer { id: 4, value: 3500 };
+
+    let mut vec = vector[transfer1, transfer2, transfer3, transfer4];
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value <= y.value);
+
+    assert_eq!(vec[0].value, 2000);
+    assert_eq!(vec[1].value, 2500);
+    assert_eq!(vec[2].value, 3000);
+    assert_eq!(vec[3].value, 3500);
+}
+
+#[test]
+fun quick_sort_by_struct_member_reverse_sorted() {
+    // Vector of transfers in reverse value order should be sorted correctly
+    let transfer1 = Transfer { id: 1, value: 3500 };
+    let transfer2 = Transfer { id: 2, value: 3000 };
+    let transfer3 = Transfer { id: 3, value: 2500 };
+    let transfer4 = Transfer { id: 4, value: 2000 };
+
+    let mut vec = vector[transfer1, transfer2, transfer3, transfer4];
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value <= y.value);
+
+    assert_eq!(vec[0].value, 2000);
+    assert_eq!(vec[1].value, 2500);
+    assert_eq!(vec[2].value, 3000);
+    assert_eq!(vec[3].value, 3500);
+}
+
+#[test]
+fun quick_sort_by_struct_single_element() {
+    // Single transfer in vector
+    let transfer = Transfer { id: 1, value: 3000 };
+    let mut vec = vector[transfer];
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value <= y.value);
+
+    assert_eq!(vec.length(), 1);
+    assert_eq!(vec[0].value, 3000);
+}
+
+#[test]
+fun quick_sort_by_struct_member_large_vector() {
+    // Larger vector of transfers sorted by value
+    let mut vec = vector[
+        Transfer { id: 1, value: 4500 },
+        Transfer { id: 2, value: 2300 },
+        Transfer { id: 3, value: 6700 },
+        Transfer { id: 4, value: 1200 },
+        Transfer { id: 5, value: 8900 },
+        Transfer { id: 6, value: 3400 },
+        Transfer { id: 7, value: 5600 },
+        Transfer { id: 8, value: 1800 },
+    ];
+
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value <= y.value);
+
+    assert_eq!(vec[0].value, 1200);
+    assert_eq!(vec[1].value, 1800);
+    assert_eq!(vec[2].value, 2300);
+    assert_eq!(vec[3].value, 3400);
+    assert_eq!(vec[4].value, 4500);
+    assert_eq!(vec[5].value, 5600);
+    assert_eq!(vec[6].value, 6700);
+    assert_eq!(vec[7].value, 8900);
 }
