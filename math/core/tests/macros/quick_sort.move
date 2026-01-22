@@ -525,7 +525,7 @@ fun quick_sort_by_descending_already_sorted() {
 }
 
 #[test_only]
-public struct Transfer has drop, copy {
+public struct Transfer has copy, drop {
     id: u8, // Transfer identifier
     value: u64, // Transfer value in smallest unit
 }
