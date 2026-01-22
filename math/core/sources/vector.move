@@ -2,6 +2,8 @@ module openzeppelin_math::vector;
 
 /// Sort an unsigned integer vector in-place using the quicksort algorithm.
 ///
+/// NOTE: This is an unstable in-place sort.
+///
 /// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
 /// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
 /// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
@@ -27,6 +29,8 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 }
 
 /// Sort a vector in-place using the quicksort algorithm with a custom comparison function.
+///
+/// NOTE: This is an unstable in-place sort.
 ///
 /// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
 /// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
@@ -57,7 +61,7 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x >= *y);
 /// // vec is now [9, 6, 5, 4, 3, 2, 1, 1]
 /// ```
-public macro fun quick_sort_by<$Int>($vec: &mut vector<$Int>, $le: |&$Int, &$Int| -> bool) {
+public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
     let vec = $vec;
     let len = vec.length();
 
