@@ -495,3 +495,27 @@ fun quick_sort_preserves_all_elements() {
         i = i + 1;
     };
 }
+
+#[test]
+fun quick_sort_by_descending_basic() {
+    // Descending order using a custom comparator
+    let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
+    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x >= *y);
+    assert_eq!(vec, vector[9u64, 6, 5, 4, 3, 2, 1, 1]);
+}
+
+#[test]
+fun quick_sort_by_descending_duplicates() {
+    // Descending order with repeated values
+    let mut vec = vector[5u32, 2, 5, 1, 5, 2, 3, 5, 1];
+    vector::quick_sort_by!(&mut vec, |x: &u32, y: &u32| *x >= *y);
+    assert_eq!(vec, vector[5u32, 5, 5, 5, 3, 2, 2, 1, 1]);
+}
+
+#[test]
+fun quick_sort_by_descending_already_sorted() {
+    // Vector already in descending order remains unchanged
+    let mut vec = vector[10u32, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+    vector::quick_sort_by!(&mut vec, |x: &u32, y: &u32| *x >= *y);
+    assert_eq!(vec, vector[10u32, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+}

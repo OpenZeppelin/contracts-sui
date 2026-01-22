@@ -26,7 +26,7 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
     quick_sort_by!($vec, |x: &$Int, y: &$Int| *x <= *y)
 }
 
-/// Sort an unsigned integer vector in-place using the quicksort algorithm.
+/// Sort a vector in-place using the quicksort algorithm with a custom comparison function.
 ///
 /// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
 /// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
@@ -37,16 +37,25 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// it suitable for arbitrarily large vectors.
 ///
 /// #### Generics
-/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+/// - `$Int`: Any type that can be compared using the provided comparison function.
 ///
 /// #### Parameters
 /// - `$vec`: A mutable reference to the vector to be sorted in-place.
+/// - `$le`: A comparison function that takes two references and returns `true` if the first
+///   element should be ordered before or equal to the second element. For ascending order,
+///   this should implement "less than or equal to" semantics.
 ///
 /// #### Example
 /// ```move
+/// // Sort in ascending order
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
-/// macros::quick_sort!(&mut vec);
+/// vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
 /// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
+///
+/// // Sort in descending order
+/// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
+/// vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x >= *y);
+/// // vec is now [9, 6, 5, 4, 3, 2, 1, 1]
 /// ```
 public macro fun quick_sort_by<$Int>($vec: &mut vector<$Int>, $le: |&$Int, &$Int| -> bool) {
     let vec = $vec;
@@ -101,6 +110,7 @@ public macro fun quick_sort_by<$Int>($vec: &mut vector<$Int>, $le: |&$Int, &$Int
 
         // Push partitions: larger first, smaller second.
         // Since we use pop_back, smaller will be processed first.
+        // Stack size will be no longer than O(log(n)).
         let left_size = i - start;
         let right_size = end - (i + 1);
 
