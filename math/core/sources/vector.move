@@ -23,6 +23,32 @@ module openzeppelin_math::vector;
 /// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
 /// ```
 public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
+    quick_sort_by!($vec, |x: &$Int, y: &$Int| *x <= *y)
+}
+
+/// Sort an unsigned integer vector in-place using the quicksort algorithm.
+///
+/// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
+/// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
+/// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
+/// selected as the pivot.
+///
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
+/// it suitable for arbitrarily large vectors.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$vec`: A mutable reference to the vector to be sorted in-place.
+///
+/// #### Example
+/// ```move
+/// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
+/// macros::quick_sort!(&mut vec);
+/// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
+/// ```
+public macro fun quick_sort_by<$Int>($vec: &mut vector<$Int>, $le: |&$Int, &$Int| -> bool) {
     let vec = $vec;
     let len = vec.length();
 
@@ -45,13 +71,13 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
         // Choose median-of-three (start, mid, pivot_index) as a pivot
         // and place it on the last position.
         let mid = (start + end) / 2;
-        if (vec[start] > vec[mid]) {
+        if ($le(&vec[mid], &vec[start])) {
             vec.swap(start, mid);
         };
-        if (vec[start] > vec[pivot_index]) {
+        if ($le(&vec[pivot_index], &vec[start])) {
             vec.swap(start, pivot_index)
         };
-        if (vec[mid] < vec[pivot_index]) {
+        if ($le(&vec[mid], &vec[pivot_index])) {
             vec.swap(mid, pivot_index);
         };
 
@@ -60,7 +86,7 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
         let mut j = start;
         while (j < pivot_index) {
             // If second index `j` is smaller (or equal) than pivot,
-            if (vec[j] <= vec[pivot_index]) {
+            if ($le(&vec[j], &vec[pivot_index])) {
                 // swap it with element from the first partition.
                 vec.swap(i, j);
                 i = i + 1;
