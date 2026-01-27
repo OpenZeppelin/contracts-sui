@@ -225,6 +225,17 @@ fun mul_shr_detects_overflow() {
     assert_eq!(overflow, option::none());
 }
 
+#[test]
+fun ai_mul_shr_shift_overflow() {
+    let overflow = u256::mul_shr(
+        1u256 << 255,
+        1u256 << 255,
+        1,
+        rounding::down(),
+    );
+    assert_eq!(overflow, option::none());
+}
+
 // === clz ===
 
 #[test]
@@ -837,6 +848,14 @@ fun inv_mod_rejects_zero_modulus() {
 }
 
 // === mul_mod ===
+
+#[test]
+fun ai_mul_mod_zero_operands() {
+    let modulus = 1_000_000_007u128 as u256;
+    assert_eq!(u256::mul_mod(0, 123, modulus), 0);
+    assert_eq!(u256::mul_mod(123, 0, modulus), 0);
+    assert_eq!(u256::mul_mod(0, 0, modulus), 0);
+}
 
 #[test]
 fun mul_mod_handles_wide_operands() {

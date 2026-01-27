@@ -99,7 +99,7 @@ jobs:
     name: Test ${{ matrix.package }}
     needs: [setup, lint]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
       pull-requests: write
@@ -116,19 +116,64 @@ jobs:
         with:
           version: ${{ env.SUI_VERSION }}
 
-      - name: Run tests
-        run: sui move test --trace
+      - name: Set package slug
+        id: set-slug
+        run: |
+          package_slug="${{ matrix.package }}"
+          package_slug="${package_slug//\//-}"
+          echo "package_slug=$package_slug" >> $GITHUB_OUTPUT
+
+      - name: Run tests (all)
+        run: sui move test --trace --coverage
         working-directory: ./${{ matrix.package }}
 
-      - name: Generate Codecov report
-        run: sui move coverage lcov > lcov.info
+      - name: Generate Codecov report (all)
+        run: sui move coverage lcov > lcov-all.info
         working-directory: ./${{ matrix.package }}
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage to Codecov (all)
         uses: codecov/codecov-action@v5
         with:
-          file: ./${{ matrix.package }}/lcov.info
+          files: ./${{ matrix.package }}/lcov-all.info
           flags: ${{ matrix.package }}
-          name: ${{ matrix.package }}
+          name: ${{ matrix.package }}-all
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Run tests (ai)
+        id: ai-tests
+        run: |
+          sui move test --trace --coverage '::ai_'
+        working-directory: ./${{ matrix.package }}
+
+      - name: Generate Codecov report (ai)
+        run: sui move coverage lcov > lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
+        working-directory: ./${{ matrix.package }}
+
+      - name: Upload coverage to Codecov (ai)
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-ai.info
+          flags: ${{ matrix.package }}-ai
+          name: ${{ matrix.package }}-ai
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Run tests (dev)
+        id: dev-tests
+        run: |
+          sui move test --trace --coverage '::([^a][^:]*|a[^i][^:]*|ai[^_][^:]*)$'
+        working-directory: ./${{ matrix.package }}
+
+      - name: Generate Codecov report (dev)
+        run: sui move coverage lcov > lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
+        working-directory: ./${{ matrix.package }}
+
+      - name: Upload coverage to Codecov (dev)
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./${{ matrix.package }}/lcov-${{ steps.set-slug.outputs.package_slug }}-dev.info
+          flags: ${{ matrix.package }}-dev
+          name: ${{ matrix.package }}-dev
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -37,6 +37,24 @@ fun request_emits_event() {
 }
 
 #[test]
+fun ai_multiple_requests_emit_events() {
+    let owner = @0x20;
+    let mut owner_ctx = dummy_ctx_with_sender(owner);
+    let wrapper = two_step_transfer::wrap(new_cap(&mut owner_ctx), &mut owner_ctx);
+
+    let mut requester_a = dummy_ctx_with_sender(@0x21);
+    let mut requester_b = dummy_ctx_with_sender(@0x22);
+    two_step_transfer::request<DummyCap>(sui::object::id(&wrapper), owner, &mut requester_a);
+    two_step_transfer::request<DummyCap>(sui::object::id(&wrapper), owner, &mut requester_b);
+
+    let events = event::events_by_type<two_step_transfer::OwnershipRequested>();
+    assert_eq!(events.length(), 2);
+
+    let DummyCap { id } = two_step_transfer::unwrap(wrapper);
+    id.delete();
+}
+
+#[test]
 fun unwrap_returns_inner_cap() {
     let owner = @0x2;
     let mut ctx = dummy_ctx_with_sender(owner);
@@ -134,6 +152,31 @@ fun reject_destroys_request() {
 
     let DummyCap { id } = wrapper.unwrap();
     id.delete();
+}
+
+#[test]
+fun ai_reject_then_transfer_reuses_wrapper() {
+    let owner = @0x30;
+    let new_owner = @0x31;
+    let mut ctx = dummy_ctx_with_sender(owner);
+    let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
+
+    let first_request = two_step_transfer::test_new_request<DummyCap>(
+        sui::object::id(&wrapper),
+        new_owner,
+        &mut ctx,
+    );
+    two_step_transfer::reject(first_request);
+
+    let second_request = two_step_transfer::test_new_request<DummyCap>(
+        sui::object::id(&wrapper),
+        new_owner,
+        &mut ctx,
+    );
+    two_step_transfer::transfer(wrapper, second_request, &mut ctx);
+
+    let events = event::events_by_type<two_step_transfer::OwnershipTransferred>();
+    assert_eq!(events.length(), 1);
 }
 
 fun expect_wrapper_mismatch(

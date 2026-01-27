@@ -132,6 +132,32 @@ fun cancel_allows_reschedule() {
 }
 
 #[test]
+fun ai_cancel_then_transfer_executes_after_cancel() {
+    let owner = @0x100;
+    let recipient_a = @0x101;
+    let recipient_b = @0x102;
+    let mut ctx = dummy_ctx_with_sender(owner);
+    let mut wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 5, &mut ctx);
+    let mut clk = clock::create_for_testing(&mut ctx);
+    clock::set_for_testing(&mut clk, 0);
+
+    delayed_transfer::schedule_transfer(&mut wrapper, recipient_a, &clk, owner);
+    delayed_transfer::cancel_schedule(&mut wrapper);
+    delayed_transfer::schedule_transfer(&mut wrapper, recipient_b, &clk, owner);
+
+    let scheduled = event::events_by_type<delayed_transfer::TransferScheduled>();
+    assert_eq!(scheduled.length(), 2);
+
+    clock::set_for_testing(&mut clk, 10);
+    delayed_transfer::execute_transfer(wrapper, &clk, &mut ctx);
+
+    let executed = event::events_by_type<delayed_transfer::OwnershipTransferred>();
+    assert_eq!(executed.length(), 1);
+
+    clock::destroy_for_testing(clk);
+}
+
+#[test]
 fun borrow_helpers_roundtrip() {
     // Borrow, mutate, and return the capability through all borrow APIs.
     let owner = @0x11;
