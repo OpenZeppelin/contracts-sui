@@ -1072,7 +1072,7 @@ public(package) macro fun median<$Int>($vec: vector<$Int>): $Int {
     let len = vec.length();
 
     if (len == 0) {
-        return 0 as $Int
+        return 0
     };
 
     quick_sort!(&mut vec);
