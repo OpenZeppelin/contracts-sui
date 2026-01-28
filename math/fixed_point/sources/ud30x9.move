@@ -1,14 +1,39 @@
-/// # UD30x9 Base Functions
+/// # UD30x9 Fixed-Point Type
 ///
-/// This module provides base utility functions for working with the UD30x9 fixed-point type.
-module openzeppelin_fp_math::ud30x9_base;
+/// This module defines the `UD30x9` decimal fixed-point type, which represents
+/// unsigned real numbers using a `u128` scaled by `10^9`.
+///
+/// ## Why UD30x9
+/// - Matches Sui’s native coin decimals (9), making conversions from token
+///   amounts straightforward and less error-prone.
+/// - Uses a decimal scale that is intuitive for humans, UIs, and offchain
+///   systems, avoiding binary fixed-point surprises.
+/// - Fits efficiently in `u128`, keeping storage and arithmetic lightweight
+///   compared to `u256`-based decimal types.
+/// - Well-suited for boundary values such as prices, fees, percentages, and
+///   protocol parameters, while heavier math can still rely on `uq64x64`
+///   internally.
+module openzeppelin_fp_math::ud30x9;
 
-use openzeppelin_fp_math::ud30x9::{UD30x9, wrap};
+/// The `UD30x9` decimal fixed-point type.
+public struct UD30x9(u128) has copy, drop, store;
 
 // === Constants ===
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
 const SCALE: u128 = 1_000_000_000; // 10^9
+
+// === Casting ===
+
+/// Wraps a `u128` number into a `UD30x9` value type.
+public fun wrap(x: u128): UD30x9 {
+    UD30x9(x)
+}
+
+/// Unwraps a `UD30x9` value into a `u128`.
+public fun unwrap(x: UD30x9): u128 {
+    x.0
+}
 
 // === Public Functions ===
 
@@ -92,6 +117,11 @@ public fun lte(x: UD30x9, y: UD30x9): bool {
     x.unwrap() <= y.unwrap()
 }
 
+/// Returns the maximum value for `UD30x9`
+public fun max(): UD30x9 {
+    wrap(MAX_VALUE)
+}
+
 /// Implements the checked modulo operation (%) for UD30x9 type.
 public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() % y.unwrap())
@@ -149,4 +179,9 @@ public fun unchecked_sub(x: UD30x9, y: UD30x9): UD30x9 {
 /// Implements the XOR (^) bitwise operation for UD30x9 type.
 public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() ^ y.unwrap())
+}
+
+/// Returns a `UD30x9` value of zero.
+public fun zero(): UD30x9 {
+    wrap(0)
 }
