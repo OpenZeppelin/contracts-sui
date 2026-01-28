@@ -3,6 +3,7 @@ module openzeppelin_math::macros;
 use openzeppelin_math::common;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
+use openzeppelin_math::vector;
 
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
@@ -985,74 +986,6 @@ public(package) macro fun binary_search<$Int>($haystack: vector<$Int>, $needle: 
     false
 }
 
-/// Sort an unsigned integer vector in-place using the quicksort algorithm.
-///
-/// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
-/// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
-/// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
-/// selected as the pivot.
-///
-/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
-/// it suitable for arbitrarily large vectors.
-///
-/// #### Generics
-/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
-///
-/// #### Parameters
-/// - `$vec`: A mutable reference to the vector to be sorted in-place.
-///
-/// #### Example
-/// ```move
-/// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
-/// macros::quick_sort!(&mut vec);
-/// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
-/// ```
-public(package) macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
-    let vec = $vec;
-    let len = vec.length();
-
-    // Recursive implementation based on stack (vector) type.
-    let mut stack_start = vector[0];
-    let mut stack_end = vector[len];
-
-    while (!stack_start.is_empty()) {
-        let start = stack_start.pop_back();
-        let end = stack_end.pop_back();
-
-        // Ensure we have at least two elements in vector.
-        if (start + 1 >= end) {
-            continue
-        };
-
-        // Partition the array and get the pivot index.
-        let pivot_index = end - 1;
-        let mut i = start;
-        let mut j = start;
-        while (j < pivot_index) {
-            // If second index `j` is smaller (or eq) than pivot,
-            if (vec[j] <= vec[pivot_index]) {
-                // swap it with element from the first partition.
-                vec.swap(i, j);
-                i = i + 1;
-            };
-            j = j + 1;
-        };
-
-        // Swap pivot to the partition index. Swapped element will be greater,
-        // than a pivot since it was already processed.
-        // `i` now partition index.
-        vec.swap(i, pivot_index);
-
-        // Put first partition to stack for recursive processing.
-        stack_start.push_back(start);
-        stack_end.push_back(i);
-
-        // Put second partition to stack for recursive processing.
-        stack_start.push_back(i + 1);
-        stack_end.push_back(end);
-    };
-}
-
 /// Compute the median of an unsigned integer vector.
 ///
 /// The helper consumes the input vector, sorts it in-place with `quick_sort`, and
@@ -1075,7 +1008,7 @@ public(package) macro fun median<$Int>($vec: vector<$Int>): $Int {
         return 0
     };
 
-    quick_sort!(&mut vec);
+    vector::quick_sort!(&mut vec);
 
     let mid = len / 2;
     if (len % 2 == 1) {
