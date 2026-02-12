@@ -116,6 +116,7 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
 
     let mut quotient = 0u256;
     let mut remainder = zero();
+    let mut overflow = false;
 
     // numerator is not zero, so we can safely call msb
     let mut idx = msb(&numerator);
@@ -127,11 +128,12 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
         };
 
         if (ge_u256(&remainder, divisor)) {
-            if (idx >= 256) {
-                return (true, 0, 0)
-            };
             remainder = sub_u256(remainder, divisor);
-            quotient = quotient | (1u256 << (idx as u8));
+            if (idx >= 256) {
+                overflow = true;
+            } else {
+                quotient = quotient | (1u256 << (idx as u8));
+            };
         };
 
         if (idx == 0) {
@@ -141,7 +143,7 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     };
 
     assert!(remainder.hi == 0, EInvalidRemainder);
-    (false, quotient, remainder.lo)
+    if (overflow) (true, 0, remainder.lo) else (false, quotient, remainder.lo)
 }
 
 /// === Internal helpers ===
