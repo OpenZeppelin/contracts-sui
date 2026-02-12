@@ -106,7 +106,8 @@ public fun mul_u256(a: u256, b: u256): U512 {
 /// Divide a 512-bit numerator by a 256-bit divisor.
 ///
 /// Returns `(overflow, quotient, remainder)` where `overflow` is `true` when the
-/// exact quotient does not fit in 256 bits.
+/// exact quotient does not fit in 256 bits. In the overflow case, `quotient` is
+/// returned as zero while `remainder` is still the correct modulus.
 public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     assert!(divisor != 0, EDivideByZero);
 
@@ -131,7 +132,9 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
             remainder = sub_u256(remainder, divisor);
             if (idx >= 256) {
                 overflow = true;
-            } else {
+            } else if (!overflow) {
+                // If the overflow flag is set, we can stop computing the quotient
+                // because it will be 0.
                 quotient = quotient | (1u256 << (idx as u8));
             };
         };
