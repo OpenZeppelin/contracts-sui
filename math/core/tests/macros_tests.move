@@ -270,7 +270,7 @@ fun mul_mod_impl_handles_wide_operands() {
 fun mul_mod_impl_handles_quotient_overflow() {
     let a = std::u256::max_value!();
     let b = a;
-    let modulus = 7u256;
+    let modulus = 7;
     let expected = ((a % modulus) * (b % modulus)) % modulus;
     let result = macros::mul_mod_impl(a, b, modulus);
     assert_eq!(result, expected);

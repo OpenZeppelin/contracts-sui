@@ -135,7 +135,7 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
             } else if (!overflow) {
                 // If the overflow flag is set, we can stop computing the quotient
                 // because it will be 0.
-                quotient = quotient | (1 << (idx as u8));
+                quotient = quotient | (1u256 << (idx as u8));
             };
         };
 
