@@ -61,6 +61,12 @@ public struct OwnershipTransferred has copy, drop {
     new_owner: address,
 }
 
+/// Emitted whenever the wrapper changes hands.
+public struct OwnershipTransferRejected has copy, drop {
+    request_id: ID,
+    current_owner: address,
+}
+
 /// Emitted whenever a capability/object is wrapped in `TwoStepTransferWrapper`.
 public struct ObjectWrapped has copy, drop {
     wrapper_id: ID,
@@ -126,16 +132,15 @@ public fun return_val<T: key + store>(
 
 /// Permanently unwrap the capability, deleting the wrapper. Only the current owner can call this,
 /// and it bypasses the request flow, effectively “owning” the capability again.
-public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxContext): T {
-    let wrapper_id = object::id(&self);
-    let TwoStepTransferWrapper { id: mut wrapper_uid } = self;
-    let cap = dof::remove(&mut wrapper_uid, WrappedKey());
+public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &TxContext): T {
+    let TwoStepTransferWrapper { id: mut wrapper_id } = self;
+    let cap = dof::remove(&mut wrapper_id, WrappedKey());
     event::emit(ObjectUnwrapped {
-        wrapper_id,
+        wrapper_id: object::uid_to_inner(&wrapper_id),
         object_id: object::id(&cap),
         owner: ctx.sender(),
     });
-    wrapper_uid.delete();
+    wrapper_id.delete();
     cap
 }
 
@@ -178,9 +183,14 @@ public fun transfer<T: key + store>(
 
 /// Reject an ownership request by deleting it—useful when the owner wants to deny or revoke a
 /// pending request without moving the wrapper.
-public fun reject<T>(request: OwnershipTransferRequest<T>) {
+public fun reject<T>(request: OwnershipTransferRequest<T>, ctx: &TxContext) {
     let OwnershipTransferRequest { id, .. } = request;
+    event::emit(OwnershipTransferRejected {
+        request_id: object::uid_to_inner(&id),
+        current_owner: ctx.sender(),
+    });
     id.delete();
+    
 }
 
 #[test_only]
