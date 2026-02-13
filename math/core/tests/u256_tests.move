@@ -853,7 +853,7 @@ fun mul_mod_handles_wide_operands() {
 fun mul_mod_handles_quotient_overflow() {
     let a = std::u256::max_value!();
     let b = a;
-    let modulus = 7u256;
+    let modulus = 7;
     let expected = ((a % modulus) * (b % modulus)) % modulus;
     let result = u256::mul_mod(a, b, modulus);
     assert_eq!(result, expected);

@@ -120,7 +120,7 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     let mut overflow = false;
 
     // numerator is not zero, so we can safely call msb
-    let mut idx = msb(&numerator);
+    let mut idx = numerator.msb();
     loop {
         remainder = shift_left1(&remainder);
         let bit = get_bit(&numerator, idx);
@@ -128,14 +128,14 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
             remainder.lo = remainder.lo | 1;
         };
 
-        if (ge_u256(&remainder, divisor)) {
-            remainder = sub_u256(remainder, divisor);
+if (remainder.ge_u256(divisor)) {
+            remainder = remainder.sub_u256(divisor);
             if (idx >= 256) {
                 overflow = true;
             } else if (!overflow) {
                 // If the overflow flag is set, we can stop computing the quotient
                 // because it will be 0.
-                quotient = quotient | (1u256 << (idx as u8));
+                quotient = quotient | (1 << (idx as u8));
             };
         };
 
