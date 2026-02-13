@@ -136,7 +136,7 @@ public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &TxConte
     let TwoStepTransferWrapper { id: mut wrapper_id } = self;
     let cap = dof::remove(&mut wrapper_id, WrappedKey());
     event::emit(ObjectUnwrapped {
-        wrapper_id: object::uid_to_inner(&wrapper_id),
+        wrapper_id: wrapper_id.uid_to_inner(),
         object_id: object::id(&cap),
         owner: ctx.sender(),
     });
@@ -186,7 +186,7 @@ public fun transfer<T: key + store>(
 public fun reject<T>(request: OwnershipTransferRequest<T>, ctx: &TxContext) {
     let OwnershipTransferRequest { id, .. } = request;
     event::emit(OwnershipTransferRejected {
-        request_id: object::uid_to_inner(&id),
+        request_id: id.uid_to_inner(),
         current_owner: ctx.sender(),
     });
     id.delete();
