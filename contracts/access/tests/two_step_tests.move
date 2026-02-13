@@ -37,22 +37,36 @@ fun request_emits_event() {
 }
 
 #[test]
-fun unwrap_returns_inner_cap() {
+fun wrap_roundtrip() {
     let owner = @0x2;
     let mut ctx = dummy_ctx_with_sender(owner);
-    let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
+    let cap = new_cap(&mut ctx);
+    let cap_id = object::id(&cap);
+    
+    // wrap flow
+    
+    let wrapper = two_step_transfer::wrap(cap, &mut ctx);
     let wrapper_id = object::id(&wrapper);
     
+    let events = event::events_by_type<two_step_transfer::ObjectWrapped>();
+    assert_eq!(events.length(), 1);
+    assert_eq!(
+        two_step_transfer::test_new_object_wrapped(wrapper_id, cap_id, owner),
+        events[0]
+    );
+    
+    // unwrap flow
+    
     let cap = wrapper.unwrap(&ctx);
-    let DummyCap { id } = cap;
 
     let events = event::events_by_type<two_step_transfer::ObjectUnwrapped>();
     assert_eq!(events.length(), 1);
-    let event = events[0];
-    assert_eq!(wrapper_id, event.wrapper_id());
-    assert_eq!(owner, event.owner());
-    assert_eq!(id.uid_to_inner(), event.object_id());
+    assert_eq!(
+        two_step_transfer::test_new_object_unwrapped(wrapper_id, cap_id, owner),
+        events[0]
+    );
     
+    let DummyCap { id } = cap;
     id.delete();
 }
 
