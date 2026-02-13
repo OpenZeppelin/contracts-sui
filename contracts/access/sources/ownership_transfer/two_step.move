@@ -61,12 +61,24 @@ public struct OwnershipTransferred has copy, drop {
     new_owner: address,
 }
 
+/// Emitted whenever a capability/object is wrapped in `TwoStepTransferWrapper`.
+public struct ObjectWrapped has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+}
+
 // === Wrap / unwrap / borrow ===
 
 /// Wrap a capability/object inside a new two step transfer wrapper, storing it under a dynamic
 /// field so the underlying ID can still be discovered by off-chain indexers.
 public fun wrap<T: key + store>(cap: T, ctx: &mut TxContext): TwoStepTransferWrapper<T> {
     let mut wrapper = TwoStepTransferWrapper { id: object::new(ctx) };
+    event::emit(ObjectWrapped {
+        wrapper_id: object::id(&wrapper),
+        object_id: object::id(&cap),
+        owner: ctx.sender(),
+    });
     dof::add(&mut wrapper.id, WrappedKey(), cap);
     wrapper
 }
