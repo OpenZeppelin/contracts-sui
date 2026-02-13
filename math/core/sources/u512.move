@@ -128,7 +128,7 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
             remainder.lo = remainder.lo | 1;
         };
 
-if (remainder.ge_u256(divisor)) {
+        if (remainder.ge_u256(divisor)) {
             remainder = remainder.sub_u256(divisor);
             if (idx >= 256) {
                 overflow = true;
