@@ -68,6 +68,13 @@ public struct ObjectWrapped has copy, drop {
     owner: address,
 }
 
+/// Emitted whenever a capability/object is unwrapped.
+public struct ObjectUnwrapped has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    requester: address,
+}
+
 // === Wrap / unwrap / borrow ===
 
 /// Wrap a capability/object inside a new two step transfer wrapper, storing it under a dynamic
@@ -119,10 +126,16 @@ public fun return_val<T: key + store>(
 
 /// Permanently unwrap the capability, deleting the wrapper. Only the current owner can call this,
 /// and it bypasses the request flow, effectively “owning” the capability again.
-public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>): T {
-    let TwoStepTransferWrapper { id: mut wrapper_id } = self;
-    let cap = dof::remove(&mut wrapper_id, WrappedKey());
-    wrapper_id.delete();
+public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxContext): T {
+    let wrapper_id = object::id(&self);
+    let TwoStepTransferWrapper { id: mut wrapper_uid } = self;
+    let cap = dof::remove(&mut wrapper_uid, WrappedKey());
+    event::emit(ObjectUnwrapped {
+        wrapper_id,
+        object_id: object::id(&cap),
+        requester: ctx.sender(),
+    });
+    wrapper_uid.delete();
     cap
 }
 
