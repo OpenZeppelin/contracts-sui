@@ -206,3 +206,13 @@ public fun test_new_request<T: key + store>(
 public fun wrapper_id(event: &ObjectUnwrapped): ID {
     event.wrapper_id
 }
+
+#[test_only]
+public fun object_id(event: &ObjectUnwrapped): ID {
+    event.object_id
+}
+
+#[test_only]
+public fun owner(event: &ObjectUnwrapped): address {
+    event.owner
+}
