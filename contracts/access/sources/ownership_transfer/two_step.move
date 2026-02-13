@@ -72,7 +72,7 @@ public struct ObjectWrapped has copy, drop {
 public struct ObjectUnwrapped has copy, drop {
     wrapper_id: ID,
     object_id: ID,
-    requester: address,
+    owner: address,
 }
 
 // === Wrap / unwrap / borrow ===
@@ -133,7 +133,7 @@ public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxC
     event::emit(ObjectUnwrapped {
         wrapper_id,
         object_id: object::id(&cap),
-        requester: ctx.sender(),
+        owner: ctx.sender(),
     });
     wrapper_uid.delete();
     cap
