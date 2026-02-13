@@ -201,3 +201,8 @@ public fun test_new_request<T: key + store>(
 ): OwnershipTransferRequest<T> {
     OwnershipTransferRequest { id: object::new(ctx), wrapper_id, new_owner }
 }
+
+#[test_only]
+public fun wrapper_id(event: &ObjectUnwrapped): ID {
+    event.wrapper_id
+}

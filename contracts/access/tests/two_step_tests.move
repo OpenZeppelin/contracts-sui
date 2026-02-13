@@ -32,7 +32,7 @@ fun request_emits_event() {
     let events = event::events_by_type<two_step_transfer::OwnershipRequested>();
     assert_eq!(events.length(), 1);
 
-    let DummyCap { id } = wrapper.unwrap();
+    let DummyCap { id } = wrapper.unwrap(&ctx);
     id.delete();
 }
 
@@ -41,8 +41,10 @@ fun unwrap_returns_inner_cap() {
     let owner = @0x2;
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
+    let wrapper_id = object::id(&wrapper);
+    
+    let cap = wrapper.unwrap(&ctx);
 
-    let cap = wrapper.unwrap();
     let DummyCap { id } = cap;
     id.delete();
 }
@@ -60,7 +62,7 @@ fun borrow_and_return_roundtrip() {
     let (cap, borrow_token) = wrapper.borrow_val();
     wrapper.return_val(cap, borrow_token);
 
-    let DummyCap { id } = wrapper.unwrap();
+    let DummyCap { id } = wrapper.unwrap(&ctx);
     id.delete();
 }
 
@@ -72,7 +74,7 @@ fun return_val_rejects_wrong_wrapper() {
     let first = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
     let second = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
-    expect_wrapper_mismatch(first, second);
+    expect_wrapper_mismatch(first, second, &ctx);
 }
 
 #[test, expected_failure(abort_code = two_step_transfer::EWrongTwoStepTransferObject)]
@@ -127,25 +129,26 @@ fun reject_destroys_request() {
         owner,
         &mut ctx,
     );
-    two_step_transfer::reject(request);
+    two_step_transfer::reject(request, &ctx);
 
     let events = event::events_by_type<two_step_transfer::OwnershipTransferred>();
     assert_eq!(events.length(), 0);
 
-    let DummyCap { id } = wrapper.unwrap();
+    let DummyCap { id } = wrapper.unwrap(&ctx);
     id.delete();
 }
 
 fun expect_wrapper_mismatch(
     mut first: two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     mut second: two_step_transfer::TwoStepTransferWrapper<DummyCap>,
+    ctx: &TxContext,
 ) {
     let (cap, borrow_token) = first.borrow_val();
     second.return_val(cap, borrow_token);
 
-    let DummyCap { id } = first.unwrap();
+    let DummyCap { id } = first.unwrap(ctx);
     id.delete();
-    let DummyCap { id } = second.unwrap();
+    let DummyCap { id } = second.unwrap(ctx);
     id.delete();
 }
 
@@ -159,7 +162,7 @@ fun expect_capability_mismatch(
     let bogus_cap = new_cap(ctx);
     wrapper.return_val(bogus_cap, borrow_token);
 
-    let DummyCap { id } = wrapper.unwrap();
+    let DummyCap { id } = wrapper.unwrap(ctx);
     id.delete();
 }
 
@@ -176,6 +179,6 @@ fun expect_mismatched_request(
     );
     wrapper.transfer(bad_request, ctx);
 
-    let DummyCap { id } = other_wrapper.unwrap();
+    let DummyCap { id } = other_wrapper.unwrap(ctx);
     id.delete();
 }
