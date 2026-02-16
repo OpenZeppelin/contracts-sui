@@ -61,7 +61,7 @@ public struct OwnershipTransferred has copy, drop {
     new_owner: address,
 }
 
-/// Emitted whenever the wrapper changes hands.
+/// Emitted whenever an ownership transfer request is rejected.
 public struct OwnershipTransferRejected has copy, drop {
     request_id: ID,
     current_owner: address,
