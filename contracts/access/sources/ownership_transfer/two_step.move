@@ -219,3 +219,11 @@ public fun test_new_object_unwrapped(
 ): ObjectUnwrapped {
     ObjectUnwrapped { wrapper_id, object_id, owner }
 }
+
+#[test_only]
+public fun test_new_ownership_transfer_rejected(
+    request_id: ID,
+    current_owner: address,
+): OwnershipTransferRejected {
+    OwnershipTransferRejected { request_id, current_owner }
+}
