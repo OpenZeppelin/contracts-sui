@@ -71,6 +71,11 @@ public struct OwnershipTransferred has copy, drop {
     new_owner: address,
 }
 
+/// Emitted when an unwrap is scheduled.
+public struct PendingTransferCancelled has copy, drop {
+    wrapper_id: ID,
+}
+
 // === Wrap / unwrap / borrow ===
 
 /// Wrap a capability/object in a delayed transfer wrapper with the desired minimum delay. The
@@ -229,4 +234,5 @@ public fun unwrap<T: key + store>(
 /// Cancel the currently scheduled transfer or unwrap operation, if any.
 public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>) {
     let PendingTransfer { .. } = self.pending.extract_or!(abort ENoPendingTransfer);
+    event::emit(PendingTransferCancelled { wrapper_id: object::id(self) });
 }
