@@ -182,7 +182,7 @@ public fun transfer<T: key + store>(
 
 /// Reject an ownership request by deleting it—useful when the owner wants to deny or revoke a
 /// pending request without moving the wrapper.
-public fun reject<T>(request: OwnershipTransferRequest<T>, ctx: &TxContext) {
+public fun reject<T>(request: OwnershipTransferRequest<T>) {
     let OwnershipTransferRequest { id, .. } = request;
     event::emit(OwnershipTransferRejected {
         request_id: id.uid_to_inner(),

@@ -149,7 +149,7 @@ fun reject_destroys_request() {
         &mut ctx,
     );
     let request_id = object::id(&request);
-    two_step_transfer::reject(request, &ctx);
+    two_step_transfer::reject(request);
 
     let expected_event = two_step_transfer::test_new_ownership_transfer_rejected(request_id);
 
