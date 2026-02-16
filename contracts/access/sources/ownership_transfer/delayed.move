@@ -71,7 +71,7 @@ public struct OwnershipTransferred has copy, drop {
     new_owner: address,
 }
 
-/// Emitted when an unwrap is scheduled.
+/// Emitted when a scheduled transfer or unwrap is cancelled.
 public struct PendingTransferCancelled has copy, drop {
     wrapper_id: ID,
 }
