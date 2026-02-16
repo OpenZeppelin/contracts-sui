@@ -190,7 +190,6 @@ public fun reject<T>(request: OwnershipTransferRequest<T>, ctx: &TxContext) {
         current_owner: ctx.sender(),
     });
     id.delete();
-    
 }
 
 #[test_only]
@@ -203,11 +202,7 @@ public fun test_new_request<T: key + store>(
 }
 
 #[test_only]
-public fun test_new_object_wrapped(
-    wrapper_id: ID,
-    object_id: ID,
-    owner: address,
-): ObjectWrapped {
+public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address): ObjectWrapped {
     ObjectWrapped { wrapper_id, object_id, owner }
 }
 

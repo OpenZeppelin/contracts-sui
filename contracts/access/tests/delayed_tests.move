@@ -131,12 +131,12 @@ fun cancel_allows_reschedule() {
     clk.set_for_testing(0);
 
     wrapper.schedule_transfer(owner, &clk, owner);
-    
+
     wrapper.cancel_schedule();
-    
+
     let events = event::events_by_type<delayed_transfer::PendingTransferCancelled>();
     assert_eq!(events.length(), 1);
-    
+
     wrapper.schedule_unwrap(&clk, owner);
 
     let events = event::events_by_type<delayed_transfer::UnwrapScheduled>();
