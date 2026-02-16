@@ -48,17 +48,21 @@ fun wrap_roundtrip() {
     let wrapper = two_step_transfer::wrap(cap, &mut ctx);
     let wrapper_id = object::id(&wrapper);
 
+    let expected_event = two_step_transfer::test_new_object_wrapped(wrapper_id, cap_id, owner);
+
     let events = event::events_by_type<two_step_transfer::ObjectWrapped>();
     assert_eq!(events.length(), 1);
-    assert_eq!(two_step_transfer::test_new_object_wrapped(wrapper_id, cap_id, owner), events[0]);
+    assert_eq!(expected_event, events[0]);
 
     // unwrap flow
 
     let cap = wrapper.unwrap(&ctx);
 
+    let expected_event = two_step_transfer::test_new_object_unwrapped(wrapper_id, cap_id, owner);
+
     let events = event::events_by_type<two_step_transfer::ObjectUnwrapped>();
     assert_eq!(events.length(), 1);
-    assert_eq!(two_step_transfer::test_new_object_unwrapped(wrapper_id, cap_id, owner), events[0]);
+    assert_eq!(expected_event, events[0]);
 
     let DummyCap { id } = cap;
     id.delete();
@@ -147,12 +151,11 @@ fun reject_destroys_request() {
     let request_id = object::id(&request);
     two_step_transfer::reject(request, &ctx);
 
+    let expected_event = two_step_transfer::test_new_ownership_transfer_rejected(request_id, owner);
+
     let events = event::events_by_type<two_step_transfer::OwnershipTransferRejected>();
     assert_eq!(events.length(), 1);
-    assert_eq!(
-        two_step_transfer::test_new_ownership_transfer_rejected(request_id, owner),
-        events[0],
-    );
+    assert_eq!(expected_event, events[0]);
 
     let DummyCap { id } = wrapper.unwrap(&ctx);
     id.delete();

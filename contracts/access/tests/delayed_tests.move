@@ -145,10 +145,11 @@ fun cancel_allows_reschedule() {
 
     let events = event::events_by_type<delayed_transfer::PendingTransferCancelled>();
     assert_eq!(events.length(), 1);
-    assert_eq!(
-        delayed_transfer::test_new_pending_transfer_cancelled(object::id(&wrapper)),
-        events[0],
+
+    let expected_event = delayed_transfer::test_new_pending_transfer_cancelled(
+        object::id(&wrapper),
     );
+    assert_eq!(expected_event, events[0]);
 
     wrapper.schedule_unwrap(&clk, owner);
 
