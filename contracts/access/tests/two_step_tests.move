@@ -151,7 +151,7 @@ fun reject_destroys_request() {
     let request_id = object::id(&request);
     two_step_transfer::reject(request, &ctx);
 
-    let expected_event = two_step_transfer::test_new_ownership_transfer_rejected(request_id, owner);
+    let expected_event = two_step_transfer::test_new_ownership_transfer_rejected(request_id);
 
     let events = event::events_by_type<two_step_transfer::OwnershipTransferRejected>();
     assert_eq!(events.length(), 1);

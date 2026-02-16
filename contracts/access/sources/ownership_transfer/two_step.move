@@ -78,7 +78,6 @@ public struct OwnershipTransferred has copy, drop {
 /// Emitted whenever an ownership transfer request is rejected.
 public struct OwnershipTransferRejected has copy, drop {
     request_id: ID,
-    current_owner: address,
 }
 
 // === Wrap / unwrap / borrow ===
@@ -187,7 +186,6 @@ public fun reject<T>(request: OwnershipTransferRequest<T>, ctx: &TxContext) {
     let OwnershipTransferRequest { id, .. } = request;
     event::emit(OwnershipTransferRejected {
         request_id: id.uid_to_inner(),
-        current_owner: ctx.sender(),
     });
     id.delete();
 }
@@ -216,9 +214,6 @@ public fun test_new_object_unwrapped(
 }
 
 #[test_only]
-public fun test_new_ownership_transfer_rejected(
-    request_id: ID,
-    current_owner: address,
-): OwnershipTransferRejected {
-    OwnershipTransferRejected { request_id, current_owner }
+public fun test_new_ownership_transfer_rejected(request_id: ID): OwnershipTransferRejected {
+    OwnershipTransferRejected { request_id }
 }
