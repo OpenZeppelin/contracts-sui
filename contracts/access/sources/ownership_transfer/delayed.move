@@ -29,6 +29,13 @@ const EWrongDelayedTransferWrapper: vector<u8> = b"Wrong delayed transfer wrappe
 #[error(code = 5)]
 const EWrongDelayedTransferObject: vector<u8> = b"Wrong delayed transfer object.";
 
+/// Emitted whenever a capability/object is wrapped in `DelayedTransferWrapper`.
+public struct ObjectWrapped has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+}
+
 /// Wrapper object that delays transfers by at least `min_delay_ms` after scheduling.
 public struct DelayedTransferWrapper<phantom T: key + store> has key {
     id: UID,
@@ -90,6 +97,11 @@ public fun wrap<T: key + store>(
         min_delay_ms,
         pending: option::none(),
     };
+    event::emit(ObjectWrapped {
+        wrapper_id: object::id(&wrapper),
+        object_id: object::id(&cap),
+        owner: ctx.sender(),
+    });
     dof::add(&mut wrapper.id, WrappedKey(), cap);
     wrapper
 }
