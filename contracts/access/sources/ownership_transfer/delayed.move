@@ -248,3 +248,8 @@ public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>)
     let PendingTransfer { .. } = self.pending.extract_or!(abort ENoPendingTransfer);
     event::emit(PendingTransferCancelled { wrapper_id: object::id(self) });
 }
+
+#[test_only]
+public fun test_new_pending_transfer_cancelled(wrapper_id: ID): PendingTransferCancelled {
+    PendingTransferCancelled { wrapper_id }
+}
