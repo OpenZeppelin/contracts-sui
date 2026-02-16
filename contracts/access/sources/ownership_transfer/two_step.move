@@ -47,6 +47,20 @@ public struct Borrow { wrapper_id: ID, object_id: ID }
 
 // === Events ===
 
+/// Emitted whenever a capability/object is wrapped in `TwoStepTransferWrapper`.
+public struct ObjectWrapped has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+}
+
+/// Emitted whenever a capability/object is unwrapped.
+public struct ObjectUnwrapped has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+}
+
 /// Emitted whenever an ownership request is created.
 public struct OwnershipRequested has copy, drop {
     wrapper_id: ID,
@@ -65,20 +79,6 @@ public struct OwnershipTransferred has copy, drop {
 public struct OwnershipTransferRejected has copy, drop {
     request_id: ID,
     current_owner: address,
-}
-
-/// Emitted whenever a capability/object is wrapped in `TwoStepTransferWrapper`.
-public struct ObjectWrapped has copy, drop {
-    wrapper_id: ID,
-    object_id: ID,
-    owner: address,
-}
-
-/// Emitted whenever a capability/object is unwrapped.
-public struct ObjectUnwrapped has copy, drop {
-    wrapper_id: ID,
-    object_id: ID,
-    owner: address,
 }
 
 // === Wrap / unwrap / borrow ===
