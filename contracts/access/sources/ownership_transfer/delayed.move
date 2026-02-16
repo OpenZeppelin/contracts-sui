@@ -29,13 +29,6 @@ const EWrongDelayedTransferWrapper: vector<u8> = b"Wrong delayed transfer wrappe
 #[error(code = 5)]
 const EWrongDelayedTransferObject: vector<u8> = b"Wrong delayed transfer object.";
 
-/// Emitted whenever a capability/object is wrapped in `DelayedTransferWrapper`.
-public struct ObjectWrapped has copy, drop {
-    wrapper_id: ID,
-    object_id: ID,
-    owner: address,
-}
-
 /// Wrapper object that delays transfers by at least `min_delay_ms` after scheduling.
 public struct DelayedTransferWrapper<phantom T: key + store> has key {
     id: UID,
@@ -55,6 +48,13 @@ public struct PendingTransfer has drop, store {
 public struct Borrow { wrapper_id: ID, object_id: ID }
 
 // === Events ===
+
+/// Emitted whenever a capability/object is wrapped in `DelayedTransferWrapper`.
+public struct ObjectWrapped has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+}
 
 /// Emitted when a delayed transfer is scheduled.
 public struct TransferScheduled has copy, drop {
