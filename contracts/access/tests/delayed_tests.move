@@ -27,10 +27,19 @@ fun wrap_emits_events() {
     let owner = @0x1;
     let min_delay_ms = 5;
     let mut ctx = dummy_ctx_with_sender(owner);
-    let wrapper = delayed_transfer::wrap(new_cap(&mut ctx), min_delay_ms, &mut ctx);
+    let cap = new_cap(&mut ctx);
+    let cap_id = object::id(&cap);
+
+    let wrapper = delayed_transfer::wrap(cap, min_delay_ms, &mut ctx);
+    let expected_event = delayed_transfer::test_new_object_wrapped(
+        object::id(&wrapper),
+        cap_id,
+        owner,
+    );
 
     let events = event::events_by_type<delayed_transfer::ObjectWrapped>();
     assert_eq!(events.length(), 1);
+    assert_eq!(expected_event, events[0]);
 
     destroy(wrapper);
 }

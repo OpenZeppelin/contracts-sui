@@ -250,6 +250,11 @@ public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>)
 }
 
 #[test_only]
+public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address): ObjectWrapped {
+    ObjectWrapped { wrapper_id, object_id, owner }
+}
+
+#[test_only]
 public fun test_new_pending_transfer_cancelled(wrapper_id: ID): PendingTransferCancelled {
     PendingTransferCancelled { wrapper_id }
 }
