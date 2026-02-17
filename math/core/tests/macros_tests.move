@@ -266,6 +266,16 @@ fun mul_mod_impl_handles_wide_operands() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fun mul_mod_impl_handles_quotient_overflow() {
+    let a = std::u256::max_value!();
+    let b = a;
+    let modulus = 7;
+    let expected = ((a % modulus) * (b % modulus)) % modulus;
+    let result = macros::mul_mod_impl(a, b, modulus);
+    assert_eq!(result, expected);
+}
+
 #[test, expected_failure(abort_code = macros::EZeroModulus)]
 fun mul_mod_impl_rejects_zero_modulus() {
     macros::mul_mod_impl(5, 7, 0);

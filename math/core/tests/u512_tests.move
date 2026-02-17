@@ -157,6 +157,16 @@ fun div_rem_flags_overflow_when_quotient_exceeds_u256() {
 }
 
 #[test]
+fun div_rem_overflow_preserves_remainder() {
+    // When the quotient overflows, remainder should still be computed correctly.
+    let numerator = u512::new(3, 1);
+    let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, 3);
+    assert_eq!(overflow, true);
+    assert_eq!(quotient, 0);
+    assert_eq!(remainder, 1);
+}
+
+#[test]
 fun div_rem_large_operands_trigger_overflow_flag() {
     // Dividing 2^512 - 1 by (2^256 - 1) should overflow because the true quotient is 2^256 + 1.
     let max = std::u256::max_value!();

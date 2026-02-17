@@ -106,7 +106,8 @@ public fun mul_u256(a: u256, b: u256): U512 {
 /// Divide a 512-bit numerator by a 256-bit divisor.
 ///
 /// Returns `(overflow, quotient, remainder)` where `overflow` is `true` when the
-/// exact quotient does not fit in 256 bits.
+/// exact quotient does not fit in 256 bits. In the overflow case, `quotient` is
+/// returned as zero while `remainder` is still the correct modulus.
 public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     assert!(divisor != 0, EDivideByZero);
 
@@ -116,9 +117,10 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
 
     let mut quotient = 0u256;
     let mut remainder = zero();
+    let mut overflow = false;
 
     // numerator is not zero, so we can safely call msb
-    let mut idx = msb(&numerator);
+    let mut idx = numerator.msb();
     loop {
         remainder = shift_left1(&remainder);
         let bit = get_bit(&numerator, idx);
@@ -126,12 +128,15 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
             remainder.lo = remainder.lo | 1;
         };
 
-        if (ge_u256(&remainder, divisor)) {
+        if (remainder.ge_u256(divisor)) {
+            remainder = remainder.sub_u256(divisor);
             if (idx >= 256) {
-                return (true, 0, 0)
+                overflow = true;
+            } else if (!overflow) {
+                // If the overflow flag is set, we can stop computing the quotient
+                // because it will be 0.
+                quotient = quotient | (1 << (idx as u8));
             };
-            remainder = sub_u256(remainder, divisor);
-            quotient = quotient | (1u256 << (idx as u8));
         };
 
         if (idx == 0) {
@@ -141,7 +146,7 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     };
 
     assert!(remainder.hi == 0, EInvalidRemainder);
-    (false, quotient, remainder.lo)
+    if (overflow) (true, 0, remainder.lo) else (false, quotient, remainder.lo)
 }
 
 /// === Internal helpers ===
