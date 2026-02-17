@@ -123,11 +123,7 @@ public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
 /// Implements unary negation operation (-x) for SD29x9 type.
 public fun negate(x: SD29x9): SD29x9 {
     let value = decompose(x.unwrap());
-    if (value.mag == 0) {
-        sd29x9::zero()
-    } else {
-        wrap_components(negate_components(value))
-    }
+    wrap_components(negate_components(value))
 }
 
 /// Implements the not equal operation (!=) for SD29x9 type.
