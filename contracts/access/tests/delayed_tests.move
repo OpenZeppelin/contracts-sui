@@ -32,7 +32,7 @@ fun wrap_emits_events() {
 
     let wrapper = delayed_transfer::wrap(cap, min_delay_ms, &mut ctx);
 
-    let events = event::events_by_type<delayed_transfer::ObjectWrapped>();
+    let events = event::events_by_type<delayed_transfer::WrapExecuted>();
     assert_eq!(events.length(), 1);
 
     let expected_event = delayed_transfer::test_new_object_wrapped(

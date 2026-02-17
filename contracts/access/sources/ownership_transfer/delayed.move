@@ -50,7 +50,7 @@ public struct Borrow { wrapper_id: ID, object_id: ID }
 // === Events ===
 
 /// Emitted whenever a capability/object is wrapped in `DelayedTransferWrapper`.
-public struct ObjectWrapped has copy, drop {
+public struct WrapExecuted has copy, drop {
     wrapper_id: ID,
     object_id: ID,
     owner: address,
@@ -97,7 +97,7 @@ public fun wrap<T: key + store>(
         min_delay_ms,
         pending: option::none(),
     };
-    event::emit(ObjectWrapped {
+    event::emit(WrapExecuted {
         wrapper_id: object::id(&wrapper),
         object_id: object::id(&cap),
         owner: ctx.sender(),
@@ -250,8 +250,8 @@ public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>)
 }
 
 #[test_only]
-public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address): ObjectWrapped {
-    ObjectWrapped { wrapper_id, object_id, owner }
+public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
+    WrapExecuted { wrapper_id, object_id, owner }
 }
 
 #[test_only]

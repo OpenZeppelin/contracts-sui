@@ -50,7 +50,7 @@ fun wrap_roundtrip() {
 
     let expected_event = two_step_transfer::test_new_object_wrapped(wrapper_id, cap_id, owner);
 
-    let events = event::events_by_type<two_step_transfer::ObjectWrapped>();
+    let events = event::events_by_type<two_step_transfer::WrapExecuted>();
     assert_eq!(events.length(), 1);
     assert_eq!(expected_event, events[0]);
 
@@ -60,7 +60,7 @@ fun wrap_roundtrip() {
 
     let expected_event = two_step_transfer::test_new_object_unwrapped(wrapper_id, cap_id, owner);
 
-    let events = event::events_by_type<two_step_transfer::ObjectUnwrapped>();
+    let events = event::events_by_type<two_step_transfer::UnwrapExecuted>();
     assert_eq!(events.length(), 1);
     assert_eq!(expected_event, events[0]);
 

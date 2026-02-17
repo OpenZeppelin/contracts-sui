@@ -48,14 +48,14 @@ public struct Borrow { wrapper_id: ID, object_id: ID }
 // === Events ===
 
 /// Emitted whenever a capability/object is wrapped in `TwoStepTransferWrapper`.
-public struct ObjectWrapped has copy, drop {
+public struct WrapExecuted has copy, drop {
     wrapper_id: ID,
     object_id: ID,
     owner: address,
 }
 
 /// Emitted whenever a capability/object is unwrapped.
-public struct ObjectUnwrapped has copy, drop {
+public struct UnwrapExecuted has copy, drop {
     wrapper_id: ID,
     object_id: ID,
     owner: address,
@@ -86,7 +86,7 @@ public struct OwnershipTransferRejected has copy, drop {
 /// field so the underlying ID can still be discovered by off-chain indexers.
 public fun wrap<T: key + store>(cap: T, ctx: &mut TxContext): TwoStepTransferWrapper<T> {
     let mut wrapper = TwoStepTransferWrapper { id: object::new(ctx) };
-    event::emit(ObjectWrapped {
+    event::emit(WrapExecuted {
         wrapper_id: object::id(&wrapper),
         object_id: object::id(&cap),
         owner: ctx.sender(),
@@ -134,7 +134,7 @@ public fun return_val<T: key + store>(
 public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &TxContext): T {
     let TwoStepTransferWrapper { id: mut wrapper_id } = self;
     let cap = dof::remove(&mut wrapper_id, WrappedKey());
-    event::emit(ObjectUnwrapped {
+    event::emit(UnwrapExecuted {
         wrapper_id: wrapper_id.uid_to_inner(),
         object_id: object::id(&cap),
         owner: ctx.sender(),
@@ -200,8 +200,8 @@ public fun test_new_request<T: key + store>(
 }
 
 #[test_only]
-public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address): ObjectWrapped {
-    ObjectWrapped { wrapper_id, object_id, owner }
+public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
+    WrapExecuted { wrapper_id, object_id, owner }
 }
 
 #[test_only]
@@ -209,8 +209,8 @@ public fun test_new_object_unwrapped(
     wrapper_id: ID,
     object_id: ID,
     owner: address,
-): ObjectUnwrapped {
-    ObjectUnwrapped { wrapper_id, object_id, owner }
+): UnwrapExecuted {
+    UnwrapExecuted { wrapper_id, object_id, owner }
 }
 
 #[test_only]
