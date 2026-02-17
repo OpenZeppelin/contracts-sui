@@ -129,8 +129,8 @@ public fun return_val<T: key + store>(
 public fun schedule_transfer<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
     new_owner: address,
-    clock: &Clock,
     current_owner: address,
+    clock: &Clock,
 ) {
     assert!(self.pending.is_none(), ETransferAlreadyScheduled);
     let execute_after = clock.timestamp_ms() + self.min_delay_ms;
@@ -154,8 +154,8 @@ public fun schedule_transfer<T: key + store>(
 /// and delete the wrapper.
 public fun schedule_unwrap<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
-    clock: &Clock,
     current_owner: address,
+    clock: &Clock,
 ) {
     assert!(self.pending.is_none(), ETransferAlreadyScheduled);
     let execute_after = clock.timestamp_ms() + self.min_delay_ms;
