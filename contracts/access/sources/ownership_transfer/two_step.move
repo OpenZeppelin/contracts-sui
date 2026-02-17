@@ -19,11 +19,11 @@ use sui::event;
 public struct WrappedKey() has copy, drop, store;
 
 /// Transfer request does not correspond to the provided wrapper
-#[error(code = 1)]
+#[error(code = 0)]
 const EInvalidTransferRequest: vector<u8> = b"Transfer request does not match wrapper.";
-#[error(code = 2)]
+#[error(code = 1)]
 const EWrongTwoStepTransferWrapper: vector<u8> = b"Wrong two step transfer wrapper.";
-#[error(code = 3)]
+#[error(code = 2)]
 const EWrongTwoStepTransferObject: vector<u8> = b"Wrong two step transfer object.";
 
 /// Wrapper object that owns the underlying capability, stored as a dynamic object field.
