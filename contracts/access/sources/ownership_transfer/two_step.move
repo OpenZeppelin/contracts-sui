@@ -205,11 +205,7 @@ public fun test_new_wrap_executed(wrapper_id: ID, object_id: ID, owner: address)
 }
 
 #[test_only]
-public fun test_new_object_unwrapped(
-    wrapper_id: ID,
-    object_id: ID,
-    owner: address,
-): UnwrapExecuted {
+public fun test_new_unwrap_executed(wrapper_id: ID, object_id: ID, owner: address): UnwrapExecuted {
     UnwrapExecuted { wrapper_id, object_id, owner }
 }
 
