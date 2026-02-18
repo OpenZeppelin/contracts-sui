@@ -35,7 +35,7 @@ fun wrap_emits_events() {
     let events = event::events_by_type<delayed_transfer::WrapExecuted>();
     assert_eq!(events.length(), 1);
 
-    let expected_event = delayed_transfer::test_new_object_wrapped(
+    let expected_event = delayed_transfer::test_new_wrap_executed(
         object::id(&wrapper),
         cap_id,
         owner,
