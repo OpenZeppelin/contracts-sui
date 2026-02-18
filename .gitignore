@@ -16,3 +16,6 @@ logs/
 # Temporary folders
 tmp/
 temp/
+
+# Everyone uses their own local dev environment config, so we should not force specifig VS Code configs
+.vscode/
