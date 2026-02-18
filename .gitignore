@@ -17,5 +17,5 @@ logs/
 tmp/
 temp/
 
-# Anyone can have local-specific VS Code settings
+# Everyone uses their own local dev environment config, so we should not force specifig VS Code configs
 .vscode/
