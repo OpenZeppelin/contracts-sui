@@ -48,7 +48,7 @@ fun wrap_roundtrip() {
     let wrapper = two_step_transfer::wrap(cap, &mut ctx);
     let wrapper_id = object::id(&wrapper);
 
-    let expected_event = two_step_transfer::test_new_wrap_executed(wrapper_id, cap_id, owner);
+    let expected_event = two_step_transfer::test_new_object_wrapped(wrapper_id, cap_id, owner);
 
     let events = event::events_by_type<two_step_transfer::WrapExecuted>();
     assert_eq!(events.length(), 1);
