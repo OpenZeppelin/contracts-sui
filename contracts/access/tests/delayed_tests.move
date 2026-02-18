@@ -2,7 +2,7 @@
 module openzeppelin_access::delayed_tests;
 
 use openzeppelin_access::delayed_transfer;
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::clock;
 use sui::event;
 
@@ -20,6 +20,29 @@ public fun dummy_ctx_with_sender(sender: address): TxContext {
 #[test_only]
 fun new_cap(ctx: &mut TxContext): DummyCap {
     DummyCap { id: object::new(ctx) }
+}
+
+#[test]
+fun wrap_emits_events() {
+    let owner = @0x1;
+    let min_delay_ms = 5;
+    let mut ctx = dummy_ctx_with_sender(owner);
+    let cap = new_cap(&mut ctx);
+    let cap_id = object::id(&cap);
+
+    let wrapper = delayed_transfer::wrap(cap, min_delay_ms, &mut ctx);
+
+    let events = event::events_by_type<delayed_transfer::WrapExecuted>();
+    assert_eq!(events.length(), 1);
+
+    let expected_event = delayed_transfer::test_new_object_wrapped(
+        object::id(&wrapper),
+        cap_id,
+        owner,
+    );
+    assert_eq!(expected_event, events[0]);
+
+    destroy(wrapper);
 }
 
 #[test]
@@ -118,7 +141,17 @@ fun cancel_allows_reschedule() {
     clk.set_for_testing(0);
 
     wrapper.schedule_transfer(owner, &clk, owner);
+
     wrapper.cancel_schedule();
+
+    let events = event::events_by_type<delayed_transfer::PendingTransferCancelled>();
+    assert_eq!(events.length(), 1);
+
+    let expected_event = delayed_transfer::test_new_pending_transfer_cancelled(
+        object::id(&wrapper),
+    );
+    assert_eq!(expected_event, events[0]);
+
     wrapper.schedule_unwrap(&clk, owner);
 
     let events = event::events_by_type<delayed_transfer::UnwrapScheduled>();
