@@ -86,6 +86,7 @@ public struct PendingTransferCancelled has copy, drop {
 /// Emitted when a scheduled unwrap is executed.
 public struct UnwrapExecuted has copy, drop {
     wrapper_id: ID,
+    object_id: ID,
     owner: address,
 }
 
@@ -237,13 +238,15 @@ public fun unwrap<T: key + store>(
     let now = clock.timestamp_ms();
     assert!(now >= execute_after_ms, EDelayNotElapsed);
 
+    let DelayedTransferWrapper { id: mut wrapper_id, .. } = self;
+    let cap = dof::remove(&mut wrapper_id, WrappedKey());
+
     event::emit(UnwrapExecuted {
-        wrapper_id: object::id(&self),
+        wrapper_id: object::uid_to_inner(&wrapper_id),
+        object_id: object::id(&cap),
         owner: ctx.sender(),
     });
 
-    let DelayedTransferWrapper { id: mut wrapper_id, .. } = self;
-    let cap = dof::remove(&mut wrapper_id, WrappedKey());
     wrapper_id.delete();
     cap
 }
@@ -265,6 +268,6 @@ public fun test_new_pending_transfer_cancelled(wrapper_id: ID): PendingTransferC
 }
 
 #[test_only]
-public fun test_new_unwrap_executed(wrapper_id: ID, owner: address): UnwrapExecuted {
-    UnwrapExecuted { wrapper_id, owner }
+public fun test_new_unwrap_executed(wrapper_id: ID, object_id: ID, owner: address): UnwrapExecuted {
+    UnwrapExecuted { wrapper_id, object_id, owner }
 }

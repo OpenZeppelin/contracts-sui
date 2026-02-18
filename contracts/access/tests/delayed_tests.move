@@ -90,6 +90,7 @@ fun schedule_and_unwrap_after_delay() {
 
     let expected_event = delayed_transfer::test_new_unwrap_executed(
         wrapper_id,
+        object::id(&cap),
         owner,
     );
     assert_eq!(expected_event, executed[0]);
