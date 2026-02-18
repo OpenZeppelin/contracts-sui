@@ -32,7 +32,7 @@ fun request_emits_event() {
     let events = event::events_by_type<two_step_transfer::OwnershipRequested>();
     assert_eq!(events.length(), 1);
 
-    let DummyCap { id } = wrapper.unwrap(&ctx);
+    let DummyCap { id } = wrapper.unwrap(&mut ctx);
     id.delete();
 }
 
@@ -56,7 +56,7 @@ fun wrap_roundtrip() {
 
     // unwrap flow
 
-    let cap = wrapper.unwrap(&ctx);
+    let cap = wrapper.unwrap(&mut ctx);
 
     let expected_event = two_step_transfer::test_new_unwrap_executed(wrapper_id, cap_id, owner);
 
@@ -81,7 +81,7 @@ fun borrow_and_return_roundtrip() {
     let (cap, borrow_token) = wrapper.borrow_val();
     wrapper.return_val(cap, borrow_token);
 
-    let DummyCap { id } = wrapper.unwrap(&ctx);
+    let DummyCap { id } = wrapper.unwrap(&mut ctx);
     id.delete();
 }
 
@@ -93,7 +93,7 @@ fun return_val_rejects_wrong_wrapper() {
     let first = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
     let second = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);
 
-    expect_wrapper_mismatch(first, second, &ctx);
+    expect_wrapper_mismatch(first, second, &mut ctx);
 }
 
 #[test, expected_failure(abort_code = two_step_transfer::EWrongTwoStepTransferObject)]
@@ -157,14 +157,14 @@ fun reject_destroys_request() {
     assert_eq!(events.length(), 1);
     assert_eq!(expected_event, events[0]);
 
-    let DummyCap { id } = wrapper.unwrap(&ctx);
+    let DummyCap { id } = wrapper.unwrap(&mut ctx);
     id.delete();
 }
 
 fun expect_wrapper_mismatch(
     mut first: two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     mut second: two_step_transfer::TwoStepTransferWrapper<DummyCap>,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) {
     let (cap, borrow_token) = first.borrow_val();
     second.return_val(cap, borrow_token);
