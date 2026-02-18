@@ -16,3 +16,6 @@ logs/
 # Temporary folders
 tmp/
 temp/
+
+# Anyone can have local-specific VS Code settings
+.vscode/
