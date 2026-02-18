@@ -1,4 +1,4 @@
-name: Move LLM Security Scan (Codex)
+name: LLM Security Scan (Codex)
 
 on:
   push:
@@ -10,17 +10,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: move-llm-scan-${{ github.ref }}
+  group: codex-llm-scan-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   security-scan:
-    name: Move vulnerability scan (read-only)
+    name: Codex vulnerability scan (read-only)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Harden the runner (Audit all outbound calls)
+      - name: Harden the runner (Audit outbound calls)
         uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
         with:
           egress-policy: audit
@@ -28,29 +28,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Set up Node.js
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
-        with:
-          node-version: 22
-
-      - name: Install Codex CLI
-        run: npm install -g @openai/codex
-
-      - name: Build file list to scan (Move + Move.toml)
-        id: files
+      - name: Write strict JSON schema for scan output
         shell: bash
         run: |
           set -euo pipefail
-          # Scan only Move sources and Move.toml (per requirements).
-          git ls-files '*.move' 'Move.toml' > /tmp/scan_files.txt || true
-          count=$(wc -l < /tmp/scan_files.txt | tr -d ' ')
-          echo "count=$count" >> "$GITHUB_OUTPUT"
-          echo "Files to scan: $count"
-          sed -n '1,200p' /tmp/scan_files.txt
-
-      - name: Write strict JSON schema for Codex output
-        shell: bash
-        run: |
           cat > /tmp/scan_schema.json <<'JSON'
           {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -73,22 +54,7 @@ jobs:
                   "required": ["severity", "category", "confidence", "file", "line_hint", "title", "description", "recommendation"],
                   "properties": {
                     "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
-                    "category": {
-                      "type": "string",
-                      "enum": [
-                        "access_control",
-                        "capability_checks",
-                        "object_ownership",
-                        "shared_object_safety",
-                        "transfer_safety",
-                        "arithmetic_overflow_underflow",
-                        "abort_handling",
-                        "dos_gas_storage",
-                        "invariant_violation",
-                        "dependency_config",
-                        "other"
-                      ]
-                    },
+                    "category": { "type": "string", "enum": ["access_control","authz","injection","crypto","dependency","secrets","dos","memory_safety","logic","configuration","other"] },
                     "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
                     "file": { "type": "string", "minLength": 1 },
                     "line_hint": { "type": ["string", "null"] },
@@ -102,77 +68,62 @@ jobs:
           }
           JSON
 
-      - name: Run Codex scan (read-only, non-interactive)
-        id: scan
-        if: steps.files.outputs.count != '0'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          CODEX_MODEL: gpt-5-codex
-        shell: bash
-        run: |
-          set -euo pipefail
+      - name: Run Codex scan (read-only)
+        id: run_codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5-codex
+          sandbox: read-only
+          # default is drop-sudo; leaving explicit for clarity
+          safety-strategy: drop-sudo
 
-          commit="$(git rev-parse HEAD)"
-          files="$(sed -e 's/^/- /' /tmp/scan_files.txt)"
+          # Write final JSON output to a file for downstream steps/artifacts
+          output-file: /tmp/scan_output.json
+          output-schema-file: /tmp/scan_schema.json
 
-          # Codex will validate the final response against /tmp/scan_schema.json and write the last message to /tmp/scan_output.json.
-          codex exec \
-            --sandbox read-only \
-            --ask-for-approval never \
-            --ephemeral \
-            --model "$CODEX_MODEL" \
-            --output-schema /tmp/scan_schema.json \
-            --output-last-message /tmp/scan_output.json \
-            "You are an expert Sui Move smart contract security auditor.
+          # Extra CLI args forwarded to `codex exec`
+          codex-args: >-
+            --ask-for-approval never
+            --ephemeral
 
-            SCOPE (MUST FOLLOW):
-            - Only analyze the Move codebase and related Move config.
-            - Files in scope are EXACTLY the following tracked files:
-            $files
-            - Treat Move.toml as security-relevant (dependencies, addresses, build settings).
+          prompt: |
+            You are an expert application security auditor.
+
+            SCOPE:
+            - Analyze the repository checked out in this workflow run (the whole codebase).
+            - You MAY read any tracked source/config/docs needed to assess security.
+            - Prefer focusing on code and configuration over generated/binary artifacts.
 
             CONSTRAINTS:
-            - Read-only analysis: do NOT propose changes outside recommendations.
+            - Read-only analysis: do NOT modify files.
+            - Output ONLY a single JSON object that EXACTLY matches the provided JSON Schema.
             - If you did not inspect a file, do not claim you did.
-            - Prefer concrete, code-referential findings (file + line hints).
+            - Prefer concrete, code-referential findings (file + line hints when possible).
 
             TASK:
-            1) For each in-scope *.move module, identify vulnerability patterns relevant to Sui Move, including (non-exhaustive):
-               - missing/incorrect access control on public(entry) functions
-               - improper capability usage or missing capability checks
-               - object ownership / UID / ID misuse, unsafe sharing, unsafe transfers
-               - shared object invariants, re-entrancy-like patterns via callbacks/hooks where applicable
-               - arithmetic, abort/require patterns, and error handling that can lead to invariant breaks
-               - DoS via unbounded loops / vector growth / excessive events / storage growth
-               - misuse of tx_context or assumptions about sender, timestamps, etc.
-               - inconsistent or dangerous patterns around coin handling and transfers
-            2) Analyze Move.toml for risky dependency / address configuration issues.
-            3) Output ONLY a single JSON object that EXACTLY matches the provided JSON Schema.
-               - Set vulnerable=true iff there is at least one finding.
-               - scanned_commit MUST be: $commit
-               - scanned_files MUST exactly list every file you actually inspected (subset of scope is allowed, but be honest).
-               - If you found nothing, findings must be [] and vulnerable=false.
+            1) Identify security vulnerabilities and high-risk security smells, including (non-exhaustive):
+               - auth/authz mistakes, access control bypasses, insecure defaults
+               - injection risks, unsafe deserialization, SSRF, command execution
+               - secrets leakage, weak crypto, broken randomness
+               - dependency/config risks (lockfiles, CI/CD, supply chain)
+               - DoS risks (unbounded loops, regex backtracking, resource exhaustion)
+               - logic flaws that enable fund loss or privilege escalation (if applicable)
+            2) Provide a succinct summary.
+            3) Populate findings with severity/category/confidence, and specific remediation.
 
-            IMPORTANT:
-            - Do not include markdown, backticks, or any extra text—JSON only."
-
-          # Echo the output for logs
-          echo "----- Codex last message (JSON) -----"
-          cat /tmp/scan_output.json
-          echo ""
-
-      - name: Handle empty Move codebase (no files to scan)
-        if: steps.files.outputs.count == '0'
-        run: |
-          echo "No *.move files or Move.toml found in the repository. Skipping scan."
-          echo '{"vulnerable":false,"summary":"No Move sources found; nothing to scan.","scanned_commit":"'"$(git rev-parse HEAD)"'","scanned_files":[],"findings":[]}' > /tmp/scan_output.json
+            OUTPUT RULES:
+            - scanned_commit MUST be: ${{ github.sha }}
+            - scanned_files MUST list every file you actually inspected (be honest).
+            - Set vulnerable=true iff there is at least one finding.
+            - If you found nothing, findings must be [] and vulnerable=false.
+            - No markdown, no backticks, no extra text — JSON only.
 
       - name: Validate results & fail on any finding
         shell: bash
         run: |
           set -euo pipefail
 
-          # Ensure jq exists (ubuntu-latest usually has it, but be defensive)
           if ! command -v jq >/dev/null 2>&1; then
             sudo apt-get update
             sudo apt-get install -y jq
@@ -186,11 +137,9 @@ jobs:
             exit 2
           fi
 
-          echo ""
           echo "════════════════════════════════════════════════════════════"
-          echo "MOVE LLM SECURITY SCAN RESULTS"
+          echo "CODEX LLM SECURITY SCAN RESULTS"
           echo "════════════════════════════════════════════════════════════"
-          echo ""
           echo "Summary: $(echo "$raw" | jq -r '.summary')"
           echo "Commit : $(echo "$raw" | jq -r '.scanned_commit')"
           echo ""
@@ -208,7 +157,6 @@ jobs:
             echo "No findings reported."
           fi
 
-          # FAIL ON ANY FINDING (spirit of the prompt), regardless of the vulnerable flag.
           if [ "$finding_count" -gt 0 ] || [ "$vulnerable" = "true" ]; then
             echo "❌ SCAN FAILED — $finding_count finding(s)."
             exit 1
@@ -220,6 +168,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: move-llm-security-scan-output
+          name: codex-llm-security-scan-output
           path: /tmp/scan_output.json
           retention-days: 30
