@@ -83,6 +83,12 @@ public struct PendingTransferCancelled has copy, drop {
     wrapper_id: ID,
 }
 
+/// Emitted when a scheduled unwrap is executed.
+public struct UnwrapExecuted has copy, drop {
+    wrapper_id: ID,
+    owner: address,
+}
+
 // === Wrap / unwrap / borrow ===
 
 /// Wrap a capability/object in a delayed transfer wrapper with the desired minimum delay. The
@@ -218,7 +224,7 @@ public fun execute_transfer<T: key + store>(
 public fun unwrap<T: key + store>(
     mut self: DelayedTransferWrapper<T>,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ): T {
     let pending = self.pending.extract_or!(abort ENoPendingTransfer);
 
@@ -231,10 +237,9 @@ public fun unwrap<T: key + store>(
     let now = clock.timestamp_ms();
     assert!(now >= execute_after_ms, EDelayNotElapsed);
 
-    event::emit(OwnershipTransferred {
+    event::emit(UnwrapExecuted {
         wrapper_id: object::id(&self),
-        previous_owner: ctx.sender(),
-        new_owner: ctx.sender(),
+        owner: ctx.sender(),
     });
 
     let DelayedTransferWrapper { id: mut wrapper_id, .. } = self;
@@ -257,4 +262,9 @@ public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address
 #[test_only]
 public fun test_new_pending_transfer_cancelled(wrapper_id: ID): PendingTransferCancelled {
     PendingTransferCancelled { wrapper_id }
+}
+
+#[test_only]
+public fun test_new_unwrap_executed(wrapper_id: ID, owner: address): UnwrapExecuted {
+    UnwrapExecuted { wrapper_id, owner }
 }
