@@ -48,7 +48,7 @@ const MAX_DECIMALS: u8 = 24;
 ///
 /// # Returns
 ///
-/// The scaled balance as u64
+/// The scaled balance as `u64`
 ///
 /// # Aborts
 ///
@@ -81,7 +81,7 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
     validate_decimals(source_decimals, target_decimals);
 
     let scaled_amount = if (target_decimals > source_decimals) {
-        // Scaling up: `raw_amount` * 10^diff can overflow `u256` before the u64
+        // Scaling up: `raw_amount * 10^diff` can overflow `u256` before the `u64`
         // bounds check below is reached. Guard against this by checking
         // `raw_amount <= u64::max / factor` first. The division is safe `u256`
         // arithmetic (`factor >= 10`, never zero), so no overflow is possible
