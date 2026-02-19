@@ -43,6 +43,8 @@ public fun checked_shr(value: u256, shift: u8): Option<u256> {
 ///
 /// Returns `None` for the following cases:
 /// - the rounded quotient cannot be represented as `u256`.
+///
+/// Aborts if `denominator` is zero.
 public fun mul_div(a: u256, b: u256, denominator: u256, rounding_mode: RoundingMode): Option<u256> {
     let (overflow, result) = macros::mul_div!(a, b, denominator, rounding_mode);
     if (overflow) {
