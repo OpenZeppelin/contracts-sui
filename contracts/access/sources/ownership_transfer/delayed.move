@@ -242,7 +242,7 @@ public fun unwrap<T: key + store>(
     let cap = dof::remove(&mut wrapper_id, WrappedKey());
 
     event::emit(UnwrapExecuted {
-        wrapper_id: object::uid_to_inner(&wrapper_id),
+        wrapper_id: wrapper_id.uid_to_inner(),
         object_id: object::id(&cap),
         owner: ctx.sender(),
     });
