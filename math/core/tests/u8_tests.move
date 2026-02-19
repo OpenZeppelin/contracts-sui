@@ -353,7 +353,7 @@ fun log2_returns_zero_for_one() {
 fun log2_handles_powers_of_two() {
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
     rounding_modes.destroy!(|rounding| {
-        assert_eq!(u8::log2(1 << 0, rounding), 0);
+        assert_eq!(u8::log2(1, rounding), 0);
         assert_eq!(u8::log2(1 << 1, rounding), 1);
         assert_eq!(u8::log2(1 << 2, rounding), 2);
         assert_eq!(u8::log2(1 << 3, rounding), 3);
