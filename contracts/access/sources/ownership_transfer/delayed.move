@@ -225,7 +225,7 @@ public fun execute_transfer<T: key + store>(
 public fun unwrap<T: key + store>(
     mut self: DelayedTransferWrapper<T>,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ): T {
     let pending = self.pending.extract_or!(abort ENoPendingTransfer);
 
