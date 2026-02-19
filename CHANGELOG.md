@@ -15,7 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add missing event emissions on state changes (#159)
 - `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
-- Emit dedicated `UnwrapExecuted` event on `delayed_transfer::unwrap` (#168)
+
+#### Breaking Change
+
+- Emit dedicated `UnwrapExecuted` event on `delayed_transfer::unwrap` instead of `OwnershipTransferred` (#168)
 
 ### `openzeppelin_math`
 
