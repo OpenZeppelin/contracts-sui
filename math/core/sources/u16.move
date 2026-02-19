@@ -1,3 +1,8 @@
+/// Helper functions for arithmetic on 16-bit unsigned integers.
+///
+/// This module provides thin wrappers around the shared `macros` helpers specialised to `u16`.
+/// It exposes a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while handling
+/// width-specific concerns such as downcasting and bit-width limits.
 module openzeppelin_math::u16;
 
 use openzeppelin_math::macros;
@@ -41,7 +46,9 @@ public fun checked_shr(value: u16, shift: u8): Option<u16> {
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
 ///
 /// Returns `None` for the following cases:
-/// - the rounded quotient cannot be represented as `u16`
+/// - the rounded quotient cannot be represented as `u16`.
+///
+/// Aborts if `denominator` is zero.
 public fun mul_div(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode): Option<u16> {
     let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
     result.try_as_u16()
@@ -98,7 +105,8 @@ public fun sqrt(value: u16, rounding_mode: RoundingMode): u16 {
 
 /// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
 ///
-/// Returns `None` when `value` and `modulus` are not co-prime. Aborts if `modulus` is zero.
+/// Returns `None` when `value` and `modulus` are not co-prime or when `value` is a multiple
+/// of `modulus`. Aborts if `modulus` is zero.
 public fun inv_mod(value: u16, modulus: u16): Option<u16> {
     macros::inv_mod!(value, modulus)
 }

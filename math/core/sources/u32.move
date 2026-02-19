@@ -1,3 +1,8 @@
+/// Helper functions for arithmetic on 32-bit unsigned integers.
+///
+/// This module provides wrappers around the shared `macros` helpers specialised to `u32`.
+/// They expose a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while
+/// handling width-specific concerns such as downcasting and bit-width limits.
 module openzeppelin_math::u32;
 
 use openzeppelin_math::macros;
@@ -41,7 +46,9 @@ public fun checked_shr(value: u32, shift: u8): Option<u32> {
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
 ///
 /// Returns `None` for the following cases:
-/// - the rounded quotient cannot be represented as `u32`
+/// - the rounded quotient cannot be represented as `u32`.
+///
+/// Aborts if `denominator` is zero.
 public fun mul_div(a: u32, b: u32, denominator: u32, rounding_mode: RoundingMode): Option<u32> {
     let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
     result.try_as_u32()
@@ -98,7 +105,8 @@ public fun sqrt(value: u32, rounding_mode: RoundingMode): u32 {
 
 /// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
 ///
-/// Returns `None` when `value` and `modulus` are not co-prime. Aborts if `modulus` is zero.
+/// Returns `None` when `value` and `modulus` are not co-prime or when `value` is a multiple
+/// of `modulus`. Aborts if `modulus` is zero.
 public fun inv_mod(value: u32, modulus: u32): Option<u32> {
     macros::inv_mod!(value, modulus)
 }

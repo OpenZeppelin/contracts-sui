@@ -1,3 +1,8 @@
+/// Helper functions for arithmetic on 256-bit unsigned integers.
+///
+/// This module provides wrappers around the shared `macros` helpers specialised to `u256`.
+/// They expose a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while
+/// handling width-specific concerns such as downcasting and bit-width limits.
 module openzeppelin_math::u256;
 
 use openzeppelin_math::macros;
@@ -37,7 +42,7 @@ public fun checked_shr(value: u256, shift: u8): Option<u256> {
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
 ///
 /// Returns `None` for the following cases:
-/// - the rounded quotient cannot be represented as `u256`
+/// - the rounded quotient cannot be represented as `u256`.
 public fun mul_div(a: u256, b: u256, denominator: u256, rounding_mode: RoundingMode): Option<u256> {
     let (overflow, result) = macros::mul_div!(a, b, denominator, rounding_mode);
     if (overflow) {
@@ -103,7 +108,8 @@ public fun sqrt(value: u256, rounding_mode: RoundingMode): u256 {
 /// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
 ///
 /// Returns the element `x` that satisfies `value * x ≡ 1 (mod modulus)` when it exists. Returns
-/// `None` if `value` and `modulus` are not co-prime and aborts when `modulus` is zero.
+/// `None` if `value` and `modulus` are not co-prime or when `value` is a multiple of `modulus`,
+/// and aborts when `modulus` is zero.
 public fun inv_mod(value: u256, modulus: u256): Option<u256> {
     macros::inv_mod!(value, modulus)
 }
