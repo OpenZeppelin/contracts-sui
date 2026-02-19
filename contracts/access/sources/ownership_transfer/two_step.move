@@ -131,7 +131,7 @@ public fun return_val<T: key + store>(
 
 /// Permanently unwrap the capability, deleting the wrapper. Only the current owner can call this,
 /// and it bypasses the request flow, effectively “owning” the capability again.
-public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &TxContext): T {
+public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxContext): T {
     let TwoStepTransferWrapper { id: mut wrapper_id } = self;
     let cap = dof::remove(&mut wrapper_id, WrappedKey());
     event::emit(UnwrapExecuted {
@@ -200,16 +200,12 @@ public fun test_new_request<T: key + store>(
 }
 
 #[test_only]
-public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
+public fun test_new_wrap_executed(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
     WrapExecuted { wrapper_id, object_id, owner }
 }
 
 #[test_only]
-public fun test_new_object_unwrapped(
-    wrapper_id: ID,
-    object_id: ID,
-    owner: address,
-): UnwrapExecuted {
+public fun test_new_unwrap_executed(wrapper_id: ID, object_id: ID, owner: address): UnwrapExecuted {
     UnwrapExecuted { wrapper_id, object_id, owner }
 }
 
