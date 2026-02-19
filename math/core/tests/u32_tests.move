@@ -364,7 +364,7 @@ fun log2_handles_powers_of_two() {
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
     rounding_modes.destroy!(|rounding| {
         // for powers of 2, log2 returns the exponent regardless of rounding mode
-        assert_eq!(u32::log2(1 << 0, rounding), 0);
+        assert_eq!(u32::log2(1, rounding), 0);
         assert_eq!(u32::log2(1 << 1, rounding), 1);
         assert_eq!(u32::log2(1 << 8, rounding), 8);
         assert_eq!(u32::log2(1 << 16, rounding), 16);
