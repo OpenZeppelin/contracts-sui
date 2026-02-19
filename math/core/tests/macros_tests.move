@@ -234,7 +234,7 @@ fun inv_mod_extended_impl_rejects_zero_modulus() {
 
 #[test]
 fun inv_mod_macro_matches_impl() {
-    let macro_inverse = macros::inv_mod!(3u64, 11);
+    let macro_inverse = macros::inv_mod!(3u64, 11u64);
     assert_eq!(macro_inverse, option::some(4));
 }
 
