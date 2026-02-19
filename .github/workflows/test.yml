@@ -2,9 +2,9 @@ name: Lint and Test
 
 on:
   push:
-    branches: [main, v*, release-v*]
+    branches: [main, release-v*]
   pull_request:
-    branches: [main, v*, release-v*]
+    branches: [main, release-v*]
 
 # Cancel in-progress runs on new pushes to the same PR/branch
 concurrency:
