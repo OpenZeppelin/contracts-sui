@@ -109,9 +109,8 @@ public fun sqrt(value: u256, rounding_mode: RoundingMode): u256 {
 
 /// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
 ///
-/// Returns the element `x` that satisfies `value * x ≡ 1 (mod modulus)` when it exists. Returns
-/// `None` if `value` and `modulus` are not co-prime or when `value` is a multiple of `modulus`,
-/// and aborts when `modulus` is zero.
+/// Returns `None` when `value` and `modulus` are not co-prime or `modulus` equals 1.
+/// Aborts if `modulus` is zero.
 public fun inv_mod(value: u256, modulus: u256): Option<u256> {
     macros::inv_mod!(value, modulus)
 }
