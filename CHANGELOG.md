@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### `openzeppelin_access`
 
 - Add missing event emissions on state changes (#159)
+- `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
 
 ### `openzeppelin_math`
 

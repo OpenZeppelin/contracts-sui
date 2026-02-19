@@ -200,16 +200,12 @@ public fun test_new_request<T: key + store>(
 }
 
 #[test_only]
-public fun test_new_object_wrapped(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
+public fun test_new_wrap_executed(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
     WrapExecuted { wrapper_id, object_id, owner }
 }
 
 #[test_only]
-public fun test_new_object_unwrapped(
-    wrapper_id: ID,
-    object_id: ID,
-    owner: address,
-): UnwrapExecuted {
+public fun test_new_unwrap_executed(wrapper_id: ID, object_id: ID, owner: address): UnwrapExecuted {
     UnwrapExecuted { wrapper_id, object_id, owner }
 }
 
