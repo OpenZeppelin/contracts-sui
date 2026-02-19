@@ -49,6 +49,13 @@ public struct Borrow { wrapper_id: ID, object_id: ID }
 
 // === Events ===
 
+/// Emitted whenever a capability/object is wrapped in `DelayedTransferWrapper`.
+public struct WrapExecuted has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+}
+
 /// Emitted when a delayed transfer is scheduled.
 public struct TransferScheduled has copy, drop {
     wrapper_id: ID,
@@ -71,6 +78,11 @@ public struct OwnershipTransferred has copy, drop {
     new_owner: address,
 }
 
+/// Emitted when a scheduled transfer or unwrap is cancelled.
+public struct PendingTransferCancelled has copy, drop {
+    wrapper_id: ID,
+}
+
 // === Wrap / unwrap / borrow ===
 
 /// Wrap a capability/object in a delayed transfer wrapper with the desired minimum delay. The
@@ -85,6 +97,11 @@ public fun wrap<T: key + store>(
         min_delay_ms,
         pending: option::none(),
     };
+    event::emit(WrapExecuted {
+        wrapper_id: object::id(&wrapper),
+        object_id: object::id(&cap),
+        owner: ctx.sender(),
+    });
     dof::add(&mut wrapper.id, WrappedKey(), cap);
     wrapper
 }
@@ -229,4 +246,15 @@ public fun unwrap<T: key + store>(
 /// Cancel the currently scheduled transfer or unwrap operation, if any.
 public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>) {
     let PendingTransfer { .. } = self.pending.extract_or!(abort ENoPendingTransfer);
+    event::emit(PendingTransferCancelled { wrapper_id: object::id(self) });
+}
+
+#[test_only]
+public fun test_new_wrap_executed(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
+    WrapExecuted { wrapper_id, object_id, owner }
+}
+
+#[test_only]
+public fun test_new_pending_transfer_cancelled(wrapper_id: ID): PendingTransferCancelled {
+    PendingTransferCancelled { wrapper_id }
 }
