@@ -1,7 +1,7 @@
 /// Helper functions for arithmetic on 16-bit unsigned integers.
 ///
-/// This module provides thin wrappers around the shared `macros` helpers specialised to `u16`.
-/// It exposes a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while handling
+/// This module provides wrappers around the shared `macros` helpers specialised to `u16`.
+/// They expose a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while handling
 /// width-specific concerns such as downcasting and bit-width limits.
 module openzeppelin_math::u16;
 
