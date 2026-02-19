@@ -47,6 +47,20 @@ public struct Borrow { wrapper_id: ID, object_id: ID }
 
 // === Events ===
 
+/// Emitted whenever a capability/object is wrapped in `TwoStepTransferWrapper`.
+public struct WrapExecuted has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+}
+
+/// Emitted whenever a capability/object is unwrapped.
+public struct UnwrapExecuted has copy, drop {
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+}
+
 /// Emitted whenever an ownership request is created.
 public struct OwnershipRequested has copy, drop {
     wrapper_id: ID,
@@ -61,12 +75,22 @@ public struct OwnershipTransferred has copy, drop {
     new_owner: address,
 }
 
+/// Emitted whenever an ownership transfer request is rejected.
+public struct OwnershipTransferRejected has copy, drop {
+    request_id: ID,
+}
+
 // === Wrap / unwrap / borrow ===
 
 /// Wrap a capability/object inside a new two step transfer wrapper, storing it under a dynamic
 /// field so the underlying ID can still be discovered by off-chain indexers.
 public fun wrap<T: key + store>(cap: T, ctx: &mut TxContext): TwoStepTransferWrapper<T> {
     let mut wrapper = TwoStepTransferWrapper { id: object::new(ctx) };
+    event::emit(WrapExecuted {
+        wrapper_id: object::id(&wrapper),
+        object_id: object::id(&cap),
+        owner: ctx.sender(),
+    });
     dof::add(&mut wrapper.id, WrappedKey(), cap);
     wrapper
 }
@@ -107,9 +131,14 @@ public fun return_val<T: key + store>(
 
 /// Permanently unwrap the capability, deleting the wrapper. Only the current owner can call this,
 /// and it bypasses the request flow, effectively “owning” the capability again.
-public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>): T {
+public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxContext): T {
     let TwoStepTransferWrapper { id: mut wrapper_id } = self;
     let cap = dof::remove(&mut wrapper_id, WrappedKey());
+    event::emit(UnwrapExecuted {
+        wrapper_id: wrapper_id.uid_to_inner(),
+        object_id: object::id(&cap),
+        owner: ctx.sender(),
+    });
     wrapper_id.delete();
     cap
 }
@@ -155,6 +184,9 @@ public fun transfer<T: key + store>(
 /// pending request without moving the wrapper.
 public fun reject<T>(request: OwnershipTransferRequest<T>) {
     let OwnershipTransferRequest { id, .. } = request;
+    event::emit(OwnershipTransferRejected {
+        request_id: id.uid_to_inner(),
+    });
     id.delete();
 }
 
@@ -165,4 +197,19 @@ public fun test_new_request<T: key + store>(
     ctx: &mut TxContext,
 ): OwnershipTransferRequest<T> {
     OwnershipTransferRequest { id: object::new(ctx), wrapper_id, new_owner }
+}
+
+#[test_only]
+public fun test_new_wrap_executed(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
+    WrapExecuted { wrapper_id, object_id, owner }
+}
+
+#[test_only]
+public fun test_new_unwrap_executed(wrapper_id: ID, object_id: ID, owner: address): UnwrapExecuted {
+    UnwrapExecuted { wrapper_id, object_id, owner }
+}
+
+#[test_only]
+public fun test_new_ownership_transfer_rejected(request_id: ID): OwnershipTransferRejected {
+    OwnershipTransferRejected { request_id }
 }
