@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add missing event emissions on state changes (#159)
 - `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
+- `delayed_transfer::schedule_transfer` and `schedule_unwrap` now derive `current_owner` from `ctx.sender()` instead of accepting it as a parameter (#174)
 
 ### `openzeppelin_math`
 
@@ -20,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preserve the remainder for `u512::div_rem_u256` even when the quotient overflows, preventing incorrect results in `mul_mod` for large operands (#151)
 
-##  1.0.0-rc.1 (19-12-2025)
+## 1.0.0-rc.1 (19-12-2025)
 
 ### `openzeppelin_math`
 
@@ -34,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `#[test_only]` attribute to test modules (#122)
 
-##  1.0.0-rc.0 (28-11-2025)
+## 1.0.0-rc.0 (28-11-2025)
 
 ### `openzeppelin_math`
 
