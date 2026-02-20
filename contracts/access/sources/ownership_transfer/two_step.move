@@ -1,17 +1,17 @@
-/// Two-step wrapper that keeps a capability or object accessible behind a wrapper, while enforcing
-/// an initiate_transfer -> accept_transfer flow for transfers.
+/// Two-step wrapper that keeps an object accessible behind a wrapper, while enforcing an
+/// initiate_transfer -> accept_transfer flow for transfers.
 ///
-/// Callers first `wrap` their capability. The current owner initiates a transfer via
-/// `initiate_transfer`,
-/// which creates a shared `OwnershipTransferRequest` and sends the wrapper to it via TTO. The
-/// prospective owner finalises the handoff with `accept_transfer`, while the current owner can
-/// `cancel_transfer`
-/// to reclaim the wrapper. A direct `unwrap` path is provided for situations where the owner wants
-/// to reclaim the underlying capability locally.
+/// Works with any `T: key + store` object, but the primary use case is wrapping capabilities
+/// (admin caps, treasury caps, etc.) where a misdirected transfer could be irreversible.
 ///
-/// This deliberate two-step process helps avoid mistakenly transferring the capability or object to
-/// the wrong recipient, a mistake which could result in the cap being irreversibly locked away due
-/// to human error.
+/// Callers first `wrap` their object. The current owner initiates a transfer via
+/// `initiate_transfer`, which creates a shared `OwnershipTransferRequest` and sends the wrapper
+/// to it via TTO. The prospective owner finalises the handoff with `accept_transfer`, while the
+/// current owner can `cancel_transfer` to reclaim the wrapper. A direct `unwrap` path is provided
+/// for situations where the owner wants to reclaim the underlying object locally.
+///
+/// This deliberate two-step process helps avoid mistakenly transferring the object to the wrong
+/// recipient, a mistake which could result in it being irreversibly locked away due to human error.
 ///
 /// By requiring explicit initiation and acceptance of each transfer, the flow provides an important
 /// safety net against accidental misdirection.
@@ -35,7 +35,7 @@ const EWrongTwoStepTransferObject: vector<u8> = b"Wrong two step transfer object
 #[error(code = 4)]
 const ENotNewOwner: vector<u8> = b"Caller is not the prospective owner.";
 
-/// Wrapper object that owns the underlying capability, stored as a dynamic object field.
+/// Wrapper that owns the underlying object, stored as a dynamic object field.
 ///
 /// The wrapper intentionally omits the `store` ability so only this module can transfer it via
 /// `transfer::transfer`.
@@ -60,14 +60,14 @@ public struct RequestBorrow { wrapper_id: ID }
 
 // === Events ===
 
-/// Emitted whenever a capability/object is wrapped in `TwoStepTransferWrapper`.
+/// Emitted whenever an object is wrapped in `TwoStepTransferWrapper`.
 public struct WrapExecuted<phantom T> has copy, drop {
     wrapper_id: ID,
     object_id: ID,
     owner: address,
 }
 
-/// Emitted whenever a capability/object is unwrapped.
+/// Emitted whenever an object is unwrapped.
 public struct UnwrapExecuted<phantom T> has copy, drop {
     wrapper_id: ID,
     object_id: ID,
@@ -95,65 +95,65 @@ public struct TransferCancelled<phantom T> has copy, drop {
 
 // === Wrap / unwrap / borrow ===
 
-/// Wrap a capability/object inside a new two step transfer wrapper, storing it under a dynamic
-/// field so the underlying ID can still be discovered by off-chain indexers.
-public fun wrap<T: key + store>(cap: T, ctx: &mut TxContext): TwoStepTransferWrapper<T> {
+/// Wrap an object inside a new two step transfer wrapper, storing it under a dynamic field so the
+/// underlying ID can still be discovered by off-chain indexers.
+public fun wrap<T: key + store>(obj: T, ctx: &mut TxContext): TwoStepTransferWrapper<T> {
     let mut wrapper = TwoStepTransferWrapper { id: object::new(ctx) };
     event::emit(WrapExecuted<T> {
         wrapper_id: object::id(&wrapper),
-        object_id: object::id(&cap),
+        object_id: object::id(&obj),
         owner: ctx.sender(),
     });
-    dof::add(&mut wrapper.id, WrappedKey(), cap);
+    dof::add(&mut wrapper.id, WrappedKey(), obj);
     wrapper
 }
 
-/// Borrow the wrapped capability immutably—useful for read-only inspection without touching the
+/// Borrow the wrapped object immutably—useful for read-only inspection without touching the
 /// transfer flow.
 public fun borrow<T: key + store>(self: &TwoStepTransferWrapper<T>): &T {
     dof::borrow(&self.id, WrappedKey())
 }
 
-/// Borrow the wrapped capability mutably when maintenance needs to happen without changing the
+/// Borrow the wrapped object mutably when maintenance needs to happen without changing the
 /// ownership state.
 public fun borrow_mut<T: key + store>(self: &mut TwoStepTransferWrapper<T>): &mut T {
     dof::borrow_mut(&mut self.id, WrappedKey())
 }
 
-/// Take the wrapped capability from the `TwoStepTransferWrapper` with a guarantee that it will be returned.
+/// Take the wrapped object from the `TwoStepTransferWrapper` with a guarantee that it will be returned.
 public fun borrow_val<T: key + store>(self: &mut TwoStepTransferWrapper<T>): (T, Borrow) {
-    let cap = dof::remove(&mut self.id, WrappedKey());
-    let object_id = object::id(&cap);
-    (cap, Borrow { wrapper_id: object::id(self), object_id })
+    let obj = dof::remove(&mut self.id, WrappedKey());
+    let object_id = object::id(&obj);
+    (obj, Borrow { wrapper_id: object::id(self), object_id })
 }
 
-/// Return the borrowed capability to the `TwoStepTransferWrapper`. This method cannot be avoided
+/// Return the borrowed object to the `TwoStepTransferWrapper`. This method cannot be avoided
 /// if `borrow_val` is used.
 public fun return_val<T: key + store>(
     self: &mut TwoStepTransferWrapper<T>,
-    capability: T,
+    obj: T,
     borrow: Borrow,
 ) {
     let Borrow { wrapper_id, object_id } = borrow;
 
     assert!(object::id(self) == wrapper_id, EWrongTwoStepTransferWrapper);
-    assert!(object::id(&capability) == object_id, EWrongTwoStepTransferObject);
+    assert!(object::id(&obj) == object_id, EWrongTwoStepTransferObject);
 
-    dof::add(&mut self.id, WrappedKey(), capability);
+    dof::add(&mut self.id, WrappedKey(), obj);
 }
 
-/// Permanently unwrap the capability, deleting the wrapper. Only the current owner can call this,
-/// and it bypasses the request flow, effectively “owning” the capability again.
+/// Permanently unwrap the object, deleting the wrapper. Only the current owner can call this,
+/// and it bypasses the request flow, effectively recovering direct ownership.
 public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxContext): T {
     let TwoStepTransferWrapper { id: mut wrapper_id } = self;
-    let cap = dof::remove(&mut wrapper_id, WrappedKey());
+    let obj = dof::remove(&mut wrapper_id, WrappedKey());
     event::emit(UnwrapExecuted<T> {
         wrapper_id: wrapper_id.uid_to_inner(),
-        object_id: object::id(&cap),
+        object_id: object::id(&obj),
         owner: ctx.sender(),
     });
     wrapper_id.delete();
-    cap
+    obj
 }
 
 // === Transfer flow ===
@@ -225,7 +225,7 @@ public fun cancel_transfer<T: key + store>(
 // === Borrow through request (during pending transfer) ===
 
 /// Receive the wrapper from the shared request via TTO so the current owner can access the
-/// capability. The returned `RequestBorrow` hot potato must be consumed by
+/// wrapped object. The returned `RequestBorrow` hot potato must be consumed by
 /// `request_return_val`.
 public fun request_borrow_val<T: key + store>(
     request: &mut OwnershipTransferRequest<T>,

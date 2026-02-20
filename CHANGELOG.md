@@ -16,13 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Redesigned `two_step_transfer` from a requester-initiated to an owner-initiated flow using shared `OwnershipTransferRequest` and TTO.
   - `request`, `transfer`, and `reject` replaced by `initiate_transfer`, `accept_transfer`, and `cancel_transfer`.
 - Renamed `two_step_transfer` events: `OwnershipRequested` → `TransferInitiated`, `OwnershipTransferred` → `TransferAccepted`, `OwnershipTransferRejected` → `TransferCancelled`.
-- All events in `two_step_transfer` and `delayed_transfer` now carry `phantom T` for capability-type-specific indexing.
+- All events in `two_step_transfer` and `delayed_transfer` now carry `phantom T` for type-specific indexing.
 - `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
 
 #### Added
 
 - Add missing event emissions on state changes (#159)
-- `two_step_transfer::request_borrow_val` and `request_return_val` for borrowing the wrapper and its capability during a pending transfer.
+- `two_step_transfer::request_borrow_val` and `request_return_val` for borrowing the wrapper and its inner object during a pending transfer.
 - `two_step_transfer::RequestBorrow` hot potato to guarantee wrapper return after `request_borrow_val`.
 
 ### `openzeppelin_math`
@@ -60,5 +60,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
-- `two_step_transfer` module that wraps a `key + store` capability behind a request/approve flow.
-- `delayed_transfer` module that enforces configurable, clock-based delays before transferring or unwrapping a capability.
+- `two_step_transfer` module that wraps a `key + store` object behind a request/approve flow.
+- `delayed_transfer` module that enforces configurable, clock-based delays before transferring or unwrapping an object.

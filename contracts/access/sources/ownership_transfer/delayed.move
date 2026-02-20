@@ -1,11 +1,14 @@
 /// Time-locked wrapper that enforces a configurable delay between scheduling and executing
-/// the transfer of a capability/object.
+/// the transfer of an object.
 ///
-/// Owners wrap the capability and must queue a transfer via the scheduling helpers.
+/// Works with any `T: key + store` object, but the primary use case is wrapping capabilities
+/// (admin caps, treasury caps, etc.) where an immediate, unannounced transfer could be risky.
+///
+/// Owners wrap the object and must queue a transfer via the scheduling helpers.
 /// After scheduling, the owner must wait for the deadline to pass before executing,
-/// guaranteeing an on-chain lead time for sensitive capability moves.
+/// guaranteeing an on-chain lead time for sensitive transfers.
 ///
-/// Unwrapping follows the same delayed pattern, ensuring the capability cannot be reclaimed
+/// Unwrapping follows the same delayed pattern, ensuring the object cannot be reclaimed
 /// without respecting the delay period.
 module openzeppelin_access::delayed_transfer;
 
@@ -49,7 +52,7 @@ public struct Borrow { wrapper_id: ID, object_id: ID }
 
 // === Events ===
 
-/// Emitted whenever a capability/object is wrapped in `DelayedTransferWrapper`.
+/// Emitted whenever an object is wrapped in `DelayedTransferWrapper`.
 public struct WrapExecuted<phantom T> has copy, drop {
     wrapper_id: ID,
     object_id: ID,
@@ -85,10 +88,10 @@ public struct PendingTransferCancelled<phantom T> has copy, drop {
 
 // === Wrap / unwrap / borrow ===
 
-/// Wrap a capability/object in a delayed transfer wrapper with the desired minimum delay. The
-/// capability is tucked under a dynamic field so its object ID remains discoverable.
+/// Wrap an object in a delayed transfer wrapper with the desired minimum delay. The object is
+/// tucked under a dynamic field so its ID remains discoverable.
 public fun wrap<T: key + store>(
-    cap: T,
+    obj: T,
     min_delay_ms: u64,
     ctx: &mut TxContext,
 ): DelayedTransferWrapper<T> {
@@ -99,44 +102,44 @@ public fun wrap<T: key + store>(
     };
     event::emit(WrapExecuted<T> {
         wrapper_id: object::id(&wrapper),
-        object_id: object::id(&cap),
+        object_id: object::id(&obj),
         owner: ctx.sender(),
     });
-    dof::add(&mut wrapper.id, WrappedKey(), cap);
+    dof::add(&mut wrapper.id, WrappedKey(), obj);
     wrapper
 }
 
-/// Borrow the wrapped capability immutably—useful for inspection without touching the schedule.
+/// Borrow the wrapped object immutably—useful for inspection without touching the schedule.
 public fun borrow<T: key + store>(self: &DelayedTransferWrapper<T>): &T {
     dof::borrow(&self.id, WrappedKey())
 }
 
-/// Borrow the wrapped capability mutably when internal state needs to be tweaked without editing
-/// the pending schedule.
+/// Borrow the wrapped object mutably when internal state needs to be tweaked without editing the
+/// pending schedule.
 public fun borrow_mut<T: key + store>(self: &mut DelayedTransferWrapper<T>): &mut T {
     dof::borrow_mut(&mut self.id, WrappedKey())
 }
 
-/// Take the wrapped capability from the `DelayedTransferWrapper` with a guarantee that it will be returned.
+/// Take the wrapped object from the `DelayedTransferWrapper` with a guarantee that it will be returned.
 public fun borrow_val<T: key + store>(self: &mut DelayedTransferWrapper<T>): (T, Borrow) {
-    let cap = dof::remove(&mut self.id, WrappedKey());
-    let object_id = object::id(&cap);
-    (cap, Borrow { wrapper_id: object::id(self), object_id })
+    let obj = dof::remove(&mut self.id, WrappedKey());
+    let object_id = object::id(&obj);
+    (obj, Borrow { wrapper_id: object::id(self), object_id })
 }
 
-/// Return the borrowed capability to the `DelayedTransferWrapper`. This method cannot be avoided
+/// Return the borrowed object to the `DelayedTransferWrapper`. This method cannot be avoided
 /// if `borrow_val` is used.
 public fun return_val<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
-    capability: T,
+    obj: T,
     borrow: Borrow,
 ) {
     let Borrow { wrapper_id, object_id } = borrow;
 
     assert!(object::id(self) == wrapper_id, EWrongDelayedTransferWrapper);
-    assert!(object::id(&capability) == object_id, EWrongDelayedTransferObject);
+    assert!(object::id(&obj) == object_id, EWrongDelayedTransferObject);
 
-    dof::add(&mut self.id, WrappedKey(), capability);
+    dof::add(&mut self.id, WrappedKey(), obj);
 }
 
 // === Scheduling / delay management ===
@@ -167,8 +170,8 @@ public fun schedule_transfer<T: key + store>(
     });
 }
 
-/// Schedule an unwrap (self-recovery). After the delay, call `unwrap` to retrieve the capability
-/// and delete the wrapper.
+/// Schedule an unwrap (self-recovery). After the delay, call `unwrap` to retrieve the object and
+/// delete the wrapper.
 public fun schedule_unwrap<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
     clock: &Clock,
@@ -213,8 +216,8 @@ public fun execute_transfer<T: key + store>(
     transfer::transfer(self, recipient);
 }
 
-/// Complete a previously scheduled unwrap after the delay—return the capability and delete the
-/// wrapper so the owner regains full control.
+/// Complete a previously scheduled unwrap after the delay—return the object and delete the wrapper
+/// so the owner regains full control.
 public fun unwrap<T: key + store>(
     mut self: DelayedTransferWrapper<T>,
     clock: &Clock,
@@ -238,9 +241,9 @@ public fun unwrap<T: key + store>(
     });
 
     let DelayedTransferWrapper { id: mut wrapper_id, .. } = self;
-    let cap = dof::remove(&mut wrapper_id, WrappedKey());
+    let obj = dof::remove(&mut wrapper_id, WrappedKey());
     wrapper_id.delete();
-    cap
+    obj
 }
 
 /// Cancel the currently scheduled transfer or unwrap operation, if any.
