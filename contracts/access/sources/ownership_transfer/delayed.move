@@ -50,14 +50,14 @@ public struct Borrow { wrapper_id: ID, object_id: ID }
 // === Events ===
 
 /// Emitted whenever a capability/object is wrapped in `DelayedTransferWrapper`.
-public struct WrapExecuted has copy, drop {
+public struct WrapExecuted<phantom T> has copy, drop {
     wrapper_id: ID,
     object_id: ID,
     owner: address,
 }
 
 /// Emitted when a delayed transfer is scheduled.
-public struct TransferScheduled has copy, drop {
+public struct TransferScheduled<phantom T> has copy, drop {
     wrapper_id: ID,
     current_owner: address,
     new_owner: address,
@@ -65,21 +65,21 @@ public struct TransferScheduled has copy, drop {
 }
 
 /// Emitted when an unwrap is scheduled.
-public struct UnwrapScheduled has copy, drop {
+public struct UnwrapScheduled<phantom T> has copy, drop {
     wrapper_id: ID,
     current_owner: address,
     execute_after_ms: u64,
 }
 
 /// Emitted when a delayed transfer is executed.
-public struct OwnershipTransferred has copy, drop {
+public struct OwnershipTransferred<phantom T> has copy, drop {
     wrapper_id: ID,
     previous_owner: address,
     new_owner: address,
 }
 
 /// Emitted when a scheduled transfer or unwrap is cancelled.
-public struct PendingTransferCancelled has copy, drop {
+public struct PendingTransferCancelled<phantom T> has copy, drop {
     wrapper_id: ID,
 }
 
@@ -97,7 +97,7 @@ public fun wrap<T: key + store>(
         min_delay_ms,
         pending: option::none(),
     };
-    event::emit(WrapExecuted {
+    event::emit(WrapExecuted<T> {
         wrapper_id: object::id(&wrapper),
         object_id: object::id(&cap),
         owner: ctx.sender(),
@@ -159,7 +159,7 @@ public fun schedule_transfer<T: key + store>(
         },
     );
     let wrapper_id = object::id(self);
-    event::emit(TransferScheduled {
+    event::emit(TransferScheduled<T> {
         wrapper_id,
         current_owner,
         new_owner,
@@ -183,7 +183,7 @@ public fun schedule_unwrap<T: key + store>(
             execute_after_ms: execute_after,
         },
     );
-    event::emit(UnwrapScheduled {
+    event::emit(UnwrapScheduled<T> {
         wrapper_id: object::id(self),
         current_owner,
         execute_after_ms: execute_after,
@@ -205,7 +205,7 @@ public fun execute_transfer<T: key + store>(
 
     let now = clock.timestamp_ms();
     assert!(now >= execute_after_ms, EDelayNotElapsed);
-    event::emit(OwnershipTransferred {
+    event::emit(OwnershipTransferred<T> {
         wrapper_id: object::id(&self),
         previous_owner: ctx.sender(),
         new_owner: recipient,
@@ -231,7 +231,7 @@ public fun unwrap<T: key + store>(
     let now = clock.timestamp_ms();
     assert!(now >= execute_after_ms, EDelayNotElapsed);
 
-    event::emit(OwnershipTransferred {
+    event::emit(OwnershipTransferred<T> {
         wrapper_id: object::id(&self),
         previous_owner: ctx.sender(),
         new_owner: ctx.sender(),
@@ -246,15 +246,19 @@ public fun unwrap<T: key + store>(
 /// Cancel the currently scheduled transfer or unwrap operation, if any.
 public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>) {
     let PendingTransfer { .. } = self.pending.extract_or!(abort ENoPendingTransfer);
-    event::emit(PendingTransferCancelled { wrapper_id: object::id(self) });
+    event::emit(PendingTransferCancelled<T> { wrapper_id: object::id(self) });
 }
 
 #[test_only]
-public fun test_new_wrap_executed(wrapper_id: ID, object_id: ID, owner: address): WrapExecuted {
+public fun test_new_wrap_executed<T>(
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+): WrapExecuted<T> {
     WrapExecuted { wrapper_id, object_id, owner }
 }
 
 #[test_only]
-public fun test_new_pending_transfer_cancelled(wrapper_id: ID): PendingTransferCancelled {
+public fun test_new_pending_transfer_cancelled<T>(wrapper_id: ID): PendingTransferCancelled<T> {
     PendingTransferCancelled { wrapper_id }
 }

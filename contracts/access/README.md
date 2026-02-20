@@ -8,7 +8,7 @@ Transfer policies for safely handing capabilities to new owners.
 
 | Module | Summary |
 |--------|---------|
-| `two_step_transfer` | Wraps a capability behind a request/approve flow to avoid accidental handoffs. |
+| `two_step_transfer` | Wraps a capability behind an initiate_transfer/accept_transfer flow to avoid accidental handoffs. |
 | `delayed_transfer` | Enforces a minimum delay between scheduling and executing transfers or unwrapping. |
 
 ---
@@ -19,9 +19,10 @@ Transfer policies for safely handing capabilities to new owners.
    - Call `wrap<T>` to move a capability under a `TwoStepTransferWrapper<T>`. The wrapper owns the capability via a dynamic object field.
 2. **Borrow**
    - Use `borrow`, `borrow_mut`, or `borrow_val`/`return_val` to read or temporarily mutate the capability without changing ownership.
+   - While a transfer is pending, the current owner can use `request_borrow_val`/`request_return_val` to temporarily access the wrapper and its capability through the shared request.
 3. **Transfer**
-   - A prospective owner invokes `request` to emit `OwnershipRequested` and hand an `OwnershipTransferRequest` to the current owner.
-   - The owner must call `transfer` with the wrapper + request to emit `OwnershipTransferred` and hand off the wrapper, or `reject` to delete the pending request.
+   - The current owner calls `initiate_transfer` to emit `TransferInitiated`, create a shared `OwnershipTransferRequest`, and TTO the wrapper to it.
+   - The prospective owner calls `accept_transfer` with the request + receiving ticket to accept, or the current owner calls `cancel_transfer` to reclaim the wrapper.
 4. **Unwrap**
    - Owners can reclaim the underlying capability immediately via `unwrap`, destroying the wrapper.
 

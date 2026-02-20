@@ -32,7 +32,7 @@ fun wrap_emits_events() {
 
     let wrapper = delayed_transfer::wrap(cap, min_delay_ms, &mut ctx);
 
-    let events = event::events_by_type<delayed_transfer::WrapExecuted>();
+    let events = event::events_by_type<delayed_transfer::WrapExecuted<DummyCap>>();
     assert_eq!(events.length(), 1);
 
     let expected_event = delayed_transfer::test_new_wrap_executed(
@@ -56,13 +56,13 @@ fun schedule_and_execute_transfer() {
     clk.set_for_testing(1);
 
     wrapper.schedule_transfer(recipient, &clk, owner);
-    let scheduled = event::events_by_type<delayed_transfer::TransferScheduled>();
+    let scheduled = event::events_by_type<delayed_transfer::TransferScheduled<DummyCap>>();
     assert_eq!(scheduled.length(), 1);
 
     clk.set_for_testing(10);
     wrapper.execute_transfer(&clk, &mut ctx);
 
-    let executed = event::events_by_type<delayed_transfer::OwnershipTransferred>();
+    let executed = event::events_by_type<delayed_transfer::OwnershipTransferred<DummyCap>>();
     assert_eq!(executed.length(), 1);
 
     clock::destroy_for_testing(clk);
@@ -78,7 +78,7 @@ fun schedule_and_unwrap_after_delay() {
     clk.set_for_testing(0);
 
     wrapper.schedule_unwrap(&clk, owner);
-    let scheduled = event::events_by_type<delayed_transfer::UnwrapScheduled>();
+    let scheduled = event::events_by_type<delayed_transfer::UnwrapScheduled<DummyCap>>();
     assert_eq!(scheduled.length(), 1);
 
     clk.set_for_testing(10);
@@ -132,7 +132,7 @@ fun unwrap_before_delay_fails() {
 }
 
 #[test]
-fun cancel_allows_reschedule() {
+fun cancel_schedule_allows_reschedule() {
     // After cancelling a pending transfer we should be able to schedule a different action.
     let owner = @0x8;
     let mut ctx = dummy_ctx_with_sender(owner);
@@ -144,7 +144,7 @@ fun cancel_allows_reschedule() {
 
     wrapper.cancel_schedule();
 
-    let events = event::events_by_type<delayed_transfer::PendingTransferCancelled>();
+    let events = event::events_by_type<delayed_transfer::PendingTransferCancelled<DummyCap>>();
     assert_eq!(events.length(), 1);
 
     let expected_event = delayed_transfer::test_new_pending_transfer_cancelled(
@@ -154,7 +154,7 @@ fun cancel_allows_reschedule() {
 
     wrapper.schedule_unwrap(&clk, owner);
 
-    let events = event::events_by_type<delayed_transfer::UnwrapScheduled>();
+    let events = event::events_by_type<delayed_transfer::UnwrapScheduled<DummyCap>>();
     assert_eq!(events.length(), 1);
 
     clk.set_for_testing(5);
@@ -165,7 +165,7 @@ fun cancel_allows_reschedule() {
 }
 
 #[test]
-fun borrow_helpers_roundtrip() {
+fun borrow_and_return_roundtrip() {
     // Borrow, mutate, and return the capability through all borrow APIs.
     let owner = @0x11;
     let mut ctx = dummy_ctx_with_sender(owner);
@@ -188,7 +188,7 @@ fun borrow_helpers_roundtrip() {
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::ENoPendingTransfer)]
-fun cancel_without_pending_fails() {
+fun cancel_schedule_without_pending_fails() {
     let owner = @0x12;
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 5, &mut ctx);
@@ -196,7 +196,7 @@ fun cancel_without_pending_fails() {
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::ENoPendingTransfer)]
-fun execute_without_pending_fails() {
+fun execute_transfer_without_pending_fails() {
     let owner = @0x13;
     let mut ctx = dummy_ctx_with_sender(owner);
     let mut clk = clock::create_for_testing(&mut ctx);
