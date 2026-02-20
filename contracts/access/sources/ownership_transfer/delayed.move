@@ -20,17 +20,17 @@ use sui::event;
 public struct WrappedKey() has copy, drop, store;
 
 #[error(code = 0)]
-const ETransferAlreadyScheduled: vector<u8> = b"Transfer already scheduled.";
+const ETransferAlreadyScheduled: vector<u8> = "Transfer already scheduled.";
 #[error(code = 1)]
-const ENoPendingTransfer: vector<u8> = b"No pending transfer.";
+const ENoPendingTransfer: vector<u8> = "No pending transfer.";
 #[error(code = 2)]
-const EDelayNotElapsed: vector<u8> = b"Delay has not elapsed.";
+const EDelayNotElapsed: vector<u8> = "Delay has not elapsed.";
 #[error(code = 3)]
-const EWrongPendingAction: vector<u8> = b"Pending action mismatch.";
+const EWrongPendingAction: vector<u8> = "Pending action mismatch.";
 #[error(code = 4)]
-const EWrongDelayedTransferWrapper: vector<u8> = b"Wrong delayed transfer wrapper.";
+const EWrongDelayedTransferWrapper: vector<u8> = "Wrong delayed transfer wrapper.";
 #[error(code = 5)]
-const EWrongDelayedTransferObject: vector<u8> = b"Wrong delayed transfer object.";
+const EWrongDelayedTransferObject: vector<u8> = "Wrong delayed transfer object.";
 
 /// Wrapper object that delays transfers by at least `min_delay_ms` after scheduling.
 public struct DelayedTransferWrapper<phantom T: key + store> has key {
