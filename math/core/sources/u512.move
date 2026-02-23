@@ -207,7 +207,8 @@ fun sub_u256(value: U512, other: u256): U512 {
 
 /// Return the index of the most significant set bit in `value`.
 ///
-/// NOTE: This internal helper function expects a value that is not zero.
+/// NOTE: This internal helper function expects a value that is not zero,
+/// in the case of zero, the function will return 0 by convention.
 fun msb(value: &U512): u16 {
     if (value.hi != 0) {
         256 + (common::msb(value.hi, 256) as u16)
