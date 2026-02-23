@@ -73,6 +73,7 @@ fun schedule_and_unwrap_after_delay() {
     let owner = @0x3;
     let mut ctx = dummy_ctx_with_sender(owner);
     let mut wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 7, &mut ctx);
+    let wrapper_id = object::id(&wrapper);
 
     let mut clk = clock::create_for_testing(&mut ctx);
     clk.set_for_testing(0);
@@ -83,6 +84,16 @@ fun schedule_and_unwrap_after_delay() {
 
     clk.set_for_testing(10);
     let cap = wrapper.unwrap(&clk, &mut ctx);
+
+    let executed = event::events_by_type<delayed_transfer::UnwrapExecuted>();
+    assert_eq!(executed.length(), 1);
+
+    let expected_event = delayed_transfer::test_new_unwrap_executed(
+        wrapper_id,
+        object::id(&cap),
+        owner,
+    );
+    assert_eq!(expected_event, executed[0]);
 
     let DummyCap { id } = cap;
     id.delete();

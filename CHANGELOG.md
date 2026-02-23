@@ -11,9 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### `openzeppelin_access`
 
+#### Added
+
 - Add missing event emissions on state changes (#159)
 - `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
 - `delayed_transfer::schedule_transfer` and `schedule_unwrap` now derive `current_owner` from `ctx.sender()` instead of accepting it as a parameter (#174)
+
+#### Changed (Breaking)
+
+- Emit dedicated `UnwrapExecuted` event on `delayed_transfer::unwrap` instead of `OwnershipTransferred` (#168)
 
 ### `openzeppelin_math`
 
