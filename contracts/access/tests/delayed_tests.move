@@ -55,7 +55,7 @@ fun schedule_and_execute_transfer() {
     let mut clk = clock::create_for_testing(&mut ctx);
     clk.set_for_testing(1);
 
-    wrapper.schedule_transfer(recipient, owner, &clk);
+    wrapper.schedule_transfer(recipient, &clk, &mut ctx);
     let scheduled = event::events_by_type<delayed_transfer::TransferScheduled>();
     assert_eq!(scheduled.length(), 1);
 
@@ -73,16 +73,27 @@ fun schedule_and_unwrap_after_delay() {
     let owner = @0x3;
     let mut ctx = dummy_ctx_with_sender(owner);
     let mut wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 7, &mut ctx);
+    let wrapper_id = object::id(&wrapper);
 
     let mut clk = clock::create_for_testing(&mut ctx);
     clk.set_for_testing(0);
 
-    wrapper.schedule_unwrap(owner, &clk);
+    wrapper.schedule_unwrap(&clk, &mut ctx);
     let scheduled = event::events_by_type<delayed_transfer::UnwrapScheduled>();
     assert_eq!(scheduled.length(), 1);
 
     clk.set_for_testing(10);
     let cap = wrapper.unwrap(&clk, &mut ctx);
+
+    let executed = event::events_by_type<delayed_transfer::UnwrapExecuted>();
+    assert_eq!(executed.length(), 1);
+
+    let expected_event = delayed_transfer::test_new_unwrap_executed(
+        wrapper_id,
+        object::id(&cap),
+        owner,
+    );
+    assert_eq!(expected_event, executed[0]);
 
     let DummyCap { id } = cap;
     id.delete();
@@ -107,7 +118,7 @@ fun schedule_unwrap_rejects_duplicate() {
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 5, &mut ctx);
     let clk = clock::create_for_testing(&mut ctx);
-    attempt_double_unwrap(wrapper, owner, clk, &mut ctx);
+    attempt_double_unwrap(wrapper, clk, &mut ctx);
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EDelayNotElapsed)]
@@ -118,7 +129,7 @@ fun execute_transfer_before_delay_fails() {
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 10, &mut ctx);
     let clk = clock::create_for_testing(&mut ctx);
-    attempt_execute_before_delay(wrapper, owner, recipient, clk, &mut ctx);
+    attempt_execute_before_delay(wrapper, recipient, clk, &mut ctx);
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EDelayNotElapsed)]
@@ -128,7 +139,7 @@ fun unwrap_before_delay_fails() {
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 10, &mut ctx);
     let clk = clock::create_for_testing(&mut ctx);
-    attempt_early_unwrap(wrapper, owner, clk, &mut ctx);
+    attempt_early_unwrap(wrapper, clk, &mut ctx);
 }
 
 #[test]
@@ -140,7 +151,7 @@ fun cancel_allows_reschedule() {
     let mut clk = clock::create_for_testing(&mut ctx);
     clk.set_for_testing(0);
 
-    wrapper.schedule_transfer(owner, owner, &clk);
+    wrapper.schedule_transfer(owner, &clk, &mut ctx);
 
     wrapper.cancel_schedule();
 
@@ -152,7 +163,7 @@ fun cancel_allows_reschedule() {
     );
     assert_eq!(expected_event, events[0]);
 
-    wrapper.schedule_unwrap(owner, &clk);
+    wrapper.schedule_unwrap(&clk, &mut ctx);
 
     let events = event::events_by_type<delayed_transfer::UnwrapScheduled>();
     assert_eq!(events.length(), 1);
@@ -179,7 +190,7 @@ fun borrow_helpers_roundtrip() {
     let (cap, borrow_token) = wrapper.borrow_val();
     wrapper.return_val(cap, borrow_token);
 
-    wrapper.schedule_unwrap(owner, &clk);
+    wrapper.schedule_unwrap(&clk, &mut ctx);
     clk.set_for_testing(10);
     let cap = wrapper.unwrap(&clk, &mut ctx);
     let DummyCap { id } = cap;
@@ -192,7 +203,7 @@ fun cancel_without_pending_fails() {
     let owner = @0x12;
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 5, &mut ctx);
-    expect_cancel_without_pending(wrapper, owner, &mut ctx);
+    expect_cancel_without_pending(wrapper, &mut ctx);
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::ENoPendingTransfer)]
@@ -222,7 +233,7 @@ fun execute_transfer_wrong_action_fails() {
     let mut clk = clock::create_for_testing(&mut ctx);
     clk.set_for_testing(0);
     let mut wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 5, &mut ctx);
-    wrapper.schedule_unwrap(owner, &clk);
+    wrapper.schedule_unwrap(&clk, &mut ctx);
     clk.set_for_testing(10);
     wrapper.execute_transfer(&clk, &mut ctx);
     clock::destroy_for_testing(clk);
@@ -236,7 +247,7 @@ fun unwrap_wrong_action_fails() {
     let mut clk = clock::create_for_testing(&mut ctx);
     clk.set_for_testing(0);
     let mut wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 5, &mut ctx);
-    wrapper.schedule_transfer(recipient, owner, &clk);
+    wrapper.schedule_transfer(recipient, &clk, &mut ctx);
     clk.set_for_testing(10);
     let cap = wrapper.unwrap(&clk, &mut ctx);
     let DummyCap { id } = cap;
@@ -268,8 +279,8 @@ fun attempt_double_schedule(
     ctx: &mut TxContext,
 ) {
     clk.set_for_testing(0);
-    wrapper.schedule_transfer(owner, owner, &clk);
-    wrapper.schedule_transfer(owner, owner, &clk);
+    wrapper.schedule_transfer(owner, &clk, ctx);
+    wrapper.schedule_transfer(owner, &clk, ctx);
 
     // Cleanup path (never reached on failure).
     clk.set_for_testing(10);
@@ -281,13 +292,12 @@ fun attempt_double_schedule(
 
 fun attempt_execute_before_delay(
     mut wrapper: delayed_transfer::DelayedTransferWrapper<DummyCap>,
-    owner: address,
     recipient: address,
     mut clk: clock::Clock,
     ctx: &mut TxContext,
 ) {
     clk.set_for_testing(0);
-    wrapper.schedule_transfer(recipient, owner, &clk);
+    wrapper.schedule_transfer(recipient, &clk, ctx);
     clk.set_for_testing(5);
     wrapper.execute_transfer(&clk, ctx);
 
@@ -296,12 +306,11 @@ fun attempt_execute_before_delay(
 
 fun attempt_early_unwrap(
     mut wrapper: delayed_transfer::DelayedTransferWrapper<DummyCap>,
-    owner: address,
     mut clk: clock::Clock,
     ctx: &mut TxContext,
 ) {
     clk.set_for_testing(0);
-    wrapper.schedule_unwrap(owner, &clk);
+    wrapper.schedule_unwrap(&clk, ctx);
     clk.set_for_testing(5);
     let cap = wrapper.unwrap(&clk, ctx);
     let DummyCap { id } = cap;
@@ -312,13 +321,12 @@ fun attempt_early_unwrap(
 
 fun attempt_double_unwrap(
     mut wrapper: delayed_transfer::DelayedTransferWrapper<DummyCap>,
-    owner: address,
     mut clk: clock::Clock,
     ctx: &mut TxContext,
 ) {
     clk.set_for_testing(0);
-    wrapper.schedule_unwrap(owner, &clk);
-    wrapper.schedule_unwrap(owner, &clk);
+    wrapper.schedule_unwrap(&clk, ctx);
+    wrapper.schedule_unwrap(&clk, ctx);
 
     clk.set_for_testing(10);
     let cap = wrapper.unwrap(&clk, ctx);
@@ -329,14 +337,13 @@ fun attempt_double_unwrap(
 
 fun expect_cancel_without_pending(
     mut wrapper: delayed_transfer::DelayedTransferWrapper<DummyCap>,
-    owner: address,
     ctx: &mut TxContext,
 ) {
     wrapper.cancel_schedule();
 
     let mut clk = clock::create_for_testing(ctx);
     clk.set_for_testing(0);
-    wrapper.schedule_unwrap(owner, &clk);
+    wrapper.schedule_unwrap(&clk, ctx);
     clk.set_for_testing(1);
     let cap = wrapper.unwrap(&clk, ctx);
     let DummyCap { id } = cap;
