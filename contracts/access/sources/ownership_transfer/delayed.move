@@ -147,7 +147,7 @@ public fun schedule_transfer<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
     new_owner: address,
     clock: &Clock,
-    current_owner: address,
+    ctx: &mut TxContext,
 ) {
     assert!(self.pending.is_none(), ETransferAlreadyScheduled);
     let execute_after = clock.timestamp_ms() + self.min_delay_ms;
@@ -158,10 +158,9 @@ public fun schedule_transfer<T: key + store>(
             execute_after_ms: execute_after,
         },
     );
-    let wrapper_id = object::id(self);
     event::emit(TransferScheduled {
-        wrapper_id,
-        current_owner,
+        wrapper_id: object::id(self),
+        current_owner: ctx.sender(),
         new_owner,
         execute_after_ms: execute_after,
     });
@@ -172,7 +171,7 @@ public fun schedule_transfer<T: key + store>(
 public fun schedule_unwrap<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
     clock: &Clock,
-    current_owner: address,
+    ctx: &mut TxContext,
 ) {
     assert!(self.pending.is_none(), ETransferAlreadyScheduled);
     let execute_after = clock.timestamp_ms() + self.min_delay_ms;
@@ -185,7 +184,7 @@ public fun schedule_unwrap<T: key + store>(
     );
     event::emit(UnwrapScheduled {
         wrapper_id: object::id(self),
-        current_owner,
+        current_owner: ctx.sender(),
         execute_after_ms: execute_after,
     });
 }
