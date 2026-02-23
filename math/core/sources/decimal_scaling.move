@@ -53,7 +53,7 @@ const MAX_DECIMALS: u8 = 24;
 ///
 /// # Returns
 ///
-/// The scaled balance as u64
+/// The scaled balance as `u64`
 ///
 /// # Aborts
 ///
@@ -85,10 +85,27 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
     // Validate decimal ranges.
     validate_decimals(source_decimals, target_decimals);
 
-    let scaled_amount = scale_amount(raw_amount, source_decimals, target_decimals);
-
-    // Verify it fits in `u64`.
-    assert!(scaled_amount <= (std::u64::max_value!() as u256), ESafeDowncastOverflowedInt);
+    let scaled_amount = if (target_decimals > source_decimals) {
+        // Scaling up: `raw_amount * 10^diff` can overflow `u256` before the `u64`
+        // bounds check below is reached. Guard against this by checking
+        // `raw_amount <= u64::max / factor` first. The division is safe `u256`
+        // arithmetic (`factor >= 10`, never zero), so no overflow is possible
+        // here. If the check fails we fall through to the intended error.
+        let decimals_diff = target_decimals - source_decimals;
+        let factor = 10u256.pow(decimals_diff);
+        assert!(
+            raw_amount <= (std::u64::max_value!() as u256) / factor,
+            ESafeDowncastOverflowedInt,
+        );
+        raw_amount * factor
+    } else {
+        // Scaling down or same decimals: integer division can only reduce the
+        // value, so no `u256` overflow is possible. However the result may still
+        // exceed `u64::max_value!()` if `raw_amount` was already above it.
+        let result = scale_amount(raw_amount, source_decimals, target_decimals);
+        assert!(result <= (std::u64::max_value!() as u256), ESafeDowncastOverflowedInt);
+        result
+    };
 
     scaled_amount as u64
 }
@@ -178,13 +195,13 @@ fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
         // Scale up: multiply by 10^(decimals_diff) to increase precision.
         // No precision loss when scaling up.
         let decimals_diff = target_decimals - source_decimals;
-        amount * std::u256::pow(10, decimals_diff)
+        amount * 10u256.pow(decimals_diff)
     } else {
         // Scale down: divide by 10^(decimals_diff) to reduce precision.
         // IMPORTANT: Integer division truncates fractional parts.
         // Example: 1999 / 1000 = 1 (truncated, not rounded to 2)
         let decimals_diff = source_decimals - target_decimals;
-        amount / std::u256::pow(10, decimals_diff)
+        amount / 10u256.pow(decimals_diff)
     }
 }
 

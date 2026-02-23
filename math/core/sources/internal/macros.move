@@ -66,17 +66,19 @@ public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: Roun
 /// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
 /// than or equal to the bit-width of `$Int`.
 public(package) macro fun checked_shl<$Int>($value: $Int, $shift: u8): Option<$Int> {
-    if ($shift == 0) {
-        return option::some($value)
+    let (value, shift) = ($value, $shift);
+    if (shift == 0) {
+        return option::some(value)
     };
     // Masking should be more efficient but it requires to know the bit
     // size of $Int and we favor simplicity in this case.
-    let shifted = $value << $shift;
-    let shifted_back = shifted >> $shift;
-    if (shifted_back != $value) {
-        return option::none()
-    };
-    option::some(shifted)
+    let shifted = value << shift;
+    let shifted_back = shifted >> shift;
+    if (shifted_back != value) {
+        option::none()
+    } else {
+        option::some(shifted)
+    }
 }
 
 /// Attempt to right shift `$value` by `$shift` bits while ensuring no truncated bits are lost.
@@ -102,12 +104,14 @@ public(package) macro fun checked_shl<$Int>($value: $Int, $shift: u8): Option<$I
 /// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
 /// than or equal to the bit-width of `$Int`.
 public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$Int> {
-    let mask = (1_u256 << $shift) - 1;
-    let shifted = $value & (mask as $Int);
+    let (value, shift) = ($value, $shift);
+    let mask = (1_u256 << shift) - 1;
+    let shifted = value & (mask as $Int);
     if (shifted != 0) {
-        return option::none()
-    };
-    option::some($value >> $shift)
+        option::none()
+    } else {
+        option::some(value >> shift)
+    }
 }
 
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.

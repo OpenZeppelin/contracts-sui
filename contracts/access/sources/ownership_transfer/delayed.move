@@ -231,9 +231,6 @@ public fun unwrap<T: key + store>(
     let PendingTransfer { recipient, execute_after_ms } = pending;
     assert!(recipient.is_none(), EWrongPendingAction);
 
-    // The recipient must be none for an unwrap.
-    recipient.destroy_none();
-
     let now = clock.timestamp_ms();
     assert!(now >= execute_after_ms, EDelayNotElapsed);
 
