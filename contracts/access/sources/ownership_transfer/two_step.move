@@ -21,8 +21,10 @@ public struct WrappedKey() has copy, drop, store;
 /// Transfer request does not correspond to the provided wrapper
 #[error(code = 1)]
 const EInvalidTransferRequest: vector<u8> = b"Transfer request does not match wrapper.";
+/// Borrow return was attempted against a different `TwoStepTransferWrapper`.
 #[error(code = 2)]
 const EWrongTwoStepTransferWrapper: vector<u8> = b"Wrong two step transfer wrapper.";
+/// Borrow return was attempted with a different wrapped object than the one originally taken.
 #[error(code = 3)]
 const EWrongTwoStepTransferObject: vector<u8> = b"Wrong two step transfer object.";
 

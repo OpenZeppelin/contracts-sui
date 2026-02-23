@@ -10,6 +10,13 @@ module openzeppelin_math::common;
 /// powers of two (bit_width/2, bit_width/4, ..., 1). For each shift, if the upper portion is zero, the number of leading zeros increases
 /// by the shift amount. If the input value is zero, it returns bit_width. Otherwise, it returns the count of leading zero bits for the
 /// value, respecting the provided bit width.
+///
+/// #### Parameters
+/// - `val`: Input value promoted to `u256`.
+/// - `bit_width`: Effective bit width of the original integer type.
+///
+/// #### Returns
+/// - Number of leading zero bits in `val` under the given `bit_width`.
 public(package) fun clz(val: u256, bit_width: u16): u16 {
     if (val == 0) {
         return bit_width
@@ -36,6 +43,14 @@ public(package) fun clz(val: u256, bit_width: u16): u16 {
 /// This function returns the zero-based index of the most significant set bit in a value of a given bit width
 /// (such as u8, u16, u32, u64, u128, or u256). The MSB position is calculated as `bit_width - 1 - clz(val, bit_width)`,
 /// where `clz` is the count of leading zeros. For a zero input, the function returns 0 by convention.
+///
+/// #### Parameters
+/// - `val`: Input value promoted to `u256`.
+/// - `bit_width`: Effective bit width of the original integer type.
+///
+/// #### Returns
+/// - Zero-based index of the most significant set bit.
+/// - Returns `0` when `val` is `0`.
 public(package) fun msb(val: u256, bit_width: u16): u8 {
     if (val == 0) {
         return 0
@@ -49,6 +64,12 @@ public(package) fun msb(val: u256, bit_width: u16): u8 {
 ///
 /// This method is based on Newton's method for computing square roots. The algorithm is restricted to only
 /// using integer operations.
+///
+/// #### Parameters
+/// - `a`: Input value.
+///
+/// #### Returns
+/// - `floor(sqrt(a))`.
 public(package) fun sqrt_floor(a: u256): u256 {
     // Take care of easy edge cases: sqrt(0) = 0 and sqrt(1) = 1
     if (a <= 1) {

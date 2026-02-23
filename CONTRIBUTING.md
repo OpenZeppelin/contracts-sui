@@ -25,6 +25,32 @@ Your contribution must meet these requirements:
 - **Move Conventions**: Follow [Sui Move conventions](https://docs.sui.io/concepts/sui-move-concepts/conventions)
 - **Documentation**: Add inline documentation for public functions and modules
 
+## Documentation Style
+
+Use consistent documentation formatting across modules:
+
+- Use section headings as `#### Parameters`, `#### Returns`, and `#### Aborts` when relevant.
+- Use `-` for list items in doc comments (not `*`).
+- Prefer documenting public functions with at least `Parameters` and `Returns`.
+- Include an `Aborts` section whenever a function can abort.
+- Keep terminology consistent with implementation (for example, avoid documenting impossible paths).
+
+Example:
+
+```move
+/// Compute something.
+///
+/// #### Parameters
+/// - `value`: Input value.
+/// - `rounding_mode`: Rounding strategy.
+///
+/// #### Returns
+/// - Rounded output value.
+///
+/// #### Aborts
+/// - Aborts if `value` is zero.
+```
+
 ## A typical workflow
 
 1. Make sure your fork is up to date with the main repository:

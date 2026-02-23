@@ -5,15 +5,25 @@ use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
 #[error(code = 0)]
-const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
+const EDivideByZero: vector<u8> = b"Divisor must be non-zero.";
 #[error(code = 1)]
 const EZeroModulus: vector<u8> = b"Modulus must be non-zero.";
 
 /// Compute the arithmetic mean of two unsigned integers with configurable rounding.
 ///
 /// The helper works across all unsigned widths by normalising the operands to `u256`. It avoids
-/// overflow by anchoring on the smaller input, halving the difference with `mul_div_inner`, and
+/// overflow by anchoring on the smaller input, halving the difference with `mul_div_u256_fast`, and
 /// then shifting back into the caller's width.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$a`, `$b`: Operands to average.
+/// - `$rounding_mode`: Rounding strategy.
+///
+/// #### Returns
+/// The arithmetic mean of `$a` and `$b`, rounded according to `$rounding_mode`.
 public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: RoundingMode): $Int {
     let a_u256 = ($a as u256);
     let b_u256 = ($b as u256);
@@ -166,8 +176,7 @@ public(package) macro fun mul_div<$Int>(
 /// `result` contains the rounded quotient when no overflow occurs.
 ///
 /// #### Aborts
-/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is 256 or
-/// greater.
+/// Does not emit custom errors.
 public(package) macro fun mul_shr<$Int>(
     $a: $Int,
     $b: $Int,
@@ -429,7 +438,14 @@ public(package) fun log10_floor(value: u256): u8 {
 /// === Helper functions ===
 
 /// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
-/// Returns `(overflow, quotient)` mirroring the macro implementation.
+///
+/// #### Parameters
+/// - `a`, `b`: Unsigned factors.
+/// - `denominator`: Unsigned divisor.
+/// - `rounding_mode`: Rounding strategy.
+///
+/// #### Returns
+/// `(overflow, quotient)` mirroring the macro implementation.
 public(package) fun mul_div_inner(
     a: u256,
     b: u256,
@@ -522,7 +538,14 @@ public(package) fun mul_div_u256_wide(
 }
 
 /// Internal helper for `mul_shr` that selects the most efficient implementation based on the input size.
-/// Returns `(overflow, quotient)` mirroring the macro implementation.
+///
+/// #### Parameters
+/// - `a`, `b`: Unsigned factors.
+/// - `shift`: Number of bits to shift right.
+/// - `rounding_mode`: Rounding strategy.
+///
+/// #### Returns
+/// `(overflow, quotient)` mirroring the macro implementation.
 public(package) fun mul_shr_inner(
     a: u256,
     b: u256,
@@ -654,7 +677,16 @@ public(package) macro fun sqrt<$Int>($value: $Int, $rounding_mode: RoundingMode)
 }
 
 /// Determine whether rounding up is required after dividing and apply it to `result`.
-/// Returns `(overflow, result)` where `overflow` is `true` if the rounded value cannot be represented as `u256`.
+///
+/// #### Parameters
+/// - `result`: Truncated quotient before rounding.
+/// - `denominator`: Divisor used by the original division.
+/// - `remainder`: Division remainder associated with `result`.
+/// - `rounding_mode`: Rounding strategy.
+///
+/// #### Returns
+/// `(overflow, result)` where `overflow` is `true` if the rounded value cannot be represented as
+/// `u256`.
 public(package) fun round_division_result(
     result: u256,
     denominator: u256,
@@ -701,7 +733,8 @@ public(package) fun round_division_result(
 /// Tie-break: equality goes up (`≥`), i.e., “round half up”.
 ///
 /// #### Returns
-/// `true` if the value should round up, `false` otherwise.
+/// The rounded base-2 logarithm: `floor_log + 1` when the midpoint threshold is met, otherwise
+/// `floor_log`.
 public(package) fun round_log2_to_nearest(value: u256, floor_log: u16): u16 {
     let threshold_exp = 2 * floor_log + 1;
     let max_small = std::u128::max_value!() as u256;
@@ -744,7 +777,8 @@ public(package) fun round_log2_to_nearest(value: u256, floor_log: u16): u16 {
 /// Tie-break: equality goes up (`≥`), i.e., “round half up”.
 ///
 /// #### Returns
-/// `true` if the value should round up, `false` otherwise.
+/// The rounded base-256 logarithm: `floor_log + 1` when the midpoint threshold is met, otherwise
+/// `floor_log`.
 public(package) fun round_log256_to_nearest(value: u256, floor_log: u8): u8 {
     // For u256 values, floor_log ∈ [0, 31], so `threshold_exp = 8 * floor_log + 4 ≤ 252`
     // and the power-of-two threshold fits safely in u256.
@@ -923,6 +957,13 @@ public(package) fun inv_mod_extended_impl(value: u256, modulus: u256): Option<u2
 }
 
 /// Compute `(a - b) mod modulus` without signed arithmetic.
+///
+/// #### Parameters
+/// - `a`, `b`: Unsigned operands.
+/// - `modulus`: Modulus for arithmetic.
+///
+/// #### Returns
+/// `(a - b) mod modulus`.
 public(package) fun mod_sub_impl(a: u256, b: u256, modulus: u256): u256 {
     if (a >= b) {
         a - b
@@ -935,6 +976,16 @@ public(package) fun mod_sub_impl(a: u256, b: u256, modulus: u256): u256 {
 ///
 /// Falls back to the wide (`u512`) helper when the operands exceed 128 bits so overflow cannot
 /// occur.
+///
+/// #### Parameters
+/// - `a`, `b`: Unsigned operands.
+/// - `modulus`: Modulus for arithmetic.
+///
+/// #### Returns
+/// `(a * b) mod modulus`.
+///
+/// #### Aborts
+/// - `EZeroModulus` if `modulus` is zero.
 public(package) fun mul_mod_impl(a: u256, b: u256, modulus: u256): u256 {
     assert!(modulus != 0, EZeroModulus);
     if (a == 0 || b == 0) {
