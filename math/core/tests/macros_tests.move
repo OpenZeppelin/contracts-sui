@@ -80,41 +80,37 @@ fun checked_shr_detects_set_bits() {
 #[test]
 fun mul_div_fast_rounding_modes() {
     // Downward rounding leaves the truncated quotient untouched.
-    let (overflow_down, down) = macros::mul_div_u256_fast(7, 10, 4, rounding::down());
-    assert_eq!(overflow_down, false);
-    assert_eq!(down, 17u256);
+    let down = macros::mul_div_u256_fast(7, 10, 4, rounding::down());
+    assert_eq!(down.overflow(), false);
+    assert_eq!(down.value(), 17u256);
 
     // Force a manual round-up.
-    let (overflow_up, up) = macros::mul_div_u256_fast(5, 3, 4, rounding::up());
-    assert_eq!(overflow_up, false);
-    assert_eq!(up, 4);
+    let up = macros::mul_div_u256_fast(5, 3, 4, rounding::up());
+    assert_eq!(up.overflow(), false);
+    assert_eq!(up.value(), 4u256);
 
     // Nearest rounds down when the remainder is small.
-    let (overflow_nearest_down, nearest_down) = macros::mul_div_u256_fast(
-        6,
-        1,
-        5,
-        rounding::nearest(),
-    );
-    assert_eq!(overflow_nearest_down, false);
-    assert_eq!(nearest_down, 1);
+    let nearest_down = macros::mul_div_u256_fast(6, 1, 5, rounding::nearest());
+    assert_eq!(nearest_down.overflow(), false);
+    assert_eq!(nearest_down.value(), 1u256);
 
     // Nearest rounds up when the remainder dominates.
-    let (overflow_nearest_up, nearest_up) = macros::mul_div_u256_fast(9, 1, 5, rounding::nearest());
-    assert_eq!(overflow_nearest_up, false);
-    assert_eq!(nearest_up, 2);
+    let nearest_up = macros::mul_div_u256_fast(9, 1, 5, rounding::nearest());
+    assert_eq!(nearest_up.overflow(), false);
+    assert_eq!(nearest_up.value(), 2u256);
 }
 
 #[test]
 fun mul_div_fast_handles_exact_division() {
     // An exact division should never apply rounding adjustments.
-    let (_, exact) = macros::mul_div_u256_fast(8, 2, 4, rounding::up());
-    assert_eq!(exact, 4);
+    let exact = macros::mul_div_u256_fast(8, 2, 4, rounding::up());
+    assert_eq!(exact.value(), 4u256);
 }
 
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
-fun mul_div_fast_rejects_zero_denominator() {
-    macros::mul_div_u256_fast(1, 1, 0, rounding::down());
+#[test]
+fun mul_div_inner_returns_none_for_zero_denominator() {
+    let result = macros::mul_div_inner(1, 1, 0, rounding::down());
+    assert!(result.is_none());
 }
 
 #[test]
@@ -123,14 +119,9 @@ fun mul_div_wide_matches_u512_downward() {
     let numerator = u512::mul_u256(large, large);
     let (overflow, baseline, _) = u512::div_rem_u256(numerator, 7);
     assert_eq!(overflow, false);
-    let (macro_overflow, wide) = macros::mul_div_u256_wide(
-        large,
-        large,
-        7,
-        rounding::down(),
-    );
-    assert_eq!(macro_overflow, false);
-    assert_eq!(wide, baseline);
+    let wide = macros::mul_div_u256_wide(large, large, 7, rounding::down());
+    assert_eq!(wide.overflow(), false);
+    assert_eq!(wide.value(), baseline);
 }
 
 #[test]
@@ -141,64 +132,39 @@ fun mul_div_wide_respects_rounding_modes() {
     assert!(remainder != 0);
 
     // Rounding up always bumps the truncated quotient when remainder is non-zero.
-    let (overflow_up, up) = macros::mul_div_u256_wide(
-        large,
-        large,
-        7,
-        rounding::up(),
-    );
-    assert_eq!(overflow_up, false);
-    assert_eq!(up, baseline + 1);
+    let up = macros::mul_div_u256_wide(large, large, 7, rounding::up());
+    assert_eq!(up.overflow(), false);
+    assert_eq!(up.value(), baseline + 1);
 
     // Nearest mirrors `rounding::down` when the remainder is small...
     let denom_down = 13;
-    let (_, baseline_down, remainder_down) = u512::div_rem_u256(
-        numerator,
-        denom_down,
-    );
+    let (_, baseline_down, remainder_down) = u512::div_rem_u256(numerator, denom_down);
     assert!(remainder_down < denom_down - remainder_down);
-    let (overflow_nearest_down, nearest_down) = macros::mul_div_u256_wide(
-        large,
-        large,
-        denom_down,
-        rounding::nearest(),
-    );
-    assert_eq!(overflow_nearest_down, false);
-    assert_eq!(nearest_down, baseline_down);
+    let nearest_down = macros::mul_div_u256_wide(large, large, denom_down, rounding::nearest());
+    assert_eq!(nearest_down.overflow(), false);
+    assert_eq!(nearest_down.value(), baseline_down);
 
     // ...and bumps when the remainder dominates.
     let denom_up = 11;
-    let (_, baseline_up, remainder_up) = u512::div_rem_u256(
-        numerator,
-        denom_up,
-    );
+    let (_, baseline_up, remainder_up) = u512::div_rem_u256(numerator, denom_up);
     assert!(remainder_up >= denom_up - remainder_up);
-    let (overflow_nearest_up, nearest_up) = macros::mul_div_u256_wide(
-        large,
-        large,
-        denom_up,
-        rounding::nearest(),
-    );
-    assert_eq!(overflow_nearest_up, false);
-    assert_eq!(nearest_up, baseline_up + 1);
+    let nearest_up = macros::mul_div_u256_wide(large, large, denom_up, rounding::nearest());
+    assert_eq!(nearest_up.overflow(), false);
+    assert_eq!(nearest_up.value(), baseline_up + 1);
 }
 
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
-fun mul_div_wide_rejects_zero_denominator() {
+#[test]
+fun mul_div_wide_inner_returns_none_for_zero_denominator() {
     let large = (std::u128::max_value!() as u256) + 1;
-    macros::mul_div_u256_wide(large, large, 0, rounding::down());
+    let result = macros::mul_div_inner(large, large, 0, rounding::down());
+    assert!(result.is_none());
 }
 
 #[test]
 fun mul_div_wide_detects_overflowing_quotient() {
     let max = std::u256::max_value!();
-    let (overflow, _) = macros::mul_div_u256_wide(
-        max,
-        max,
-        1,
-        rounding::down(),
-    );
-    assert_eq!(overflow, true);
+    let result = macros::mul_div_u256_wide(max, max, 1, rounding::down());
+    assert_eq!(result.overflow(), true);
 }
 
 // === inv_mod / mod_sub / mul_mod helpers ===
@@ -227,9 +193,10 @@ fun inv_mod_extended_impl_reduced_zero_returns_none() {
     assert_eq!(result, option::none());
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
-fun inv_mod_extended_impl_rejects_zero_modulus() {
-    macros::inv_mod_extended_impl(1, 0);
+#[test]
+fun inv_mod_extended_impl_zero_modulus_returns_none() {
+    let result = macros::inv_mod_extended_impl(1, 0);
+    assert!(result.is_none());
 }
 
 #[test]
@@ -247,7 +214,13 @@ fun mod_sub_impl_wraps_underflow() {
 #[test]
 fun mul_mod_impl_returns_zero_when_operand_zero() {
     let result = macros::mul_mod_impl(0, 123, 11);
-    assert_eq!(result, 0);
+    assert_eq!(result.destroy_some(), 0);
+}
+
+#[test]
+fun mul_mod_impl_returns_none_for_zero_modulus() {
+    let result = macros::mul_mod_impl(5, 7, 0);
+    assert!(result.is_none());
 }
 
 #[test]
@@ -263,7 +236,7 @@ fun mul_mod_impl_handles_wide_operands() {
 
     // The helper should match the reference result for wide operands.
     let result = macros::mul_mod_impl(a, b, modulus);
-    assert_eq!(result, expected);
+    assert_eq!(result.destroy_some(), expected);
 }
 
 #[test]
@@ -273,52 +246,47 @@ fun mul_mod_impl_handles_quotient_overflow() {
     let modulus = 7;
     let expected = ((a % modulus) * (b % modulus)) % modulus;
     let result = macros::mul_mod_impl(a, b, modulus);
-    assert_eq!(result, expected);
-}
-
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
-fun mul_mod_impl_rejects_zero_modulus() {
-    macros::mul_mod_impl(5, 7, 0);
+    assert_eq!(result.destroy_some(), expected);
 }
 
 #[test]
 fun mul_mod_macro_matches_helper() {
-    let direct = macros::mul_mod_impl(123, 456, 789);
+    let direct = macros::mul_mod_impl(123, 456, 789).destroy_some();
     let via_macro = macros::mul_mod!(123, 456, 789);
-    assert_eq!(via_macro, direct as u64);
+    assert_eq!(via_macro.destroy_some(), direct as u64);
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
-fun mul_mod_macro_rejects_zero_modulus() {
-    macros::mul_mod!(1, 2, 0u64);
+#[test]
+fun mul_mod_macro_returns_none_for_zero_modulus() {
+    let result = macros::mul_mod!(1, 2, 0u64);
+    assert!(result.is_none());
 }
 
 #[test]
 fun mul_div_macro_uses_fast_path_for_small_inputs() {
-    let (overflow, result) = macros::mul_div!(15u8, 3u8, 4u8, rounding::down());
-    assert_eq!(overflow, false);
-    let (_, expected) = macros::mul_div_u256_fast(15, 3, 4, rounding::down());
-    assert_eq!(result, expected);
+    let result = macros::mul_div!(15u8, 3u8, 4u8, rounding::down());
+    assert!(result.is_some());
+    let r = result.destroy_some();
+    let expected = macros::mul_div_u256_fast(15, 3, 4, rounding::down());
+    assert_eq!(r.overflow(), expected.overflow());
+    assert_eq!(r.value(), expected.value());
 }
 
 #[test]
 fun mul_div_macro_uses_wide_path_for_large_inputs() {
     let large = (std::u128::max_value!() as u256) + 1;
-    let (overflow, macro_result) = macros::mul_div!(large, large, 7, rounding::down());
-    assert_eq!(overflow, false);
-    let (wide_overflow, expected) = macros::mul_div_u256_wide(
-        large,
-        large,
-        7,
-        rounding::down(),
-    );
-    assert_eq!(wide_overflow, false);
-    assert_eq!(macro_result, expected);
+    let result = macros::mul_div!(large, large, 7, rounding::down());
+    assert!(result.is_some());
+    let r = result.destroy_some();
+    let expected = macros::mul_div_u256_wide(large, large, 7, rounding::down());
+    assert_eq!(r.overflow(), expected.overflow());
+    assert_eq!(r.value(), expected.value());
 }
 
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
-fun mul_div_macro_rejects_zero_denominator() {
-    macros::mul_div!(1u64, 1u64, 0u64, rounding::down());
+#[test]
+fun mul_div_macro_returns_none_for_zero_denominator() {
+    let result = macros::mul_div!(1u64, 1u64, 0u64, rounding::down());
+    assert!(result.is_none());
 }
 
 // === mul_shr ===
@@ -479,27 +447,17 @@ fun mul_shr_macro_detects_overflow() {
 
 #[test]
 fun round_division_result_handles_rounding_modes() {
-    let (overflow_down, rounded_down) = macros::round_division_result(
-        10,
-        16,
-        1,
-        rounding::nearest(),
-    );
-    assert_eq!(overflow_down, false);
-    assert_eq!(rounded_down, 10u256);
+    let rounded_down = macros::round_division_result(10, 16, 1, rounding::nearest());
+    assert_eq!(rounded_down.overflow(), false);
+    assert_eq!(rounded_down.value(), 10u256);
 
-    let (overflow_nearest, rounded_nearest) = macros::round_division_result(
-        10,
-        8,
-        4,
-        rounding::nearest(),
-    );
-    assert_eq!(overflow_nearest, false);
-    assert_eq!(rounded_nearest, 11u256);
+    let rounded_nearest = macros::round_division_result(10, 8, 4, rounding::nearest());
+    assert_eq!(rounded_nearest.overflow(), false);
+    assert_eq!(rounded_nearest.value(), 11u256);
 
     let max = std::u256::max_value!();
-    let (overflow_up, _) = macros::round_division_result(max, 2, 1, rounding::up());
-    assert_eq!(overflow_up, true);
+    let overflowed = macros::round_division_result(max, 2, 1, rounding::up());
+    assert_eq!(overflowed.overflow(), true);
 }
 
 // === clz ===

@@ -1,7 +1,6 @@
 #[test_only]
 module openzeppelin_math::u32_tests;
 
-use openzeppelin_math::macros;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u32;
 use std::unit_test::assert_eq;
@@ -118,9 +117,9 @@ fun mul_div_exact_division() {
 }
 
 // Division by zero still bubbles the macro error.
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
+#[test]
 fun mul_div_rejects_zero_denominator() {
-    u32::mul_div(1, 1, 0, rounding::down());
+    assert!(u32::mul_div(1, 1, 0, rounding::down()).is_none());
 }
 
 // Cast back to u32 must trip when the result no longer fits.
@@ -748,9 +747,9 @@ fun inv_mod_returns_none_when_not_coprime() {
     assert_eq!(result, option::none());
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun inv_mod_rejects_zero_modulus() {
-    u32::inv_mod(1, 0);
+    assert!(u32::inv_mod(1, 0).is_none());
 }
 
 // === mul_mod ===
@@ -758,10 +757,10 @@ fun inv_mod_rejects_zero_modulus() {
 #[test]
 fun mul_mod_handles_large_values() {
     let result = u32::mul_mod(123_456_789, 400_000_001, 1_000_000_007);
-    assert_eq!(result, 377_777_784);
+    assert_eq!(result.destroy_some(), 377_777_784);
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun mul_mod_rejects_zero_modulus() {
-    u32::mul_mod(10, 10, 0);
+    assert!(u32::mul_mod(10, 10, 0).is_none());
 }

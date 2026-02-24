@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Changed (Breaking)
 
 - Emit dedicated `UnwrapExecuted` event on `delayed_transfer::unwrap` instead of `OwnershipTransferred` (#168)
+- `mul_mod` in `u8`, `u16`, `u32`, `u64`, `u128`, and `u256` modules now returns `Option<T>` instead of `T`. A zero `modulus` yields `option::none()` rather than aborting (#189)
 
 ### `openzeppelin_math`
 

@@ -39,12 +39,11 @@ public fun checked_shr(value: u256, shift: u8): Option<u256> {
 /// Returns `None` for the following cases:
 /// - the rounded quotient cannot be represented as `u256`
 public fun mul_div(a: u256, b: u256, denominator: u256, rounding_mode: RoundingMode): Option<u256> {
-    let (overflow, result) = macros::mul_div!(a, b, denominator, rounding_mode);
-    if (overflow) {
+    macros::mul_div!(a, b, denominator, rounding_mode).and!(|result| if (result.overflow()) {
         option::none()
     } else {
-        option::some(result)
-    }
+        option::some(result.value())
+    })
 }
 
 /// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
@@ -109,6 +108,6 @@ public fun inv_mod(value: u256, modulus: u256): Option<u256> {
 }
 
 /// Multiply `a` and `b` modulo `modulus`. Aborts if `modulus` is zero.
-public fun mul_mod(a: u256, b: u256, modulus: u256): u256 {
+public fun mul_mod(a: u256, b: u256, modulus: u256): Option<u256> {
     macros::mul_mod!(a, b, modulus)
 }

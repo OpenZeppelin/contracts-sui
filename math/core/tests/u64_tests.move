@@ -1,7 +1,6 @@
 #[test_only]
 module openzeppelin_math::u64_tests;
 
-use openzeppelin_math::macros;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u64;
 use std::unit_test::assert_eq;
@@ -120,9 +119,9 @@ fun mul_div_exact_division() {
 }
 
 // Guard against missing macro errors during integration.
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
+#[test]
 fun mul_div_rejects_zero_denominator() {
-    u64::mul_div(1, 1, 0, rounding::down());
+    assert!(u64::mul_div(1, 1, 0, rounding::down()).is_none());
 }
 
 // Downstream overflow is still surfaced via the overflow flag.
@@ -752,9 +751,9 @@ fun inv_mod_returns_none_when_not_coprime() {
     assert_eq!(result, option::none());
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun inv_mod_rejects_zero_modulus() {
-    u64::inv_mod(1, 0);
+    assert!(u64::inv_mod(1, 0).is_none());
 }
 
 // === mul_mod ===
@@ -762,10 +761,10 @@ fun inv_mod_rejects_zero_modulus() {
 #[test]
 fun mul_mod_handles_large_values() {
     let result = u64::mul_mod(987_654_321, 123_456_789, 1_000_000_007);
-    assert_eq!(result, 259_106_859);
+    assert_eq!(result.destroy_some(), 259_106_859);
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun mul_mod_rejects_zero_modulus() {
-    u64::mul_mod(3, 4, 0);
+    assert!(u64::mul_mod(3, 4, 0).is_none());
 }

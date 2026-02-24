@@ -1,7 +1,6 @@
 #[test_only]
 module openzeppelin_math::u128_tests;
 
-use openzeppelin_math::macros;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u128;
 use std::unit_test::assert_eq;
@@ -120,9 +119,9 @@ fun mul_div_exact_division() {
 }
 
 // Keep coverage over the shared macro guard.
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
+#[test]
 fun mul_div_rejects_zero_denominator() {
-    u128::mul_div(1, 1, 0, rounding::down());
+    assert!(u128::mul_div(1, 1, 0, rounding::down()).is_none());
 }
 
 // Casting down from u256 must still flag when values exceed u128's range.
@@ -756,9 +755,9 @@ fun inv_mod_returns_none_when_not_coprime() {
     assert_eq!(result, option::none());
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun inv_mod_rejects_zero_modulus() {
-    u128::inv_mod(1, 0);
+    assert!(u128::inv_mod(1, 0).is_none());
 }
 
 // === mul_mod ===
@@ -770,10 +769,10 @@ fun mul_mod_handles_large_values() {
         123456789123456789u128,
         1_000_000_007u128,
     );
-    assert_eq!(result, 327_846_861u128);
+    assert_eq!(result.destroy_some(), 327_846_861u128);
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun mul_mod_rejects_zero_modulus() {
-    u128::mul_mod(2, 3, 0);
+    assert!(u128::mul_mod(2, 3, 0).is_none());
 }

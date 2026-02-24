@@ -1,7 +1,6 @@
 #[test_only]
 module openzeppelin_math::u8_tests;
 
-use openzeppelin_math::macros;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u8;
 use std::unit_test::assert_eq;
@@ -118,9 +117,9 @@ fun mul_div_exact_division() {
 }
 
 // Division by zero should still surface the shared macro error.
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
+#[test]
 fun mul_div_rejects_zero_denominator() {
-    u8::mul_div(1, 1, 0, rounding::down());
+    assert!(u8::mul_div(1, 1, 0, rounding::down()).is_none());
 }
 
 // Wrappers must flag when the macro's result no longer fits in u8.
@@ -711,9 +710,9 @@ fun inv_mod_returns_none_when_not_coprime() {
     assert_eq!(result, option::none());
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun inv_mod_rejects_zero_modulus() {
-    u8::inv_mod(1, 0);
+    assert!(u8::inv_mod(1, 0).is_none());
 }
 
 // === mul_mod ===
@@ -721,10 +720,10 @@ fun inv_mod_rejects_zero_modulus() {
 #[test]
 fun mul_mod_fast_path() {
     let result = u8::mul_mod(7, 9, 11);
-    assert_eq!(result, 8);
+    assert_eq!(result.destroy_some(), 8);
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun mul_mod_rejects_zero_modulus() {
-    u8::mul_mod(2, 3, 0);
+    assert!(u8::mul_mod(2, 3, 0).is_none());
 }

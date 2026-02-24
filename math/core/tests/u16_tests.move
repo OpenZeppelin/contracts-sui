@@ -1,7 +1,6 @@
 #[test_only]
 module openzeppelin_math::u16_tests;
 
-use openzeppelin_math::macros;
 use openzeppelin_math::rounding;
 use openzeppelin_math::u16;
 use std::unit_test::assert_eq;
@@ -118,9 +117,9 @@ fun mul_div_exact_division() {
 }
 
 // Macro-level guard still fires.
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
+#[test]
 fun mul_div_rejects_zero_denominator() {
-    u16::mul_div(1, 1, 0, rounding::down());
+    assert!(u16::mul_div(1, 1, 0, rounding::down()).is_none());
 }
 
 // Downcast overflow must be intercepted.
@@ -733,9 +732,9 @@ fun inv_mod_returns_none_when_not_coprime() {
     assert_eq!(result, option::none());
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun inv_mod_rejects_zero_modulus() {
-    u16::inv_mod(1, 0);
+    assert!(u16::inv_mod(1, 0).is_none());
 }
 
 // === mul_mod ===
@@ -743,10 +742,10 @@ fun inv_mod_rejects_zero_modulus() {
 #[test]
 fun mul_mod_basic() {
     let result = u16::mul_mod(1234, 5678, 9973);
-    assert_eq!(result, 5606);
+    assert_eq!(result.destroy_some(), 5606);
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun mul_mod_rejects_zero_modulus() {
-    u16::mul_mod(5, 7, 0);
+    assert!(u16::mul_mod(5, 7, 0).is_none());
 }

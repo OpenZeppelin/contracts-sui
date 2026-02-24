@@ -133,20 +133,20 @@ fun mul_div_handles_wide_operands() {
         7,
         rounding::down(),
     );
-    let (wide_overflow, expected) = macros::mul_div_u256_wide(
+    let result_wide = macros::mul_div_u256_wide(
         large,
         large,
         7,
         rounding::down(),
     );
-    assert_eq!(wide_overflow, false);
-    assert_eq!(result, option::some(expected));
+    assert_eq!(result_wide.overflow(), false);
+    assert_eq!(result, option::some(result_wide.value()));
 }
 
 // Division-by-zero guard enforced at the macro layer.
-#[test, expected_failure(abort_code = macros::EDivideByZero)]
+#[test]
 fun mul_div_rejects_zero_denominator() {
-    u256::mul_div(1, 1, 0, rounding::down());
+    assert!(u256::mul_div(1, 1, 0, rounding::down()).is_none());
 }
 
 // Even u256 should flag when the macro's output overflows 256 bits.
@@ -831,9 +831,9 @@ fun inv_mod_returns_none_when_not_coprime() {
     assert_eq!(result, option::none());
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun inv_mod_rejects_zero_modulus() {
-    u256::inv_mod(1, 0);
+    assert!(u256::inv_mod(1, 0).is_none());
 }
 
 // === mul_mod ===
@@ -846,7 +846,7 @@ fun mul_mod_handles_wide_operands() {
     let wide_product = u512::mul_u256(a, b);
     let (_, _, expected) = u512::div_rem_u256(wide_product, modulus);
     let result = u256::mul_mod(a, b, modulus);
-    assert_eq!(result, expected);
+    assert_eq!(result.destroy_some(), expected);
 }
 
 #[test]
@@ -856,10 +856,10 @@ fun mul_mod_handles_quotient_overflow() {
     let modulus = 7;
     let expected = ((a % modulus) * (b % modulus)) % modulus;
     let result = u256::mul_mod(a, b, modulus);
-    assert_eq!(result, expected);
+    assert_eq!(result.destroy_some(), expected);
 }
 
-#[test, expected_failure(abort_code = macros::EZeroModulus)]
+#[test]
 fun mul_mod_rejects_zero_modulus() {
-    u256::mul_mod(2, 3, 0);
+    assert!(u256::mul_mod(2, 3, 0).is_none());
 }

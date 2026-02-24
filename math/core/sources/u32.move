@@ -43,8 +43,7 @@ public fun checked_shr(value: u32, shift: u8): Option<u32> {
 /// Returns `None` for the following cases:
 /// - the rounded quotient cannot be represented as `u32`
 public fun mul_div(a: u32, b: u32, denominator: u32, rounding_mode: RoundingMode): Option<u32> {
-    let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
-    result.try_as_u32()
+    macros::mul_div!(a, b, denominator, rounding_mode).and!(|result| result.value().try_as_u32())
 }
 
 /// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
@@ -104,6 +103,6 @@ public fun inv_mod(value: u32, modulus: u32): Option<u32> {
 }
 
 /// Multiply `a` and `b` modulo `modulus`. Aborts if `modulus` is zero.
-public fun mul_mod(a: u32, b: u32, modulus: u32): u32 {
+public fun mul_mod(a: u32, b: u32, modulus: u32): Option<u32> {
     macros::mul_mod!(a, b, modulus)
 }

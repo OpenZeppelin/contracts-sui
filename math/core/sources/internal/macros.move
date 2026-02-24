@@ -4,10 +4,20 @@ use openzeppelin_math::common;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
-#[error(code = 0)]
-const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
-#[error(code = 1)]
-const EZeroModulus: vector<u8> = b"Modulus must be non-zero.";
+/// Result type for math operations.
+/// `overflow = true` means the rounded quotient does not fit in 256 bits.
+public struct MathResult has copy, drop, store {
+    overflow: bool,
+    value: u256,
+}
+
+public fun value(result: &MathResult): u256 {
+    result.value
+}
+
+public fun overflow(result: &MathResult): bool {
+    result.overflow
+}
 
 /// Compute the arithmetic mean of two unsigned integers with configurable rounding.
 ///
@@ -33,8 +43,8 @@ public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: Roun
 
     let delta = upper - lower;
     // Use the fast path as delta * 1 is guaranteed to fit in u256
-    let (_, half) = mul_div_u256_fast(delta, 1, 2, rounding_mode);
-    let average = lower + half;
+    let result = mul_div_u256_fast(delta, 1, 2, rounding_mode);
+    let average = lower + result.value();
 
     average as $Int
 }
@@ -114,8 +124,7 @@ public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$I
 ///
 /// This macro provides a uniform API for `mul_div` across all unsigned integer widths. It normalises
 /// the inputs to `u256`, chooses the most efficient helper, and returns the rounded quotient alongside
-/// an overflow flag. Narrower wrapper modules downcast the result after ensuring it fits. Undefined
-/// divisions (e.g. denominator = 0) abort with descriptive error codes.
+/// an overflow flag wrapped in `Option`. `option::none()` is returned when `denominator` is zero.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -126,17 +135,14 @@ public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$I
 /// - `$rounding_mode`: Rounding strategy.
 ///
 /// #### Returns
-/// `(overflow, result)` where `overflow` is `true` when the rounded quotient exceeds `u256::MAX` and
-/// `result` carries the rounded value when no overflow occurred.
-///
-/// #### Aborts
-/// Propagates the same error codes as the underlying helpers (`EDivideByZero`).
+/// `option::some(MathResult)` where `MathResult.overflow` is `true` when the rounded quotient
+/// exceeds `u256::MAX`, or `option::none()` when `denominator` is zero.
 public(package) macro fun mul_div<$Int>(
     $a: $Int,
     $b: $Int,
     $denominator: $Int,
     $rounding_mode: RoundingMode,
-): (bool, u256) {
+): Option<MathResult> {
     let a_u256 = ($a as u256);
     let b_u256 = ($b as u256);
     let denominator_u256 = ($denominator as u256);
@@ -212,7 +218,7 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
 ///
 /// #### Parameters
 /// - `$value`: Unsigned integer whose inverse is being computed.
-/// - `$modulus`: Modulus for the arithmetic; must be non-zero.
+/// - `$modulus`: Modulus for the arithmetic.
 ///
 /// #### Returns
 /// `option::some(inverse)` when the inverse exists (`value * inverse ≡ 1 (mod modulus)`),
@@ -220,8 +226,7 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
 public(package) macro fun inv_mod<$Int>($value: $Int, $modulus: $Int): Option<$Int> {
     let value_u256 = ($value as u256);
     let modulus_u256 = ($modulus as u256);
-    let result = inv_mod_extended_impl(value_u256, modulus_u256);
-    option::map!(result, |v| v as $Int)
+    inv_mod_extended_impl(value_u256, modulus_u256).map!(|v| v as $Int)
 }
 
 /// Multiply `$a` and `$b` modulo `$modulus`.
@@ -234,12 +239,13 @@ public(package) macro fun inv_mod<$Int>($value: $Int, $modulus: $Int): Option<$I
 /// - `$modulus`: Modulus for the arithmetic; must be non-zero.
 ///
 /// #### Returns
-/// The product reduced modulo `$modulus`.
-public(package) macro fun mul_mod<$Int>($a: $Int, $b: $Int, $modulus: $Int): $Int {
+/// `option::some(result)` with the product reduced modulo `$modulus`, or `option::none()` when
+/// `modulus` is zero.
+public(package) macro fun mul_mod<$Int>($a: $Int, $b: $Int, $modulus: $Int): Option<$Int> {
     let a_u256 = ($a as u256);
     let b_u256 = ($b as u256);
     let modulus_u256 = ($modulus as u256);
-    mul_mod_impl(a_u256, b_u256, modulus_u256) as $Int
+    mul_mod_impl(a_u256, b_u256, modulus_u256).map!(|v| v as $Int)
 }
 
 /// Return the position of the most significant bit (MSB) in an unsigned integer.
@@ -428,20 +434,26 @@ public(package) fun log10_floor(value: u256): u8 {
 
 /// === Helper functions ===
 
-/// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
-/// Returns `(overflow, quotient)` mirroring the macro implementation.
+/// Internal helper for `mul_div` that selects the most efficient implementation based on the input
+/// size. Returns `option::none()` when `denominator` is zero; otherwise `option::some(MathResult)`
+/// where `MathResult.overflow` signals that the quotient exceeds `u256::MAX`.
 public(package) fun mul_div_inner(
     a: u256,
     b: u256,
     denominator: u256,
     rounding_mode: RoundingMode,
-): (bool, u256) {
+): Option<MathResult> {
+    // Denominator = 0 → return none instead of aborting, matching Solidity parity.
+    if (denominator == 0) {
+        return option::none()
+    };
     let max_small = std::u128::max_value!() as u256;
-    if (a > max_small || b > max_small) {
+    let result = if (a > max_small || b > max_small) {
         mul_div_u256_wide(a, b, denominator, rounding_mode)
     } else {
         mul_div_u256_fast(a, b, denominator, rounding_mode)
-    }
+    };
+    option::some(result)
 }
 
 /// Multiply two `u256` values, divide by `denominator`, and round the result without widening.
@@ -449,25 +461,22 @@ public(package) fun mul_div_inner(
 /// This helper assumes both operands fit within `u128`, which allows us to perform the entire
 /// computation in native `u256` space. That keeps the code fast and avoids allocating the full
 /// 512-bit intermediate representation. Rounding is applied according to `rounding_mode`.
+/// The denominator is assumed to be non-zero; the caller (`mul_div_inner`) is responsible for
+/// that guard.
 ///
 /// #### Parameters
 /// - `a`, `b`: Unsigned factors whose product stays below 2^256.
-/// - `denominator`: Unsigned divisor, must be non-zero.
+/// - `denominator`: Unsigned divisor, assumed non-zero.
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
 /// #### Returns
-/// The rounded quotient as a `u256`.
-///
-/// #### Aborts
-/// - `EDivideByZero` if `denominator` is zero.
+/// A `MathResult` with `overflow = false` and the rounded quotient.
 public(package) fun mul_div_u256_fast(
     a: u256,
     b: u256,
     denominator: u256,
     rounding_mode: RoundingMode,
-): (bool, u256) {
-    assert!(denominator != 0, EDivideByZero);
-
+): MathResult {
     let numerator = a * b;
     let mut quotient = numerator / denominator;
     let remainder = numerator % denominator;
@@ -475,10 +484,10 @@ public(package) fun mul_div_u256_fast(
     if (remainder != 0) {
         // Overflow is not possible here because the numerator (a * b) is bounded by (2^128-1)^2 < u256::MAX.
         // Even after rounding up, the result fits in u256.
-        (_, quotient) = round_division_result(quotient, denominator, remainder, rounding_mode);
+        quotient = round_division_result(quotient, denominator, remainder, rounding_mode).value;
     };
 
-    (false, quotient)
+    MathResult { overflow: false, value: quotient }
 }
 
 /// Multiply two `u256` values with full 512-bit precision before dividing and rounding.
@@ -486,39 +495,32 @@ public(package) fun mul_div_u256_fast(
 /// This variant handles the general case where `a * b` may exceed 2^256. It widens the product to
 /// a 512-bit value, performs an exact division, and then applies rounding. If the true quotient does
 /// not fit back into 256 bits or rounding would push it past the maximum value, the helper returns
-/// `(true, _)` to signal overflow.
+/// a `MathResult` with `overflow = true`. The denominator is assumed to be non-zero; the caller
+/// (`mul_div_inner`) is responsible for that guard.
 ///
 /// #### Parameters
 /// - `a`, `b`: Unsigned factors up to 2^256 - 1.
-/// - `denominator`: Unsigned divisor, must be non-zero.
+/// - `denominator`: Unsigned divisor, assumed non-zero.
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
 /// #### Returns
-/// `(overflow, result)` where `overflow` indicates whether the exact (or rounded) quotient exceeds
-/// the `u256` range. `result` is only meaningful when `overflow` is `false`.
-///
-/// #### Aborts
-/// - `EDivideByZero` if `denominator` is zero.
+/// A `MathResult` where `overflow = true` indicates the exact (or rounded) quotient exceeds the
+/// `u256` range. `value` is only meaningful when `overflow` is `false`.
 public(package) fun mul_div_u256_wide(
     a: u256,
     b: u256,
     denominator: u256,
     rounding_mode: RoundingMode,
-): (bool, u256) {
-    assert!(denominator != 0, EDivideByZero);
-
+): MathResult {
     let numerator = u512::mul_u256(a, b);
-    let (overflow, quotient, remainder) = u512::div_rem_u256(
-        numerator,
-        denominator,
-    );
+    let (overflow, quotient, remainder) = u512::div_rem_u256(numerator, denominator);
     if (overflow) {
-        (true, 0)
-    } else if (remainder == 0) {
-        (false, quotient)
-    } else {
-        round_division_result(quotient, denominator, remainder, rounding_mode)
-    }
+        return MathResult { overflow: true, value: 0 }
+    };
+    if (remainder == 0) {
+        return MathResult { overflow: false, value: quotient }
+    };
+    round_division_result(quotient, denominator, remainder, rounding_mode)
 }
 
 /// Internal helper for `mul_shr` that selects the most efficient implementation based on the input size.
@@ -567,7 +569,8 @@ public(package) fun mul_shr_u256_fast(
     if (remainder != 0) {
         // Overflow is not possible here because the numerator (a * b) is bounded by (2^128-1)^2 < u256::MAX.
         // Even after rounding up, the result fits in u256.
-        (_, result) = round_division_result(result, denominator, remainder, rounding_mode);
+        let rounded = round_division_result(result, denominator, remainder, rounding_mode);
+        result = rounded.value;
     };
 
     (false, result)
@@ -616,16 +619,11 @@ public(package) fun mul_shr_u256_wide(
     let remainder = lo & mask;
     if (remainder != 0) {
         let denominator = 1u256 << shift;
-        let (overflow, rounded) = round_division_result(
-            result,
-            denominator,
-            remainder,
-            rounding_mode,
-        );
-        if (overflow) {
+        let rounded = round_division_result(result, denominator, remainder, rounding_mode);
+        if (rounded.overflow) {
             return (true, 0)
         };
-        result = rounded;
+        result = rounded.value;
     };
 
     (false, result)
@@ -654,13 +652,13 @@ public(package) macro fun sqrt<$Int>($value: $Int, $rounding_mode: RoundingMode)
 }
 
 /// Determine whether rounding up is required after dividing and apply it to `result`.
-/// Returns `(overflow, result)` where `overflow` is `true` if the rounded value cannot be represented as `u256`.
+/// Returns a `MathResult` where `overflow = true` if the rounded value cannot be represented as `u256`.
 public(package) fun round_division_result(
     result: u256,
     denominator: u256,
     remainder: u256,
     rounding_mode: RoundingMode,
-): (bool, u256) {
+): MathResult {
     let should_round_up = if (rounding_mode == rounding::up()) {
         true
     } else if (rounding_mode == rounding::nearest()) {
@@ -670,11 +668,11 @@ public(package) fun round_division_result(
     };
 
     if (!should_round_up) {
-        (false, result)
+        MathResult { overflow: false, value: result }
     } else if (result == std::u256::max_value!()) {
-        (true, 0)
+        MathResult { overflow: true, value: 0 }
     } else {
-        (false, result + 1)
+        MathResult { overflow: false, value: result + 1 }
     }
 }
 
@@ -698,7 +696,7 @@ public(package) fun round_division_result(
 ///   - if `x² ≥ 2^threshold_exp` → round up (`floor_log + 1`)
 ///   - else                      → round down (`floor_log`)
 ///
-/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+/// Tie-break: equality goes up (`≥`), i.e., "round half up".
 ///
 /// #### Returns
 /// `true` if the value should round up, `false` otherwise.
@@ -741,7 +739,7 @@ public(package) fun round_log2_to_nearest(value: u256, floor_log: u16): u16 {
 ///   - if `x ≥ 2^threshold_exp` → round up (`floor_log + 1`)
 ///   - else                     → round down (`floor_log`)
 ///
-/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+/// Tie-break: equality goes up (`≥`), i.e., "round half up".
 ///
 /// #### Returns
 /// `true` if the value should round up, `false` otherwise.
@@ -876,16 +874,20 @@ public(package) fun round_sqrt_result(
 /// `value * x + modulus * y = gcd(value, modulus)`. When the gcd is 1, `x` is the inverse
 /// modulo `modulus`.
 ///
+/// Returns `option::none()` for all degenerate inputs (`modulus = 0`, `modulus = 1`, or
+/// `value` not co-prime with `modulus`), matching Solidity's behaviour of returning 0 rather
+/// than reverting.
+///
 /// #### Parameters
 /// - `value`: Operand whose inverse is desired.
-/// - `modulus`: Modulus, must be non-zero.
+/// - `modulus`: Modulus; `option::none()` is returned when it is 0 or 1.
 ///
 /// #### Returns
 /// `option::some(inverse)` when `value` and `modulus` are co-prime, otherwise `option::none()`.
 public(package) fun inv_mod_extended_impl(value: u256, modulus: u256): Option<u256> {
-    // Guard against invalid modulus values up front.
-    assert!(modulus != 0, EZeroModulus);
-    if (modulus == 1) {
+    // modulus = 0 or modulus = 1 → no meaningful inverse exists.
+    // Returns none instead of aborting to match Solidity parity.
+    if (modulus <= 1) {
         return option::none()
     };
 
@@ -907,8 +909,10 @@ public(package) fun inv_mod_extended_impl(value: u256, modulus: u256): Option<u2
         let quotient = r / new_r;
 
         // Update the coefficient for `value`, keeping it within `[0, modulus)`.
+        // Safety: modulus >= 2 is guaranteed by the early-return guard above, so
+        // `mul_mod_impl` will always return `option::some()`.
         let tmp_t = new_t;
-        let product = mul_mod_impl(quotient, new_t, modulus);
+        let product = mul_mod_impl(quotient, new_t, modulus).destroy_some();
         new_t = mod_sub_impl(t, product, modulus);
         t = tmp_t;
 
@@ -934,19 +938,31 @@ public(package) fun mod_sub_impl(a: u256, b: u256, modulus: u256): u256 {
 /// Compute `(a * b) mod modulus` with a 128-bit fast path.
 ///
 /// Falls back to the wide (`u512`) helper when the operands exceed 128 bits so overflow cannot
-/// occur.
-public(package) fun mul_mod_impl(a: u256, b: u256, modulus: u256): u256 {
-    assert!(modulus != 0, EZeroModulus);
-    if (a == 0 || b == 0) {
-        return 0
+/// occur. Returns `option::none()` when `modulus` is zero, and `option::some(0)` when either
+/// operand is zero. This preserves a consistent `Option`-based error-handling contract throughout
+/// the modular arithmetic helpers.
+///
+/// #### Parameters
+/// - `a`, `b`: Unsigned operands.
+/// - `modulus`: Modulus for the arithmetic.
+///
+/// #### Returns
+/// `option::some(result)` with the product reduced modulo `modulus`, or `option::none()` when
+/// `modulus` is zero.
+public(package) fun mul_mod_impl(a: u256, b: u256, modulus: u256): Option<u256> {
+    if (modulus == 0) {
+        return option::none()
     };
-
+    if (a == 0 || b == 0) {
+        return option::some(0)
+    };
     let max_small = std::u128::max_value!() as u256;
-    if (a > max_small || b > max_small) {
+    let result = if (a > max_small || b > max_small) {
         let product = u512::mul_u256(a, b);
         let (_, _, remainder) = u512::div_rem_u256(product, modulus);
         remainder
     } else {
-        ((a * b) % modulus)
-    }
+        (a * b) % modulus
+    };
+    option::some(result)
 }
