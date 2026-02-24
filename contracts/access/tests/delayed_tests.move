@@ -108,7 +108,7 @@ fun schedule_transfer_rejects_duplicate() {
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 5, &mut ctx);
     let clk = clock::create_for_testing(&mut ctx);
-    attempt_double_schedule(wrapper, clk, owner, &mut ctx);
+    attempt_double_schedule(wrapper, owner, clk, &mut ctx);
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::ETransferAlreadyScheduled)]
@@ -129,7 +129,7 @@ fun execute_transfer_before_delay_fails() {
     let mut ctx = dummy_ctx_with_sender(owner);
     let wrapper = delayed_transfer::wrap(new_cap(&mut ctx), 10, &mut ctx);
     let clk = clock::create_for_testing(&mut ctx);
-    attempt_execute_before_delay(wrapper, clk, recipient, &mut ctx);
+    attempt_execute_before_delay(wrapper, recipient, clk, &mut ctx);
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EDelayNotElapsed)]
@@ -274,8 +274,8 @@ fun return_val_rejects_wrong_object() {
 
 fun attempt_double_schedule(
     mut wrapper: delayed_transfer::DelayedTransferWrapper<DummyCap>,
-    mut clk: clock::Clock,
     owner: address,
+    mut clk: clock::Clock,
     ctx: &mut TxContext,
 ) {
     clk.set_for_testing(0);
@@ -292,8 +292,8 @@ fun attempt_double_schedule(
 
 fun attempt_execute_before_delay(
     mut wrapper: delayed_transfer::DelayedTransferWrapper<DummyCap>,
-    mut clk: clock::Clock,
     recipient: address,
+    mut clk: clock::Clock,
     ctx: &mut TxContext,
 ) {
     clk.set_for_testing(0);
