@@ -9,13 +9,12 @@ const BIT_WIDTH: u8 = 8;
 /// Compute the arithmetic mean of two `u8` values with configurable rounding.
 ///
 /// #### Parameters
-///
 /// - `a`: First operand.
 /// - `b`: Second operand.
 /// - `rounding_mode`: Rounding strategy.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - The rounded arithmetic mean of `a` and `b`.
 public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
     macros::average!(a, b, rounding_mode)
@@ -28,12 +27,11 @@ public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
 /// losing information.
 ///
 /// #### Parameters
-///
 /// - `value`: The input value to shift.
 /// - `shift`: Number of bits to shift left.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - `option::some(shifted)` when the shift is valid and lossless.
 /// - `option::none()` if the shift would consume non-zero bits.
 public fun checked_shl(value: u8, shift: u8): Option<u8> {
@@ -53,12 +51,11 @@ public fun checked_shl(value: u8, shift: u8): Option<u8> {
 /// losing information.
 ///
 /// #### Parameters
-///
 /// - `value`: The input value to shift.
 /// - `shift`: Number of bits to shift right.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - `option::some(shifted)` when the shift is valid and lossless.
 /// - `option::none()` if the shift would consume non-zero bits.
 public fun checked_shr(value: u8, shift: u8): Option<u8> {
@@ -74,19 +71,18 @@ public fun checked_shr(value: u8, shift: u8): Option<u8> {
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
 ///
 /// #### Parameters
-///
 /// - `a`: First factor.
 /// - `b`: Second factor.
 /// - `denominator`: Divisor.
 /// - `rounding_mode`: Rounding strategy.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - `option::some(result)` when the rounded quotient fits in `u8`.
 /// - `option::none()` when the rounded quotient cannot be represented as `u8`.
 ///
-/// #### Aborts
 ///
+/// #### Aborts
 /// - Aborts if `denominator` is zero.
 public fun mul_div(a: u8, b: u8, denominator: u8, rounding_mode: RoundingMode): Option<u8> {
     let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
@@ -96,14 +92,13 @@ public fun mul_div(a: u8, b: u8, denominator: u8, rounding_mode: RoundingMode): 
 /// Multiply `a` and `b`, shift the product right by `shift`, and round according to `rounding_mode`.
 ///
 /// #### Parameters
-///
 /// - `a`: First factor.
 /// - `b`: Second factor.
 /// - `shift`: Number of bits to shift right.
 /// - `rounding_mode`: Rounding strategy.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - `option::some(result)` when the rounded value fits in `u8`.
 /// - `option::none()` when the rounded value cannot be represented as `u8`.
 public fun mul_shr(a: u8, b: u8, shift: u8, rounding_mode: RoundingMode): Option<u8> {
@@ -114,11 +109,10 @@ public fun mul_shr(a: u8, b: u8, shift: u8, rounding_mode: RoundingMode): Option
 /// Count the number of leading zero bits in `value`.
 ///
 /// #### Parameters
-///
 /// - `value`: Input value.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - Number of leading zero bits.
 public fun clz(value: u8): u8 {
     macros::clz!(value, BIT_WIDTH as u16) as u8
@@ -127,11 +121,10 @@ public fun clz(value: u8): u8 {
 /// Return the position of the most significant bit in the value.
 ///
 /// #### Parameters
-///
 /// - `value`: Input value.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - Zero-based index of the most significant bit.
 /// - Returns `0` if `value` is `0`.
 public fun msb(value: u8): u8 {
@@ -141,12 +134,11 @@ public fun msb(value: u8): u8 {
 /// Compute the log in base 2 of a positive value with configurable rounding.
 ///
 /// #### Parameters
-///
 /// - `value`: Input value.
 /// - `rounding_mode`: Rounding strategy.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - Base-2 logarithm rounded according to `rounding_mode`.
 /// - Returns `0` if `value` is `0`.
 public fun log2(value: u8, rounding_mode: RoundingMode): u8 {
@@ -156,12 +148,11 @@ public fun log2(value: u8, rounding_mode: RoundingMode): u8 {
 /// Compute the log in base 256 of a positive value with configurable rounding.
 ///
 /// #### Parameters
-///
 /// - `value`: Input value.
 /// - `rounding_mode`: Rounding strategy.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - Base-256 logarithm rounded according to `rounding_mode`.
 /// - Returns `0` if `value` is `0`.
 public fun log256(value: u8, rounding_mode: RoundingMode): u8 {
@@ -171,12 +162,11 @@ public fun log256(value: u8, rounding_mode: RoundingMode): u8 {
 /// Compute the log in base 10 of a positive value with configurable rounding.
 ///
 /// #### Parameters
-///
 /// - `value`: Input value.
 /// - `rounding_mode`: Rounding strategy.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - Base-10 logarithm rounded according to `rounding_mode`.
 /// - Returns `0` if `value` is `0`.
 public fun log10(value: u8, rounding_mode: RoundingMode): u8 {
@@ -186,12 +176,11 @@ public fun log10(value: u8, rounding_mode: RoundingMode): u8 {
 /// Compute the square root of a value with configurable rounding.
 ///
 /// #### Parameters
-///
 /// - `value`: Input value.
 /// - `rounding_mode`: Rounding strategy.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - Square root rounded according to `rounding_mode`.
 /// - Returns `0` if `value` is `0`.
 public fun sqrt(value: u8, rounding_mode: RoundingMode): u8 {
@@ -201,17 +190,16 @@ public fun sqrt(value: u8, rounding_mode: RoundingMode): u8 {
 /// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
 ///
 /// #### Parameters
-///
 /// - `value`: Value to invert.
 /// - `modulus`: Modulus for arithmetic.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - `option::some(inverse)` when `value` and `modulus` are co-prime.
 /// - `option::none()` when no inverse exists.
 ///
-/// #### Aborts
 ///
+/// #### Aborts
 /// - Aborts if `modulus` is zero.
 public fun inv_mod(value: u8, modulus: u8): Option<u8> {
     macros::inv_mod!(value, modulus)
@@ -220,17 +208,16 @@ public fun inv_mod(value: u8, modulus: u8): Option<u8> {
 /// Multiply `a` and `b` modulo `modulus`.
 ///
 /// #### Parameters
-///
 /// - `a`: First factor.
 /// - `b`: Second factor.
 /// - `modulus`: Modulus for arithmetic.
 ///
-/// #### Returns
 ///
+/// #### Returns
 /// - `(a * b) mod modulus`.
 ///
-/// #### Aborts
 ///
+/// #### Aborts
 /// - Aborts if `modulus` is zero.
 public fun mul_mod(a: u8, b: u8, modulus: u8): u8 {
     macros::mul_mod!(a, b, modulus)
