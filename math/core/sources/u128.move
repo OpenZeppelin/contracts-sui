@@ -1,3 +1,8 @@
+/// Functions for arithmetic on 128-bit unsigned integers.
+///
+/// This module provides wrappers around the shared `macros` helpers specialised to `u128`.
+/// They expose a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while
+/// handling width-specific concerns such as downcasting and bit-width limits.
 module openzeppelin_math::u128;
 
 use openzeppelin_math::macros;
@@ -41,7 +46,9 @@ public fun checked_shr(value: u128, shift: u8): Option<u128> {
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
 ///
 /// Returns `None` for the following cases:
-/// - the rounded quotient cannot be represented as `u128`
+/// - the rounded quotient cannot be represented as `u128`.
+///
+/// Aborts if `denominator` is zero.
 public fun mul_div(a: u128, b: u128, denominator: u128, rounding_mode: RoundingMode): Option<u128> {
     let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
     result.try_as_u128()
@@ -98,7 +105,8 @@ public fun sqrt(value: u128, rounding_mode: RoundingMode): u128 {
 
 /// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
 ///
-/// Returns `None` when `value` and `modulus` share a factor and aborts if `modulus` is zero.
+/// Returns `None` when `value` and `modulus` are not co-prime or `modulus` equals 1.
+/// Aborts if `modulus` is zero.
 public fun inv_mod(value: u128, modulus: u128): Option<u128> {
     macros::inv_mod!(value, modulus)
 }
