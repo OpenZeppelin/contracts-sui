@@ -4,5 +4,6 @@
 	"useModuleLabel": true,
 	"autoGroupImports": "module",
 	"enableErrorDebug": false,
-	"wrapComments": false
+	"wrapComments": false,
+	"plugins": ["@mysten/prettier-plugin-move"]
 }
