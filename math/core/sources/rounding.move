@@ -1,6 +1,6 @@
 module openzeppelin_math::rounding;
 
-/// Enumerates the supported rounding strategies for `mul_div`.
+/// Enumerates the supported rounding strategies shared by arithmetic helpers in this package.
 /// - Down: Always round the truncated result down towards zero.
 /// - Up: Always round the truncated result up (ceiling).
 /// - Nearest: Round to the closest integer, breaking ties by rounding up.

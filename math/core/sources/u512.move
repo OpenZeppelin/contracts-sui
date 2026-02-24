@@ -312,7 +312,7 @@ fun sub_u256(value: U512, other: u256): U512 {
 
 /// Return the index of the most significant set bit in `value`.
 ///
-/// NOTE: This internal helper function expects a value that is not zero.
+/// NOTE: By convention, if `value` is zero, this function returns 0.
 ///
 /// #### Parameters
 /// - `value`: Non-zero wide integer.
