@@ -18,11 +18,9 @@ const EZeroModulus: vector<u8> = b"Modulus must be non-zero.";
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$a`, `$b`: Operands to average.
 /// - `$rounding_mode`: Rounding strategy.
-///
 ///
 /// #### Returns
 /// - The arithmetic mean of `$a` and `$b`, rounded according to `$rounding_mode`.
@@ -62,16 +60,13 @@ public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: Roun
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$value`: Unsigned integer subject to the shift.
 /// - `$shift`: Number of bits to shift to the left. Must be less than the bit-width of `$Int`.
 ///
-///
 /// #### Returns
 /// - `option::some(result)` with the shifted value when the high bits are all zero, otherwise
 /// - `option::none()`.
-///
 ///
 /// #### Aborts
 /// - Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
@@ -103,16 +98,13 @@ public(package) macro fun checked_shl<$Int>($value: $Int, $shift: u8): Option<$I
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$value`: Unsigned integer subject to the shift.
 /// - `$shift`: Number of bits to shift to the right. Must be less than the bit-width of `$Int`.
 ///
-///
 /// #### Returns
 /// - `option::some(result)` with the shifted value when the low bits are all zero, otherwise
 /// - `option::none()`.
-///
 ///
 /// #### Aborts
 /// - Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is greater
@@ -138,17 +130,14 @@ public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$I
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$a`, `$b`: Unsigned factors.
 /// - `$denominator`: Unsigned divisor.
 /// - `$rounding_mode`: Rounding strategy.
 ///
-///
 /// #### Returns
 /// - `(overflow, result)` where `overflow` is `true` when the rounded quotient exceeds `u256::MAX` and
 /// - `result` carries the rounded value when no overflow occurred.
-///
 ///
 /// #### Aborts
 /// - Propagates the same error codes as the underlying helpers (`EDivideByZero`).
@@ -177,17 +166,14 @@ public(package) macro fun mul_div<$Int>(
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$a`, `$b`: Unsigned factors.
 /// - `$shift`: Number of bits to shift to the right. Must be less than 256.
 /// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
-///
 /// #### Returns
 /// - `(overflow, result)` where `overflow` reports that the rounded value cannot fit in 256 bits and
 /// - `result` contains the rounded quotient when no overflow occurs.
-///
 ///
 /// #### Aborts
 /// - Does not emit custom errors.
@@ -217,11 +203,9 @@ public(package) macro fun mul_shr<$Int>(
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$value`: The unsigned integer to count leading zeros for.
 /// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
-///
 ///
 /// #### Returns
 /// - The number of leading zero bits as a `u16`. Returns `$bit_width` if `$value` is 0.
@@ -238,7 +222,6 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
 /// #### Parameters
 /// - `$value`: Unsigned integer whose inverse is being computed.
 /// - `$modulus`: Modulus for the arithmetic; must be non-zero.
-///
 ///
 /// #### Returns
 /// - `option::some(inverse)` when the inverse exists (`value * inverse ≡ 1 (mod modulus)`),
@@ -259,7 +242,6 @@ public(package) macro fun inv_mod<$Int>($value: $Int, $modulus: $Int): Option<$I
 /// - `$a`, `$b`: Unsigned operands.
 /// - `$modulus`: Modulus for the arithmetic; must be non-zero.
 ///
-///
 /// #### Returns
 /// - The product reduced modulo `$modulus`.
 public(package) macro fun mul_mod<$Int>($a: $Int, $b: $Int, $modulus: $Int): $Int {
@@ -278,11 +260,9 @@ public(package) macro fun mul_mod<$Int>($a: $Int, $b: $Int, $modulus: $Int): $In
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$value`: The unsigned integer to analyze.
 /// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
-///
 ///
 /// #### Returns
 /// - The zero-based position of the most significant bit as a `u8`.
@@ -299,12 +279,10 @@ public(package) macro fun msb<$Int>($value: $Int, $bit_width: u16): u8 {
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$value`: The unsigned integer to compute the logarithm for.
 /// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
 /// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
-///
 ///
 /// #### Returns
 /// - The base-2 logarithm as a `u16`, rounded according to the specified mode.
@@ -340,12 +318,10 @@ public(package) macro fun log2<$Int>(
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$value`: The unsigned integer to compute the logarithm for.
 /// - `$bit_width`: The bit width of the type (8, 16, 32, 64, 128, or 256).
 /// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
-///
 ///
 /// #### Returns
 /// - The base-256 logarithm as a `u8`, rounded according to the specified mode.
@@ -382,11 +358,9 @@ public(package) macro fun log256<$Int>(
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$value`: The unsigned integer to compute the logarithm for.
 /// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
-///
 ///
 /// #### Returns
 /// - The base-10 logarithm as a `u8`, rounded according to the specified mode.
@@ -425,7 +399,6 @@ const TEN_POW_64: u256 = TEN_POW_32 * TEN_POW_32;
 ///
 /// #### Parameters
 /// - `value`: The input value as a `u256`.
-///
 ///
 /// #### Returns
 /// - The floor of log10(value) as a `u8`. For `value = 0`, returns `0` by convention.
@@ -471,7 +444,6 @@ public(package) fun log10_floor(value: u256): u8 {
 /// - `denominator`: Unsigned divisor.
 /// - `rounding_mode`: Rounding strategy.
 ///
-///
 /// #### Returns
 /// - `(overflow, quotient)` mirroring the macro implementation.
 public(package) fun mul_div_inner(
@@ -499,10 +471,8 @@ public(package) fun mul_div_inner(
 /// - `denominator`: Unsigned divisor, must be non-zero.
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
-///
 /// #### Returns
 /// - The rounded quotient as a `u256`.
-///
 ///
 /// #### Aborts
 /// - `EDivideByZero` if `denominator` is zero.
@@ -539,11 +509,9 @@ public(package) fun mul_div_u256_fast(
 /// - `denominator`: Unsigned divisor, must be non-zero.
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
-///
 /// #### Returns
 /// - `(overflow, result)` where `overflow` indicates whether the exact (or rounded) quotient exceeds
 /// - the `u256` range. `result` is only meaningful when `overflow` is `false`.
-///
 ///
 /// #### Aborts
 /// - `EDivideByZero` if `denominator` is zero.
@@ -576,7 +544,6 @@ public(package) fun mul_div_u256_wide(
 /// - `shift`: Number of bits to shift right.
 /// - `rounding_mode`: Rounding strategy.
 ///
-///
 /// #### Returns
 /// - `(overflow, quotient)` mirroring the macro implementation.
 public(package) fun mul_shr_inner(
@@ -600,7 +567,6 @@ public(package) fun mul_shr_inner(
 /// - `a`, `b`:  Unsigned factors whose product stays below 2^256.
 /// - `shift`: Number of bits to shift right (0–255).
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
-///
 ///
 /// #### Returns
 /// - `(overflow, result)` where `overflow` is `false` and `result` is the shifted and rounded value.
@@ -638,7 +604,6 @@ public(package) fun mul_shr_u256_fast(
 /// - `a`, `b`: Unsigned factors whose product may exceed 2^256.
 /// - `shift`: Number of bits to shift right (0–255).
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
-///
 ///
 /// #### Returns
 /// - `(overflow, result)` where `overflow` indicates whether the shifted value cannot fit in 256 bits
@@ -699,11 +664,9 @@ public(package) fun mul_shr_u256_wide(
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
-///
 /// #### Parameters
 /// - `$value`: The unsigned integer to calculate the square root of.
 /// - `$rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
-///
 ///
 /// #### Returns
 /// - The square root of `$value` rounded according to `$rounding_mode`, cast back to `$Int`.
@@ -720,7 +683,6 @@ public(package) macro fun sqrt<$Int>($value: $Int, $rounding_mode: RoundingMode)
 /// - `denominator`: Divisor used by the original division.
 /// - `remainder`: Division remainder associated with `result`.
 /// - `rounding_mode`: Rounding strategy.
-///
 ///
 /// #### Returns
 /// - `(overflow, result)` where `overflow` is `true` if the rounded value cannot be represented as
@@ -753,7 +715,6 @@ public(package) fun round_division_result(
 /// #### Parameters
 /// - `value`: The value being tested (already cast to u256).
 /// - `floor_log`: The floor of log2(value), i.e., log2(value)⌋.
-///
 ///
 /// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
@@ -803,7 +764,6 @@ public(package) fun round_log2_to_nearest(value: u256, floor_log: u16): u16 {
 /// - `value`: The value being tested (already cast to u256).
 /// - `floor_log`: The floor of log256(value), i.e., ⌊log256(value)⌋.
 ///
-///
 /// Given `floor_log = ⌊log256(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
 /// `[256^floor_log, 256^(floor_log+1))`. Using `256 = 2^8`, this midpoint is
@@ -832,7 +792,6 @@ public(package) fun round_log256_to_nearest(value: u256, floor_log: u8): u8 {
 /// #### Parameters
 /// - `value`: The value being tested (already cast to u256).
 /// - `floor_log`: The floor of log10(value), i.e., ⌊log10(value)⌋.
-///
 ///
 /// Given `floor_log = ⌊log10(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
@@ -919,7 +878,6 @@ public(package) fun round_log10_to_nearest(value: u256, floor_log: u8): u8 {
 /// - `floor_result`: The floor of the square root.
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
-///
 /// #### Returns
 /// - The square root rounded according to the specified mode.
 public(package) fun round_sqrt_result(
@@ -955,7 +913,6 @@ public(package) fun round_sqrt_result(
 /// #### Parameters
 /// - `value`: Operand whose inverse is desired.
 /// - `modulus`: Modulus, must be non-zero.
-///
 ///
 /// #### Returns
 /// - `option::some(inverse)` when `value` and `modulus` are co-prime, otherwise `option::none()`.
@@ -1005,7 +962,6 @@ public(package) fun inv_mod_extended_impl(value: u256, modulus: u256): Option<u2
 /// - `a`, `b`: Unsigned operands.
 /// - `modulus`: Modulus for arithmetic.
 ///
-///
 /// #### Returns
 /// - `(a - b) mod modulus`.
 public(package) fun mod_sub_impl(a: u256, b: u256, modulus: u256): u256 {
@@ -1025,10 +981,8 @@ public(package) fun mod_sub_impl(a: u256, b: u256, modulus: u256): u256 {
 /// - `a`, `b`: Unsigned operands.
 /// - `modulus`: Modulus for arithmetic.
 ///
-///
 /// #### Returns
 /// - `(a * b) mod modulus`.
-///
 ///
 /// #### Aborts
 /// - `EZeroModulus` if `modulus` is zero.

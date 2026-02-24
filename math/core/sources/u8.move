@@ -13,7 +13,6 @@ const BIT_WIDTH: u8 = 8;
 /// - `b`: Second operand.
 /// - `rounding_mode`: Rounding strategy.
 ///
-///
 /// #### Returns
 /// - The rounded arithmetic mean of `a` and `b`.
 public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
@@ -29,7 +28,6 @@ public fun average(a: u8, b: u8, rounding_mode: RoundingMode): u8 {
 /// #### Parameters
 /// - `value`: The input value to shift.
 /// - `shift`: Number of bits to shift left.
-///
 ///
 /// #### Returns
 /// - `option::some(shifted)` when the shift is valid and lossless.
@@ -54,7 +52,6 @@ public fun checked_shl(value: u8, shift: u8): Option<u8> {
 /// - `value`: The input value to shift.
 /// - `shift`: Number of bits to shift right.
 ///
-///
 /// #### Returns
 /// - `option::some(shifted)` when the shift is valid and lossless.
 /// - `option::none()` if the shift would consume non-zero bits.
@@ -76,11 +73,9 @@ public fun checked_shr(value: u8, shift: u8): Option<u8> {
 /// - `denominator`: Divisor.
 /// - `rounding_mode`: Rounding strategy.
 ///
-///
 /// #### Returns
 /// - `option::some(result)` when the rounded quotient fits in `u8`.
 /// - `option::none()` when the rounded quotient cannot be represented as `u8`.
-///
 ///
 /// #### Aborts
 /// - Aborts if `denominator` is zero.
@@ -97,7 +92,6 @@ public fun mul_div(a: u8, b: u8, denominator: u8, rounding_mode: RoundingMode): 
 /// - `shift`: Number of bits to shift right.
 /// - `rounding_mode`: Rounding strategy.
 ///
-///
 /// #### Returns
 /// - `option::some(result)` when the rounded value fits in `u8`.
 /// - `option::none()` when the rounded value cannot be represented as `u8`.
@@ -111,7 +105,6 @@ public fun mul_shr(a: u8, b: u8, shift: u8, rounding_mode: RoundingMode): Option
 /// #### Parameters
 /// - `value`: Input value.
 ///
-///
 /// #### Returns
 /// - Number of leading zero bits.
 public fun clz(value: u8): u8 {
@@ -122,7 +115,6 @@ public fun clz(value: u8): u8 {
 ///
 /// #### Parameters
 /// - `value`: Input value.
-///
 ///
 /// #### Returns
 /// - Zero-based index of the most significant bit.
@@ -137,7 +129,6 @@ public fun msb(value: u8): u8 {
 /// - `value`: Input value.
 /// - `rounding_mode`: Rounding strategy.
 ///
-///
 /// #### Returns
 /// - Base-2 logarithm rounded according to `rounding_mode`.
 /// - Returns `0` if `value` is `0`.
@@ -150,7 +141,6 @@ public fun log2(value: u8, rounding_mode: RoundingMode): u8 {
 /// #### Parameters
 /// - `value`: Input value.
 /// - `rounding_mode`: Rounding strategy.
-///
 ///
 /// #### Returns
 /// - Base-256 logarithm rounded according to `rounding_mode`.
@@ -165,7 +155,6 @@ public fun log256(value: u8, rounding_mode: RoundingMode): u8 {
 /// - `value`: Input value.
 /// - `rounding_mode`: Rounding strategy.
 ///
-///
 /// #### Returns
 /// - Base-10 logarithm rounded according to `rounding_mode`.
 /// - Returns `0` if `value` is `0`.
@@ -178,7 +167,6 @@ public fun log10(value: u8, rounding_mode: RoundingMode): u8 {
 /// #### Parameters
 /// - `value`: Input value.
 /// - `rounding_mode`: Rounding strategy.
-///
 ///
 /// #### Returns
 /// - Square root rounded according to `rounding_mode`.
@@ -193,11 +181,9 @@ public fun sqrt(value: u8, rounding_mode: RoundingMode): u8 {
 /// - `value`: Value to invert.
 /// - `modulus`: Modulus for arithmetic.
 ///
-///
 /// #### Returns
 /// - `option::some(inverse)` when `value` and `modulus` are co-prime.
 /// - `option::none()` when no inverse exists.
-///
 ///
 /// #### Aborts
 /// - Aborts if `modulus` is zero.
@@ -212,10 +198,8 @@ public fun inv_mod(value: u8, modulus: u8): Option<u8> {
 /// - `b`: Second factor.
 /// - `modulus`: Modulus for arithmetic.
 ///
-///
 /// #### Returns
 /// - `(a * b) mod modulus`.
-///
 ///
 /// #### Aborts
 /// - Aborts if `modulus` is zero.

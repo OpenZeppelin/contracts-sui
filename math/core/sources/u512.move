@@ -30,7 +30,6 @@ const EInvalidRemainder: vector<u8> = b"High remainder bits must be zero";
 /// - `hi`: Upper 256-bit limb.
 /// - `lo`: Lower 256-bit limb.
 ///
-///
 /// #### Returns
 /// - A `U512` composed from `hi` and `lo`.
 public fun new(hi: u256, lo: u256): U512 {
@@ -50,7 +49,6 @@ public fun zero(): U512 {
 /// #### Parameters
 /// - `value`: Lower 256-bit value to embed.
 ///
-///
 /// #### Returns
 /// - A `U512` with `hi = 0` and `lo = value`.
 public fun from_u256(value: u256): U512 {
@@ -61,7 +59,6 @@ public fun from_u256(value: u256): U512 {
 ///
 /// #### Parameters
 /// - `value`: Wide integer.
-///
 ///
 /// #### Returns
 /// - High 256-bit limb.
@@ -74,7 +71,6 @@ public fun hi(value: &U512): u256 {
 /// #### Parameters
 /// - `value`: Wide integer.
 ///
-///
 /// #### Returns
 /// - Low 256-bit limb.
 public fun lo(value: &U512): u256 {
@@ -86,7 +82,6 @@ public fun lo(value: &U512): u256 {
 /// #### Parameters
 /// - `value`: Left operand.
 /// - `other`: Right operand.
-///
 ///
 /// #### Returns
 /// - `true` when `value >= other`, `false` otherwise.
@@ -122,10 +117,8 @@ public fun ge(value: &U512, other: &U512): bool {
 /// - `a`: First factor.
 /// - `b`: Second factor.
 ///
-///
 /// #### Returns
 /// - Full-width 512-bit product `a * b`.
-///
 ///
 /// #### Aborts
 /// - `ECarryOverflow` if an unexpected final carry exceeds the representable range.
@@ -165,10 +158,8 @@ public fun mul_u256(a: u256, b: u256): U512 {
 /// - `numerator`: Wide dividend.
 /// - `divisor`: Non-zero `u256` divisor.
 ///
-///
 /// #### Returns
 /// - `(overflow, quotient, remainder)` as documented above.
-///
 ///
 /// #### Aborts
 /// - `EDivideByZero` if `divisor` is zero.
@@ -222,7 +213,6 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
 /// - `value`: Wide integer.
 /// - `other`: Scalar comparator.
 ///
-///
 /// #### Returns
 /// - `true` when `value >= other`, `false` otherwise.
 fun ge_u256(value: &U512, other: u256): bool {
@@ -233,7 +223,6 @@ fun ge_u256(value: &U512, other: u256): bool {
 ///
 /// #### Parameters
 /// - `value`: Input scalar.
-///
 ///
 /// #### Returns
 /// - `(hi, lo)` 128-bit halves.
@@ -249,7 +238,6 @@ fun split_u256(value: u256): (u128, u128) {
 /// - `hi`: Upper 128-bit half.
 /// - `lo`: Lower 128-bit half.
 ///
-///
 /// #### Returns
 /// - Reconstructed `u256` value.
 fun compose_u256(hi: u128, lo: u128): u256 {
@@ -260,7 +248,6 @@ fun compose_u256(hi: u128, lo: u128): u256 {
 ///
 /// #### Parameters
 /// - `a`, `b`, `c`: Operands.
-///
 ///
 /// #### Returns
 /// - `(limb, carry)` where `limb` is the low 128 bits of the sum and `carry` is the high part.
@@ -273,7 +260,6 @@ fun sum_three_u128(a: u128, b: u128, c: u128): (u128, u128) {
 ///
 /// #### Parameters
 /// - `value`: Wide integer.
-///
 ///
 /// #### Returns
 /// - `value << 1` with carry propagated from low to high limb.
@@ -288,7 +274,6 @@ fun shift_left1(value: &U512): U512 {
 /// #### Parameters
 /// - `value`: Wide integer.
 /// - `idx`: Bit index in `[0, 511]`.
-///
 ///
 /// #### Returns
 /// - Bit value `0` or `1` at index `idx`.
@@ -307,10 +292,8 @@ fun get_bit(value: &U512, idx: u16): u8 {
 /// - `value`: Minuend.
 /// - `other`: Subtrahend.
 ///
-///
 /// #### Returns
 /// - `value - other` as `U512`.
-///
 ///
 /// #### Aborts
 /// - `EUnderflow` if a borrow from the high limb would underflow.
@@ -333,7 +316,6 @@ fun sub_u256(value: U512, other: u256): U512 {
 ///
 /// #### Parameters
 /// - `value`: Non-zero wide integer.
-///
 ///
 /// #### Returns
 /// - Zero-based index of the most significant set bit.

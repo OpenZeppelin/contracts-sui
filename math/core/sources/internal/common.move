@@ -15,7 +15,6 @@ module openzeppelin_math::common;
 /// - `val`: Input value promoted to `u256`.
 /// - `bit_width`: Effective bit width of the original integer type.
 ///
-///
 /// #### Returns
 /// - Number of leading zero bits in `val` under the given `bit_width`.
 public(package) fun clz(val: u256, bit_width: u16): u16 {
@@ -49,7 +48,6 @@ public(package) fun clz(val: u256, bit_width: u16): u16 {
 /// - `val`: Input value promoted to `u256`.
 /// - `bit_width`: Effective bit width of the original integer type.
 ///
-///
 /// #### Returns
 /// - Zero-based index of the most significant set bit.
 /// - Returns `0` when `val` is `0`.
@@ -69,7 +67,6 @@ public(package) fun msb(val: u256, bit_width: u16): u8 {
 ///
 /// #### Parameters
 /// - `a`: Input value.
-///
 ///
 /// #### Returns
 /// - `floor(sqrt(a))`.
