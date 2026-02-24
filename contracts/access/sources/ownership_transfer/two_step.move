@@ -1,7 +1,7 @@
 /// Two-step wrapper that keeps a capability or object accessible behind a wrapper, while enforcing
 /// a request -> approval flow for transfers.
 ///
-/// Callers first `wrap` their capability. Prospective owners then issue `request_ownership`, and
+/// Callers first `wrap` their capability. Prospective owners then issue `request`, and
 /// the current owner finalises the handoff with `transfer`. A direct `unwrap` path is provided for
 /// situations where the owner wants to reclaim the underlying capability locally.
 ///
@@ -23,11 +23,11 @@ use sui::event;
 public struct WrappedKey() has copy, drop, store;
 
 /// Transfer request does not correspond to the provided wrapper
-#[error(code = 1)]
+#[error(code = 0)]
 const EInvalidTransferRequest: vector<u8> = b"Transfer request does not match wrapper.";
-#[error(code = 2)]
+#[error(code = 1)]
 const EWrongTwoStepTransferWrapper: vector<u8> = b"Wrong two step transfer wrapper.";
-#[error(code = 3)]
+#[error(code = 2)]
 const EWrongTwoStepTransferObject: vector<u8> = b"Wrong two step transfer object.";
 
 /// Wrapper object that owns the underlying capability, stored as a dynamic object field.
@@ -165,7 +165,7 @@ public fun request<T: key + store>(wrapper_id: ID, current_owner: address, ctx: 
     transfer::transfer(request, current_owner);
 }
 
-/// Approve a request that was previously issued through `request_ownership`, move the wrapper to
+/// Approve a request that was previously issued through `request`, move the wrapper to
 /// the requester, and emit an `OwnershipTransferred` event for observability.
 public fun transfer<T: key + store>(
     self: TwoStepTransferWrapper<T>,

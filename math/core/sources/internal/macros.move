@@ -16,7 +16,7 @@ const EZeroModulus: vector<u8> = b"Modulus must be non-zero.";
 /// Compute the arithmetic mean of two unsigned integers with configurable rounding.
 ///
 /// The helper works across all unsigned widths by normalising the operands to `u256`. It avoids
-/// overflow by anchoring on the smaller input, halving the difference with `mul_div_inner`, and
+/// overflow by anchoring on the smaller input, halving the difference with `mul_div_u256_fast`, and
 /// then shifting back into the caller's width.
 public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: RoundingMode): $Int {
     let a_u256 = ($a as u256);
@@ -170,8 +170,7 @@ public(package) macro fun mul_div<$Int>(
 /// `result` contains the rounded quotient when no overflow occurs.
 ///
 /// #### Aborts
-/// Does not emit custom errors, but will inherit the Move abort that occurs when `$shift` is 256 or
-/// greater.
+/// Does not emit custom errors.
 public(package) macro fun mul_shr<$Int>(
     $a: $Int,
     $b: $Int,
@@ -706,7 +705,8 @@ public(package) fun round_division_result(
 /// Tie-break: equality goes up (`≥`), i.e., “round half up”.
 ///
 /// #### Returns
-/// `true` if the value should round up, `false` otherwise.
+/// The rounded base-2 logarithm: `floor_log + 1` when the midpoint threshold is met, otherwise
+/// `floor_log`.
 public(package) fun round_log2_to_nearest(value: u256, floor_log: u16): u16 {
     let threshold_exp = 2 * floor_log + 1;
     let max_small = std::u128::max_value!() as u256;
@@ -749,7 +749,8 @@ public(package) fun round_log2_to_nearest(value: u256, floor_log: u16): u16 {
 /// Tie-break: equality goes up (`≥`), i.e., “round half up”.
 ///
 /// #### Returns
-/// `true` if the value should round up, `false` otherwise.
+/// The rounded base-256 logarithm: `floor_log + 1` when the midpoint threshold is met, otherwise
+/// `floor_log`.
 public(package) fun round_log256_to_nearest(value: u256, floor_log: u8): u8 {
     // For u256 values, floor_log ∈ [0, 31], so `threshold_exp = 8 * floor_log + 4 ≤ 252`
     // and the power-of-two threshold fits safely in u256.
