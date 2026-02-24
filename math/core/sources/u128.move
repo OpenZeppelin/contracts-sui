@@ -1,4 +1,4 @@
-/// Helper functions for arithmetic on 128-bit unsigned integers.
+/// Functions for arithmetic on 128-bit unsigned integers.
 ///
 /// This module provides wrappers around the shared `macros` helpers specialised to `u128`.
 /// They expose a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while
