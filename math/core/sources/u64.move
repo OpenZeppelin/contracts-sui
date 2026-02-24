@@ -1,3 +1,8 @@
+/// Functions for arithmetic on 64-bit unsigned integers.
+///
+/// This module provides wrappers around the shared `macros` helpers specialised to `u64`.
+/// They expose a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while
+/// handling width-specific concerns such as downcasting and bit-width limits.
 module openzeppelin_math::u64;
 
 use openzeppelin_math::macros;
@@ -41,7 +46,9 @@ public fun checked_shr(value: u64, shift: u8): Option<u64> {
 /// Multiply `a` and `b`, divide by `denominator`, and round according to `rounding_mode`.
 ///
 /// Returns `None` for the following cases:
-/// - the rounded quotient cannot be represented as `u64`
+/// - the rounded quotient cannot be represented as `u64`.
+///
+/// Aborts if `denominator` is zero.
 public fun mul_div(a: u64, b: u64, denominator: u64, rounding_mode: RoundingMode): Option<u64> {
     macros::mul_div!(a, b, denominator, rounding_mode).and!(|result| result.value().try_as_u64())
 }
@@ -97,8 +104,8 @@ public fun sqrt(value: u64, rounding_mode: RoundingMode): u64 {
 
 /// Compute the modular multiplicative inverse of `value` in `Z / modulus`.
 ///
-/// If `value` and `modulus` are co-prime, returns the unique element `x` such that
-/// `value * x ≡ 1 (mod modulus)`. Otherwise returns `None`. Aborts for a zero modulus.
+/// Returns `None` when `value` and `modulus` are not co-prime or `modulus` equals 1.
+/// Aborts if `modulus` is zero.
 public fun inv_mod(value: u64, modulus: u64): Option<u64> {
     macros::inv_mod!(value, modulus)
 }

@@ -1,4 +1,3 @@
-///
 /// Common internal utilities used in multiple places of the package.
 ///
 module openzeppelin_math::common;

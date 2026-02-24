@@ -1,3 +1,8 @@
+/// Helpers for converting token balances between different decimal precisions.
+///
+/// This module focuses on safe upcasting and downcasting between `u64` and `u256` while
+/// preserving economic value and enforcing a consistent truncation policy when scaling
+/// down. It is primarily intended for cross-chain or cross-token decimal alignment.
 module openzeppelin_math::decimal_scaling;
 
 // === Errors ===
