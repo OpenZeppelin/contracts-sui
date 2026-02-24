@@ -179,7 +179,7 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 /// # Examples
 ///
 /// - Scaling up: amount=1000000, source=6, target=9 → 1000000000 (no precision loss).
-/// - Scaling down: amount=1000000000, source=9, target=6 → 1000000 (fractional part lost).
+/// - Scaling down: amount=1000000000, source=9, target=6 → 1000000.
 /// - Same decimals: amount=1000000000, source=9, target=9 → 1000000000 (no conversion).
 /// - Truncation example: amount=1999000000, source=9, target=0 → 1 (not 2).
 fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
