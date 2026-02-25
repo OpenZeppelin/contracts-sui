@@ -16,16 +16,20 @@ module openzeppelin_access::two_step_transfer;
 use sui::dynamic_object_field as dof;
 use sui::event;
 
+/// Zero-sized key used to reference the dynamically stored wrapped capability or object.
+///
+/// This marker type is never instantiated with data; it only serves as the unique key for the
+/// dynamic object field that holds the underlying capability inside `TwoStepTransferWrapper`.
 public struct WrappedKey() has copy, drop, store;
 
 /// Transfer request does not correspond to the provided wrapper
-#[error(code = 1)]
+#[error(code = 0)]
 const EInvalidTransferRequest: vector<u8> = b"Transfer request does not match wrapper.";
 /// Borrow return was attempted against a different `TwoStepTransferWrapper`.
-#[error(code = 2)]
+#[error(code = 1)]
 const EWrongTwoStepTransferWrapper: vector<u8> = b"Wrong two step transfer wrapper.";
 /// Borrow return was attempted with a different wrapped object than the one originally taken.
-#[error(code = 3)]
+#[error(code = 2)]
 const EWrongTwoStepTransferObject: vector<u8> = b"Wrong two step transfer object.";
 
 /// Wrapper object that owns the underlying capability, stored as a dynamic object field.

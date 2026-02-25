@@ -1,3 +1,7 @@
+/// Shared arithmetic helpers used to implement the public `u*` modules.
+///
+/// This module exposes internal macros and functions that operate primarily on `u256` and are
+/// wrapped by the width-specific facades (`u8`, `u16`, `u32`, `u64`, `u128`, `u256`).
 module openzeppelin_math::macros;
 
 use openzeppelin_math::common;
@@ -224,8 +228,11 @@ public(package) macro fun clz<$Int>($value: $Int, $bit_width: u16): u16 {
 /// - `$modulus`: Modulus for the arithmetic; must be non-zero.
 ///
 /// #### Returns
-/// - `option::some(inverse)` when the inverse exists (`value * inverse ≡ 1 (mod modulus)`),
-/// - otherwise `option::none()`.
+/// - `option::some(inverse)` when `value` and `modulus` are co-prime.
+/// - `option::none()` when `value` and `modulus` are not co-prime, or when `modulus` is 1.
+///
+/// #### Aborts
+/// - Aborts if `modulus` is zero.
 public(package) macro fun inv_mod<$Int>($value: $Int, $modulus: $Int): Option<$Int> {
     let value_u256 = ($value as u256);
     let modulus_u256 = ($modulus as u256);
@@ -472,7 +479,8 @@ public(package) fun mul_div_inner(
 /// - `rounding_mode`: Rounding strategy drawn from `rounding::RoundingMode`.
 ///
 /// #### Returns
-/// - The rounded quotient as a `u256`.
+/// `(overflow, quotient)` where `overflow` is always `false` for this fast path and `quotient`
+/// carries the rounded result.
 ///
 /// #### Aborts
 /// - `EDivideByZero` if `denominator` is zero.

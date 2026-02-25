@@ -1,3 +1,8 @@
+/// Functions for arithmetic on 256-bit unsigned integers.
+///
+/// This module provides wrappers around the shared `macros` helpers specialised to `u256`.
+/// They expose a consistent API surface (e.g. `mul_div`, `mul_shr`, `inv_mod`) while
+/// handling width-specific concerns such as downcasting and bit-width limits.
 module openzeppelin_math::u256;
 
 use openzeppelin_math::macros;
@@ -191,7 +196,7 @@ public fun sqrt(value: u256, rounding_mode: RoundingMode): u256 {
 ///
 /// #### Returns
 /// - `option::some(inverse)` when `value` and `modulus` are co-prime.
-/// - `option::none()` when no inverse exists.
+/// - `option::none()` when `value` and `modulus` are not co-prime, or when `modulus` is 1.
 ///
 /// #### Aborts
 /// - Aborts if `modulus` is zero.
