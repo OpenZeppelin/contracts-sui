@@ -635,11 +635,11 @@ fun div_handles_zero_sign_and_identity_cases() {
 #[test]
 fun div_handles_signs_and_exact_fractional_results() {
     // 7.5 / 2.5 -> 3 under current magnitude-division behavior.
-    let numer = pos(7 * SCALE + 500_000_000);
-    let denom = pos(2 * SCALE + 500_000_000);
-    expect(numer.div(denom), pos(3));
-    expect(numer.div(denom.negate()), neg(3));
-    expect(numer.negate().div(denom.negate()), pos(3));
+    let numerator = pos(7 * SCALE + 500_000_000);
+    let denominator = pos(2 * SCALE + 500_000_000);
+    expect(numerator.div(denominator), pos(3));
+    expect(numerator.div(denominator.negate()), neg(3));
+    expect(numerator.negate().div(denominator.negate()), pos(3));
 }
 
 #[test]

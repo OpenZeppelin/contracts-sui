@@ -453,9 +453,9 @@ fun div_handles_zero_and_identity_cases() {
 #[test]
 fun div_handles_exact_and_fractional_results() {
     // 7.5 / 2.5 = 3.0
-    let numer = fixed(7 * SCALE + 500_000_000);
-    let denom = fixed(2 * SCALE + 500_000_000);
-    expect(numer.div(denom), fixed(3 * SCALE));
+    let numerator = fixed(7 * SCALE + 500_000_000);
+    let denominator = fixed(2 * SCALE + 500_000_000);
+    expect(numerator.div(denominator), fixed(3 * SCALE));
 
     // 1.0 / 3.0 = 0.333333333...
     expect(fixed(SCALE).div(fixed(3 * SCALE)), fixed(333_333_333));
@@ -464,9 +464,9 @@ fun div_handles_exact_and_fractional_results() {
 #[test]
 fun div_truncates_repeating_results() {
     // 2.000000001 / 2.0 = 1.0000000005 -> 1.000000000
-    let numer = fixed(2 * SCALE + 1);
-    let denom = fixed(2 * SCALE);
-    expect(numer.div(denom), fixed(SCALE));
+    let numerator = fixed(2 * SCALE + 1);
+    let denominator = fixed(2 * SCALE);
+    expect(numerator.div(denominator), fixed(SCALE));
 }
 
 #[test]
