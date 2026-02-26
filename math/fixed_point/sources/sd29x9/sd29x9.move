@@ -97,7 +97,7 @@ public fun wrap(value: u128, is_negative: bool): SD29x9 {
         return zero()
     };
     if (is_negative) {
-        if (value < MIN_NEGATIVE_VALUE) { 
+        if (value < MIN_NEGATIVE_VALUE) {
             // The conversion to two's complement cannot overflow: zero is handled separately
             // before any bit manipulation, and otherwise the range is restricted to values
             // up to `2^127-1` (the maximum positive signed value). As a result, there is
