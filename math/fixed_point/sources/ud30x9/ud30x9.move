@@ -18,6 +18,10 @@ module openzeppelin_fp_math::ud30x9;
 /// The `UD30x9` decimal fixed-point type.
 public struct UD30x9(u128) has copy, drop, store;
 
+// === Constants ===
+
+const SCALE: u128 = 1_000_000_000; // 10^9
+
 // === Functions ===
 
 public use fun openzeppelin_fp_math::ud30x9_base::abs as UD30x9.abs;
@@ -25,6 +29,7 @@ public use fun openzeppelin_fp_math::ud30x9_base::add as UD30x9.add;
 public use fun openzeppelin_fp_math::ud30x9_base::and as UD30x9.and;
 public use fun openzeppelin_fp_math::ud30x9_base::and2 as UD30x9.and2;
 public use fun openzeppelin_fp_math::ud30x9_base::ceil as UD30x9.ceil;
+public use fun openzeppelin_fp_math::ud30x9_base::div as UD30x9.div;
 public use fun openzeppelin_fp_math::ud30x9_base::eq as UD30x9.eq;
 public use fun openzeppelin_fp_math::ud30x9_base::floor as UD30x9.floor;
 public use fun openzeppelin_fp_math::ud30x9_base::gt as UD30x9.gt;
@@ -34,9 +39,12 @@ public use fun openzeppelin_fp_math::ud30x9_base::lshift as UD30x9.lshift;
 public use fun openzeppelin_fp_math::ud30x9_base::lt as UD30x9.lt;
 public use fun openzeppelin_fp_math::ud30x9_base::lte as UD30x9.lte;
 public use fun openzeppelin_fp_math::ud30x9_base::mod as UD30x9.mod;
+public use fun openzeppelin_fp_math::ud30x9_base::mul as UD30x9.mul;
 public use fun openzeppelin_fp_math::ud30x9_base::neq as UD30x9.neq;
 public use fun openzeppelin_fp_math::ud30x9_base::not as UD30x9.not;
 public use fun openzeppelin_fp_math::ud30x9_base::or as UD30x9.or;
+public use fun openzeppelin_fp_math::ud30x9_base::pow as UD30x9.pow;
+public use fun openzeppelin_fp_math::ud30x9_base::pow_alt as UD30x9.pow_alt;
 public use fun openzeppelin_fp_math::ud30x9_base::rshift as UD30x9.rshift;
 public use fun openzeppelin_fp_math::ud30x9_base::sub as UD30x9.sub;
 public use fun openzeppelin_fp_math::ud30x9_base::unchecked_add as UD30x9.unchecked_add;
@@ -48,6 +56,11 @@ public fun zero(): UD30x9 {
     UD30x9(0)
 }
 
+/// Returns a representation of one in `UD30x9` type.
+public fun one(): UD30x9 {
+    UD30x9(SCALE)
+}
+
 /// Returns the maximum value for `UD30x9`
 public fun max(): UD30x9 {
     UD30x9(std::u128::max_value!())
@@ -56,8 +69,8 @@ public fun max(): UD30x9 {
 // === Casting helpers ===
 
 /// Wraps a `u128` number into a `UD30x9` value type.
-public fun wrap(x: u128): UD30x9 {
-    UD30x9(x)
+public fun wrap(value: u128): UD30x9 {
+    UD30x9(value)
 }
 
 /// Unwraps a `UD30x9` value into a `u128`.
