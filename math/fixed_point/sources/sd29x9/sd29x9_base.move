@@ -134,9 +134,10 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
 public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
-    let quotient = x.mag / y.mag;
     let neg = x.neg != y.neg;
-    wrap_components(Components { neg, mag: quotient })
+    let numerator = (x.mag as u256) * SCALE_U256;
+    let mag = numerator / (y.mag as u256);
+    wrap_components(Components { neg, mag: mag as u128 })
 }
 
 /// Implements the checked exponentiation operation (^) for SD29x9 type.

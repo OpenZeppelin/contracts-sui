@@ -627,31 +627,30 @@ fun div_handles_zero_sign_and_identity_cases() {
     let value = pos(7 * SCALE + 500_000_000); // 7.5
 
     expect(zero.div(value), zero);
-    // SD div currently divides magnitudes directly.
-    expect(value.div(one), pos(7));
-    expect(value.div(neg_one), neg(7));
+    expect(value.div(one), value);
+    expect(value.div(neg_one), value.negate());
 }
 
 #[test]
 fun div_handles_signs_and_exact_fractional_results() {
-    // 7.5 / 2.5 -> 3 under current magnitude-division behavior.
+    // 7.5 / 2.5 = 3.0
     let numerator = pos(7 * SCALE + 500_000_000);
     let denominator = pos(2 * SCALE + 500_000_000);
-    expect(numerator.div(denominator), pos(3));
-    expect(numerator.div(denominator.negate()), neg(3));
-    expect(numerator.negate().div(denominator.negate()), pos(3));
+    expect(numerator.div(denominator), pos(3 * SCALE));
+    expect(numerator.div(denominator.negate()), neg(3 * SCALE));
+    expect(numerator.negate().div(denominator.negate()), pos(3 * SCALE));
 }
 
 #[test]
 fun div_truncates_towards_zero() {
-    // 1.0 / 3.0 -> 0 under current magnitude-division behavior.
-    expect(pos(SCALE).div(pos(3 * SCALE)), sd29x9::zero());
-    expect(neg(SCALE).div(pos(3 * SCALE)), sd29x9::zero());
+    // 1.0 / 3.0 = 0.333333333...
+    expect(pos(SCALE).div(pos(3 * SCALE)), pos(333_333_333));
+    expect(neg(SCALE).div(pos(3 * SCALE)), neg(333_333_333));
 }
 
 #[test]
 fun div_handles_min_over_one() {
-    expect(sd29x9::min().div(pos(SCALE)), neg(MIN_NEGATIVE_VALUE / SCALE));
+    expect(sd29x9::min().div(pos(SCALE)), sd29x9::min());
 }
 
 #[test, expected_failure]
@@ -659,9 +658,9 @@ fun div_by_zero_aborts() {
     pos(10 * SCALE).div(sd29x9::zero());
 }
 
-#[test]
+#[test, expected_failure(abort_code = sd29x9::EOverflow)]
 fun div_handles_min_div_negative_one() {
-    expect(sd29x9::min().div(neg(SCALE)), pos(MIN_NEGATIVE_VALUE / SCALE));
+    sd29x9::min().div(neg(SCALE));
 }
 
 // === pow ===
