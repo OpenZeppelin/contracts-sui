@@ -69,8 +69,8 @@ public fun max(): UD30x9 {
 // === Casting helpers ===
 
 /// Wraps a `u128` number into a `UD30x9` value type.
-public fun wrap(value: u128): UD30x9 {
-    UD30x9(value)
+public fun wrap(x: u128): UD30x9 {
+    UD30x9(x)
 }
 
 /// Unwraps a `UD30x9` value into a `u128`.
