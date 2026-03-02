@@ -51,7 +51,7 @@ public struct TwoStepTransferWrapper<phantom T: key + store> has key {
 
 /// Shared object created when the current owner initiates a transfer. The wrapper is held by the
 /// request via TTO so both parties can interact with it.
-public struct PendingOwnershipTransfer<phantom T> has key {
+public struct PendingOwnershipTransfer<phantom T: key + store> has key {
     id: UID,
     wrapper_id: ID,
     from: address,
@@ -418,7 +418,7 @@ public fun test_new_transfer_cancelled<T>(request_id: ID): TransferCancelled<T> 
 }
 
 #[test_only]
-public fun test_destroy_request<T>(request: PendingOwnershipTransfer<T>) {
+public fun test_destroy_request<T: key + store>(request: PendingOwnershipTransfer<T>) {
     let PendingOwnershipTransfer { id, .. } = request;
     id.delete();
 }
