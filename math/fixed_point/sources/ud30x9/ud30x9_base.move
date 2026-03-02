@@ -137,20 +137,6 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     wrap_u256(result)
 }
 
-/// Implements the checked exponentiation operation (^) for `UD30x9` type.
-public fun pow_alt(x: UD30x9, exp: u8): UD30x9 {
-    if (exp == 0) {
-        return one()
-    };
-    if (exp == 1) {
-        return x
-    };
-    let mut result = x;
-    let times = exp - 1;
-    times.do!(|_| result = result.mul(x));
-    result
-}
-
 /// Implements the not equal operation (!=) for `UD30x9` type.
 public fun neq(x: UD30x9, y: UD30x9): bool {
     x.unwrap() != y.unwrap()

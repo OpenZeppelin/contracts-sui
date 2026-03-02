@@ -159,20 +159,6 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     wrap_components(result)
 }
 
-/// Implements the checked exponentiation operation (^) for `SD29x9` type.
-public fun pow_alt(x: SD29x9, exp: u8): SD29x9 {
-    if (exp == 0) {
-        return one()
-    };
-    if (exp == 1) {
-        return x
-    };
-    let mut result = x;
-    let times = exp - 1;
-    times.do!(|_| result = result.mul(x));
-    result
-}
-
 /// Implements unary negation operation (-x) for `SD29x9` type.
 public fun negate(x: SD29x9): SD29x9 {
     let value = decompose(x.unwrap());
