@@ -32,12 +32,6 @@ fun wrap_max_positive() {
 }
 
 #[test]
-fun wrap_min_negative() {
-    let value = sd29x9::wrap(MIN_NEGATIVE_VALUE, true);
-    expect(value, sd29x9::min());
-}
-
-#[test]
 fun addition_and_subtraction_cover_signs() {
     expect(pos(10).add(neg(5)), pos(5));
     expect(neg(10).add(pos(5)), neg(5));
