@@ -525,6 +525,11 @@ fun pow_overflow_aborts_for_large_base() {
     ud30x9::max().pow(2);
 }
 
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun pow_overflow_aborts_with_correct_abort_code() {
+    ud30x9::max().pow(32);
+}
+
 // === pow_alt ===
 
 #[test]

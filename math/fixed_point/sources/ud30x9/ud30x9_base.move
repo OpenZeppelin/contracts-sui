@@ -125,10 +125,14 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     if (exp == 1) {
         return x
     };
+    let max_value = U128_MAX_VALUE as u256;
     let base = x.unwrap() as u256;
     let mut result = base;
     let times = exp - 1;
-    times.do!(|_| result = result * base / SCALE_U256);
+    times.do!(|_| {
+        result = result * base / SCALE_U256;
+        assert!(result <= max_value, EOverflow);
+    });
 
     wrap_u256(result)
 }
