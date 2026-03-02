@@ -49,6 +49,36 @@ fun addition_and_subtraction_cover_signs() {
 }
 
 #[test]
+fun sum_handles_edge_cases() {
+    let (min, max, zero) = (sd29x9::min(), sd29x9::max(), sd29x9::zero());
+    expect(min.add(zero), min);
+    expect(max.add(zero), max);
+    expect(zero.add(min), min);
+    expect(zero.add(max), max);
+
+    let one = pos(1);
+    expect(max.negate().add(one.negate()), min);
+    expect(max.sub(one).add(one), max);
+    expect(min.add(one).add(one).negate().add(one), max);
+}
+
+#[test]
+fun sub_handles_edge_cases() {
+    let (min, max, zero) = (sd29x9::min(), sd29x9::max(), sd29x9::zero());
+    expect(min.sub(zero), min);
+    expect(max.sub(zero), max);
+    
+    let one = pos(1);
+    let min_plus_one = min.add(one);
+    expect(zero.sub(min_plus_one), max);
+    expect(zero.sub(max), min_plus_one);
+
+    expect(max.negate().add(one.negate()), min);
+    expect(max.sub(one).add(one), max);
+    expect(min.add(one).add(one).negate().add(one), max);
+}
+
+#[test]
 fun sum_can_reach_minimum_value() {
     let min_val = sd29x9::min();
     let min_plus_one = min_val.add(pos(1));
