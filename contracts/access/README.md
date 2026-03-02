@@ -23,7 +23,7 @@ Both modules accept any `T: key + store` object, but the primary use case is wra
    - Use `borrow`, `borrow_mut`, or `borrow_val`/`return_val` to read or temporarily mutate the wrapped object without changing ownership.
    - While a transfer is pending, the current owner can use `request_borrow_val`/`request_return_val` to temporarily access the wrapper and its inner object through the shared request.
 3. **Transfer**
-   - The current owner calls `initiate_transfer` to emit `TransferInitiated`, create a shared `OwnershipTransferRequest`, and TTO the wrapper to it.
+   - The current owner calls `initiate_transfer` to emit `TransferInitiated`, create a shared `PendingOwnershipTransfer`, and TTO the wrapper to it.
    - The prospective owner calls `accept_transfer` with the request + receiving ticket to accept, or the current owner calls `cancel_transfer` to reclaim the wrapper.
 4. **Unwrap**
    - Owners can reclaim the underlying object immediately via `unwrap`, destroying the wrapper.

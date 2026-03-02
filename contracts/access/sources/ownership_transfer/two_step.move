@@ -5,7 +5,7 @@
 /// (admin caps, treasury caps, etc.) where a misdirected transfer could be irreversible.
 ///
 /// Callers first `wrap` their object. The current owner initiates a transfer via
-/// `initiate_transfer`, which creates a shared `OwnershipTransferRequest` and sends the wrapper
+/// `initiate_transfer`, which creates a shared `PendingOwnershipTransfer` and sends the wrapper
 /// to it via TTO. The prospective owner finalises the handoff with `accept_transfer`, while the
 /// current owner can `cancel_transfer` to reclaim the wrapper. A direct `unwrap` path is provided
 /// for situations where the owner wants to reclaim the underlying object locally.
@@ -45,7 +45,7 @@ public struct TwoStepTransferWrapper<phantom T: key + store> has key {
 
 /// Shared object created when the current owner initiates a transfer. The wrapper is held by the
 /// request via TTO so both parties can interact with it.
-public struct OwnershipTransferRequest<phantom T> has key {
+public struct PendingOwnershipTransfer<phantom T> has key {
     id: UID,
     wrapper_id: ID,
     from: address,
@@ -78,7 +78,7 @@ public struct UnwrapExecuted<phantom T> has copy, drop {
 public struct TransferInitiated<phantom T> has copy, drop {
     wrapper_id: ID,
     current_owner: address,
-    requester: address,
+    new_owner: address,
 }
 
 /// Emitted whenever the wrapper changes hands.
@@ -167,7 +167,7 @@ public fun initiate_transfer<T: key + store>(
 ) {
     let wrapper_id = object::id(&self);
     let from = ctx.sender();
-    let request = OwnershipTransferRequest<T> {
+    let request = PendingOwnershipTransfer<T> {
         id: object::new(ctx),
         wrapper_id,
         from,
@@ -177,7 +177,7 @@ public fun initiate_transfer<T: key + store>(
     event::emit(TransferInitiated<T> {
         wrapper_id,
         current_owner: from,
-        requester: new_owner,
+        new_owner: new_owner,
     });
     transfer::share_object(request);
     transfer::transfer(self, request_address);
@@ -186,12 +186,12 @@ public fun initiate_transfer<T: key + store>(
 /// Accept a request that was previously initiated through `initiate_transfer`, move the wrapper to
 /// the prospective owner, and emit a `TransferAccepted` event for observability.
 public fun accept_transfer<T: key + store>(
-    request: OwnershipTransferRequest<T>,
+    request: PendingOwnershipTransfer<T>,
     wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>,
     ctx: &mut TxContext,
 ) {
     assert!(ctx.sender() == request.new_owner, ENotNewOwner);
-    let OwnershipTransferRequest { id: mut request_id, wrapper_id, from, new_owner } = request;
+    let PendingOwnershipTransfer { id: mut request_id, wrapper_id, from, new_owner } = request;
     let wrapper = transfer::receive(&mut request_id, wrapper_ticket);
     assert!(object::id(&wrapper) == wrapper_id, EInvalidTransferRequest);
     request_id.delete();
@@ -206,12 +206,12 @@ public fun accept_transfer<T: key + store>(
 
 /// Cancel an ownership request, reclaiming the wrapper and deleting the request.
 public fun cancel_transfer<T: key + store>(
-    request: OwnershipTransferRequest<T>,
+    request: PendingOwnershipTransfer<T>,
     wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>,
     ctx: &mut TxContext,
 ) {
     assert!(ctx.sender() == request.from, ENotOwner);
-    let OwnershipTransferRequest { id: mut request_id, wrapper_id, from, .. } = request;
+    let PendingOwnershipTransfer { id: mut request_id, wrapper_id, from, .. } = request;
     let request_id_inner = request_id.uid_to_inner();
     let wrapper = transfer::receive(&mut request_id, wrapper_ticket);
     assert!(object::id(&wrapper) == wrapper_id, EInvalidTransferRequest);
@@ -228,7 +228,7 @@ public fun cancel_transfer<T: key + store>(
 /// wrapped object. The returned `RequestBorrow` hot potato must be consumed by
 /// `request_return_val`.
 public fun request_borrow_val<T: key + store>(
-    request: &mut OwnershipTransferRequest<T>,
+    request: &mut PendingOwnershipTransfer<T>,
     wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>,
     ctx: &mut TxContext,
 ): (TwoStepTransferWrapper<T>, RequestBorrow) {
@@ -242,7 +242,7 @@ public fun request_borrow_val<T: key + store>(
 
 /// Return the wrapper to the request after `request_borrow_val`.
 public fun request_return_val<T: key + store>(
-    request: &OwnershipTransferRequest<T>,
+    request: &PendingOwnershipTransfer<T>,
     wrapper: TwoStepTransferWrapper<T>,
     borrow: RequestBorrow,
 ) {
@@ -259,8 +259,8 @@ public fun test_new_request<T: key + store>(
     from: address,
     new_owner: address,
     ctx: &mut TxContext,
-): OwnershipTransferRequest<T> {
-    OwnershipTransferRequest { id: object::new(ctx), wrapper_id, from, new_owner }
+): PendingOwnershipTransfer<T> {
+    PendingOwnershipTransfer { id: object::new(ctx), wrapper_id, from, new_owner }
 }
 
 #[test_only]
@@ -293,9 +293,9 @@ public fun test_new_unwrap_executed<T>(
 public fun test_new_transfer_initiated<T>(
     wrapper_id: ID,
     current_owner: address,
-    requester: address,
+    new_owner: address,
 ): TransferInitiated<T> {
-    TransferInitiated { wrapper_id, current_owner, requester }
+    TransferInitiated { wrapper_id, current_owner, new_owner }
 }
 
 #[test_only]
@@ -313,7 +313,7 @@ public fun test_new_transfer_cancelled<T>(request_id: ID): TransferCancelled<T> 
 }
 
 #[test_only]
-public fun test_destroy_request<T>(request: OwnershipTransferRequest<T>) {
-    let OwnershipTransferRequest { id, .. } = request;
+public fun test_destroy_request<T>(request: PendingOwnershipTransfer<T>) {
+    let PendingOwnershipTransfer { id, .. } = request;
     id.delete();
 }

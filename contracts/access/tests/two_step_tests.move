@@ -42,7 +42,7 @@ fun initiate_transfer_emits_event() {
     assert_eq!(expected_event, events[0]);
 
     test.next_tx(owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -137,7 +137,7 @@ fun accept_transfer_emits_event() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(new_owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -170,7 +170,7 @@ fun accept_transfer_rejects_non_new_owner() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(attacker);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -191,7 +191,7 @@ fun accept_transfer_rejects_mismatched_wrapper() {
     two_step_transfer::test_transfer_wrapper(extra_wrapper, owner);
 
     test.next_tx(owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let extra_wrapper = test.take_from_sender<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -200,7 +200,7 @@ fun accept_transfer_rejects_mismatched_wrapper() {
     test_scenario::return_shared(request);
 
     test.next_tx(new_owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     >(&request_id);
@@ -218,7 +218,7 @@ fun cancel_transfer_emits_event() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -248,7 +248,7 @@ fun cancel_transfer_rejects_non_owner() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(attacker);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -266,7 +266,7 @@ fun request_borrow_val_roundtrip() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(owner);
-    let mut request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let mut request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -280,7 +280,7 @@ fun request_borrow_val_roundtrip() {
     test_scenario::return_shared(request);
 
     test.next_tx(owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -304,7 +304,7 @@ fun request_borrow_val_rejects_non_owner() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(attacker);
-    let mut request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let mut request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -330,7 +330,7 @@ fun request_return_val_rejects_wrong_wrapper() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(owner);
-    let mut request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let mut request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let extra_wrapper = test.take_from_sender<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -362,7 +362,7 @@ fun cancel_transfer_rejects_mismatched_wrapper() {
     two_step_transfer::test_transfer_wrapper(extra_wrapper, owner);
 
     test.next_tx(owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let extra_wrapper = test.take_from_sender<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -371,7 +371,7 @@ fun cancel_transfer_rejects_mismatched_wrapper() {
     test_scenario::return_shared(request);
 
     test.next_tx(owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     >(&request_id);
@@ -388,7 +388,7 @@ fun request_borrow_val_inner_cap_roundtrip() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(owner);
-    let mut request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let mut request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -406,7 +406,7 @@ fun request_borrow_val_inner_cap_roundtrip() {
     test_scenario::return_shared(request);
 
     test.next_tx(owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -429,7 +429,7 @@ fun request_return_val_rejects_wrong_request() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(owner);
-    let mut request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let mut request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -470,7 +470,7 @@ fun consecutive_transfers() {
     two_step_transfer::initiate_transfer(wrapper, owner_b, test.ctx());
 
     test.next_tx(owner_b);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -483,7 +483,7 @@ fun consecutive_transfers() {
     two_step_transfer::initiate_transfer(wrapper, owner_c, test.ctx());
 
     test.next_tx(owner_c);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
@@ -507,7 +507,7 @@ fun new_owner_can_use_wrapper_after_accept() {
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(new_owner);
-    let request = test.take_shared<two_step_transfer::OwnershipTransferRequest<DummyCap>>();
+    let request = test.take_shared<two_step_transfer::PendingOwnershipTransfer<DummyCap>>();
     let request_id = object::id(&request);
     let ticket = test_scenario::most_recent_receiving_ticket<
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,

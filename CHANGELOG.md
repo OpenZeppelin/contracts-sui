@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Changed (Breaking)
 
-- Redesigned `two_step_transfer` from a requester-initiated to an owner-initiated flow using shared `OwnershipTransferRequest` and TTO.
+- Redesigned `two_step_transfer` from a requester-initiated to an owner-initiated flow using shared `PendingOwnershipTransfer` and TTO.
   - `request`, `transfer`, and `reject` replaced by `initiate_transfer`, `accept_transfer`, and `cancel_transfer`.
 - Renamed `two_step_transfer` events: `OwnershipRequested` → `TransferInitiated`, `OwnershipTransferred` → `TransferAccepted`, `OwnershipTransferRejected` → `TransferCancelled`.
 - All events in `two_step_transfer` and `delayed_transfer` now carry `phantom T` for type-specific indexing.
@@ -60,5 +60,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
-- `two_step_transfer` module that wraps a `key + store` object behind a request/approve flow.
+- `two_step_transfer` module that wraps a `key + store` object behind a two-step transfer flow.
 - `delayed_transfer` module that enforces configurable, clock-based delays before transferring or unwrapping an object.
