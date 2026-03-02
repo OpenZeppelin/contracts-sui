@@ -100,8 +100,7 @@ public fun lte(x: UD30x9, y: UD30x9): bool {
 
 /// Implements the checked modulo operation (%) for `UD30x9` type.
 public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
-    let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    wrap_u256(x % y)
+    wrap(x.unwrap() % y.unwrap())
 }
 
 /// Implements the checked multiplication operation (*) for `UD30x9` type.
