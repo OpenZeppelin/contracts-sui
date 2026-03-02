@@ -215,6 +215,7 @@ fun cancel_transfer_emits_event() {
     let new_owner = @0x11;
     let mut test = test_scenario::begin(owner);
     let wrapper = two_step_transfer::wrap(new_cap(test.ctx()), test.ctx());
+    let wrapper_id = object::id(&wrapper);
     two_step_transfer::initiate_transfer(wrapper, new_owner, test.ctx());
 
     test.next_tx(owner);
@@ -225,7 +226,11 @@ fun cancel_transfer_emits_event() {
     >(&request_id);
     two_step_transfer::cancel_transfer(request, ticket, test.ctx());
 
-    let expected_event = two_step_transfer::test_new_transfer_cancelled(request_id);
+    let expected_event = two_step_transfer::test_new_transfer_cancelled(
+        wrapper_id,
+        owner,
+        new_owner,
+    );
 
     let events = event::events_by_type<two_step_transfer::TransferCancelled<DummyCap>>();
     assert_eq!(events.length(), 1);

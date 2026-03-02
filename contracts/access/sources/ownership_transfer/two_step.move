@@ -15,6 +15,30 @@
 ///
 /// By requiring explicit initiation and acceptance of each transfer, the flow provides an important
 /// safety net against accidental misdirection.
+///
+/// #### Security Model
+///
+/// - This module is designed for flows where the wrapper is controlled by a single logical owner.
+/// - `initiate_transfer` records `ctx.sender()` as the current owner (`from`) in the pending transfer.
+/// - `cancel_transfer` returns the wrapper to that recorded `from` address.
+/// - Therefore, the signer that executes `initiate_transfer` must be the same principal that should
+///   be allowed to cancel and recover the wrapper.
+///
+/// #### Misuse Paths (Important)
+///
+/// - Do not use this module for shared-object custody flows where arbitrary executors can trigger
+///   transfer initiation.
+/// - In those flows, a caller may execute `initiate_transfer` on behalf of a shared object and become
+///   the recorded `from`, gaining cancel authority and receiving the wrapper via `cancel_transfer`.
+/// - Do not assume governance approval or shared-object ownership automatically maps to the correct
+///   `from` identity in this module.
+///
+/// #### Integration Guidance
+///
+/// - Use this module when the transaction signer executing `initiate_transfer` is intentionally the
+///   owner/cancel authority for the wrapped object.
+/// - If your protocol requires shared custody, delegated executors, or caller-independent cancel rights,
+///   implement a dedicated ownership-transfer design instead of using this module directly.
 module openzeppelin_access::two_step_transfer;
 
 use sui::dynamic_object_field as dof;
@@ -96,7 +120,9 @@ public struct TransferAccepted<phantom T> has copy, drop {
 
 /// Emitted whenever an ownership transfer is cancelled.
 public struct TransferCancelled<phantom T> has copy, drop {
-    request_id: ID,
+    wrapper_id: ID,
+    current_owner: address,
+    new_owner: address,
 }
 
 // === Wrap / unwrap / borrow ===
@@ -211,6 +237,14 @@ public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxC
 /// Initiate an ownership transfer by creating a shared request and sending the wrapper to it via
 /// TTO. The caller is the current owner and `new_owner` becomes the prospective owner.
 ///
+/// #### Security Warning
+///
+/// - This function binds cancel authority to `ctx.sender()` by storing it as `from`.
+/// - The same `from` address is later authorized by `cancel_transfer` to recover the wrapper.
+/// - Only call this when the signer is intentionally the logical owner/cancel authority.
+/// - Unsafe pattern: calling this from shared-object workflows where an arbitrary executor can
+///   trigger transfer initiation.
+///
 /// #### Parameters
 /// - `self`: Wrapper being transferred.
 /// - `new_owner`: Prospective owner who may accept the transfer.
@@ -276,6 +310,13 @@ public fun accept_transfer<T: key + store>(
 
 /// Cancel an ownership request, reclaiming the wrapper and deleting the request.
 ///
+/// #### Security Note
+///
+/// - This function returns the wrapper to `request.from`, which is captured from `ctx.sender()` at
+///   `initiate_transfer` time.
+/// - If `initiate_transfer` was executed by the wrong principal, cancellation will return custody to
+///   that principal.
+///
 /// #### Parameters
 /// - `request`: Pending transfer object to cancel.
 /// - `wrapper_ticket`: TTO receiving ticket for the wrapper.
@@ -293,12 +334,13 @@ public fun cancel_transfer<T: key + store>(
     ctx: &mut TxContext,
 ) {
     assert!(ctx.sender() == request.from, ENotOwner);
-    let PendingOwnershipTransfer { id: mut request_id, wrapper_id, from, .. } = request;
-    let request_id_inner = request_id.uid_to_inner();
+    let PendingOwnershipTransfer { id: mut request_id, wrapper_id, from, to } = request;
     let wrapper = transfer::receive(&mut request_id, wrapper_ticket);
     assert!(object::id(&wrapper) == wrapper_id, EInvalidTransferRequest);
     event::emit(TransferCancelled<T> {
-        request_id: request_id_inner,
+        wrapper_id,
+        current_owner: from,
+        new_owner: to,
     });
     request_id.delete();
     transfer::transfer(wrapper, from);
@@ -413,8 +455,12 @@ public fun test_new_transfer_accepted<T>(
 }
 
 #[test_only]
-public fun test_new_transfer_cancelled<T>(request_id: ID): TransferCancelled<T> {
-    TransferCancelled { request_id }
+public fun test_new_transfer_cancelled<T>(
+    wrapper_id: ID,
+    current_owner: address,
+    new_owner: address,
+): TransferCancelled<T> {
+    TransferCancelled { wrapper_id, current_owner, new_owner }
 }
 
 #[test_only]
