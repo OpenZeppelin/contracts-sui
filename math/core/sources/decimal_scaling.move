@@ -47,18 +47,18 @@ const MAX_DECIMALS: u8 = 24;
 ///
 /// # Arguments
 ///
-/// * `raw_amount` - The original balance (e.g., from Ethereum with 18 decimals).
-/// * `source_decimals` - Source chain decimal places (must be <= 24).
-/// * `target_decimals` - Target decimal places (must be <= 24, typically 6-9 for Sui).
+/// - `raw_amount`: The original balance (e.g., from Ethereum with 18 decimals).
+/// - `source_decimals`: Source chain decimal places (must be <= 24).
+/// - `target_decimals`: Target decimal places (must be <= 24, typically 6-9 for Sui).
 ///
 /// # Returns
 ///
-/// The scaled balance as `u64`
+/// - The scaled balance as `u64`.
 ///
 /// # Aborts
 ///
-/// * `EInvalidDecimals` - If either decimal value exceeds `MAX_DECIMALS` (24).
-/// * `ESafeDowncastOverflowedInt` - If scaled amount exceeds `std::u64::max_value!()`.
+/// - `EInvalidDecimals`: If either decimal value exceeds `MAX_DECIMALS` (24).
+/// - `ESafeDowncastOverflowedInt`: If scaled amount exceeds `std::u64::max_value!()`.
 ///
 /// # Examples
 ///
@@ -124,17 +124,17 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
 ///
 /// # Arguments
 ///
-/// * `amount` - The balance in `u64`.
-/// * `source_decimals` - Source decimal places (must be <= 24, typically 6-9 for Sui).
-/// * `target_decimals` - Target decimal places (must be <= 24, e.g., 18 for Ethereum).
+/// - `amount`: The balance in `u64`.
+/// - `source_decimals`: Source decimal places (must be <= 24, typically 6-9 for Sui).
+/// - `target_decimals`: Target decimal places (must be <= 24, e.g., 18 for Ethereum).
 ///
 /// # Returns
 ///
-/// The scaled balance as `u256`.
+/// - The scaled balance as `u256`.
 ///
 /// # Aborts
 ///
-/// * `EInvalidDecimals` - If either decimal value exceeds `MAX_DECIMALS` (24).
+/// - `EInvalidDecimals`: If either decimal value exceeds `MAX_DECIMALS` (24).
 ///
 /// # Examples
 ///
@@ -173,9 +173,9 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 ///
 /// # Arguments
 ///
-/// * `amount` - The amount to scale (as `u256`).
-/// * `source_decimals` - Current decimal precision.
-/// * `target_decimals` - Desired decimal precision.
+/// - `amount`: The amount to scale (as `u256`).
+/// - `source_decimals`: Current decimal precision.
+/// - `target_decimals`: Desired decimal precision.
 ///
 /// # Returns
 ///
@@ -183,10 +183,10 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 ///
 /// # Examples
 ///
-/// * Scaling up: amount=1000000, source=6, target=9 → 1000000000 (no precision loss).
-/// * Scaling down: amount=1000000000, source=9, target=6 → 1000000 (fractional part lost).
-/// * Same decimals: amount=1000000000, source=9, target=9 → 1000000000 (no conversion).
-/// * Truncation example: amount=1999000000, source=9, target=0 → 1 (not 2).
+/// - Scaling up: amount=1000000, source=6, target=9 → 1000000000 (no precision loss).
+/// - Scaling down: amount=1000000000, source=9, target=6 → 1000000.
+/// - Same decimals: amount=1000000000, source=9, target=9 → 1000000000 (no conversion).
+/// - Truncation example: amount=1999000000, source=9, target=0 → 1 (not 2).
 fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
     // Fast path: same decimals, no scaling needed.
     if (source_decimals == target_decimals) {
@@ -213,12 +213,12 @@ fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
 ///
 /// # Arguments
 ///
-/// * `decimals_a` - First decimal value to validate.
-/// * `decimals_b` - Second decimal value to validate.
+/// - `decimals_a`: First decimal value to validate.
+/// - `decimals_b`: Second decimal value to validate.
 ///
 /// # Aborts
 ///
-/// Aborts with `EInvalidDecimals` if either decimal exceeds `MAX_DECIMALS`.
+/// - Aborts with `EInvalidDecimals` if either decimal exceeds `MAX_DECIMALS`.
 fun validate_decimals(decimals_a: u8, decimals_b: u8) {
     assert!(decimals_a <= MAX_DECIMALS, EInvalidDecimals);
     assert!(decimals_b <= MAX_DECIMALS, EInvalidDecimals);

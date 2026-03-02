@@ -16,16 +16,22 @@ use sui::event;
 /// Dynamic field key for a wrapped object.
 public struct WrappedKey() has copy, drop, store;
 
+/// A transfer or unwrap is already scheduled and must be executed or cancelled first.
 #[error(code = 0)]
 const ETransferAlreadyScheduled: vector<u8> = b"Transfer already scheduled.";
+/// No pending transfer/unwrap exists for the wrapper.
 #[error(code = 1)]
 const ENoPendingTransfer: vector<u8> = b"No pending transfer.";
+/// The configured delay has not elapsed yet.
 #[error(code = 2)]
 const EDelayNotElapsed: vector<u8> = b"Delay has not elapsed.";
+/// A transfer action was attempted when an unwrap was scheduled, or vice versa.
 #[error(code = 3)]
 const EWrongPendingAction: vector<u8> = b"Pending action mismatch.";
+/// Borrow return was attempted against a different `DelayedTransferWrapper`.
 #[error(code = 4)]
 const EWrongDelayedTransferWrapper: vector<u8> = b"Wrong delayed transfer wrapper.";
+/// Borrow return was attempted with a different wrapped object than the one originally taken.
 #[error(code = 5)]
 const EWrongDelayedTransferObject: vector<u8> = b"Wrong delayed transfer object.";
 
@@ -247,7 +253,9 @@ public fun unwrap<T: key + store>(
     cap
 }
 
-/// Cancel the currently scheduled transfer or unwrap operation, if any.
+/// Cancel the currently scheduled transfer or unwrap operation.
+///
+/// Aborts with `ENoPendingTransfer` when no operation is currently scheduled.
 public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>) {
     let PendingTransfer { .. } = self.pending.extract_or!(abort ENoPendingTransfer);
     event::emit(PendingTransferCancelled { wrapper_id: object::id(self) });
