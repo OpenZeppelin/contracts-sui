@@ -21,17 +21,23 @@ use sui::dynamic_object_field as dof;
 use sui::event;
 use sui::transfer::Receiving;
 
+/// Dynamic field key for a wrapped object.
 public struct WrappedKey() has copy, drop, store;
 
-#[error(code = 0)]
-const ENotOwner: vector<u8> = "Caller is not the current owner.";
+
 /// Transfer request does not correspond to the provided wrapper
-#[error(code = 1)]
+#[error(code = 0)]
 const EInvalidTransferRequest: vector<u8> = "Transfer request does not match wrapper.";
-#[error(code = 2)]
+/// Borrow return was attempted against a different `TwoStepTransferWrapper`.
+#[error(code = 1)]
 const EWrongTwoStepTransferWrapper: vector<u8> = "Wrong two step transfer wrapper.";
-#[error(code = 3)]
+/// Borrow return was attempted with a different wrapped object than the one originally taken.
+#[error(code = 2)]
 const EWrongTwoStepTransferObject: vector<u8> = "Wrong two step transfer object.";
+/// Caller is not the current owner.
+#[error(code = 3)]
+const ENotOwner: vector<u8> = "Caller is not the current owner.";
+/// Caller is not the prospective owner.
 #[error(code = 4)]
 const ENotNewOwner: vector<u8> = "Caller is not the prospective owner.";
 
