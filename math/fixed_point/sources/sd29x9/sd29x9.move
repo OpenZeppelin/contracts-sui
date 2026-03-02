@@ -92,28 +92,21 @@ public fun max(): SD29x9 {
 /// Aborts if `x` exceeds the SD29x9 magnitude bounds for a signed 128-bit integer.
 ///
 /// NOTE: This function can't be used to obtain the minimum value, use `min()` instead.
-public fun wrap(value: u128, is_negative: bool): SD29x9 {
-    if (value == 0) {
-        return zero()
-    };
-    if (is_negative) {
-        if (value < MIN_NEGATIVE_VALUE) {
-            // The conversion to two's complement cannot overflow: zero is handled separately
-            // before any bit manipulation, and otherwise the range is restricted to values
-            // up to `2^127-1` (the maximum positive signed value). As a result, there is
-            // always room to represent the negative result within 128 bits, and the process
-            // is unambiguous and safe.
-            let bits = two_complement(value);
-            SD29x9(bits)
-        } else if (value == MIN_NEGATIVE_VALUE) {
-            min()
-        } else {
-            // The value is too large to be represented as a negative SD29x9
-            abort EOverflow
-        }
+public fun wrap(x: u128, is_negative: bool): SD29x9 {
+    if (x == 0) {
+        zero()
+    } else if (x > MAX_POSITIVE_VALUE) {
+        // The value is too large to be represented as a positive SD29x9
+        abort EOverflow
+    } else if (is_negative) {
+        // The conversion to two's complement cannot overflow: zero is handled separately
+        // before any bit manipulation, and otherwise the range is restricted to values
+        // up to `2^127-1` (the maximum positive signed value). As a result, there is
+        // always room to represent the negative result within 128 bits, and the process
+        // is unambiguous and safe.
+        SD29x9(two_complement(x))
     } else {
-        assert!(value <= MAX_POSITIVE_VALUE, EOverflow);
-        SD29x9(value)
+        SD29x9(x)
     }
 }
 
@@ -124,8 +117,8 @@ public fun unwrap(x: SD29x9): u128 {
 
 // ==== Internal Functions ====
 
-public(package) fun two_complement(value: u128): u128 {
-    let bitwise_not = value ^ U128_MAX_VALUE;
+public(package) fun two_complement(bits: u128): u128 {
+    let bitwise_not = bits ^ U128_MAX_VALUE;
     bitwise_not + 1
 }
 
