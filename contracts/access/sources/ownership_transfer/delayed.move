@@ -21,22 +21,22 @@ public struct WrappedKey() has copy, drop, store;
 
 /// A transfer or unwrap is already scheduled and must be executed or cancelled first.
 #[error(code = 0)]
-const ETransferAlreadyScheduled: vector<u8> = "Transfer already scheduled.";
+const ETransferAlreadyScheduled: vector<u8> = "Transfer already scheduled";
 /// No pending transfer/unwrap exists for the wrapper.
 #[error(code = 1)]
-const ENoPendingTransfer: vector<u8> = "No pending transfer.";
+const ENoPendingTransfer: vector<u8> = "No pending transfer";
 /// The configured delay has not elapsed yet.
 #[error(code = 2)]
-const EDelayNotElapsed: vector<u8> = "Delay has not elapsed.";
+const EDelayNotElapsed: vector<u8> = "Delay has not elapsed";
 /// A transfer action was attempted when an unwrap was scheduled, or vice versa.
 #[error(code = 3)]
-const EWrongPendingAction: vector<u8> = "Pending action mismatch.";
+const EWrongPendingAction: vector<u8> = "Pending action mismatch";
 /// Borrow return was attempted against a different `DelayedTransferWrapper`.
 #[error(code = 4)]
-const EWrongDelayedTransferWrapper: vector<u8> = "Wrong delayed transfer wrapper.";
+const EWrongDelayedTransferWrapper: vector<u8> = "Wrong delayed transfer wrapper";
 /// Borrow return was attempted with a different wrapped object than the one originally taken.
 #[error(code = 5)]
-const EWrongDelayedTransferObject: vector<u8> = "Wrong delayed transfer object.";
+const EWrongDelayedTransferObject: vector<u8> = "Wrong delayed transfer object";
 
 /// Wrapper object that delays transfers by at least `min_delay_ms` after scheduling.
 public struct DelayedTransferWrapper<phantom T: key + store> has key {
@@ -373,6 +373,10 @@ public fun test_new_pending_transfer_cancelled<T>(wrapper_id: ID): PendingTransf
 }
 
 #[test_only]
-public fun test_new_unwrap_executed<T>(wrapper_id: ID, object_id: ID, owner: address): UnwrapExecuted<T> {
+public fun test_new_unwrap_executed<T>(
+    wrapper_id: ID,
+    object_id: ID,
+    owner: address,
+): UnwrapExecuted<T> {
     UnwrapExecuted { wrapper_id, object_id, owner }
 }

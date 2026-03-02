@@ -48,22 +48,21 @@ use sui::transfer::Receiving;
 /// Dynamic field key for a wrapped object.
 public struct WrappedKey() has copy, drop, store;
 
-
 /// Transfer request does not correspond to the provided wrapper
 #[error(code = 0)]
-const EInvalidTransferRequest: vector<u8> = "Transfer request does not match wrapper.";
+const EInvalidTransferRequest: vector<u8> = "Transfer request does not match wrapper";
 /// Borrow return was attempted against a different `TwoStepTransferWrapper`.
 #[error(code = 1)]
-const EWrongTwoStepTransferWrapper: vector<u8> = "Wrong two step transfer wrapper.";
+const EWrongTwoStepTransferWrapper: vector<u8> = "Wrong two step transfer wrapper";
 /// Borrow return was attempted with a different wrapped object than the one originally taken.
 #[error(code = 2)]
-const EWrongTwoStepTransferObject: vector<u8> = "Wrong two step transfer object.";
+const EWrongTwoStepTransferObject: vector<u8> = "Wrong two step transfer object";
 /// Caller is not the current owner.
 #[error(code = 3)]
-const ENotOwner: vector<u8> = "Caller is not the current owner.";
+const ENotOwner: vector<u8> = "Caller is not the current owner";
 /// Caller is not the prospective owner.
 #[error(code = 4)]
-const ENotNewOwner: vector<u8> = "Caller is not the prospective owner.";
+const ENotNewOwner: vector<u8> = "Caller is not the prospective owner";
 
 /// Wrapper that owns the underlying object, stored as a dynamic object field.
 ///
