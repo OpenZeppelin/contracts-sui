@@ -49,7 +49,7 @@ public struct PendingOwnershipTransfer<phantom T> has key {
     id: UID,
     wrapper_id: ID,
     from: address,
-    new_owner: address,
+    to: address,
 }
 
 /// Hot potato used to ensure a wrapped object was returned after being taken using `borrow_val`.
@@ -171,7 +171,7 @@ public fun initiate_transfer<T: key + store>(
         id: object::new(ctx),
         wrapper_id,
         from,
-        new_owner,
+        to: new_owner,
     };
     let request_address = object::id_address(&request);
     event::emit(TransferInitiated<T> {
@@ -190,8 +190,8 @@ public fun accept_transfer<T: key + store>(
     wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>,
     ctx: &mut TxContext,
 ) {
-    assert!(ctx.sender() == request.new_owner, ENotNewOwner);
-    let PendingOwnershipTransfer { id: mut request_id, wrapper_id, from, new_owner } = request;
+    assert!(ctx.sender() == request.to, ENotNewOwner);
+    let PendingOwnershipTransfer { id: mut request_id, wrapper_id, from, to } = request;
     let wrapper = transfer::receive(&mut request_id, wrapper_ticket);
     assert!(object::id(&wrapper) == wrapper_id, EInvalidTransferRequest);
     request_id.delete();
@@ -199,9 +199,9 @@ public fun accept_transfer<T: key + store>(
     event::emit(TransferAccepted<T> {
         wrapper_id,
         previous_owner: from,
-        new_owner,
+        new_owner: to,
     });
-    transfer::transfer(wrapper, new_owner);
+    transfer::transfer(wrapper, to);
 }
 
 /// Cancel an ownership request, reclaiming the wrapper and deleting the request.
@@ -260,7 +260,7 @@ public fun test_new_request<T: key + store>(
     new_owner: address,
     ctx: &mut TxContext,
 ): PendingOwnershipTransfer<T> {
-    PendingOwnershipTransfer { id: object::new(ctx), wrapper_id, from, new_owner }
+    PendingOwnershipTransfer { id: object::new(ctx), wrapper_id, from, to: new_owner }
 }
 
 #[test_only]
