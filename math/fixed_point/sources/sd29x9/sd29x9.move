@@ -66,16 +66,17 @@ public fun zero(): SD29x9 {
     SD29x9(0)
 }
 
+/// Returns a representation of one in `SD29x9` type.
 public fun one(): SD29x9 {
     SD29x9(SCALE)
 }
 
-/// Returns the representation of -2^127 in SD29x9
+/// Returns the representation of -2^127 in `SD29x9`
 public fun min(): SD29x9 {
     SD29x9(MIN_NEGATIVE_VALUE)
 }
 
-/// Returns the representation of 2^127 - 1 in SD29x9
+/// Returns the representation of 2^127 - 1 in `SD29x9`
 public fun max(): SD29x9 {
     SD29x9(MAX_POSITIVE_VALUE)
 }
