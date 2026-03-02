@@ -1,6 +1,6 @@
-/// # SD29x9 Base Functions
+/// # `SD29x9` Base Functions
 ///
-/// Base utilities tailored to the signed SD29x9
+/// Base utilities tailored to the signed `SD29x9`
 /// representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
@@ -13,30 +13,30 @@ const SCALE_U256: u256 = SCALE as u256; // 10^9
 
 // === Public Functions ===
 
-/// Returns the absolute value of a SD29x9.
+/// Returns the absolute value of a `SD29x9`.
 public fun abs(x: SD29x9): SD29x9 {
     let mut components = decompose(x.unwrap());
     components.neg = false;
     wrap_components(components)
 }
 
-/// Implements the checked addition operation (+) for the SD29x9 type.
+/// Implements the checked addition operation (+) for the `SD29x9` type.
 public fun add(x: SD29x9, y: SD29x9): SD29x9 {
     let result = add_components(decompose(x.unwrap()), decompose(y.unwrap()));
     wrap_components(result)
 }
 
-/// Implements the AND (&) bitwise operation for SD29x9 type with u128 bits.
+/// Implements the AND (&) bitwise operation for `SD29x9` type with `u128` bits.
 public fun and(x: SD29x9, bits: u128): SD29x9 {
     from_bits(x.unwrap() & bits)
 }
 
-/// Implements the AND (&) bitwise operation for SD29x9 type with another SD29x9.
+/// Implements the AND (&) bitwise operation for `SD29x9` type with another `SD29x9`.
 public fun and2(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(x.unwrap() & y.unwrap())
 }
 
-/// Rounds up a SD29x9 to the nearest integer (towards positive infinity).
+/// Rounds up a `SD29x9` to the nearest integer (towards positive infinity).
 public fun ceil(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     let fractional = mag % SCALE;
@@ -52,12 +52,12 @@ public fun ceil(x: SD29x9): SD29x9 {
     wrap_components(result)
 }
 
-/// Implements the equal operation (==) for SD29x9 type.
+/// Implements the equal operation (==) for `SD29x9` type.
 public fun eq(x: SD29x9, y: SD29x9): bool {
     x.unwrap() == y.unwrap()
 }
 
-/// Rounds down a SD29x9 to the nearest integer (towards negative infinity).
+/// Rounds down a `SD29x9` to the nearest integer (towards negative infinity).
 public fun floor(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     let fractional = mag % SCALE;
@@ -73,22 +73,22 @@ public fun floor(x: SD29x9): SD29x9 {
     wrap_components(result)
 }
 
-/// Implements the greater than operation (>) for SD29x9 type.
+/// Implements the greater than operation (>) for `SD29x9` type.
 public fun gt(x: SD29x9, y: SD29x9): bool {
     greater_than_bits(x.unwrap(), y.unwrap())
 }
 
-/// Implements the greater than or equal to operation (>=) for SD29x9 type.
+/// Implements the greater than or equal to operation (>=) for `SD29x9` type.
 public fun gte(x: SD29x9, y: SD29x9): bool {
     !lt(x, y)
 }
 
-/// Implements a zero comparison check function for SD29x9 type.
+/// Implements a zero comparison check function for `SD29x9` type.
 public fun is_zero(x: SD29x9): bool {
     x.unwrap() == 0
 }
 
-/// Implements the left shift operation (<<) for SD29x9 type.
+/// Implements the left shift operation (<<) for `SD29x9` type.
 ///
 /// This shift is performed on the raw two's-complement bits.
 /// - If `bits >= 128`, returns zero (all bits cleared).
@@ -102,17 +102,17 @@ public fun lshift(x: SD29x9, bits: u8): SD29x9 {
     from_bits((x.unwrap() << bits) & U128_MAX_VALUE)
 }
 
-/// Implements the lower than operation (<) for SD29x9 type.
+/// Implements the lower than operation (<) for `SD29x9` type.
 public fun lt(x: SD29x9, y: SD29x9): bool {
     greater_than_bits(y.unwrap(), x.unwrap())
 }
 
-/// Implements the lower than or equal to operation (<=) for SD29x9 type.
+/// Implements the lower than or equal to operation (<=) for `SD29x9` type.
 public fun lte(x: SD29x9, y: SD29x9): bool {
     !gt(x, y)
 }
 
-/// Implements the checked modulo operation (%) for SD29x9 type.
+/// Implements the checked modulo operation (%) for `SD29x9` type.
 public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
@@ -120,7 +120,7 @@ public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
     wrap_components(Components { neg: x.neg, mag: remainder })
 }
 
-/// Implements the checked multiplication operation (*) for SD29x9 type.
+/// Implements the checked multiplication operation (*) for `SD29x9` type.
 public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
@@ -130,7 +130,7 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
     wrap_components(Components { neg, mag })
 }
 
-/// Implements the checked division operation (/) for SD29x9 type.
+/// Implements the checked division operation (/) for `SD29x9` type.
 public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
@@ -140,7 +140,7 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     wrap_components(Components { neg, mag: mag as u128 })
 }
 
-/// Implements the checked exponentiation operation (^) for SD29x9 type.
+/// Implements the checked exponentiation operation (^) for `SD29x9` type.
 public fun pow(x: SD29x9, exp: u8): SD29x9 {
     if (exp == 0) {
         return one()
@@ -158,7 +158,7 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     wrap_components(result)
 }
 
-/// Implements the checked exponentiation operation (^) for SD29x9 type.
+/// Implements the checked exponentiation operation (^) for `SD29x9` type.
 public fun pow_alt(x: SD29x9, exp: u8): SD29x9 {
     if (exp == 0) {
         return one()
@@ -172,28 +172,28 @@ public fun pow_alt(x: SD29x9, exp: u8): SD29x9 {
     result
 }
 
-/// Implements unary negation operation (-x) for SD29x9 type.
+/// Implements unary negation operation (-x) for `SD29x9` type.
 public fun negate(x: SD29x9): SD29x9 {
     let value = decompose(x.unwrap());
     wrap_components(negate_components(value))
 }
 
-/// Implements the not equal operation (!=) for SD29x9 type.
+/// Implements the not equal operation (!=) for `SD29x9` type.
 public fun neq(x: SD29x9, y: SD29x9): bool {
     !eq(x, y)
 }
 
-/// Implements the NOT (~) bitwise operation for SD29x9 type.
+/// Implements the NOT (~) bitwise operation for `SD29x9` type.
 public fun not(x: SD29x9): SD29x9 {
     from_bits(x.unwrap() ^ U128_MAX_VALUE)
 }
 
-/// Implements the OR (|) bitwise operation for SD29x9 type.
+/// Implements the OR (|) bitwise operation for `SD29x9` type.
 public fun or(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(x.unwrap() | y.unwrap())
 }
 
-/// Implements the right shift operation (>>) for SD29x9 type.
+/// Implements the right shift operation (>>) for `SD29x9` type.
 ///
 /// This shift is performed on the raw two's-complement bits and preserves sign.
 /// - If `bits == 0`, returns the original value unchanged.
@@ -222,24 +222,24 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
     }
 }
 
-/// Implements the checked subtraction operation (-) for SD29x9 type.
+/// Implements the checked subtraction operation (-) for `SD29x9` type.
 public fun sub(x: SD29x9, y: SD29x9): SD29x9 {
     let negated_y = negate_components(decompose(y.unwrap()));
     let result = add_components(decompose(x.unwrap()), negated_y);
     wrap_components(result)
 }
 
-/// Implements the unchecked addition operation (+) for SD29x9 type.
+/// Implements the unchecked addition operation (+) for `SD29x9` type.
 public fun unchecked_add(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(wrapping_add_bits(x.unwrap(), y.unwrap()))
 }
 
-/// Implements the unchecked subtraction operation (-) for SD29x9 type.
+/// Implements the unchecked subtraction operation (-) for `SD29x9` type.
 public fun unchecked_sub(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(wrapping_sub_bits(x.unwrap(), y.unwrap()))
 }
 
-/// Implements the XOR (^) bitwise operation for SD29x9 type.
+/// Implements the XOR (^) bitwise operation for `SD29x9` type.
 public fun xor(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(x.unwrap() ^ y.unwrap())
 }
