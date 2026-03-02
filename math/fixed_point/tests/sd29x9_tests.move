@@ -61,7 +61,7 @@ fun sub_handles_edge_cases() {
     let (min, max, zero) = (sd29x9::min(), sd29x9::max(), sd29x9::zero());
     expect(min.sub(zero), min);
     expect(max.sub(zero), max);
-    
+
     let one = pos(1);
     let min_plus_one = min.add(one);
     expect(zero.sub(min_plus_one), max);
