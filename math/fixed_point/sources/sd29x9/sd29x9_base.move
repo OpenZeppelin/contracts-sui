@@ -4,9 +4,10 @@
 /// representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
-use openzeppelin_fp_math::sd29x9::{Self, SD29x9, from_bits, zero, one, two_complement};
+use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 
 const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
+const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const SIGN_BIT: u128 = 1u128 << 127;
 const SCALE: u128 = 1_000_000_000; // 10^9
 const SCALE_U256: u256 = SCALE as u256; // 10^9
@@ -278,8 +279,13 @@ fun add_components(x: Components, y: Components): Components {
 }
 
 fun wrap_components(value: Components): SD29x9 {
-    let Components { neg, mag } = value;
-    sd29x9::wrap(mag, neg)
+    if (value.mag == 0) {
+        zero()
+    } else if (value.neg && value.mag == MIN_NEGATIVE_VALUE) {
+        min()
+    } else {
+        wrap(value.mag, value.neg)
+    }
 }
 
 fun wrapping_add_bits(a: u128, b: u128): u128 {
