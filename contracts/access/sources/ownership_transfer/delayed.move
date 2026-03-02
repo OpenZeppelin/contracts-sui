@@ -103,6 +103,14 @@ public struct UnwrapExecuted<phantom T> has copy, drop {
 
 /// Wrap an object in a delayed transfer wrapper with the desired minimum delay. The object is
 /// tucked under a dynamic field so its ID remains discoverable.
+///
+/// #### Parameters
+/// - `obj`: Object to wrap.
+/// - `min_delay_ms`: Minimum delay in milliseconds before a scheduled action can execute.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - A new `DelayedTransferWrapper<T>` that owns `obj`.
 public fun wrap<T: key + store>(
     obj: T,
     min_delay_ms: u64,
@@ -123,17 +131,35 @@ public fun wrap<T: key + store>(
 }
 
 /// Borrow the wrapped object immutably—useful for inspection without touching the schedule.
+///
+/// #### Parameters
+/// - `self`: Wrapper holding the object.
+///
+/// #### Returns
+/// - Immutable reference to the wrapped object.
 public fun borrow<T: key + store>(self: &DelayedTransferWrapper<T>): &T {
     dof::borrow(&self.id, WrappedKey())
 }
 
 /// Borrow the wrapped object mutably when internal state needs to be tweaked without editing the
 /// pending schedule.
+///
+/// #### Parameters
+/// - `self`: Wrapper holding the object.
+///
+/// #### Returns
+/// - Mutable reference to the wrapped object.
 public fun borrow_mut<T: key + store>(self: &mut DelayedTransferWrapper<T>): &mut T {
     dof::borrow_mut(&mut self.id, WrappedKey())
 }
 
 /// Take the wrapped object from the `DelayedTransferWrapper` with a guarantee that it will be returned.
+///
+/// #### Parameters
+/// - `self`: Wrapper holding the object.
+///
+/// #### Returns
+/// - `(obj, borrow)` where `obj` is the wrapped object and `borrow` must be consumed by `return_val`.
 public fun borrow_val<T: key + store>(self: &mut DelayedTransferWrapper<T>): (T, Borrow) {
     let obj = dof::remove(&mut self.id, WrappedKey());
     let object_id = object::id(&obj);
@@ -142,6 +168,18 @@ public fun borrow_val<T: key + store>(self: &mut DelayedTransferWrapper<T>): (T,
 
 /// Return the borrowed object to the `DelayedTransferWrapper`. This method cannot be avoided
 /// if `borrow_val` is used.
+///
+/// #### Parameters
+/// - `self`: Target wrapper.
+/// - `obj`: Object being returned.
+/// - `borrow`: Hot potato produced by `borrow_val`.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `EWrongDelayedTransferWrapper` if `borrow` does not correspond to `self`.
+/// - `EWrongDelayedTransferObject` if `obj` does not match the borrowed object.
 public fun return_val<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
     obj: T,
@@ -159,6 +197,18 @@ public fun return_val<T: key + store>(
 
 /// Schedule a new transfer to `new_owner`. Stores recipient + deadline; caller later invokes
 /// `execute_transfer` after `min_delay_ms` has passed.
+///
+/// #### Parameters
+/// - `self`: Wrapper whose transfer is being scheduled.
+/// - `new_owner`: Prospective owner to receive the wrapper when transfer is executed.
+/// - `clock`: Clock used to compute the execution deadline.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `ETransferAlreadyScheduled` if another transfer or unwrap is already pending.
 public fun schedule_transfer<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
     new_owner: address,
@@ -184,6 +234,17 @@ public fun schedule_transfer<T: key + store>(
 
 /// Schedule an unwrap (self-recovery). After the delay, call `unwrap` to retrieve the object and
 /// delete the wrapper.
+///
+/// #### Parameters
+/// - `self`: Wrapper whose unwrap is being scheduled.
+/// - `clock`: Clock used to compute the execution deadline.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `ETransferAlreadyScheduled` if another transfer or unwrap is already pending.
 public fun schedule_unwrap<T: key + store>(
     self: &mut DelayedTransferWrapper<T>,
     clock: &Clock,
@@ -209,6 +270,19 @@ public fun schedule_unwrap<T: key + store>(
 
 /// Execute the pending transfer once the configured delay has elapsed, consuming the wrapper and
 /// emitting an `OwnershipTransferred` event.
+///
+/// #### Parameters
+/// - `self`: Wrapper with a pending transfer schedule.
+/// - `clock`: Clock used to validate that delay has elapsed.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `ENoPendingTransfer` if no transfer or unwrap is scheduled.
+/// - `EWrongPendingAction` if the pending schedule is an unwrap instead of a transfer.
+/// - `EDelayNotElapsed` if the execution timestamp has not been reached.
 public fun execute_transfer<T: key + store>(
     mut self: DelayedTransferWrapper<T>,
     clock: &Clock,
@@ -230,6 +304,19 @@ public fun execute_transfer<T: key + store>(
 
 /// Complete a previously scheduled unwrap after the delay—return the object and delete the wrapper
 /// so the owner regains full control.
+///
+/// #### Parameters
+/// - `self`: Wrapper with a pending unwrap schedule.
+/// - `clock`: Clock used to validate that delay has elapsed.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - The unwrapped object.
+///
+/// #### Aborts
+/// - `ENoPendingTransfer` if no transfer or unwrap is scheduled.
+/// - `EWrongPendingAction` if the pending schedule is a transfer instead of an unwrap.
+/// - `EDelayNotElapsed` if the execution timestamp has not been reached.
 public fun unwrap<T: key + store>(
     mut self: DelayedTransferWrapper<T>,
     clock: &Clock,
@@ -258,7 +345,14 @@ public fun unwrap<T: key + store>(
 
 /// Cancel the currently scheduled transfer or unwrap operation.
 ///
-/// Aborts with `ENoPendingTransfer` when no operation is currently scheduled.
+/// #### Parameters
+/// - `self`: Wrapper whose pending schedule should be removed.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `ENoPendingTransfer` when no operation is currently scheduled.
 public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>) {
     let PendingTransfer { .. } = self.pending.extract_or!(abort ENoPendingTransfer);
     event::emit(PendingTransferCancelled<T> { wrapper_id: object::id(self) });

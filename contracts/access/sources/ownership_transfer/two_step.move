@@ -103,6 +103,13 @@ public struct TransferCancelled<phantom T> has copy, drop {
 
 /// Wrap an object inside a new two step transfer wrapper, storing it under a dynamic field so the
 /// underlying ID can still be discovered by off-chain indexers.
+///
+/// #### Parameters
+/// - `obj`: Object to wrap.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - A new `TwoStepTransferWrapper<T>` that owns `obj`.
 public fun wrap<T: key + store>(obj: T, ctx: &mut TxContext): TwoStepTransferWrapper<T> {
     let mut wrapper = TwoStepTransferWrapper { id: object::new(ctx) };
     event::emit(WrapExecuted<T> {
@@ -116,17 +123,35 @@ public fun wrap<T: key + store>(obj: T, ctx: &mut TxContext): TwoStepTransferWra
 
 /// Borrow the wrapped object immutably—useful for read-only inspection without touching the
 /// transfer flow.
+///
+/// #### Parameters
+/// - `self`: Wrapper holding the object.
+///
+/// #### Returns
+/// - Immutable reference to the wrapped object.
 public fun borrow<T: key + store>(self: &TwoStepTransferWrapper<T>): &T {
     dof::borrow(&self.id, WrappedKey())
 }
 
 /// Borrow the wrapped object mutably when maintenance needs to happen without changing the
 /// ownership state.
+///
+/// #### Parameters
+/// - `self`: Wrapper holding the object.
+///
+/// #### Returns
+/// - Mutable reference to the wrapped object.
 public fun borrow_mut<T: key + store>(self: &mut TwoStepTransferWrapper<T>): &mut T {
     dof::borrow_mut(&mut self.id, WrappedKey())
 }
 
 /// Take the wrapped object from the `TwoStepTransferWrapper` with a guarantee that it will be returned.
+///
+/// #### Parameters
+/// - `self`: Wrapper holding the object.
+///
+/// #### Returns
+/// - `(obj, borrow)` where `obj` is the wrapped object and `borrow` must be consumed by `return_val`.
 public fun borrow_val<T: key + store>(self: &mut TwoStepTransferWrapper<T>): (T, Borrow) {
     let obj = dof::remove(&mut self.id, WrappedKey());
     let object_id = object::id(&obj);
@@ -135,6 +160,18 @@ public fun borrow_val<T: key + store>(self: &mut TwoStepTransferWrapper<T>): (T,
 
 /// Return the borrowed object to the `TwoStepTransferWrapper`. This method cannot be avoided
 /// if `borrow_val` is used.
+///
+/// #### Parameters
+/// - `self`: Target wrapper.
+/// - `obj`: Object being returned.
+/// - `borrow`: Hot potato produced by `borrow_val`.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `EWrongTwoStepTransferWrapper` if `borrow` does not correspond to `self`.
+/// - `EWrongTwoStepTransferObject` if `obj` does not match the borrowed object.
 public fun return_val<T: key + store>(
     self: &mut TwoStepTransferWrapper<T>,
     obj: T,
@@ -150,6 +187,13 @@ public fun return_val<T: key + store>(
 
 /// Permanently unwrap the object, deleting the wrapper. Only the current owner can call this,
 /// and it bypasses the request flow, effectively recovering direct ownership.
+///
+/// #### Parameters
+/// - `self`: Wrapper to unwrap.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - The wrapped object.
 public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxContext): T {
     let TwoStepTransferWrapper { id: mut wrapper_id } = self;
     let obj = dof::remove(&mut wrapper_id, WrappedKey());
@@ -166,6 +210,14 @@ public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxC
 
 /// Initiate an ownership transfer by creating a shared request and sending the wrapper to it via
 /// TTO. The caller is the current owner and `new_owner` becomes the prospective owner.
+///
+/// #### Parameters
+/// - `self`: Wrapper being transferred.
+/// - `new_owner`: Prospective owner who may accept the transfer.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - Nothing.
 public fun initiate_transfer<T: key + store>(
     self: TwoStepTransferWrapper<T>,
     new_owner: address,
@@ -191,6 +243,18 @@ public fun initiate_transfer<T: key + store>(
 
 /// Accept a request that was previously initiated through `initiate_transfer`, move the wrapper to
 /// the prospective owner, and emit a `TransferAccepted` event for observability.
+///
+/// #### Parameters
+/// - `request`: Pending transfer object created by `initiate_transfer`.
+/// - `wrapper_ticket`: TTO receiving ticket for the wrapper.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `ENotNewOwner` if caller is not the designated new owner.
+/// - `EInvalidTransferRequest` if the received wrapper does not match the request.
 public fun accept_transfer<T: key + store>(
     request: PendingOwnershipTransfer<T>,
     wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>,
@@ -211,6 +275,18 @@ public fun accept_transfer<T: key + store>(
 }
 
 /// Cancel an ownership request, reclaiming the wrapper and deleting the request.
+///
+/// #### Parameters
+/// - `request`: Pending transfer object to cancel.
+/// - `wrapper_ticket`: TTO receiving ticket for the wrapper.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `ENotOwner` if caller is not the owner who initiated the transfer.
+/// - `EInvalidTransferRequest` if the received wrapper does not match the request.
 public fun cancel_transfer<T: key + store>(
     request: PendingOwnershipTransfer<T>,
     wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>,
@@ -233,6 +309,18 @@ public fun cancel_transfer<T: key + store>(
 /// Receive the wrapper from the shared request via TTO so the current owner can access the
 /// wrapped object. The returned `RequestBorrow` hot potato must be consumed by
 /// `request_return_val`.
+///
+/// #### Parameters
+/// - `request`: Mutable pending transfer object.
+/// - `wrapper_ticket`: TTO receiving ticket for the wrapper.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - `(wrapper, borrow)` where `borrow` must be consumed by `request_return_val`.
+///
+/// #### Aborts
+/// - `ENotOwner` if caller is not the owner who initiated the transfer.
+/// - `EInvalidTransferRequest` if the received wrapper does not match the request.
 public fun request_borrow_val<T: key + store>(
     request: &mut PendingOwnershipTransfer<T>,
     wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>,
@@ -247,6 +335,17 @@ public fun request_borrow_val<T: key + store>(
 }
 
 /// Return the wrapper to the request after `request_borrow_val`.
+///
+/// #### Parameters
+/// - `request`: Pending transfer object that should receive the wrapper back.
+/// - `wrapper`: Wrapper to return.
+/// - `borrow`: Hot potato produced by `request_borrow_val`.
+///
+/// #### Returns
+/// - Nothing.
+///
+/// #### Aborts
+/// - `EInvalidTransferRequest` if `wrapper` or `borrow` does not match `request`.
 public fun request_return_val<T: key + store>(
     request: &PendingOwnershipTransfer<T>,
     wrapper: TwoStepTransferWrapper<T>,
