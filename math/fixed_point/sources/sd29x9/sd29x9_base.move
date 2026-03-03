@@ -6,11 +6,19 @@ module openzeppelin_fp_math::sd29x9_base;
 
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 
+// === Constants ===
+
 const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
 const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const SIGN_BIT: u128 = 1u128 << 127;
 const SCALE: u128 = 1_000_000_000; // 10^9
 const SCALE_U256: u256 = SCALE as u256; // 10^9
+
+// === Errors ===
+
+/// Value overflows SD29x9 (must fit in 2^127 signed range)
+#[error(code = 0)]
+const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
 
 // === Public Functions ===
 
