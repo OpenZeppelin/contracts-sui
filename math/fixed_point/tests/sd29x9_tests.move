@@ -736,3 +736,33 @@ fun pow_supports_high_exponents() {
 fun pow_overflow_aborts_for_large_base() {
     sd29x9::max().pow(2);
 }
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_positive() {
+    let x = pos(123 * SCALE + 456_000_000);
+    expect(x.unchecked_sub(sd29x9::zero()), x);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_negative() {
+    let x = neg(123 * SCALE + 456_000_000);
+    expect(x.unchecked_sub(sd29x9::zero()), x);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_max() {
+    let max = sd29x9::max();
+    expect(max.unchecked_sub(sd29x9::zero()), max);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_min() {
+    let min = sd29x9::min();
+    expect(min.unchecked_sub(sd29x9::zero()), min);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_zero() {
+    let zero = sd29x9::zero();
+    expect(zero.unchecked_sub(zero), zero);
+}
