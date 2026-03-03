@@ -144,8 +144,9 @@ public fun unwrap(x: SD29x9): u128 {
 // ==== Internal Functions ====
 
 public(package) fun two_complement(bits: u128): u128 {
-    let bitwise_not = bits ^ U128_MAX_VALUE;
-    bitwise_not + 1
+    let inverted = bits ^ U128_MAX_VALUE;
+    let sum = (inverted as u256) + 1;
+    (sum & (U128_MAX_VALUE as u256)) as u128
 }
 
 public(package) fun from_bits(bits: u128): SD29x9 {
