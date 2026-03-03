@@ -50,29 +50,50 @@ public use fun openzeppelin_fp_math::ud30x9_base::unchecked_add as UD30x9.unchec
 public use fun openzeppelin_fp_math::ud30x9_base::unchecked_sub as UD30x9.unchecked_sub;
 public use fun openzeppelin_fp_math::ud30x9_base::xor as UD30x9.xor;
 
-/// Returns a `UD30x9` value of zero.
+/// Constructs the zero value in `UD30x9` representation.
+///
+/// #### Returns
+/// - The `UD30x9` representation of `0`.
 public fun zero(): UD30x9 {
     UD30x9(0)
 }
 
-/// Returns a representation of one in `UD30x9` type.
+/// Constructs the value of one in `UD30x9` representation.
+///
+/// #### Returns
+/// - The `UD30x9` representation of `1`.
 public fun one(): UD30x9 {
     UD30x9(SCALE)
 }
 
-/// Returns the maximum value for `UD30x9`
+/// Constructs the maximum representable `UD30x9` value.
+///
+/// #### Returns
+/// - The largest possible `UD30x9` value.
 public fun max(): UD30x9 {
     UD30x9(std::u128::max_value!())
 }
 
 // === Casting helpers ===
 
-/// Wraps a `u128` number into a `UD30x9` value type.
+/// Wraps raw `u128` bits into a `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Raw fixed-point value to wrap.
+///
+/// #### Returns
+/// - The wrapped `UD30x9` value.
 public fun wrap(x: u128): UD30x9 {
     UD30x9(x)
 }
 
-/// Unwraps a `UD30x9` value into a `u128`.
+/// Returns the underlying `u128` value of a `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Value to unwrap.
+///
+/// #### Returns
+/// - The underlying `u128` value.
 public fun unwrap(x: UD30x9): u128 {
     x.0
 }

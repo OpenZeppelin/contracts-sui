@@ -18,28 +18,67 @@ const EOverflow: vector<u8> = b"Value overflows UD30x9 (must fit in 2^128 unsign
 
 // === Public Functions ===
 
-/// Implements the checked addition operation (+) for the `UD30x9` type.
+/// Adds two `UD30x9` values.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The sum `x + y`.
+///
+/// #### Aborts
+/// - Aborts if the sum exceeds the representable `UD30x9` range.
 public fun add(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     wrap_u256(x + y)
 }
 
-/// Implements the AND (&) bitwise operation for `UD30x9` type with `u128` bits.
+/// Performs a bitwise AND between raw `UD30x9` bits and a `u128` mask.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Bit mask applied to `x`'s underlying bits.
+///
+/// #### Returns
+/// - The result of bitwise AND operation.
 public fun and(x: UD30x9, bits: u128): UD30x9 {
     wrap(x.unwrap() & bits)
 }
 
-/// Implements the AND (&) bitwise operation for `UD30x9` type with another `UD30x9`.
+/// Performs a bitwise AND between two `UD30x9` raw bit patterns.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The result of bitwise AND operation.
 public fun and2(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() & y.unwrap())
 }
 
-/// Returns the absolute value of a `UD30x9`. For unsigned types, this is always the value itself.
+/// Returns the absolute value of a `UD30x9`.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `x` unchanged, since `UD30x9` is unsigned.
 public fun abs(x: UD30x9): UD30x9 {
     x
 }
 
-/// Rounds up a `UD30x9` to the nearest integer (towards positive infinity).
+/// Rounds toward positive infinity to the next integer (if fractional), otherwise unchanged.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `x` rounded up (ceiling) at integer precision.
+///
+/// #### Aborts
+/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
 public fun ceil(x: UD30x9): UD30x9 {
     let value = x.unwrap() as u256;
     let fractional = value % SCALE_U256;
@@ -52,12 +91,25 @@ public fun ceil(x: UD30x9): UD30x9 {
     }
 }
 
-/// Implements the equal operation (==) for `UD30x9` type.
+/// Checks whether two `UD30x9` values are equal.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - `true` if `x == y`, otherwise `false`.
 public fun eq(x: UD30x9, y: UD30x9): bool {
     x.unwrap() == y.unwrap()
 }
 
-/// Rounds down a `UD30x9` to the nearest integer (towards zero).
+/// Rounds down to the nearest integer multiple of `1e9`.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `x` rounded down (floor) at integer precision.
 public fun floor(x: UD30x9): UD30x9 {
     let value = x.unwrap();
     let fractional = value % SCALE;
@@ -68,56 +120,143 @@ public fun floor(x: UD30x9): UD30x9 {
     }
 }
 
-/// Implements the greater than operation (>) for `UD30x9` type.
+/// Compares whether `x` is greater than `y`.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - `true` if `x > y`, otherwise `false`.
 public fun gt(x: UD30x9, y: UD30x9): bool {
     x.unwrap() > y.unwrap()
 }
 
-/// Implements the greater than or equal to operation (>=) for `UD30x9` type.
+/// Compares whether `x` is greater than or equal to `y`.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - `true` if `x >= y`, otherwise `false`.
 public fun gte(x: UD30x9, y: UD30x9): bool {
     x.unwrap() >= y.unwrap()
 }
 
-/// Implements a zero comparison check function for `UD30x9` type.
+/// Checks whether a value is exactly zero.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `true` if `x` is zero, otherwise `false`.
 public fun is_zero(x: UD30x9): bool {
     x.unwrap() == 0
 }
 
-/// Implements the left shift operation (<<) for `UD30x9` type.
+/// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
+/// The high bits are dropped if they overflow past the 128-bit boundary.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Number of bit positions to shift left.
+///
+/// #### Returns
+/// - Zero if `bits >= 128` (all bits shifted out).
+/// - Otherwise, the result of shifting the `x`'s raw bits left by `bits`.
 public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+    if (bits >= 128) {
+        return wrap(0)
+    };
     wrap(x.unwrap() << bits)
 }
 
-/// Implements the lower than operation (<) for `UD30x9` type.
+/// Compares whether `x` is less than `y`.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - `true` if `x < y`, otherwise `false`.
 public fun lt(x: UD30x9, y: UD30x9): bool {
     x.unwrap() < y.unwrap()
 }
 
-/// Implements the lower than or equal to operation (<=) for `UD30x9` type.
+/// Compares whether `x` is less than or equal to `y`.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - `true` if `x <= y`, otherwise `false`.
 public fun lte(x: UD30x9, y: UD30x9): bool {
     x.unwrap() <= y.unwrap()
 }
 
-/// Implements the checked modulo operation (%) for `UD30x9` type.
+/// Computes the remainder of dividing one `UD30x9` value by another.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The remainder of `x` divided by `y`.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
 public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() % y.unwrap())
 }
 
-/// Implements the checked multiplication operation (*) for `UD30x9` type.
+/// Multiplies two `UD30x9` values with fixed-point scaling.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`.
+///
+/// #### Aborts
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let product = x * y / SCALE_U256;
     wrap_u256(product)
 }
 
-/// Implements the checked division operation (/) for `UD30x9` type.
+/// Divides `x` by `y` with fixed-point scaling.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The quotient `x / y`.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let numerator = x * SCALE_U256;
     wrap_u256(numerator / y)
 }
 
-/// Implements the checked exponentiation operation (^) for `UD30x9` type.
+/// Raises `x` to a power of `exp`.
+///
+/// #### Parameters
+/// - `x`: Base value.
+/// - `exp`: Exponent.
+///
+/// #### Returns
+/// - The `exp` power of `x`.
+///
+/// #### Aborts
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun pow(x: UD30x9, exp: u8): UD30x9 {
     if (exp == 0) {
         return one()
@@ -137,34 +276,83 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     wrap_u256(result)
 }
 
-/// Implements the not equal operation (!=) for `UD30x9` type.
+/// Checks whether two `UD30x9` values are not equal.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - `true` if `x != y`, otherwise `false`.
 public fun neq(x: UD30x9, y: UD30x9): bool {
     x.unwrap() != y.unwrap()
 }
 
-/// Implements the NOT (~) bitwise operation for `UD30x9` type.
+/// Performs a bitwise NOT on the raw `UD30x9` bits.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - The result of bitwise NOT operation.
 public fun not(x: UD30x9): UD30x9 {
     wrap(x.unwrap() ^ U128_MAX_VALUE)
 }
 
-/// Implements the OR (|) bitwise operation for `UD30x9` type.
+/// Performs a bitwise OR between two `UD30x9` raw bit patterns.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The result of bitwise OR operation.
 public fun or(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() | y.unwrap())
 }
 
-/// Implements the right shift operation (>>) for `UD30x9` type.
+/// Performs a logical right shift on the underlying 128-bit representation of a `UD30x9` value.
+/// Vacated high bits are filled with zeros.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Number of bit positions to shift right.
+///
+/// #### Returns
+/// - Zero if `bits >= 128`.
+/// - Otherwise, the result of shifting the `x`'s raw bits right by `bits`.
 public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+    if (bits >= 128) {
+        return wrap(0)
+    };
     wrap(x.unwrap() >> bits)
 }
 
-/// Implements the checked subtraction operation (-) for `UD30x9` type.
+/// Subtracts `y` from `x`.
+///
+/// #### Parameters
+/// - `x`: First operand (minuend).
+/// - `y`: Second operand (subtrahend).
+///
+/// #### Returns
+/// - The difference `x - y`.
+///
+/// #### Aborts
+/// - Aborts if `y > x`.
 public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap(), y.unwrap());
     assert!(x >= y, EOverflow);
     wrap(x - y)
 }
 
-/// Implements the unchecked addition operation (+) for `UD30x9` type.
+/// Performs unchecked addition of two `UD30x9` values.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The wrapping sum `x + y` modulo `2^128`.
 public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let sum = x + y;
@@ -175,7 +363,14 @@ public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(wrapped)
 }
 
-/// Implements the unchecked subtraction operation (-) for `UD30x9` type.
+/// Performs unchecked subtraction of two `UD30x9` values.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The wrapping difference `x - y` modulo `2^128`.
 public fun unchecked_sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let u128_max = U128_MAX_VALUE as u256;
@@ -189,7 +384,14 @@ public fun unchecked_sub(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(wrapped)
 }
 
-/// Implements the XOR (^) bitwise operation for `UD30x9` type.
+/// Performs a bitwise XOR between two `UD30x9` raw bit patterns.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The result of bitwise XOR operation.
 public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() ^ y.unwrap())
 }

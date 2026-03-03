@@ -196,6 +196,36 @@ fun unchecked_add_and_sub_wrap_around() {
 }
 
 #[test]
+fun unchecked_sub_zero_is_identity_for_positive() {
+    let x = pos(123 * SCALE + 456_000_000);
+    expect(x.unchecked_sub(sd29x9::zero()), x);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_negative() {
+    let x = neg(123 * SCALE + 456_000_000);
+    expect(x.unchecked_sub(sd29x9::zero()), x);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_max() {
+    let max = sd29x9::max();
+    expect(max.unchecked_sub(sd29x9::zero()), max);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_min() {
+    let min = sd29x9::min();
+    expect(min.unchecked_sub(sd29x9::zero()), min);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_zero() {
+    let zero = sd29x9::zero();
+    expect(zero.unchecked_sub(zero), zero);
+}
+
+#[test]
 fun logical_helpers_match_sd29x9_interface() {
     let value = pos(123);
     assert!(sd29x9::zero().is_zero());

@@ -119,14 +119,28 @@ fun modulo_with_zero_divisor_aborts() {
     fixed(10).mod(fixed(0));
 }
 
-#[test, expected_failure]
-fun lshift_by_128_aborts() {
-    fixed(1).lshift(128);
+#[test]
+fun lshift_by_128_returns_zero() {
+    let x = fixed(1);
+    expect(x.lshift(128), fixed(0));
 }
 
-#[test, expected_failure]
-fun rshift_by_128_aborts() {
-    fixed(1).rshift(128);
+#[test]
+fun rshift_by_128_returns_zero() {
+    let x = fixed(1);
+    expect(x.rshift(128), fixed(0));
+}
+
+#[test]
+fun lshift_by_255_returns_zero() {
+    let x = fixed(1);
+    expect(x.lshift(255), fixed(0));
+}
+
+#[test]
+fun rshift_by_255_returns_zero() {
+    let x = fixed(1);
+    expect(x.rshift(255), fixed(0));
 }
 
 #[test]
