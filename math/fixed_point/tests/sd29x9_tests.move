@@ -26,6 +26,12 @@ fun expect(left: SD29x9, right: SD29x9) {
 // ==== Tests ====
 
 #[test]
+fun wrap_max_positive() {
+    let value = sd29x9::wrap(MAX_POSITIVE_VALUE, false);
+    expect(value, sd29x9::max());
+}
+
+#[test]
 fun addition_and_subtraction_cover_signs() {
     expect(pos(10).add(neg(5)), pos(5));
     expect(neg(10).add(pos(5)), neg(5));
@@ -34,6 +40,36 @@ fun addition_and_subtraction_cover_signs() {
     expect(pos(20).sub(pos(7)), pos(13));
     expect(pos(7).sub(pos(20)), neg(13));
     expect(neg(9).sub(neg(4)), neg(5));
+}
+
+#[test]
+fun sum_handles_edge_cases() {
+    let (min, max, zero) = (sd29x9::min(), sd29x9::max(), sd29x9::zero());
+    expect(min.add(zero), min);
+    expect(max.add(zero), max);
+    expect(zero.add(min), min);
+    expect(zero.add(max), max);
+
+    let one = pos(1);
+    expect(max.negate().add(one.negate()), min);
+    expect(max.sub(one).add(one), max);
+    expect(min.add(one).add(one).negate().add(one), max);
+}
+
+#[test]
+fun sub_handles_edge_cases() {
+    let (min, max, zero) = (sd29x9::min(), sd29x9::max(), sd29x9::zero());
+    expect(min.sub(zero), min);
+    expect(max.sub(zero), max);
+
+    let one = pos(1);
+    let min_plus_one = min.add(one);
+    expect(zero.sub(min_plus_one), max);
+    expect(zero.sub(max), min_plus_one);
+
+    expect(max.negate().add(one.negate()), min);
+    expect(max.sub(one).add(one), max);
+    expect(min.add(one).add(one).negate().add(one), max);
 }
 
 #[test]
@@ -123,14 +159,14 @@ fun checked_sub_overflow_aborts() {
 }
 
 #[test]
-fun modulo_tracks_dividend_sign() {
+fun mod_tracks_dividend_sign() {
     expect(pos(100).mod(pos(15)), pos(10));
     expect(neg(100).mod(pos(15)), neg(10));
     expect(pos(42).mod(neg(21)), sd29x9::zero());
 }
 
 #[test, expected_failure]
-fun modulo_with_zero_divisor_aborts() {
+fun mod_with_zero_modulus_aborts() {
     pos(10).mod(sd29x9::zero());
 }
 
@@ -206,6 +242,11 @@ fun abs_handles_edge_cases() {
 
     // Max positive value remains unchanged
     expect(sd29x9::max().abs(), sd29x9::max());
+}
+
+#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+fun abs_fails_for_min() {
+    sd29x9::min().abs();
 }
 
 // === ceil ===
@@ -399,4 +440,299 @@ fun negate_fails_for_min() {
 fun negate_handles_min_minus_one() {
     let min_minus_one = neg(MIN_NEGATIVE_VALUE - 1);
     expect(min_minus_one.negate(), sd29x9::max());
+}
+
+// === mul ===
+
+#[test]
+fun mul_handles_multiplication_by_zero() {
+    let zero = sd29x9::zero();
+    let values = vector[
+        sd29x9::zero(),
+        sd29x9::one(),
+        sd29x9::one().negate(),
+        pos(5 * SCALE + 250_000_000),
+        neg(5 * SCALE + 250_000_000),
+        pos(500_000_000_000_000_000),
+        neg(500_000_000_000_000_000),
+    ];
+    values.destroy!(|val| {
+        expect(val.mul(zero), zero);
+        expect(zero.mul(val), zero);
+    });
+}
+
+#[test]
+fun mul_handles_multiplication_by_one() {
+    let one = sd29x9::one();
+    let values = vector[
+        sd29x9::zero(),
+        sd29x9::one(),
+        sd29x9::one().negate(),
+        pos(5 * SCALE + 250_000_000),
+        neg(5 * SCALE + 250_000_000),
+        pos(500_000_000_000_000_000),
+        neg(500_000_000_000_000_000),
+    ];
+    values.destroy!(|val| {
+        expect(val.mul(one), val);
+        expect(one.mul(val), val);
+    });
+}
+
+#[test]
+fun mul_handles_multiplication_by_minus_one() {
+    let minus_one = sd29x9::one().negate();
+    let values = vector[
+        sd29x9::zero(),
+        sd29x9::one(),
+        sd29x9::one().negate(),
+        pos(5 * SCALE + 250_000_000),
+        neg(5 * SCALE + 250_000_000),
+        pos(500_000_000_000_000_000),
+        neg(500_000_000_000_000_000),
+    ];
+    values.destroy!(|val| {
+        expect(val.mul(minus_one), val.negate());
+        expect(minus_one.mul(val), val.negate());
+    });
+}
+
+#[test]
+fun mul_handles_signs_for_integers() {
+    let two = pos(2 * SCALE);
+    let three = pos(3 * SCALE);
+    let six = pos(6 * SCALE);
+    let minus_two = two.negate();
+    let minus_three = three.negate();
+    let minus_six = six.negate();
+
+    // 1. Both positive
+    expect(two.mul(three), six);
+
+    // 2. Left positive, right negative
+    expect(two.mul(minus_three), minus_six);
+
+    // 3. Left negative, right positive
+    expect(minus_two.mul(three), minus_six);
+
+    // 4. Both negative
+    expect(minus_two.mul(minus_three), six);
+}
+
+#[test]
+fun mul_handles_signs_for_fractional() {
+    // 1.5 * 2.25 = 3.375
+    let left = pos(1_500_000_000);
+    let right = pos(2_250_000_000);
+    let expected = pos(3_375_000_000);
+
+    // 1. Both positive
+    expect(left.mul(right), expected);
+
+    // 2. Left positive, right negative
+    expect(left.mul(right.negate()), expected.negate());
+
+    // 3. Left negative, right positive
+    expect(left.negate().mul(right), expected.negate());
+
+    // 4. Both negative
+    expect(left.negate().mul(right.negate()), expected);
+}
+
+#[test]
+fun mul_handles_fractional_products() {
+    let a = pos(1_500_000_000);
+    let b = pos(2_250_000_000);
+    let product = pos(3_375_000_000);
+
+    // 1.5 * 2.25 = 3.375
+    expect(a.mul(b), pos(3_375_000_000));
+
+    // 1.5 * -2.25 = -3.375
+    expect(a.mul(b.negate()), product.negate());
+
+    // -1.5 * 2.25 = -3.375
+    expect(a.negate().mul(b), product.negate());
+
+    // -1.5 * -2.25 = 3.375
+    expect(a.negate().mul(b.negate()), product);
+}
+
+#[test]
+fun mul_truncates_towards_zero_at_scale_boundary() {
+    // 1.000000001 * 1.000000001 = 1.000000002000000001 -> 1.000000002
+    let x = pos(SCALE + 1);
+    expect(x.mul(x), pos(SCALE + 2));
+
+    // 1.000000001 * 1.000000002 = 1.000000003000000002 -> 1.000000003
+    expect(pos(SCALE + 1).mul(pos(SCALE + 2)), pos(SCALE + 3));
+
+    // 0.999999999 * 0.999999999 = 0.999999998000000001 -> 0.999999998
+    let almost_one = pos(SCALE - 1);
+    expect(almost_one.mul(almost_one), pos(SCALE - 2));
+
+    // Sign checks near the truncation boundary
+    expect(x.negate().mul(x), neg(SCALE + 2));
+    expect(x.negate().mul(x.negate()), pos(SCALE + 2));
+}
+
+#[test]
+fun mul_handles_difficult_fractional_magnitudes() {
+    // (999999999.999999999)^2 = 999999999999999998.000000000000000001
+    let value = pos(999_999_999_999_999_999);
+    let expected_square = pos(999_999_999_999_999_998_000_000_000);
+    expect(value.mul(value), pos(999_999_999_999_999_998_000_000_000));
+    expect(value.negate().mul(value), expected_square.negate());
+    expect(value.mul(value.negate()), expected_square.negate());
+    expect(value.negate().mul(value.negate()), expected_square);
+
+    // 123456789.123456789 * 987654321.987654321
+    let left = pos(123_456_789_123_456_789);
+    let right = pos(987_654_321_987_654_321);
+    let expected_product = pos(121_932_631_356_500_531_347_203_169);
+    expect(left.mul(right), expected_product);
+    expect(left.negate().mul(right), expected_product.negate());
+    expect(left.mul(right.negate()), expected_product.negate());
+    expect(left.negate().mul(right.negate()), expected_product);
+}
+
+#[test]
+fun mul_large_intermediate_product_does_not_overflow() {
+    // These products exceed u128 before scaling down, so this checks that
+    // multiplication uses a wider intermediate and only then divides by SCALE
+    let half = pos(SCALE / 2); // 0.5
+    let max = sd29x9::max();
+    let min = sd29x9::min();
+
+    expect(max.mul(half), pos(MAX_POSITIVE_VALUE / 2));
+    expect(half.mul(max), pos(MAX_POSITIVE_VALUE / 2));
+
+    expect(min.mul(half), neg(MIN_NEGATIVE_VALUE / 2));
+    expect(half.mul(min), neg(MIN_NEGATIVE_VALUE / 2));
+}
+
+#[test]
+fun mul_handles_min_times_one() {
+    let min = sd29x9::min();
+    let one = sd29x9::one();
+    expect(min.mul(one), min);
+}
+
+#[test]
+fun mul_handles_max_times_one() {
+    let max = sd29x9::max();
+    let one = sd29x9::one();
+    expect(max.mul(one), max);
+}
+
+#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+fun mul_overflow_aborts_for_min_times_negative_one() {
+    sd29x9::min().mul(neg(SCALE));
+}
+
+#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+fun mul_overflow_aborts_for_large_positive_result() {
+    sd29x9::max().mul(pos(SCALE + 1));
+}
+
+#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+fun mul_overflow_aborts_for_large_negative_result() {
+    sd29x9::min().mul(pos(SCALE + 1));
+}
+
+// === div ===
+
+#[test]
+fun div_handles_zero_sign_and_identity_cases() {
+    let zero = sd29x9::zero();
+    let one = pos(SCALE);
+    let neg_one = neg(SCALE);
+    let value = pos(7 * SCALE + 500_000_000); // 7.5
+
+    expect(zero.div(value), zero);
+    expect(value.div(one), value);
+    expect(value.div(neg_one), value.negate());
+}
+
+#[test]
+fun div_handles_signs_and_exact_fractional_results() {
+    // 7.5 / 2.5 = 3.0
+    let numerator = pos(7 * SCALE + 500_000_000);
+    let denominator = pos(2 * SCALE + 500_000_000);
+    expect(numerator.div(denominator), pos(3 * SCALE));
+    expect(numerator.div(denominator.negate()), neg(3 * SCALE));
+    expect(numerator.negate().div(denominator.negate()), pos(3 * SCALE));
+}
+
+#[test]
+fun div_truncates_towards_zero() {
+    // 1.0 / 3.0 = 0.333333333...
+    expect(pos(SCALE).div(pos(3 * SCALE)), pos(333_333_333));
+    expect(neg(SCALE).div(pos(3 * SCALE)), neg(333_333_333));
+}
+
+#[test]
+fun div_handles_min_over_one() {
+    expect(sd29x9::min().div(pos(SCALE)), sd29x9::min());
+}
+
+#[test, expected_failure]
+fun div_by_zero_aborts() {
+    pos(10 * SCALE).div(sd29x9::zero());
+}
+
+#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+fun div_handles_min_div_negative_one() {
+    sd29x9::min().div(neg(SCALE));
+}
+
+// === pow ===
+
+#[test]
+fun pow_handles_zero_and_one_exponents() {
+    let x = pos(12 * SCALE + 345_678_901);
+    expect(x.pow(0), sd29x9::one());
+    expect(x.pow(1), x);
+    expect(sd29x9::zero().pow(0), sd29x9::one());
+}
+
+#[test]
+fun pow_handles_zero_base_and_sign_parity() {
+    let zero = sd29x9::zero();
+    expect(zero.pow(5), zero);
+
+    let neg_base = neg(2 * SCALE);
+    expect(neg_base.pow(2), pos(4 * SCALE));
+    expect(neg_base.pow(3), neg(8 * SCALE));
+}
+
+#[test]
+fun pow_handles_fractional_values_and_truncation() {
+    // 1.5^2 = 2.25, 1.5^3 = 3.375
+    let one_point_five = pos(1_500_000_000);
+    expect(one_point_five.pow(2), pos(2_250_000_000));
+    expect(one_point_five.pow(3), pos(3_375_000_000));
+
+    // 1.000000001^2 = 1.000000002000000001 -> 1.000000002
+    let epsilon = pos(SCALE + 1);
+    expect(epsilon.pow(2), pos(SCALE + 2));
+}
+
+#[test]
+fun pow_handles_negative_one_parity() {
+    let neg_one = neg(SCALE);
+    expect(neg_one.pow(2), pos(SCALE));
+    expect(neg_one.pow(3), neg(SCALE));
+}
+
+#[test]
+fun pow_supports_high_exponents() {
+    let val = pos(SCALE + 250_000_000); // 1.25
+    val.pow(255);
+}
+
+#[test, expected_failure]
+fun pow_overflow_aborts_for_large_base() {
+    sd29x9::max().pow(2);
 }

@@ -23,6 +23,7 @@ public struct SD29x9(u128) has copy, drop, store;
 const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
 const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
+const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Errors ===
 
@@ -37,6 +38,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::add as SD29x9.add;
 public use fun openzeppelin_fp_math::sd29x9_base::and as SD29x9.and;
 public use fun openzeppelin_fp_math::sd29x9_base::and2 as SD29x9.and2;
 public use fun openzeppelin_fp_math::sd29x9_base::ceil as SD29x9.ceil;
+public use fun openzeppelin_fp_math::sd29x9_base::div as SD29x9.div;
 public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
 public use fun openzeppelin_fp_math::sd29x9_base::floor as SD29x9.floor;
 public use fun openzeppelin_fp_math::sd29x9_base::gt as SD29x9.gt;
@@ -46,10 +48,12 @@ public use fun openzeppelin_fp_math::sd29x9_base::lshift as SD29x9.lshift;
 public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
 public use fun openzeppelin_fp_math::sd29x9_base::lte as SD29x9.lte;
 public use fun openzeppelin_fp_math::sd29x9_base::mod as SD29x9.mod;
+public use fun openzeppelin_fp_math::sd29x9_base::mul as SD29x9.mul;
 public use fun openzeppelin_fp_math::sd29x9_base::negate as SD29x9.negate;
 public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
 public use fun openzeppelin_fp_math::sd29x9_base::not as SD29x9.not;
 public use fun openzeppelin_fp_math::sd29x9_base::or as SD29x9.or;
+public use fun openzeppelin_fp_math::sd29x9_base::pow as SD29x9.pow;
 public use fun openzeppelin_fp_math::sd29x9_base::rshift as SD29x9.rshift;
 public use fun openzeppelin_fp_math::sd29x9_base::sub as SD29x9.sub;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchecked_add;
@@ -61,12 +65,17 @@ public fun zero(): SD29x9 {
     SD29x9(0)
 }
 
-/// Returns the representation of -2^127 in SD29x9
+/// Returns a representation of one in `SD29x9` type.
+public fun one(): SD29x9 {
+    SD29x9(SCALE)
+}
+
+/// Returns the representation of -2^127 in `SD29x9`
 public fun min(): SD29x9 {
     SD29x9(MIN_NEGATIVE_VALUE)
 }
 
-/// Returns the representation of 2^127 - 1 in SD29x9
+/// Returns the representation of 2^127 - 1 in `SD29x9`
 public fun max(): SD29x9 {
     SD29x9(MAX_POSITIVE_VALUE)
 }
@@ -108,8 +117,8 @@ public fun unwrap(x: SD29x9): u128 {
 
 // ==== Internal Functions ====
 
-public(package) fun two_complement(x: u128): u128 {
-    let bitwise_not = x ^ U128_MAX_VALUE;
+public(package) fun two_complement(bits: u128): u128 {
+    let bitwise_not = bits ^ U128_MAX_VALUE;
     bitwise_not + 1
 }
 
