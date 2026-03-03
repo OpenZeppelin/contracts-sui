@@ -4,17 +4,57 @@
 module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
+use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 
 // === Constants ===
 
 const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
 const SCALE: u128 = 1_000_000_000; // 10^9
 const SCALE_U256: u256 = SCALE as u256; // 10^9
+const MAX_POSITIVE_SD29x9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
 
 // === Errors ===
 
 #[error(code = 0)]
 const EOverflow: vector<u8> = b"Value overflows UD30x9 (must fit in 2^128 unsigned range)";
+
+/// Value cannot be converted to `SD29x9`
+#[error(code = 1)]
+const ECannotBeConvertedToSD29x9: vector<u8> = b"Value cannot be converted to SD29x9";
+
+// === Conversion ===
+
+/// Converts a `UD30x9` value to a `SD29x9` value.
+///
+/// #### Parameters
+/// - `x`: Input `UD30x9` value.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `x`.
+/// 
+/// #### Aborts
+/// - Aborts if `x` is greater than max positive `SD29x9` value.
+public fun into_SD29x9(x: UD30x9): SD29x9 {
+    let value = x.unwrap();
+    assert!(value <= MAX_POSITIVE_SD29x9, ECannotBeConvertedToSD29x9);
+    sd29x9::wrap(value, false)
+}
+
+/// Tries to convert a `UD30x9` value to a `SD29x9` value.
+///
+/// #### Parameters
+/// - `x`: Input `UD30x9` value.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `x` if `x` is less than or equal to max positive `SD29x9` value, otherwise `none`.
+public fun try_into_SD29x9(x: UD30x9): Option<SD29x9> {
+    let value = x.unwrap();
+    if (value > MAX_POSITIVE_SD29x9) {
+        option::none()
+    } else {
+        option::some(sd29x9::wrap(value, false))
+    }
+}
 
 // === Public Functions ===
 
