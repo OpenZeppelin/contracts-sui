@@ -85,6 +85,9 @@ public fun is_zero(x: UD30x9): bool {
 
 /// Implements the left shift operation (<<) for `UD30x9` type.
 public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+    if (bits >= 128) {
+        return wrap(0)
+    };
     wrap(x.unwrap() << bits)
 }
 
@@ -154,6 +157,9 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 
 /// Implements the right shift operation (>>) for `UD30x9` type.
 public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+    if (bits >= 128) {
+        return wrap(0)
+    };
     wrap(x.unwrap() >> bits)
 }
 
