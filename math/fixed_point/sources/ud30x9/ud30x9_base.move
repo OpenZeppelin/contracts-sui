@@ -155,18 +155,20 @@ public fun is_zero(x: UD30x9): bool {
     x.unwrap() == 0
 }
 
-/// Performs a logical left shift on the underlying 128-bit representation.
+/// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
+/// The high bits are dropped if they overflow past the 128-bit boundary.
 ///
 /// #### Parameters
 /// - `x`: Input value.
 /// - `bits`: Number of bit positions to shift left.
 ///
 /// #### Returns
-/// - The value obtained by shifting `x` left by `bits`.
-///
-/// #### Aborts
-/// - Aborts if `bits >= 128`.
+/// - Zero if `bits >= 128` (all bits shifted out).
+/// - Otherwise, the result of shifting the `x`'s raw bits left by `bits`.
 public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+    if (bits >= 128) {
+        return wrap(0)
+    };
     wrap(x.unwrap() << bits)
 }
 
@@ -309,18 +311,20 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() | y.unwrap())
 }
 
-/// Performs a logical right shift on the underlying 128-bit representation.
+/// Performs a logical right shift on the underlying 128-bit representation of a `UD30x9` value.
+/// Vacated high bits are filled with zeros.
 ///
 /// #### Parameters
 /// - `x`: Input value.
 /// - `bits`: Number of bit positions to shift right.
 ///
 /// #### Returns
-/// - The value obtained by shifting `x` right by `bits`.
-///
-/// #### Aborts
-/// - Aborts if `bits >= 128`.
+/// - Zero if `bits >= 128`.
+/// - Otherwise, the result of shifting the `x`'s raw bits right by `bits`.
 public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+    if (bits >= 128) {
+        return wrap(0)
+    };
     wrap(x.unwrap() >> bits)
 }
 
