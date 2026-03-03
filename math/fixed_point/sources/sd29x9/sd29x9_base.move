@@ -33,7 +33,7 @@ const ECannotBeConvertedToUD30x9: vector<u8> = b"Value cannot be converted to UD
 ///
 /// #### Returns
 /// - The `UD30x9` representation of `x`.
-/// 
+///
 /// #### Aborts
 /// - Aborts if `x` is negative.
 public fun into_UD30x9(x: SD29x9): UD30x9 {
