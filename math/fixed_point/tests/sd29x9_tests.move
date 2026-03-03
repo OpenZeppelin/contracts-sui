@@ -2,6 +2,7 @@
 module openzeppelin_fp_math::sd29x9_tests;
 
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9, from_bits};
+use openzeppelin_fp_math::sd29x9_base;
 use std::unit_test::assert_eq;
 
 const ALL_ONES: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
@@ -57,6 +58,25 @@ fun sum_handles_edge_cases() {
 }
 
 #[test]
+fun sum_can_reach_minimum_value() {
+    let min_val = sd29x9::min();
+    let min_plus_one = min_val.add(pos(1));
+    let zero = sd29x9::zero();
+
+    // 0 + min = min (should work with checked add)
+    expect(zero.add(min_val), min_val);
+    // (min + 1) + (-1) = min
+    expect(min_plus_one.add(neg(1)), min_val);
+}
+
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun sum_handles_overflow() {
+    let max = sd29x9::max();
+    let one = pos(1);
+    expect(max.add(one), sd29x9::min());
+}
+
+#[test]
 fun sub_handles_edge_cases() {
     let (min, max, zero) = (sd29x9::min(), sd29x9::max(), sd29x9::zero());
     expect(min.sub(zero), min);
@@ -72,16 +92,11 @@ fun sub_handles_edge_cases() {
     expect(min.add(one).add(one).negate().add(one), max);
 }
 
-#[test]
-fun sum_can_reach_minimum_value() {
-    let min_val = sd29x9::min();
-    let min_plus_one = min_val.add(pos(1));
-    let zero = sd29x9::zero();
-
-    // 0 + min = min (should work with checked add)
-    expect(zero.add(min_val), min_val);
-    // (min + 1) + (-1) = min
-    expect(min_plus_one.add(neg(1)), min_val);
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun sub_handles_overflow() {
+    let min = sd29x9::min();
+    let one = pos(1);
+    expect(min.sub(one), sd29x9::max());
 }
 
 #[test]
@@ -144,14 +159,14 @@ fun shifts_cover_positive_negative_and_large_offsets() {
     );
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun checked_add_overflow_aborts() {
     let max = sd29x9::max();
     let one = pos(1);
     max.add(one);
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun checked_sub_overflow_aborts() {
     let min_val = sd29x9::min();
     let one = pos(1);
@@ -178,6 +193,36 @@ fun unchecked_add_and_sub_wrap_around() {
 
     let min_val = sd29x9::min();
     expect(min_val.unchecked_sub(one), max);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_positive() {
+    let x = pos(123 * SCALE + 456_000_000);
+    expect(x.unchecked_sub(sd29x9::zero()), x);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_negative() {
+    let x = neg(123 * SCALE + 456_000_000);
+    expect(x.unchecked_sub(sd29x9::zero()), x);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_max() {
+    let max = sd29x9::max();
+    expect(max.unchecked_sub(sd29x9::zero()), max);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_min() {
+    let min = sd29x9::min();
+    expect(min.unchecked_sub(sd29x9::zero()), min);
+}
+
+#[test]
+fun unchecked_sub_zero_is_identity_for_zero() {
+    let zero = sd29x9::zero();
+    expect(zero.unchecked_sub(zero), zero);
 }
 
 #[test]
@@ -244,7 +289,7 @@ fun abs_handles_edge_cases() {
     expect(sd29x9::max().abs(), sd29x9::max());
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun abs_fails_for_min() {
     sd29x9::min().abs();
 }
@@ -303,7 +348,7 @@ fun ceil_handles_edge_cases() {
     expect(pos(1_000_000_000 * SCALE + 500_000_000).ceil(), pos(1_000_000_001 * SCALE));
 }
 
-#[test, expected_failure]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun ceil_fails_for_max() {
     sd29x9::max().ceil();
 }
@@ -431,7 +476,7 @@ fun negate_handles_max() {
     expect(sd29x9::max().negate(), from_bits(MIN_NEGATIVE_VALUE + 1));
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun negate_fails_for_min() {
     sd29x9::min().negate();
 }
@@ -626,17 +671,17 @@ fun mul_handles_max_times_one() {
     expect(max.mul(one), max);
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun mul_overflow_aborts_for_min_times_negative_one() {
     sd29x9::min().mul(neg(SCALE));
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun mul_overflow_aborts_for_large_positive_result() {
     sd29x9::max().mul(pos(SCALE + 1));
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun mul_overflow_aborts_for_large_negative_result() {
     sd29x9::min().mul(pos(SCALE + 1));
 }
@@ -682,7 +727,7 @@ fun div_by_zero_aborts() {
     pos(10 * SCALE).div(sd29x9::zero());
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun div_handles_min_div_negative_one() {
     sd29x9::min().div(neg(SCALE));
 }
@@ -732,37 +777,13 @@ fun pow_supports_high_exponents() {
     val.pow(255);
 }
 
-#[test, expected_failure]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun pow_overflow_aborts_for_large_base() {
     sd29x9::max().pow(2);
 }
 
-#[test]
-fun unchecked_sub_zero_is_identity_for_positive() {
-    let x = pos(123 * SCALE + 456_000_000);
-    expect(x.unchecked_sub(sd29x9::zero()), x);
-}
-
-#[test]
-fun unchecked_sub_zero_is_identity_for_negative() {
-    let x = neg(123 * SCALE + 456_000_000);
-    expect(x.unchecked_sub(sd29x9::zero()), x);
-}
-
-#[test]
-fun unchecked_sub_zero_is_identity_for_max() {
-    let max = sd29x9::max();
-    expect(max.unchecked_sub(sd29x9::zero()), max);
-}
-
-#[test]
-fun unchecked_sub_zero_is_identity_for_min() {
-    let min = sd29x9::min();
-    expect(min.unchecked_sub(sd29x9::zero()), min);
-}
-
-#[test]
-fun unchecked_sub_zero_is_identity_for_zero() {
-    let zero = sd29x9::zero();
-    expect(zero.unchecked_sub(zero), zero);
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun pow_overflow_aborts_for_large_exponent() {
+    let three = pos(3 * SCALE);
+    three.pow(255);
 }

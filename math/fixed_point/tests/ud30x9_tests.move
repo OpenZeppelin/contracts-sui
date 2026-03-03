@@ -105,12 +105,12 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
 }
 
 #[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
-fun checked_add_overflow_aborts() {
+fun checked_add_overflow_aborts_as_expected() {
     fixed(MAX_VALUE).add(fixed(1));
 }
 
 #[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
-fun checked_sub_underflow_aborts() {
+fun checked_sub_underflow_aborts_as_expected() {
     fixed(0).sub(fixed(1));
 }
 
@@ -144,7 +144,7 @@ fun rshift_by_255_returns_zero() {
 }
 
 #[test]
-fun unchecked_addition_wraps_on_overflow() {
+fun unchecked_add_wraps_on_overflow() {
     let a = fixed(5);
     let b = fixed(7);
     assert_eq!(a.unchecked_add(b).unwrap(), 12);
@@ -156,7 +156,7 @@ fun unchecked_addition_wraps_on_overflow() {
 }
 
 #[test]
-fun unchecked_subtraction_wraps_both_directions() {
+fun unchecked_sub_wraps_both_directions() {
     let ten = fixed(10);
     let three = fixed(3);
 
