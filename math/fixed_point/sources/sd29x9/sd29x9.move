@@ -1,7 +1,7 @@
 /// # SD29x9 Fixed-Point Type
 ///
 /// This module defines the `SD29x9` decimal fixed-point type, which represents
-/// signed real numbers using a 2-complement `u128` scaled by `10^9`.
+/// signed real numbers using two's complement `u128` scaled by `10^9`.
 ///
 /// ## Why SD29x9
 /// - Matches Sui’s native coin decimals (9), making conversions from token
@@ -60,22 +60,34 @@ public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchec
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_sub as SD29x9.unchecked_sub;
 public use fun openzeppelin_fp_math::sd29x9_base::xor as SD29x9.xor;
 
-/// Returns a `SD29x9` value of zero.
+/// Constructs the zero value in `SD29x9` representation.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `0`.
 public fun zero(): SD29x9 {
     SD29x9(0)
 }
 
-/// Returns a representation of one in `SD29x9` type.
+/// Constructs the value of one in `SD29x9` representation.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `1`.
 public fun one(): SD29x9 {
     SD29x9(SCALE)
 }
 
-/// Returns the representation of -2^127 in `SD29x9`
+/// Constructs the minimum representable `SD29x9` value.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `-2^127`.
 public fun min(): SD29x9 {
     SD29x9(MIN_NEGATIVE_VALUE)
 }
 
-/// Returns the representation of 2^127 - 1 in `SD29x9`
+/// Constructs the maximum representable `SD29x9` value.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `2^127 - 1`.
 public fun max(): SD29x9 {
     SD29x9(MAX_POSITIVE_VALUE)
 }
@@ -89,7 +101,15 @@ public fun max(): SD29x9 {
 /// If `is_negative` is `true`, the value is converted to its two's complement
 /// form to represent a negative SD29x9.
 ///
-/// Aborts if `x` exceeds the SD29x9 magnitude bounds for a signed 128-bit integer.
+/// #### Parameters
+/// - `x`: Unsigned magnitude to wrap.
+/// - `is_negative`: Whether `x` should be encoded as a negative value.
+///
+/// #### Returns
+/// - The wrapped `SD29x9` value.
+///
+/// #### Aborts
+/// - Aborts if `x` exceeds the representable positive magnitude (`2^127 - 1`).
 ///
 /// NOTE: This function can't be used to obtain the minimum value, use `min()` instead.
 public fun wrap(x: u128, is_negative: bool): SD29x9 {
@@ -110,7 +130,13 @@ public fun wrap(x: u128, is_negative: bool): SD29x9 {
     }
 }
 
-/// Unwraps a `SD29x9` value into a `u128`.
+/// Returns the raw `u128` bits of an `SD29x9` value.
+///
+/// #### Parameters
+/// - `x`: Value to unwrap.
+///
+/// #### Returns
+/// - The underlying `u128` bit representation.
 public fun unwrap(x: SD29x9): u128 {
     x.0
 }
