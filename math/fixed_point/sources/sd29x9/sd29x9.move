@@ -1,7 +1,7 @@
 /// # SD29x9 Fixed-Point Type
 ///
 /// This module defines the `SD29x9` decimal fixed-point type, which represents
-/// signed real numbers using a 2-complement `u128` scaled by `10^9`.
+/// signed real numbers using two's complement `u128` scaled by `10^9`.
 ///
 /// ## Why SD29x9
 /// - Matches Sui’s native coin decimals (9), making conversions from token

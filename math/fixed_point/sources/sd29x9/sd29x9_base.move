@@ -40,8 +40,7 @@ public fun abs(x: SD29x9): SD29x9 {
 /// - The sum `x + y`.
 ///
 /// #### Aborts
-/// - Aborts if intermediate magnitude arithmetic overflows `u128`.
-/// - Aborts if the resulting positive magnitude exceeds the representable `SD29x9` range.
+/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun add(x: SD29x9, y: SD29x9): SD29x9 {
     let result = add_components(decompose(x.unwrap()), decompose(y.unwrap()));
     wrap_components(result)
@@ -409,14 +408,14 @@ public fun unchecked_add(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(wrapping_add_bits(x.unwrap(), y.unwrap()))
 }
 
-/// Performs the unchecked substraction on two `SD29x9` values.
+/// Performs the unchecked subtraction on two `SD29x9` values.
 ///
 /// #### Parameters
 /// - `x`: First operand.
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The result of raw bits substraction.
+/// - The result of raw bits subtraction.
 public fun unchecked_sub(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(wrapping_sub_bits(x.unwrap(), y.unwrap()))
 }

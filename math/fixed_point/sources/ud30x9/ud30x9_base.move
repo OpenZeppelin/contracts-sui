@@ -69,7 +69,7 @@ public fun abs(x: UD30x9): UD30x9 {
     x
 }
 
-/// Rounds toward positive infinity to the nearest integer.
+/// Rounds toward positive infinity to the next integer (if fractional), otherwise unchanged.
 ///
 /// #### Parameters
 /// - `x`: Input value.
@@ -363,7 +363,7 @@ public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(wrapped)
 }
 
-/// Performs unchecked substraction of two `UD30x9` values.
+/// Performs unchecked subtraction of two `UD30x9` values.
 ///
 /// #### Parameters
 /// - `x`: First operand.
