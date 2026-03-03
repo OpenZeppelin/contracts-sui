@@ -159,14 +159,14 @@ fun shifts_cover_positive_negative_and_large_offsets() {
     );
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun checked_add_overflow_aborts() {
     let max = sd29x9::max();
     let one = pos(1);
     max.add(one);
 }
 
-#[test, expected_failure(abort_code = sd29x9::EOverflow)]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun checked_sub_overflow_aborts() {
     let min_val = sd29x9::min();
     let one = pos(1);

@@ -11,8 +11,7 @@ use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_comple
 const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
 const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const SIGN_BIT: u128 = 1u128 << 127;
-const SCALE: u128 = 1_000_000_000; // 10^9
-const SCALE_U256: u256 = SCALE as u256; // 10^9
+const SCALE: u256 = 1_000_000_000; // 10^9
 
 // === Errors ===
 
@@ -249,8 +248,8 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
-    let prod = (x.mag as u256) * (y.mag as u256);
-    let mag = (prod / SCALE_U256) as u128;
+    let prod = x.mag * y.mag;
+    let mag = prod / SCALE;
     wrap_components(Components { neg, mag })
 }
 
@@ -270,9 +269,9 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
-    let numerator = (x.mag as u256) * SCALE_U256;
-    let mag = numerator / (y.mag as u256);
-    wrap_components(Components { neg, mag: mag as u128 })
+    let numerator = x.mag * SCALE;
+    let mag = numerator / y.mag;
+    wrap_components(Components { neg, mag: mag })
 }
 
 /// Raises `x` to a power of `exp`.
@@ -293,13 +292,15 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     if (exp == 1) {
         return x
     };
-    let components = decompose(x.unwrap());
-    let base = components.mag as u256;
-    let neg = components.neg && (exp % 2 != 0);
-    let mut mag = base;
+    let Components { neg, mag} = decompose(x.unwrap());
+    let res_neg = neg && (exp % 2 != 0);
+    let mut res_mag = mag;
     let times = exp - 1;
-    times.do!(|_| mag = mag * base / SCALE_U256);
-    let result = Components { neg, mag: mag as u128 };
+    times.do!(|_| {
+        res_mag = res_mag * mag / SCALE;
+        assert!(res_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
+    });
+    let result = Components { neg: res_neg, mag: res_mag };
     wrap_components(result)
 }
 
@@ -444,14 +445,14 @@ public fun xor(x: SD29x9, y: SD29x9): SD29x9 {
 
 public struct Components has copy, drop {
     neg: bool,
-    mag: u128,
+    mag: u256,
 }
 
 fun decompose(bits: u128): Components {
     if ((bits & SIGN_BIT) != 0) {
-        Components { neg: true, mag: two_complement(bits) }
+        Components { neg: true, mag: two_complement(bits) as u256 }
     } else {
-        Components { neg: false, mag: bits }
+        Components { neg: false, mag: bits as u256 }
     }
 }
 
@@ -475,11 +476,14 @@ fun add_components(x: Components, y: Components): Components {
 
 fun wrap_components(value: Components): SD29x9 {
     if (value.mag == 0) {
-        zero()
-    } else if (value.neg && value.mag == MIN_NEGATIVE_VALUE) {
+        return zero()
+    };
+    let min_negative = MIN_NEGATIVE_VALUE as u256;
+    if (value.neg && value.mag == min_negative) {
         min()
     } else {
-        wrap(value.mag, value.neg)
+        assert!(value.mag < min_negative, EOverflow);
+        wrap(value.mag as u128, value.neg)
     }
 }
 
