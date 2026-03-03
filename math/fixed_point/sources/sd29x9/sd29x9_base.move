@@ -292,7 +292,7 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     if (exp == 1) {
         return x
     };
-    let Components { neg, mag} = decompose(x.unwrap());
+    let Components { neg, mag } = decompose(x.unwrap());
     let res_neg = neg && (exp % 2 != 0);
     let mut res_mag = mag;
     let times = exp - 1;
