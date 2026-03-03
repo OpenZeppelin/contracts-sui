@@ -310,7 +310,7 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     let neg = x.neg != y.neg;
     let numerator = x.mag * SCALE;
     let mag = numerator / y.mag;
-    wrap_components(Components { neg, mag: mag })
+    wrap_components(Components { neg, mag })
 }
 
 /// Raises `x` to a power of `exp`.
