@@ -168,7 +168,7 @@ public fun is_zero(x: SD29x9): bool {
     x.unwrap() == 0
 }
 
-/// Performs a logical left shift on the underlying 128-bit representation. 
+/// Performs a logical left shift on the underlying 128-bit representation.
 /// Doesn't preserve the sign and can move 1s into the sign bit.
 ///
 /// #### Parameters
