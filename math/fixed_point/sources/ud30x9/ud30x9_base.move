@@ -84,7 +84,16 @@ public fun is_zero(x: UD30x9): bool {
 }
 
 /// Implements the left shift operation (<<) for `UD30x9` type.
+///
+/// This shift is performed on the raw unsigned bits.
+/// - If `bits >= 128`, returns zero (all bits shifted out).
+/// - Otherwise, shifts the raw bits left by `bits`.
+/// - This is a logical left shift and can drop high bits when they overflow
+///   past the 128-bit boundary.
 public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+    if (bits >= 128) {
+        return wrap(0)
+    };
     wrap(x.unwrap() << bits)
 }
 
@@ -153,7 +162,15 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 }
 
 /// Implements the right shift operation (>>) for `UD30x9` type.
+///
+/// This shift is performed on the raw unsigned bits.
+/// - If `bits >= 128`, returns zero (all bits shifted out).
+/// - Otherwise, shifts the raw bits right by `bits`.
+/// - This is a logical right shift; vacated high bits are filled with zeros.
 public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+    if (bits >= 128) {
+        return wrap(0)
+    };
     wrap(x.unwrap() >> bits)
 }
 
