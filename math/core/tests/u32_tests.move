@@ -763,5 +763,59 @@ fun mul_mod_handles_large_values() {
 
 #[test, expected_failure(abort_code = macros::EZeroModulus)]
 fun mul_mod_rejects_zero_modulus() {
-    u32::mul_mod(10, 10, 0);
+    u32::mul_mod(2, 3, 0);
+}
+
+// === is_power_of_ten ===
+
+#[test]
+fun is_power_of_ten_basic() {
+    assert_eq!(u32::is_power_of_ten(1), true);
+    assert_eq!(u32::is_power_of_ten(10), true);
+    assert_eq!(u32::is_power_of_ten(100), true);
+    assert_eq!(u32::is_power_of_ten(1000), true);
+    assert_eq!(u32::is_power_of_ten(10000), true);
+    assert_eq!(u32::is_power_of_ten(100000), true);
+    assert_eq!(u32::is_power_of_ten(1000000), true);
+    assert_eq!(u32::is_power_of_ten(10000000), true);
+    assert_eq!(u32::is_power_of_ten(100000000), true);
+    assert_eq!(u32::is_power_of_ten(1000000000), true);
+    assert_eq!(u32::is_power_of_ten(0), false);
+    assert_eq!(u32::is_power_of_ten(2), false);
+    assert_eq!(u32::is_power_of_ten(11), false);
+    assert_eq!(u32::is_power_of_ten(999), false);
+    assert_eq!(u32::is_power_of_ten(1001), false);
+    assert_eq!(u32::is_power_of_ten(1234567890), false);
+}
+
+#[test]
+fun is_power_of_ten_edge_cases() {
+    // Test numbers just below powers of ten
+    assert_eq!(u32::is_power_of_ten(9), false);
+    assert_eq!(u32::is_power_of_ten(99), false);
+    assert_eq!(u32::is_power_of_ten(9999), false);
+    assert_eq!(u32::is_power_of_ten(99999), false);
+    assert_eq!(u32::is_power_of_ten(999999), false);
+    assert_eq!(u32::is_power_of_ten(9999999), false);
+    assert_eq!(u32::is_power_of_ten(99999999), false);
+    assert_eq!(u32::is_power_of_ten(999999999), false);
+
+    // Test numbers just above powers of ten
+    assert_eq!(u32::is_power_of_ten(11), false);
+    assert_eq!(u32::is_power_of_ten(101), false);
+    assert_eq!(u32::is_power_of_ten(10001), false);
+    assert_eq!(u32::is_power_of_ten(100001), false);
+    assert_eq!(u32::is_power_of_ten(1000001), false);
+
+    // Test multiples of 10 that aren't powers of 10
+    assert_eq!(u32::is_power_of_ten(20), false);
+    assert_eq!(u32::is_power_of_ten(30), false);
+    assert_eq!(u32::is_power_of_ten(50), false);
+    assert_eq!(u32::is_power_of_ten(200), false);
+    assert_eq!(u32::is_power_of_ten(500), false);
+    assert_eq!(u32::is_power_of_ten(5000), false);
+    assert_eq!(u32::is_power_of_ten(50000), false);
+
+    // Test max u32 value
+    assert_eq!(u32::is_power_of_ten(4294967295), false);
 }

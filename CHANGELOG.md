@@ -4,10 +4,32 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
+
+### `openzeppelin_fp_math`
+
+#### Added
+
+- `UD30x9` fixed-point type with: (#129)
+  - Core: `wrap`, `unwrap`
+  - Arithmetic: `add`, `sub`, `mul`, `div`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
+  - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
+  - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
+- `SD29x9` fixed-point type with: (#129)
+  - Constants: `zero`, `min`, `max`
+  - Core: `wrap`, `unwrap`
+  - Arithmetic: `add`, `sub`, `mul`, `div`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
+  - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
+  - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
+- `casting_u128` helpers for `UD30x9` and `SD29x9`. (#129)
+
+### `openzeppelin_math`
+
+#### Added
+
+- `is_power_of_ten` helpers for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`. (#125)
 
 ## 1.0.0 (04-03-2026)
 

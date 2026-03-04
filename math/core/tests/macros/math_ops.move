@@ -1,5 +1,5 @@
 #[test_only]
-module openzeppelin_math::macros_tests;
+module openzeppelin_math::math_ops;
 
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding;

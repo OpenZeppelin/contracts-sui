@@ -29,7 +29,7 @@ jobs:
       - name: Set package matrix
         id: set-matrix
         run: |
-          PACKAGES='["math/core", "contracts/access"]'
+          PACKAGES='["contracts/access", "math/core", "math/fixed_point"]'
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
       - name: Cache Sui binary
