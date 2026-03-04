@@ -27,7 +27,7 @@ const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Errors ===
 
-/// Value cannot be safely cast to `SD29x9` after apply
+/// Value cannot be represented as `SD29x9`
 #[error(code = 0)]
 const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
 
@@ -43,6 +43,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
 public use fun openzeppelin_fp_math::sd29x9_base::floor as SD29x9.floor;
 public use fun openzeppelin_fp_math::sd29x9_base::gt as SD29x9.gt;
 public use fun openzeppelin_fp_math::sd29x9_base::gte as SD29x9.gte;
+public use fun openzeppelin_fp_math::sd29x9_base::into_UD30x9 as SD29x9.into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::is_zero as SD29x9.is_zero;
 public use fun openzeppelin_fp_math::sd29x9_base::lshift as SD29x9.lshift;
 public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
@@ -56,6 +57,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::or as SD29x9.or;
 public use fun openzeppelin_fp_math::sd29x9_base::pow as SD29x9.pow;
 public use fun openzeppelin_fp_math::sd29x9_base::rshift as SD29x9.rshift;
 public use fun openzeppelin_fp_math::sd29x9_base::sub as SD29x9.sub;
+public use fun openzeppelin_fp_math::sd29x9_base::try_into_UD30x9 as SD29x9.try_into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchecked_add;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_sub as SD29x9.unchecked_sub;
 public use fun openzeppelin_fp_math::sd29x9_base::xor as SD29x9.xor;

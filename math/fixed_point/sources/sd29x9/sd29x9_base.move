@@ -5,6 +5,7 @@
 module openzeppelin_fp_math::sd29x9_base;
 
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
+use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 
 // === Constants ===
 
@@ -15,9 +16,47 @@ const SCALE: u256 = 1_000_000_000; // 10^9
 
 // === Errors ===
 
-/// Value overflows SD29x9 (must fit in 2^127 signed range)
+/// Value overflows `SD29x9` (must fit in 2^127 signed range)
 #[error(code = 0)]
 const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
+
+/// Value cannot be converted to `UD30x9`
+#[error(code = 1)]
+const ECannotBeConvertedToUD30x9: vector<u8> = b"Value cannot be converted to UD30x9";
+
+// === Conversion ===
+
+/// Converts a `SD29x9` value to a `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input `SD29x9` value.
+///
+/// #### Returns
+/// - The `UD30x9` representation of `x`.
+///
+/// #### Aborts
+/// - Aborts if `x` is negative.
+public fun into_UD30x9(x: SD29x9): UD30x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg, ECannotBeConvertedToUD30x9);
+    ud30x9::wrap(mag as u128)
+}
+
+/// Tries to convert a `SD29x9` value to a `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input `SD29x9` value.
+///
+/// #### Returns
+/// - The `UD30x9` representation of `x` if `x` is non-negative, otherwise `none`.
+public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
+    let Components { neg, mag } = decompose(x.unwrap());
+    if (neg) {
+        option::none()
+    } else {
+        option::some(ud30x9::wrap(mag as u128))
+    }
+}
 
 // === Public Functions ===
 
