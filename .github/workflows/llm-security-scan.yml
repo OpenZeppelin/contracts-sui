@@ -1,0 +1,173 @@
+name: LLM Security Scan (Codex)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.move"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-llm-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-scan:
+    name: Codex vulnerability scan (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Harden the runner (Audit outbound calls)
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Write strict JSON schema for scan output
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/scan_schema.json <<'JSON'
+          {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["vulnerable", "summary", "scanned_commit", "scanned_files", "findings"],
+            "properties": {
+              "vulnerable": { "type": "boolean" },
+              "summary": { "type": "string", "minLength": 1 },
+              "scanned_commit": { "type": "string", "minLength": 7 },
+              "scanned_files": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["severity", "category", "confidence", "file", "line_hint", "title", "description", "recommendation"],
+                  "properties": {
+                    "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+                    "category": { "type": "string", "enum": ["access_control","authz","injection","crypto","dependency","secrets","dos","memory_safety","logic","configuration","other"] },
+                    "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+                    "file": { "type": "string", "minLength": 1 },
+                    "line_hint": { "type": ["string", "null"] },
+                    "title": { "type": "string", "minLength": 1 },
+                    "description": { "type": "string", "minLength": 1 },
+                    "recommendation": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          }
+          JSON
+
+      - name: Run Codex scan (read-only)
+        id: run_codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5-codex
+          sandbox: read-only
+          # default is drop-sudo; leaving explicit for clarity
+          safety-strategy: drop-sudo
+
+          # Write final JSON output to a file for downstream steps/artifacts
+          output-file: /tmp/scan_output.json
+          output-schema-file: /tmp/scan_schema.json
+
+          # Extra CLI args forwarded to `codex exec`
+          codex-args: >-
+            --ask-for-approval never
+            --ephemeral
+
+          prompt: |
+            You are an expert application security auditor.
+
+            SCOPE:
+            - Analyze the repository checked out in this workflow run (the whole codebase).
+            - You MAY read any tracked source/config/docs needed to assess security.
+            - Prefer focusing on code and configuration over generated/binary artifacts.
+
+            CONSTRAINTS:
+            - Read-only analysis: do NOT modify files.
+            - Output ONLY a single JSON object that EXACTLY matches the provided JSON Schema.
+            - If you did not inspect a file, do not claim you did.
+            - Prefer concrete, code-referential findings (file + line hints when possible).
+
+            TASK:
+            1) Identify security vulnerabilities and high-risk security smells, including (non-exhaustive):
+               - auth/authz mistakes, access control bypasses, insecure defaults
+               - injection risks, unsafe deserialization, SSRF, command execution
+               - secrets leakage, weak crypto, broken randomness
+               - dependency/config risks (lockfiles, CI/CD, supply chain)
+               - DoS risks (unbounded loops, regex backtracking, resource exhaustion)
+               - logic flaws that enable fund loss or privilege escalation (if applicable)
+            2) Provide a succinct summary.
+            3) Populate findings with severity/category/confidence, and specific remediation.
+
+            OUTPUT RULES:
+            - scanned_commit MUST be: ${{ github.sha }}
+            - scanned_files MUST list every file you actually inspected (be honest).
+            - Set vulnerable=true iff there is at least one finding.
+            - If you found nothing, findings must be [] and vulnerable=false.
+            - No markdown, no backticks, no extra text — JSON only.
+
+      - name: Validate results & fail on any finding
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+          raw="$(cat /tmp/scan_output.json | tr -d '\r')"
+
+          if ! echo "$raw" | jq empty 2>/dev/null; then
+            echo "ERROR: Could not parse scan output as JSON:"
+            echo "$raw"
+            exit 2
+          fi
+
+          echo "════════════════════════════════════════════════════════════"
+          echo "CODEX LLM SECURITY SCAN RESULTS"
+          echo "════════════════════════════════════════════════════════════"
+          echo "Summary: $(echo "$raw" | jq -r '.summary')"
+          echo "Commit : $(echo "$raw" | jq -r '.scanned_commit')"
+          echo ""
+
+          finding_count="$(echo "$raw" | jq '.findings | length')"
+          vulnerable="$(echo "$raw" | jq -r '.vulnerable')"
+
+          if [ "$finding_count" -gt 0 ]; then
+            echo "Findings ($finding_count):"
+            echo "$raw" | jq -r '
+              .findings[]
+              | "- [\(.severity | ascii_upcase)] (\(.category), confidence=\(.confidence)) \(.title)\n  file=\(.file) line=\(.line_hint // "unknown")\n  issue=\(.description)\n  fix=\(.recommendation)\n"
+            '
+          else
+            echo "No findings reported."
+          fi
+
+          if [ "$finding_count" -gt 0 ] || [ "$vulnerable" = "true" ]; then
+            echo "❌ SCAN FAILED — $finding_count finding(s)."
+            exit 1
+          fi
+
+          echo "✅ SCAN PASSED — No vulnerabilities detected."
+
+      - name: Upload scan output
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: codex-llm-security-scan-output
+          path: /tmp/scan_output.json
+          retention-days: 30
