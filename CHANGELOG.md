@@ -14,11 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Added
 
 - Add missing event emissions on state changes (#159)
-- `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
-- `delayed_transfer::schedule_transfer` and `schedule_unwrap` now derive `current_owner` from `ctx.sender()` instead of accepting it as a parameter (#174)
+- `two_step_transfer::request_borrow_val` and `request_return_val` for borrowing the wrapper and its inner object during a pending transfer.
+- `two_step_transfer::RequestBorrow` hot potato to guarantee wrapper return after `request_borrow_val`.
 
 #### Changed (Breaking)
 
+- Redesigned `two_step_transfer` from a requester-initiated to an owner-initiated flow using shared `PendingOwnershipTransfer` and TTO.
+  - `request`, `transfer`, and `reject` replaced by `initiate_transfer`, `accept_transfer`, and `cancel_transfer`.
+- Renamed `two_step_transfer` events: `OwnershipRequested` → `TransferInitiated`, `OwnershipTransferred` → `TransferAccepted`, `OwnershipTransferRejected` → `TransferCancelled`.
+- All events in `two_step_transfer` and `delayed_transfer` now carry `phantom T` for type-specific indexing.
+- `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
+- `delayed_transfer::schedule_transfer` and `schedule_unwrap` now derive `current_owner` from `ctx.sender()` instead of accepting it as a parameter (#174)
 - Emit dedicated `UnwrapExecuted` event on `delayed_transfer::unwrap` instead of `OwnershipTransferred` (#168)
 
 ### `openzeppelin_math`
@@ -56,5 +62,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
-- `two_step_transfer` module that wraps a `key + store` capability behind a request/approve flow.
-- `delayed_transfer` module that enforces configurable, clock-based delays before transferring or unwrapping a capability.
+- `two_step_transfer` module that wraps a `key + store` object behind a two-step transfer flow.
+- `delayed_transfer` module that enforces configurable, clock-based delays before transferring or unwrapping an object.
