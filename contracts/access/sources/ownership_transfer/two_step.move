@@ -191,9 +191,6 @@ public fun borrow_val<T: key + store>(self: &mut TwoStepTransferWrapper<T>): (T,
 /// - `obj`: Object being returned.
 /// - `borrow`: Hot potato produced by `borrow_val`.
 ///
-/// #### Returns
-/// - Nothing.
-///
 /// #### Aborts
 /// - `EWrongTwoStepTransferWrapper` if `borrow` does not correspond to `self`.
 /// - `EWrongTwoStepTransferObject` if `obj` does not match the borrowed object.
@@ -248,9 +245,6 @@ public fun unwrap<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxC
 /// - `self`: Wrapper being transferred.
 /// - `new_owner`: Prospective owner who may accept the transfer.
 /// - `ctx`: Transaction context.
-///
-/// #### Returns
-/// - Nothing.
 public fun initiate_transfer<T: key + store>(
     self: TwoStepTransferWrapper<T>,
     new_owner: address,
@@ -281,9 +275,6 @@ public fun initiate_transfer<T: key + store>(
 /// - `request`: Pending transfer object created by `initiate_transfer`.
 /// - `wrapper_ticket`: TTO receiving ticket for the wrapper.
 /// - `ctx`: Transaction context.
-///
-/// #### Returns
-/// - Nothing.
 ///
 /// #### Aborts
 /// - `ENotNewOwner` if caller is not the designated new owner.
@@ -320,9 +311,6 @@ public fun accept_transfer<T: key + store>(
 /// - `request`: Pending transfer object to cancel.
 /// - `wrapper_ticket`: TTO receiving ticket for the wrapper.
 /// - `ctx`: Transaction context.
-///
-/// #### Returns
-/// - Nothing.
 ///
 /// #### Aborts
 /// - `ENotOwner` if caller is not the owner who initiated the transfer.
@@ -381,9 +369,6 @@ public fun request_borrow_val<T: key + store>(
 /// - `request`: Pending transfer object that should receive the wrapper back.
 /// - `wrapper`: Wrapper to return.
 /// - `borrow`: Hot potato produced by `request_borrow_val`.
-///
-/// #### Returns
-/// - Nothing.
 ///
 /// #### Aborts
 /// - `EInvalidTransferRequest` if `wrapper` or `borrow` does not match `request`.

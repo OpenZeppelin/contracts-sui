@@ -174,9 +174,6 @@ public fun borrow_val<T: key + store>(self: &mut DelayedTransferWrapper<T>): (T,
 /// - `obj`: Object being returned.
 /// - `borrow`: Hot potato produced by `borrow_val`.
 ///
-/// #### Returns
-/// - Nothing.
-///
 /// #### Aborts
 /// - `EWrongDelayedTransferWrapper` if `borrow` does not correspond to `self`.
 /// - `EWrongDelayedTransferObject` if `obj` does not match the borrowed object.
@@ -203,9 +200,6 @@ public fun return_val<T: key + store>(
 /// - `new_owner`: Prospective owner to receive the wrapper when transfer is executed.
 /// - `clock`: Clock used to compute the execution deadline.
 /// - `ctx`: Transaction context.
-///
-/// #### Returns
-/// - Nothing.
 ///
 /// #### Aborts
 /// - `ETransferAlreadyScheduled` if another transfer or unwrap is already pending.
@@ -240,9 +234,6 @@ public fun schedule_transfer<T: key + store>(
 /// - `clock`: Clock used to compute the execution deadline.
 /// - `ctx`: Transaction context.
 ///
-/// #### Returns
-/// - Nothing.
-///
 /// #### Aborts
 /// - `ETransferAlreadyScheduled` if another transfer or unwrap is already pending.
 public fun schedule_unwrap<T: key + store>(
@@ -275,9 +266,6 @@ public fun schedule_unwrap<T: key + store>(
 /// - `self`: Wrapper with a pending transfer schedule.
 /// - `clock`: Clock used to validate that delay has elapsed.
 /// - `ctx`: Transaction context.
-///
-/// #### Returns
-/// - Nothing.
 ///
 /// #### Aborts
 /// - `ENoPendingTransfer` if no transfer or unwrap is scheduled.
@@ -347,9 +335,6 @@ public fun unwrap<T: key + store>(
 ///
 /// #### Parameters
 /// - `self`: Wrapper whose pending schedule should be removed.
-///
-/// #### Returns
-/// - Nothing.
 ///
 /// #### Aborts
 /// - `ENoPendingTransfer` when no operation is currently scheduled.

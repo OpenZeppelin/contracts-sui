@@ -210,7 +210,7 @@ fun accept_transfer_rejects_mismatched_wrapper() {
 
 #[test]
 fun cancel_transfer_emits_event() {
-    // Owner can cancel a pending request without emitting transfer events.
+    // Owner can cancel a pending request and emits a TransferCancelled event.
     let owner = @0x10;
     let new_owner = @0x11;
     let mut test = test_scenario::begin(owner);
