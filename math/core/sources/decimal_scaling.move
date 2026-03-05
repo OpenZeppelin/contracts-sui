@@ -45,22 +45,19 @@ const MAX_DECIMALS: u8 = 24;
 /// This behavior is standard in blockchain systems to prevent inflation but
 /// means precision is permanently lost when scaling to lower decimal places.
 ///
-/// # Arguments
-///
+/// #### Parameters
 /// - `raw_amount`: The original balance (e.g., from Ethereum with 18 decimals).
 /// - `source_decimals`: Source chain decimal places (must be <= 24).
 /// - `target_decimals`: Target decimal places (must be <= 24, typically 6-9 for Sui).
 ///
-/// # Returns
-///
+/// #### Returns
 /// - The scaled balance as `u64`.
 ///
-/// # Aborts
-///
+/// #### Aborts
 /// - `EInvalidDecimals`: If either decimal value exceeds `MAX_DECIMALS` (24).
 /// - `ESafeDowncastOverflowedInt`: If scaled amount exceeds `std::u64::max_value!()`.
 ///
-/// # Examples
+/// #### Examples
 ///
 /// ```
 /// // Scaling down: Ethereum to Sui (precision preserved for clean values)
@@ -122,21 +119,18 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
 /// When scaling up, precision is preserved perfectly. When scaling down,
 /// the fractional part is permanently lost (truncated, not rounded).
 ///
-/// # Arguments
-///
+/// #### Parameters
 /// - `amount`: The balance in `u64`.
 /// - `source_decimals`: Source decimal places (must be <= 24, typically 6-9 for Sui).
 /// - `target_decimals`: Target decimal places (must be <= 24, e.g., 18 for Ethereum).
 ///
-/// # Returns
-///
+/// #### Returns
 /// - The scaled balance as `u256`.
 ///
-/// # Aborts
-///
+/// #### Aborts
 /// - `EInvalidDecimals`: If either decimal value exceeds `MAX_DECIMALS` (24).
 ///
-/// # Examples
+/// #### Examples
 ///
 /// ```
 /// // Scaling up: Sui to Ethereum (no precision loss)
@@ -171,17 +165,15 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 /// through rounding errors, but users must be aware that precision is permanently
 /// lost when converting to lower decimal places.
 ///
-/// # Arguments
-///
+/// #### Parameters
 /// - `amount`: The amount to scale (as `u256`).
 /// - `source_decimals`: Current decimal precision.
 /// - `target_decimals`: Desired decimal precision.
 ///
-/// # Returns
+/// #### Returns
+/// - The scaled amount preserving economic value (subject to truncation when scaling down).
 ///
-/// The scaled amount preserving economic value (subject to truncation when scaling down).
-///
-/// # Examples
+/// #### Examples
 ///
 /// - Scaling up: amount=1000000, source=6, target=9 → 1000000000 (no precision loss).
 /// - Scaling down: amount=1000000000, source=9, target=6 → 1000000.
@@ -211,13 +203,11 @@ fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
 /// Both values must be <= `MAX_DECIMALS` (24). If either value exceeds this limit,
 /// the function aborts with `EInvalidDecimals`.
 ///
-/// # Arguments
-///
+/// #### Parameters
 /// - `decimals_a`: First decimal value to validate.
 /// - `decimals_b`: Second decimal value to validate.
 ///
-/// # Aborts
-///
+/// #### Aborts
 /// - Aborts with `EInvalidDecimals` if either decimal exceeds `MAX_DECIMALS`.
 fun validate_decimals(decimals_a: u8, decimals_b: u8) {
     assert!(decimals_a <= MAX_DECIMALS, EInvalidDecimals);

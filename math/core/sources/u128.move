@@ -211,10 +211,16 @@ public fun mul_mod(a: u128, b: u128, modulus: u128): u128 {
     macros::mul_mod!(a, b, modulus)
 }
 
-/// Returns true if the value is a power of ten (1, 10, 100, ...)
+/// Returns `true` if `n` is a power of ten.
 ///
 /// Uses a lookup table with binary search for efficiency.
-/// For u128, valid powers of ten range from 10^0 to 10^38.
+/// For `u128`, valid powers of ten range from 10^0 to 10^38.
+///
+/// #### Parameters
+/// - `n`: Input value.
+///
+/// #### Returns
+/// - `true` if `n` is a power of ten within the `u128` range, otherwise `false`.
 public fun is_power_of_ten(n: u128): bool {
     // Powers of 10 from 10^0 to 10^38 for u128
     let powers = vector[

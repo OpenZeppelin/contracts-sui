@@ -212,9 +212,15 @@ public fun mul_mod(a: u8, b: u8, modulus: u8): u8 {
     macros::mul_mod!(a, b, modulus)
 }
 
-/// Returns true if the value is a power of ten (1, 10, 100)
+/// Returns `true` if `n` is a power of ten.
 ///
-/// For u8, only 1, 10, and 100 are powers of ten within range.
+/// For `u8`, valid powers of ten are: 1, 10, 100.
+///
+/// #### Parameters
+/// - `n`: Input value.
+///
+/// #### Returns
+/// - `true` if `n` is a power of ten within the `u8` range, otherwise `false`.
 public fun is_power_of_ten(n: u8): bool {
     n == 1 || n == 10 || n == 100
 }
