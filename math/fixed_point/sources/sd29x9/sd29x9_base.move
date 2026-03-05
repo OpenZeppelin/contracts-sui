@@ -1,7 +1,6 @@
-/// # `SD29x9` Base Functions
+/// Base utility functions for the `SD29x9` fixed-point type.
 ///
-/// Base utilities tailored to the signed `SD29x9`
-/// representation (two's complement stored in `u128` with 9 decimal places).
+/// Tailored to the signed `SD29x9` representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
@@ -18,11 +17,11 @@ const SCALE: u256 = 1_000_000_000; // 10^9
 
 /// Value overflows `SD29x9` (must fit in 2^127 signed range)
 #[error(code = 0)]
-const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
+const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed range)";
 
 /// Value cannot be converted to `UD30x9`
 #[error(code = 1)]
-const ECannotBeConvertedToUD30x9: vector<u8> = b"Value cannot be converted to UD30x9";
+const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD30x9";
 
 // === Conversion ===
 

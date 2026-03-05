@@ -1,10 +1,10 @@
-/// # SD29x9 Fixed-Point Type
+/// Signed decimal fixed-point type `SD29x9`.
 ///
 /// This module defines the `SD29x9` decimal fixed-point type, which represents
 /// signed real numbers using two's complement `u128` scaled by `10^9`.
 ///
-/// ## Why SD29x9
-/// - Matches Sui’s native coin decimals (9), making conversions from token
+/// Why SD29x9:
+/// - Matches Sui's native coin decimals (9), making conversions from token
 ///   amounts straightforward and less error-prone.
 /// - Uses a decimal scale that is intuitive for humans, UIs, and offchain
 ///   systems, avoiding binary fixed-point surprises.
@@ -29,7 +29,7 @@ const SCALE: u128 = 1_000_000_000; // 10^9
 
 /// Value cannot be represented as `SD29x9`
 #[error(code = 0)]
-const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
+const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed range)";
 
 // === Functions ===
 
@@ -145,12 +145,26 @@ public fun unwrap(x: SD29x9): u128 {
 
 // ==== Internal Functions ====
 
+/// Compute the two's complement of a `u128` bit pattern.
+///
+/// #### Parameters
+/// - `bits`: Input bit pattern.
+///
+/// #### Returns
+/// - The two's complement of `bits`.
 public(package) fun two_complement(bits: u128): u128 {
     let inverted = bits ^ U128_MAX_VALUE;
     let sum = (inverted as u256) + 1;
     (sum & (U128_MAX_VALUE as u256)) as u128
 }
 
+/// Wraps a raw `u128` bit pattern directly into an `SD29x9` value without validation.
+///
+/// #### Parameters
+/// - `bits`: Raw bit pattern to wrap.
+///
+/// #### Returns
+/// - The `SD29x9` value with the given underlying bit pattern.
 public(package) fun from_bits(bits: u128): SD29x9 {
     SD29x9(bits)
 }

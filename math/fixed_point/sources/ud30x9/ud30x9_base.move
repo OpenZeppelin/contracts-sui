@@ -1,6 +1,4 @@
-/// # `UD30x9` Base Functions
-///
-/// This module provides base utility functions for working with the `UD30x9` fixed-point type.
+/// Base utility functions for the `UD30x9` fixed-point type.
 module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
@@ -16,11 +14,11 @@ const MAX_POSITIVE_SD29X9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 
 // === Errors ===
 
 #[error(code = 0)]
-const EOverflow: vector<u8> = b"Value overflows UD30x9 (must fit in 2^128 unsigned range)";
+const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigned range)";
 
 /// Value cannot be converted to `SD29x9`
 #[error(code = 1)]
-const ECannotBeConvertedToSD29x9: vector<u8> = b"Value cannot be converted to SD29x9";
+const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
 
 // === Conversion ===
 
