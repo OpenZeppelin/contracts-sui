@@ -111,7 +111,7 @@ fun checked_add_overflow_aborts_as_expected() {
     fixed(MAX_VALUE).add(fixed(1));
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+#[test, expected_failure(abort_code = ud30x9_base::EUnderflow)]
 fun checked_sub_underflow_aborts_as_expected() {
     fixed(0).sub(fixed(1));
 }

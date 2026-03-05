@@ -422,7 +422,7 @@ fun floor_handles_max() {
     expect(max.floor(), pos(expected));
 }
 
-#[test, expected_failure]
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun floor_fails_for_min() {
     sd29x9::min().floor();
 }
