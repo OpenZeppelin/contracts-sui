@@ -4,7 +4,7 @@
 /// unsigned real numbers using a `u128` scaled by `10^9`.
 ///
 /// Why UD30x9:
-/// - Matches Sui’s native coin decimals (9), making conversions from token
+/// - Matches Sui's native coin decimals (9), making conversions from token
 ///   amounts straightforward and less error-prone.
 /// - Uses a decimal scale that is intuitive for humans, UIs, and offchain
 ///   systems, avoiding binary fixed-point surprises.
