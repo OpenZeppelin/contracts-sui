@@ -16,13 +16,13 @@ const HALF_BITS: u8 = 128;
 const HALF_MASK: u256 = (1u256 << HALF_BITS) - 1;
 
 #[error(code = 0)]
-const ECarryOverflow: vector<u8> = b"Cross-limb addition overflowed";
+const ECarryOverflow: vector<u8> = "Cross-limb addition overflowed";
 #[error(code = 1)]
-const EUnderflow: vector<u8> = b"Borrow underflowed high limb";
+const EUnderflow: vector<u8> = "Borrow underflowed high limb";
 #[error(code = 2)]
-const EDivideByZero: vector<u8> = b"Divisor must be non-zero";
+const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 #[error(code = 3)]
-const EInvalidRemainder: vector<u8> = b"High remainder bits must be zero";
+const EInvalidRemainder: vector<u8> = "High remainder bits must be zero";
 
 /// Construct a `U512` from its high and low 256-bit components.
 public fun new(hi: u256, lo: u256): U512 {

@@ -29,7 +29,7 @@ const SCALE: u128 = 1_000_000_000; // 10^9
 
 /// Value cannot be represented as `SD29x9`
 #[error(code = 0)]
-const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
+const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed range)";
 
 // === Functions ===
 

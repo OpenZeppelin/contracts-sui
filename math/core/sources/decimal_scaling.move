@@ -4,11 +4,11 @@ module openzeppelin_math::decimal_scaling;
 
 /// Value cannot be safely cast to `u64` (exceeds `std::u64::max_value!()`).
 #[error(code = 0)]
-const ESafeDowncastOverflowedInt: vector<u8> = b"Value cannot be represented as u64";
+const ESafeDowncastOverflowedInt: vector<u8> = "Value cannot be represented as u64";
 
 /// Decimals value is invalid (must be <= 24).
 #[error(code = 1)]
-const EInvalidDecimals: vector<u8> = b"Decimals value is invalid (must be <= 24)";
+const EInvalidDecimals: vector<u8> = "Decimals value is invalid (must be <= 24)";
 
 // === Constants ===
 

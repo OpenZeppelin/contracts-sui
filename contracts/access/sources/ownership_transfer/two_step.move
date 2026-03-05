@@ -20,11 +20,11 @@ public struct WrappedKey() has copy, drop, store;
 
 /// Transfer request does not correspond to the provided wrapper
 #[error(code = 1)]
-const EInvalidTransferRequest: vector<u8> = b"Transfer request does not match wrapper.";
+const EInvalidTransferRequest: vector<u8> = "Transfer request does not match wrapper.";
 #[error(code = 2)]
-const EWrongTwoStepTransferWrapper: vector<u8> = b"Wrong two step transfer wrapper.";
+const EWrongTwoStepTransferWrapper: vector<u8> = "Wrong two step transfer wrapper.";
 #[error(code = 3)]
-const EWrongTwoStepTransferObject: vector<u8> = b"Wrong two step transfer object.";
+const EWrongTwoStepTransferObject: vector<u8> = "Wrong two step transfer object.";
 
 /// Wrapper object that owns the underlying capability, stored as a dynamic object field.
 ///
