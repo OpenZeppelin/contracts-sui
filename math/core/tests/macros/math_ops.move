@@ -234,7 +234,7 @@ fun inv_mod_extended_impl_rejects_zero_modulus() {
 
 #[test]
 fun inv_mod_macro_matches_impl() {
-    let macro_inverse = macros::inv_mod!(3, 11);
+    let macro_inverse = macros::inv_mod!(3u64, 11u64);
     assert_eq!(macro_inverse, option::some(4));
 }
 
@@ -266,6 +266,16 @@ fun mul_mod_impl_handles_wide_operands() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fun mul_mod_impl_handles_quotient_overflow() {
+    let a = std::u256::max_value!();
+    let b = a;
+    let modulus = 7;
+    let expected = ((a % modulus) * (b % modulus)) % modulus;
+    let result = macros::mul_mod_impl(a, b, modulus);
+    assert_eq!(result, expected);
+}
+
 #[test, expected_failure(abort_code = macros::EZeroModulus)]
 fun mul_mod_impl_rejects_zero_modulus() {
     macros::mul_mod_impl(5, 7, 0);
@@ -280,7 +290,7 @@ fun mul_mod_macro_matches_helper() {
 
 #[test, expected_failure(abort_code = macros::EZeroModulus)]
 fun mul_mod_macro_rejects_zero_modulus() {
-    macros::mul_mod!(1, 2, 0);
+    macros::mul_mod!(1, 2, 0u64);
 }
 
 #[test]
@@ -1130,7 +1140,7 @@ fun sqrt_handles_powers_of_two() {
     // Powers of 4 (perfect squares of powers of 2)
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
     rounding_modes.destroy!(|rounding| {
-        assert_eq!(macros::sqrt!(1u64 << 0, rounding), 1); // sqrt(1) = 1
+        assert_eq!(macros::sqrt!(1u64, rounding), 1); // sqrt(1) = 1
         assert_eq!(macros::sqrt!(1u64 << 2, rounding), 2); // sqrt(4) = 2
         assert_eq!(macros::sqrt!(1u64 << 4, rounding), 4); // sqrt(16) = 4
         assert_eq!(macros::sqrt!(1u64 << 6, rounding), 8); // sqrt(64) = 8

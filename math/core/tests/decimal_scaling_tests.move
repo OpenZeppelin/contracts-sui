@@ -620,3 +620,13 @@ fun pow_10_zero_edge_case() {
     let result2 = decimal_scaling::safe_upcast_balance((amount as u64), 0, 0);
     assert_eq!(result2, amount);
 }
+
+#[test, expected_failure(abort_code = decimal_scaling::ESafeDowncastOverflowedInt)]
+fun downcast_overflow_after_scaling_down() {
+    // raw_amount is above `u64::max_value!()`, and dividing by 10^2 still leaves the
+    // result above `u64::max_value!()`, so the else-branch assert must catch it.
+    //
+    // `(u64::max_value!() * 100 + 100) / 100 = u64::max_value!() + 1`  →  overflows `u64`
+    let amount = (std::u64::max_value!() as u256) * 100 + 100;
+    decimal_scaling::safe_downcast_balance(amount, 11, 9);
+}
