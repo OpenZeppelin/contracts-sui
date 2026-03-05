@@ -1,6 +1,4 @@
-/// # `UD30x9` Base Functions
-///
-/// This module provides base utility functions for working with the `UD30x9` fixed-point type.
+/// Base utility functions for the `UD30x9` fixed-point type.
 module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};

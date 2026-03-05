@@ -1,7 +1,6 @@
-/// # `SD29x9` Base Functions
+/// Base utility functions for the `SD29x9` fixed-point type.
 ///
-/// Base utilities tailored to the signed `SD29x9`
-/// representation (two's complement stored in `u128` with 9 decimal places).
+/// Tailored to the signed `SD29x9` representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
