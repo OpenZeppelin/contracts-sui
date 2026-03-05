@@ -37,8 +37,9 @@ Both modules accept any `T: key + store` object, but the primary use case is wra
 2. **Borrow**
    - Access the wrapped object through `borrow`, `borrow_mut`, or the `borrow_val` / `return_val` pair for temporary moves.
 3. **Schedule**
-   - Call `schedule_transfer` with a recipient, clock, and owner to emit `TransferScheduled`. The wrapper tracks the scheduled action.
+   - Call `schedule_transfer` with a recipient and clock; the wrapper derives the current owner from `ctx.sender()`, emits `TransferScheduled`, and tracks the scheduled action.
    - Call `schedule_unwrap` to plan a delayed unwrap; the wrapper emits `UnwrapScheduled`.
 4. **Execute or Cancel**
-   - After `clock.timestamp_ms() >= execute_after_ms`, call `execute_transfer` or `unwrap` to emit `OwnershipTransferred`, consume the wrapper, and deliver the object.
-   - Use `cancel_schedule` to drop a pending action prior to execution.
+   - After `clock.timestamp_ms() >= execute_after_ms`, call `execute_transfer` to emit `OwnershipTransferred`, consume the wrapper, and transfer it to the scheduled recipient.
+   - After `clock.timestamp_ms() >= execute_after_ms`, call `unwrap` to emit `UnwrapExecuted`, delete the wrapper, and return the wrapped object.
+   - Use `cancel_schedule` to cancel any pending transfer or unwrap before execution.

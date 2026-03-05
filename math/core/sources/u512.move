@@ -315,10 +315,11 @@ fun sub_u256(value: U512, other: u256): U512 {
 /// NOTE: By convention, if `value` is zero, this function returns 0.
 ///
 /// #### Parameters
-/// - `value`: Non-zero wide integer.
+/// - `value`: Wide integer.
 ///
 /// #### Returns
 /// - Zero-based index of the most significant set bit.
+/// - Returns `0` when `value` is `0`.
 fun msb(value: &U512): u16 {
     if (value.hi != 0) {
         256 + (common::msb(value.hi, 256) as u16)
