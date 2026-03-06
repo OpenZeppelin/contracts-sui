@@ -109,7 +109,7 @@ public struct UnwrapExecuted<phantom T> has copy, drop {
 /// #### Parameters
 /// - `obj`: Object to wrap.
 /// - `min_delay_ms`: Minimum delay in milliseconds before a scheduled action can execute.
-/// - `recipient`: Address that receives initial custody of the wrapper.
+/// - `recipient`: Address that receives initial custody of the wrapper, effectively the owner.
 /// - `ctx`: Transaction context.
 public fun wrap<T: key + store>(
     obj: T,
