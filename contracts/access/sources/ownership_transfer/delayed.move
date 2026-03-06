@@ -4,7 +4,8 @@
 /// Works with any `T: key + store` object, but the primary use case is wrapping capabilities
 /// (admin caps, treasury caps, etc.) where an immediate, unannounced transfer could be risky.
 ///
-/// Owners wrap the object and must queue a transfer via the scheduling helpers.
+/// Callers wrap the object and choose an initial `recipient` for wrapper custody.
+/// The recipient can then queue a transfer via the scheduling helpers.
 /// After scheduling, the owner must wait for the deadline to pass before executing,
 /// guaranteeing an on-chain lead time for sensitive transfers.
 ///
@@ -101,22 +102,22 @@ public struct UnwrapExecuted<phantom T> has copy, drop {
 
 // === Wrap / unwrap / borrow ===
 
-/// Wrap an object in a delayed transfer wrapper with the desired minimum delay. The object is
-/// tucked under a dynamic field so its ID remains discoverable.
+/// Wrap an object in a delayed transfer wrapper with the desired minimum delay, then transfer
+/// the wrapper to `recipient`. The wrapped object is tucked under a dynamic field so its ID
+/// remains discoverable.
 ///
 /// #### Parameters
 /// - `obj`: Object to wrap.
 /// - `min_delay_ms`: Minimum delay in milliseconds before a scheduled action can execute.
+/// - `recipient`: Address that receives initial custody of the wrapper.
 /// - `ctx`: Transaction context.
-///
-/// #### Returns
-/// - A new `DelayedTransferWrapper<T>` that owns `obj`.
 public fun wrap<T: key + store>(
     obj: T,
     min_delay_ms: u64,
+    recipient: address,
     ctx: &mut TxContext,
-): DelayedTransferWrapper<T> {
-    let mut wrapper = DelayedTransferWrapper {
+) {
+    let mut wrapper = DelayedTransferWrapper<T> {
         id: object::new(ctx),
         min_delay_ms,
         pending: option::none(),
@@ -124,10 +125,10 @@ public fun wrap<T: key + store>(
     event::emit(WrapExecuted<T> {
         wrapper_id: object::id(&wrapper),
         object_id: object::id(&obj),
-        owner: ctx.sender(),
+        owner: recipient,
     });
     dof::add(&mut wrapper.id, WrappedKey(), obj);
-    wrapper
+    transfer::transfer(wrapper, recipient);
 }
 
 /// Borrow the wrapped object immutably—useful for inspection without touching the schedule.
