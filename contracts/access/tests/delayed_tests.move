@@ -48,6 +48,42 @@ fun wrap_emits_events() {
 }
 
 #[test]
+fun wrap_to_different_recipient_emits_event_and_transfers_custody() {
+    let sender = @0xA;
+    let recipient = @0xB;
+    let min_delay_ms = 5;
+    let mut test = test_scenario::begin(sender);
+    let obj = new_cap(test.ctx());
+    let obj_id = object::id(&obj);
+
+    delayed_transfer::wrap(obj, min_delay_ms, recipient, test.ctx());
+
+    let events = event::events_by_type<delayed_transfer::WrapExecuted<DummyCap>>();
+    assert_eq!(events.length(), 1);
+
+    test.next_tx(recipient);
+    let mut wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
+    let wrapper_id = object::id(&wrapper);
+
+    let expected_event = delayed_transfer::test_new_wrap_executed(
+        wrapper_id,
+        obj_id,
+        recipient,
+    );
+    assert_eq!(expected_event, events[0]);
+
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(0);
+    wrapper.schedule_unwrap(&clk, test.ctx());
+    clk.set_for_testing(min_delay_ms);
+    let obj = wrapper.unwrap(&clk, test.ctx());
+    let DummyCap { id } = obj;
+    id.delete();
+    clock::destroy_for_testing(clk);
+    test.end();
+}
+
+#[test]
 fun schedule_and_execute_transfer() {
     let owner = @0x1;
     let recipient = @0x2;
