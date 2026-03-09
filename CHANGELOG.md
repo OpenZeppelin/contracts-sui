@@ -48,6 +48,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Renamed `two_step_transfer` events: `OwnershipRequested` → `TransferInitiated`, `OwnershipTransferred` → `TransferAccepted`, `OwnershipTransferRejected` → `TransferCancelled`.
 - All events in `two_step_transfer` and `delayed_transfer` now carry `phantom T` for type-specific indexing.
 - `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
+- `delayed_transfer::wrap` now takes an explicit `recipient` and transfers the wrapper to that address instead of returning `DelayedTransferWrapper<T>`.
 - `delayed_transfer::schedule_transfer` and `schedule_unwrap` now derive `current_owner` from `ctx.sender()` instead of accepting it as a parameter (#174)
 - Emit dedicated `UnwrapExecuted` event on `delayed_transfer::unwrap` instead of `OwnershipTransferred` (#168)
 
