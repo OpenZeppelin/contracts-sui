@@ -2,12 +2,15 @@
 module openzeppelin_fp_math::ud30x9_tests;
 
 use openzeppelin_fp_math::casting_u128::into_UD30x9;
+use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
+use openzeppelin_fp_math::ud30x9_base;
 use std::unit_test::assert_eq;
 
 use fun into_UD30x9 as u128.into_UD30x9;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
+const MAX_POSITIVE_SD29X9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
 const SCALE: u128 = 1_000_000_000;
 
 // ==== Helpers ====
@@ -103,13 +106,13 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
     assert_eq!(right_shifted.unwrap(), raw >> 4);
 }
 
-#[test, expected_failure]
-fun checked_add_overflow_aborts() {
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun checked_add_overflow_aborts_as_expected() {
     fixed(MAX_VALUE).add(fixed(1));
 }
 
-#[test, expected_failure]
-fun checked_sub_underflow_aborts() {
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun checked_sub_underflow_aborts_as_expected() {
     fixed(0).sub(fixed(1));
 }
 
@@ -118,18 +121,32 @@ fun modulo_with_zero_divisor_aborts() {
     fixed(10).mod(fixed(0));
 }
 
-#[test, expected_failure]
-fun lshift_by_128_aborts() {
-    fixed(1).lshift(128);
-}
-
-#[test, expected_failure]
-fun rshift_by_128_aborts() {
-    fixed(1).rshift(128);
+#[test]
+fun lshift_by_128_returns_zero() {
+    let x = fixed(1);
+    expect(x.lshift(128), fixed(0));
 }
 
 #[test]
-fun unchecked_addition_wraps_on_overflow() {
+fun rshift_by_128_returns_zero() {
+    let x = fixed(1);
+    expect(x.rshift(128), fixed(0));
+}
+
+#[test]
+fun lshift_by_255_returns_zero() {
+    let x = fixed(1);
+    expect(x.lshift(255), fixed(0));
+}
+
+#[test]
+fun rshift_by_255_returns_zero() {
+    let x = fixed(1);
+    expect(x.rshift(255), fixed(0));
+}
+
+#[test]
+fun unchecked_add_wraps_on_overflow() {
     let a = fixed(5);
     let b = fixed(7);
     assert_eq!(a.unchecked_add(b).unwrap(), 12);
@@ -141,7 +158,7 @@ fun unchecked_addition_wraps_on_overflow() {
 }
 
 #[test]
-fun unchecked_subtraction_wraps_both_directions() {
+fun unchecked_sub_wraps_both_directions() {
     let ten = fixed(10);
     let three = fixed(3);
 
@@ -272,7 +289,7 @@ fun ceil_handles_edge_cases() {
     expect(almost.ceil(), fixed(6 * SCALE));
 }
 
-#[test, expected_failure]
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
 fun ceil_fails_for_max() {
     ud30x9::max().ceil();
 }
@@ -341,4 +358,320 @@ fun floor_handles_max() {
     let max = ud30x9::max();
     let expected = MAX_VALUE - MAX_VALUE % SCALE;
     expect(max.floor(), fixed(expected));
+}
+
+// === mul ===
+
+#[test]
+fun mul_handles_multiplication_by_zero() {
+    let zero = fixed(0);
+    let values = vector[
+        fixed(0),
+        fixed(SCALE),
+        fixed(5 * SCALE + 250_000_000),
+        fixed(500_000_000_000_000_000),
+        ud30x9::max(),
+    ];
+
+    values.destroy!(|val| {
+        expect(val.mul(zero), zero);
+        expect(zero.mul(val), zero);
+    });
+}
+
+#[test]
+fun mul_handles_multiplication_by_one() {
+    let one = fixed(SCALE);
+    let values = vector[
+        fixed(0),
+        fixed(SCALE),
+        fixed(5 * SCALE + 250_000_000),
+        fixed(500_000_000_000_000_000),
+    ];
+
+    values.destroy!(|val| {
+        expect(val.mul(one), val);
+        expect(one.mul(val), val);
+    });
+}
+
+#[test]
+fun mul_handles_exact_and_fractional_products() {
+    // 1.5 * 2.25 = 3.375
+    let a = fixed(1_500_000_000);
+    let b = fixed(2_250_000_000);
+    expect(a.mul(b), fixed(3_375_000_000));
+
+    // 2.0 * 3.0 = 6.0
+    expect(fixed(2 * SCALE).mul(fixed(3 * SCALE)), fixed(6 * SCALE));
+}
+
+#[test]
+fun mul_truncates_towards_zero_at_scale_boundary() {
+    // 1.000000001 * 1.000000001 = 1.000000002000000001 -> 1.000000002
+    let x = fixed(SCALE + 1);
+    expect(x.mul(x), fixed(SCALE + 2));
+
+    // 1.000000001 * 1.000000002 = 1.000000003000000002 -> 1.000000003
+    expect(fixed(SCALE + 1).mul(fixed(SCALE + 2)), fixed(SCALE + 3));
+
+    // 0.999999999 * 0.999999999 = 0.999999998000000001 -> 0.999999998
+    let almost_one = fixed(SCALE - 1);
+    expect(almost_one.mul(almost_one), fixed(SCALE - 2));
+}
+
+#[test]
+fun mul_handles_difficult_fractional_magnitudes() {
+    // (999999999.999999999)^2 = 999999999999999998.000000000000000001
+    let value = fixed(999_999_999_999_999_999);
+    expect(value.mul(value), fixed(999_999_999_999_999_998_000_000_000));
+
+    // 123456789.123456789 * 987654321.987654321
+    let left = fixed(123_456_789_123_456_789);
+    let right = fixed(987_654_321_987_654_321);
+    expect(left.mul(right), fixed(121_932_631_356_500_531_347_203_169));
+}
+
+#[test]
+fun mul_large_intermediate_product_does_not_overflow() {
+    // This product exceeds u128 before scaling down, so this checks that
+    // multiplication uses a wider intermediate and only then divides by SCALE.
+    let half = fixed(SCALE / 2); // 0.5
+    let max = ud30x9::max();
+    expect(max.mul(half), fixed(MAX_VALUE / 2));
+    expect(half.mul(max), fixed(MAX_VALUE / 2));
+}
+
+#[test]
+fun mul_handles_max_times_one() {
+    let max = ud30x9::max();
+    let one = fixed(SCALE);
+    expect(max.mul(one), max);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun mul_overflow_aborts_for_large_result() {
+    ud30x9::max().mul(fixed(SCALE + 1));
+}
+
+// === div ===
+
+#[test]
+fun div_handles_zero_and_identity_cases() {
+    let zero = fixed(0);
+    let one = fixed(SCALE);
+    let value = fixed(7 * SCALE + 500_000_000); // 7.5
+
+    expect(zero.div(value), zero);
+    expect(value.div(one), value);
+}
+
+#[test]
+fun div_handles_exact_and_fractional_results() {
+    // 7.5 / 2.5 = 3.0
+    let numerator = fixed(7 * SCALE + 500_000_000);
+    let denominator = fixed(2 * SCALE + 500_000_000);
+    expect(numerator.div(denominator), fixed(3 * SCALE));
+
+    // 1.0 / 3.0 = 0.333333333...
+    expect(fixed(SCALE).div(fixed(3 * SCALE)), fixed(333_333_333));
+}
+
+#[test]
+fun div_truncates_repeating_results() {
+    // 2.000000001 / 2.0 = 1.0000000005 -> 1.000000000
+    let numerator = fixed(2 * SCALE + 1);
+    let denominator = fixed(2 * SCALE);
+    expect(numerator.div(denominator), fixed(SCALE));
+}
+
+#[test]
+fun div_handles_extreme_but_valid_inputs() {
+    // max / max = 1.0
+    expect(ud30x9::max().div(ud30x9::max()), fixed(SCALE));
+}
+
+#[test, expected_failure]
+fun div_by_zero_aborts() {
+    fixed(10 * SCALE).div(fixed(0));
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun div_result_overflow_aborts() {
+    // max / 0.000000001 would exceed u128 when rescaled.
+    ud30x9::max().div(fixed(1));
+}
+
+// === pow ===
+
+#[test]
+fun pow_handles_zero_and_one_exponents() {
+    let x = fixed(12 * SCALE + 345_678_901);
+    expect(x.pow(0), fixed(SCALE));
+    expect(x.pow(1), x);
+    expect(fixed(0).pow(0), fixed(SCALE));
+}
+
+#[test]
+fun pow_handles_zero_and_one_bases() {
+    expect(fixed(0).pow(5), fixed(0));
+    expect(fixed(SCALE).pow(17), fixed(SCALE));
+}
+
+#[test]
+fun pow_handles_fractional_values_and_truncation() {
+    // 1.5^2 = 2.25, 1.5^3 = 3.375
+    let one_point_five = fixed(1_500_000_000);
+    expect(one_point_five.pow(2), fixed(2_250_000_000));
+    expect(one_point_five.pow(3), fixed(3_375_000_000));
+
+    // 1.000000001^2 = 1.000000002000000001 -> 1.000000002
+    let epsilon = fixed(SCALE + 1);
+    expect(epsilon.pow(2), fixed(SCALE + 2));
+}
+
+#[test]
+fun pow_supports_high_exponents() {
+    let val = fixed(SCALE + 250_000_000); // 1.25
+    val.pow(255);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun pow_overflow_aborts_for_large_base() {
+    ud30x9::max().pow(2);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun pow_overflow_aborts_with_correct_abort_code() {
+    ud30x9::max().pow(32);
+}
+
+// === into_SD29x9 ===
+
+#[test]
+fun into_sd29x9_converts_zero() {
+    let zero = ud30x9::zero();
+    let converted = zero.into_SD29x9();
+    assert!(converted.is_zero());
+    assert!(converted.eq(sd29x9::zero()));
+}
+
+#[test]
+fun into_sd29x9_converts_integer_and_fractional_values() {
+    // 42.0
+    let integer = fixed(42 * SCALE);
+    assert_eq!(integer.into_SD29x9().unwrap(), 42 * SCALE);
+
+    // 42.123456789
+    let fractional = fixed(42 * SCALE + 123_456_789);
+    assert_eq!(fractional.into_SD29x9().unwrap(), 42 * SCALE + 123_456_789);
+}
+
+#[test]
+fun into_sd29x9_roundtrip_for_supported_values() {
+    let samples = vector[
+        0,
+        1,
+        SCALE - 1,
+        SCALE,
+        SCALE + 1,
+        123 * SCALE + 456_789_012,
+        MAX_POSITIVE_SD29X9 - 1,
+        MAX_POSITIVE_SD29X9,
+    ];
+
+    samples.destroy!(|val| {
+        let x = fixed(val);
+        let result = x.into_SD29x9().into_UD30x9();
+        assert_eq!(x, result);
+    });
+}
+
+#[test]
+fun into_sd29x9_converts_max_supported_value() {
+    let max_supported = fixed(MAX_POSITIVE_SD29X9);
+    let expected = sd29x9::wrap(MAX_POSITIVE_SD29X9, false);
+    assert_eq!(max_supported.into_SD29x9(), expected);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::ECannotBeConvertedToSD29x9)]
+fun into_sd29x9_aborts_when_value_exceeds_sd29x9_max() {
+    let unsupported_val = fixed(MAX_POSITIVE_SD29X9 + 1);
+    unsupported_val.into_SD29x9();
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::ECannotBeConvertedToSD29x9)]
+fun into_sd29x9_aborts_for_ud30x9_max() {
+    ud30x9::max().into_SD29x9();
+}
+
+// === try_into_SD29x9 ===
+
+#[test]
+fun try_into_sd29x9_returns_some_for_zero() {
+    let zero = ud30x9::zero();
+    let result = zero.try_into_SD29x9();
+    assert_eq!(result, option::some(sd29x9::zero()));
+    result.do!(|val| assert!(val.is_zero()));
+}
+
+#[test]
+fun try_into_sd29x9_returns_some_for_integer_and_fractional_values() {
+    // 42.0
+    let int_val = fixed(42 * SCALE);
+    let expected_int = sd29x9::wrap(42 * SCALE, false);
+    assert_eq!(int_val.try_into_SD29x9(), option::some(expected_int));
+
+    // 42.123456789
+    let fractional = fixed(42 * SCALE + 123_456_789);
+    let expected_fractional = sd29x9::wrap(42 * SCALE + 123_456_789, false);
+    assert_eq!(fractional.try_into_SD29x9(), option::some(expected_fractional));
+}
+
+#[test]
+fun try_into_sd29x9_roundtrip_for_supported_values() {
+    let samples = vector[
+        0,
+        1,
+        SCALE - 1,
+        SCALE,
+        SCALE + 1,
+        123 * SCALE + 456_789_012,
+        MAX_POSITIVE_SD29X9 - 1,
+        MAX_POSITIVE_SD29X9,
+    ];
+
+    samples.destroy!(|val| {
+        let x = fixed(val);
+        let result = x.try_into_SD29x9().destroy_some().try_into_UD30x9().destroy_some();
+        assert_eq!(x, result);
+    });
+}
+
+#[test]
+fun try_into_sd29x9_returns_some_for_max_supported_value() {
+    let max_supported = fixed(MAX_POSITIVE_SD29X9);
+    let expected = sd29x9::wrap(MAX_POSITIVE_SD29X9, false);
+    assert_eq!(max_supported.try_into_SD29x9(), option::some(expected));
+}
+
+#[test]
+fun try_into_sd29x9_returns_none_when_value_exceeds_sd29x9_max() {
+    let unsupported_val = fixed(MAX_POSITIVE_SD29X9 + 1);
+    assert_eq!(unsupported_val.try_into_SD29x9(), option::none());
+}
+
+#[test]
+fun try_into_sd29x9_returns_none_for_ud30x9_max() {
+    assert_eq!(ud30x9::max().try_into_SD29x9(), option::none());
+}
+
+#[test]
+fun try_into_sd29x9_matches_into_sd29x9_on_convertible_values() {
+    let samples = vector[0, 1, SCALE - 1, SCALE, 123 * SCALE + 456_789_012, MAX_POSITIVE_SD29X9];
+
+    samples.destroy!(|raw| {
+        let x = fixed(raw);
+        assert_eq!(ud30x9_base::try_into_SD29x9(x), option::some(x.into_SD29x9()));
+    });
 }

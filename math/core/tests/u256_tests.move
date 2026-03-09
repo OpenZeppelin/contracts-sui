@@ -410,7 +410,7 @@ fun log2_handles_powers_of_two() {
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
     rounding_modes.destroy!(|rounding| {
         // for powers of 2, log2 returns the exponent regardless of rounding mode
-        assert_eq!(u256::log2(1 << 0, rounding), 0);
+        assert_eq!(u256::log2(1, rounding), 0);
         assert_eq!(u256::log2(1 << 1, rounding), 1);
         assert_eq!(u256::log2(1 << 7, rounding), 7);
         assert_eq!(u256::log2(1 << 8, rounding), 8);
@@ -845,6 +845,16 @@ fun mul_mod_handles_wide_operands() {
     let modulus = (1u256 << 201) - 109;
     let wide_product = u512::mul_u256(a, b);
     let (_, _, expected) = u512::div_rem_u256(wide_product, modulus);
+    let result = u256::mul_mod(a, b, modulus);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fun mul_mod_handles_quotient_overflow() {
+    let a = std::u256::max_value!();
+    let b = a;
+    let modulus = 7;
+    let expected = ((a % modulus) * (b % modulus)) % modulus;
     let result = u256::mul_mod(a, b, modulus);
     assert_eq!(result, expected);
 }
