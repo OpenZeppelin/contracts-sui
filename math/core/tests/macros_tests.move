@@ -136,8 +136,13 @@ fun mul_div_wide_matches_u512_downward() {
 #[test]
 fun mul_div_wide_respects_rounding_modes() {
     let large = (std::u128::max_value!() as u256) + 1;
-    let numerator = u512::mul_u256(large, large);
-    let (_, baseline, remainder) = u512::div_rem_u256(numerator, 7);
+    let max = std::u256::max_value!();
+
+    // large = 2^128, so large * large = 2^256 = u256::MAX + 1.
+    // Derive the exact quotient/remainder for 2^256 / d from u256-space arithmetic
+    // instead of running the slow wide division helper as a baseline.
+    let baseline = max / 7;
+    let remainder = (max % 7) + 1;
     assert!(remainder != 0);
 
     // Rounding up always bumps the truncated quotient when remainder is non-zero.
@@ -152,10 +157,8 @@ fun mul_div_wide_respects_rounding_modes() {
 
     // Nearest mirrors `rounding::down` when the remainder is small...
     let denom_down = 13;
-    let (_, baseline_down, remainder_down) = u512::div_rem_u256(
-        numerator,
-        denom_down,
-    );
+    let baseline_down = max / denom_down;
+    let remainder_down = (max % denom_down) + 1;
     assert!(remainder_down < denom_down - remainder_down);
     let (overflow_nearest_down, nearest_down) = macros::mul_div_u256_wide(
         large,
@@ -168,10 +171,8 @@ fun mul_div_wide_respects_rounding_modes() {
 
     // ...and bumps when the remainder dominates.
     let denom_up = 11;
-    let (_, baseline_up, remainder_up) = u512::div_rem_u256(
-        numerator,
-        denom_up,
-    );
+    let baseline_up = max / denom_up;
+    let remainder_up = (max % denom_up) + 1;
     assert!(remainder_up >= denom_up - remainder_up);
     let (overflow_nearest_up, nearest_up) = macros::mul_div_u256_wide(
         large,
