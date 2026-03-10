@@ -21,6 +21,8 @@ fun mul_handles_multiplication_by_zero() {
         neg(5 * SCALE + 250_000_000),
         pos(500_000_000_000_000_000),
         neg(500_000_000_000_000_000),
+        pos(MAX_POSITIVE_VALUE),
+        neg(MIN_NEGATIVE_VALUE),
     ];
     values.destroy!(|val| {
         expect(val.mul(zero), zero);

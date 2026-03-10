@@ -55,9 +55,9 @@ fun sub_handles_edge_cases() {
     expect(zero.sub(min_plus_epsilon), max);
     expect(zero.sub(max), min_plus_epsilon);
 
-    expect(max.negate().add(epsilon.negate()), min);
-    expect(max.sub(epsilon).add(epsilon), max);
-    expect(min.add(epsilon).add(epsilon).negate().add(epsilon), max);
+    expect(max.negate().sub(epsilon), min);
+    expect(max.sub(epsilon).sub(epsilon.negate()), max);
+    expect(min.add(epsilon).add(epsilon).negate().sub(epsilon.negate()), max);
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
