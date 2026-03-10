@@ -57,7 +57,12 @@ fun div_result_overflow_aborts() {
 
 #[test]
 fun div_self_is_one() {
-    let cases = vector[fixed(SCALE), fixed(2 * SCALE), fixed(7 * SCALE + 500_000_000), fixed(100 * SCALE)];
+    let cases = vector[
+        fixed(SCALE),
+        fixed(2 * SCALE),
+        fixed(7 * SCALE + 500_000_000),
+        fixed(100 * SCALE),
+    ];
     cases.destroy!(|x| {
         expect(x.div(x), fixed(SCALE));
     });

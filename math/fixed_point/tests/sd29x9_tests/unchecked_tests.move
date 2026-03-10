@@ -49,15 +49,7 @@ fun unchecked_sub_zero_is_identity_for_zero() {
 #[test]
 fun unchecked_add_zero_is_identity() {
     let zero = sd29x9::zero();
-    let values = vector[
-        pos(1),
-        neg(1),
-        pos(SCALE),
-        neg(SCALE),
-        sd29x9::max(),
-        sd29x9::min(),
-        zero,
-    ];
+    let values = vector[pos(1), neg(1), pos(SCALE), neg(SCALE), sd29x9::max(), sd29x9::min(), zero];
     values.destroy!(|x| {
         expect(x.unchecked_add(zero), x);
     });
