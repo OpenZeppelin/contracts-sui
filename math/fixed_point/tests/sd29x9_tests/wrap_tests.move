@@ -2,7 +2,7 @@
 module openzeppelin_fp_math::sd29x9_wrap_tests;
 
 use openzeppelin_fp_math::sd29x9::{Self, from_bits};
-use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect};
+use openzeppelin_fp_math::sd29x9_test_helpers::{pos, expect};
 use std::unit_test::assert_eq;
 
 const ALL_ONES: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
@@ -38,12 +38,12 @@ fun wrap_cannot_produce_min_value() {
 
 #[test]
 fun wrap_small_positive() {
-    assert_eq!(pos(1).unwrap(), 1);
+    assert_eq!(sd29x9::wrap(1, false).unwrap(), 1);
 }
 
 #[test]
 fun wrap_negative_one_is_all_ones() {
-    assert_eq!(neg(1).unwrap(), ALL_ONES);
+    assert_eq!(sd29x9::wrap(1, true).unwrap(), ALL_ONES);
 }
 
 #[test]
