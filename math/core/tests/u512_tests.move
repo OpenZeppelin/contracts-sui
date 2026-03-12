@@ -129,6 +129,20 @@ fun div_rem_with_remainder() {
 }
 
 #[test]
+fun div_rem_large_low_limb_uses_native_u256_division() {
+    // A numerator that stays entirely in the low limb should match native u256 division.
+    let numerator = u512::new(0, 1u256 << 200);
+    let divisor = 3u256;
+    let (overflow, quotient, remainder) = u512::div_rem_u256(
+        numerator,
+        divisor,
+    );
+    assert_eq!(overflow, false);
+    assert_eq!(quotient, (1u256 << 200) / divisor);
+    assert_eq!(remainder, (1u256 << 200) % divisor);
+}
+
+#[test]
 fun div_rem_handles_high_limb_without_overflow() {
     // Dividing a value with both limbs populated exercises the borrow path inside subtraction.
     let numerator = u512::new(2, 123);
