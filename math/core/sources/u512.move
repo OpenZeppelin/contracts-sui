@@ -167,8 +167,8 @@ public fun mul_u256(a: u256, b: u256): U512 {
 public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     assert!(divisor != 0, EDivideByZero);
 
-    if (numerator.hi == 0 && numerator.lo == 0) {
-        return (false, 0, 0)
+    if (numerator.hi == 0) {
+        return (false, numerator.lo / divisor, numerator.lo % divisor)
     };
 
     let mut quotient = 0u256;

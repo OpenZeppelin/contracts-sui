@@ -2,17 +2,17 @@
 ///
 module openzeppelin_math::common;
 
-/// Count the number of leading zeros in an unsigned integer value of arbitrary bit width.
+/// Count the number of leading zeros for one of the package's supported unsigned widths.
 ///
-/// This function counts the number of leading zero bits in a value of a given bit width (such as u8, u16, u32, u64, u128, or u256)
-/// using a binary search method. It starts with the full bit width and iteratively right-shifts the value by progressively smaller
-/// powers of two (bit_width/2, bit_width/4, ..., 1). For each shift, if the upper portion is zero, the number of leading zeros increases
-/// by the shift amount. If the input value is zero, it returns bit_width. Otherwise, it returns the count of leading zero bits for the
-/// value, respecting the provided bit width.
+/// This helper is intended for the power-of-two widths used throughout the package: `8`, `16`, `32`,
+/// `64`, `128`, and `256`. It counts leading zero bits using a binary-search strategy that repeatedly
+/// shifts by `bit_width / 2`, `bit_width / 4`, ..., `1`. If the input value is zero, it returns
+/// `bit_width`. Otherwise, it returns the count of leading zero bits under the provided width.
 ///
 /// #### Parameters
 /// - `val`: Input value promoted to `u256`.
-/// - `bit_width`: Effective bit width of the original integer type.
+/// - `bit_width`: Effective bit width of the original integer type; must be one of `8`, `16`, `32`,
+///   `64`, `128`, or `256`.
 ///
 /// #### Returns
 /// - Number of leading zero bits in `val` under the given `bit_width`.
