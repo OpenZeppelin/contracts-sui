@@ -320,12 +320,21 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 
 /// Raises `x` to a power of `exp`.
 ///
+/// This helper uses repeated fixed-point multiplication with truncation after each step. It applies
+/// the recurrence `result = floor(result * base / SCALE)` `exp - 1` times rather than computing the
+/// exact power and rounding once at the end.
+///
+/// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
+/// `exp` grows, results are biased toward zero, and for `0 < abs(x) < 1` intermediate values can
+/// reach zero before the final mathematically scaled result would.
+///
 /// #### Parameters
 /// - `x`: Base value.
 /// - `exp`: Exponent.
 ///
 /// #### Returns
-/// - The `exp` power of `x`.
+/// - An approximation of `x^exp` using the same stepwise truncation semantics as repeated
+///   fixed-point multiplication.
 ///
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
