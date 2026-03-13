@@ -251,12 +251,15 @@ public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
 
 /// Multiplies two `UD30x9` values with fixed-point scaling.
 ///
+/// The intermediate product is rescaled using integer division by `SCALE`, so the result is
+/// rounded down toward zero whenever the exact product cannot be represented with 9 decimals.
+///
 /// #### Parameters
 /// - `x`: First operand.
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The product `x * y`.
+/// - The product `x * y`, rounded down to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
@@ -268,12 +271,15 @@ public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
 
 /// Divides `x` by `y` with fixed-point scaling.
 ///
+/// The scaled numerator is reduced using integer division, so the result is rounded down toward
+/// zero whenever the exact quotient cannot be represented with 9 decimals.
+///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The quotient `x / y`.
+/// - The quotient `x / y`, rounded down to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
@@ -286,12 +292,21 @@ public fun div(x: UD30x9, y: UD30x9): UD30x9 {
 
 /// Raises `x` to a power of `exp`.
 ///
+/// This helper uses repeated fixed-point multiplication with truncation after each step. It applies
+/// the recurrence `result = floor(result * base / SCALE)` `exp - 1` times rather than computing the
+/// exact power and rounding once at the end.
+///
+/// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
+/// `exp` grows, results are biased toward zero, and for `0 < x < 1` intermediate values can reach
+/// zero before the final mathematically scaled result would.
+///
 /// #### Parameters
 /// - `x`: Base value.
 /// - `exp`: Exponent.
 ///
 /// #### Returns
-/// - The `exp` power of `x`.
+/// - An approximation of `x^exp` using the same stepwise truncation semantics as repeated
+///   fixed-point multiplication.
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
