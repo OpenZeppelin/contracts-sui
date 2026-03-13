@@ -253,14 +253,20 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
     !gt(x, y)
 }
 
-/// Computes the remainder of dividing one `SD29x9` value by another.
+/// Computes the truncating remainder of dividing one `SD29x9` value by another.
+///
+/// This helper follows remainder semantics, not Euclidean modulo semantics. The magnitude is
+/// computed as `abs(x) % abs(y)`, and the sign of the result follows the dividend `x`. In
+/// particular, a negative dividend can produce a negative non-zero remainder, while the sign of
+/// `y` does not affect the result apart from the zero-divisor check.
 ///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The remainder of `x` divided by `y`.
+/// - The truncating remainder of `x` divided by `y`.
+/// - Returns `0` when `x` is an exact multiple of `y`.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
