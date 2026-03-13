@@ -251,12 +251,15 @@ public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
 
 /// Multiplies two `UD30x9` values with fixed-point scaling.
 ///
+/// The intermediate product is rescaled using integer division by `SCALE`, so the result is
+/// rounded down toward zero whenever the exact product cannot be represented with 9 decimals.
+///
 /// #### Parameters
 /// - `x`: First operand.
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The product `x * y`.
+/// - The product `x * y`, rounded down to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
@@ -268,12 +271,15 @@ public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
 
 /// Divides `x` by `y` with fixed-point scaling.
 ///
+/// The scaled numerator is reduced using integer division, so the result is rounded down toward
+/// zero whenever the exact quotient cannot be represented with 9 decimals.
+///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The quotient `x / y`.
+/// - The quotient `x / y`, rounded down to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
