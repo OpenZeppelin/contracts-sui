@@ -253,14 +253,20 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
     !gt(x, y)
 }
 
-/// Computes the remainder of dividing one `SD29x9` value by another.
+/// Computes the truncating remainder of dividing one `SD29x9` value by another.
+///
+/// This helper follows remainder semantics, not Euclidean modulo semantics. The magnitude is
+/// computed as `abs(x) % abs(y)`, and the sign of the result follows the dividend `x`. In
+/// particular, a negative dividend can produce a negative non-zero remainder, while the sign of
+/// `y` does not affect the result apart from the zero-divisor check.
 ///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The remainder of `x` divided by `y`.
+/// - The truncating remainder of `x` divided by `y`.
+/// - Returns `0` when `x` is an exact multiple of `y`.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
@@ -314,12 +320,23 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 
 /// Raises `x` to a power of `exp`.
 ///
+/// This helper uses repeated fixed-point multiplication with truncation after each step. It updates
+/// the magnitude via `res_mag = (res_mag * mag) / SCALE`, while the sign is derived separately from
+/// the sign of `x` and the parity of `exp`. As a result, the signed output follows truncation
+/// toward zero rather than `floor` for negative values, and this step is applied `exp - 1` times
+/// rather than computing the exact power and rounding once at the end.
+///
+/// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
+/// `exp` grows, results are biased toward zero, and for `0 < abs(x) < 1` intermediate values can
+/// reach zero before the final mathematically scaled result would.
+///
 /// #### Parameters
 /// - `x`: Base value.
 /// - `exp`: Exponent.
 ///
 /// #### Returns
-/// - The `exp` power of `x`.
+/// - An approximation of `x^exp` using the same stepwise truncation semantics as repeated
+///   fixed-point multiplication.
 ///
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
