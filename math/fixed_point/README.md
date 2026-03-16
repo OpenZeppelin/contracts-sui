@@ -46,7 +46,8 @@ let new_balance = balance.add(adjustment); // 7.5
 
 - Stored as `u128` scaled by 10^9
 - Right shifts preserve sign for `SD29x9` (arithmetic) and zero-fill for `UD30x9` (logical)
-- `UD30x9.mul` and `UD30x9.div` rescale with truncating integer division, so results round down
-  when they cannot be represented exactly with 9 decimals
+- `UD30x9.mul`/`UD30x9.div` and `SD29x9.mul`/`SD29x9.div` rescale with truncating integer
+  division; for `UD30x9` this means rounding down, while for `SD29x9` this means truncation
+  toward zero when results cannot be represented exactly with 9 decimals
 - `pow` uses iterative truncating multiplication, so fractional results are approximate and can
   drift toward zero for large exponents

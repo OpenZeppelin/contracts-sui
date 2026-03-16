@@ -320,9 +320,11 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 
 /// Raises `x` to a power of `exp`.
 ///
-/// This helper uses repeated fixed-point multiplication with truncation after each step. It applies
-/// the recurrence `result = floor(result * base / SCALE)` `exp - 1` times rather than computing the
-/// exact power and rounding once at the end.
+/// This helper uses repeated fixed-point multiplication with truncation after each step. It updates
+/// the magnitude via `res_mag = (res_mag * mag) / SCALE`, while the sign is derived separately from
+/// the sign of `x` and the parity of `exp`. As a result, the signed output follows truncation
+/// toward zero rather than `floor` for negative values, and this step is applied `exp - 1` times
+/// rather than computing the exact power and rounding once at the end.
 ///
 /// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
 /// `exp` grows, results are biased toward zero, and for `0 < abs(x) < 1` intermediate values can
