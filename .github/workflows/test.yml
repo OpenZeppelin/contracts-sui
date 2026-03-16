@@ -16,7 +16,7 @@ permissions:
   pull-requests: write
 
 env:
-  SUI_VERSION: "1.65.2"
+  SUI_VERSION: "1.67.3"
 
 jobs:
   setup:
