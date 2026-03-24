@@ -2,6 +2,7 @@
 module openzeppelin_fp_math::sd29x9_mod_tests;
 
 use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::sd29x9_base;
 use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect};
 
 const SCALE: u128 = 1_000_000_000;
@@ -13,7 +14,7 @@ fun mod_tracks_dividend_sign() {
     expect(pos(42 * SCALE).mod(neg(21 * SCALE)), sd29x9::zero());
 }
 
-#[test, expected_failure(arithmetic_error, location = openzeppelin_fp_math::sd29x9_base)]
+#[test, expected_failure(abort_code = sd29x9_base::EDivideByZero)]
 fun mod_with_zero_modulus_aborts() {
     pos(10).mod(sd29x9::zero());
 }

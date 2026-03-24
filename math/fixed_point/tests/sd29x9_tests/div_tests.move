@@ -41,7 +41,7 @@ fun div_handles_min_over_one() {
     expect(sd29x9::min().div(pos(SCALE)), sd29x9::min());
 }
 
-#[test, expected_failure(arithmetic_error, location = openzeppelin_fp_math::sd29x9_base)]
+#[test, expected_failure(abort_code = sd29x9_base::EDivideByZero)]
 fun div_by_zero_aborts() {
     pos(10 * SCALE).div(sd29x9::zero());
 }
