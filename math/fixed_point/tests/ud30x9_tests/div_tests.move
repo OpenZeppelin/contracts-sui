@@ -44,7 +44,7 @@ fun div_handles_extreme_but_valid_inputs() {
     expect(ud30x9::max().div(ud30x9::max()), fixed(SCALE));
 }
 
-#[test, expected_failure(arithmetic_error, location = openzeppelin_fp_math::ud30x9_base)]
+#[test, expected_failure(abort_code = ud30x9_base::EDivideByZero)]
 fun div_by_zero_aborts() {
     fixed(10 * SCALE).div(fixed(0));
 }
