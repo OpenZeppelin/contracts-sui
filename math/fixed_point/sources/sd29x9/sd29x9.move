@@ -1,10 +1,10 @@
-/// # SD29x9 Fixed-Point Type
+/// Signed decimal fixed-point type `SD29x9`.
 ///
 /// This module defines the `SD29x9` decimal fixed-point type, which represents
-/// signed real numbers using a 2-complement `u128` scaled by `10^9`.
+/// signed real numbers using two's complement `u128` scaled by `10^9`.
 ///
-/// ## Why SD29x9
-/// - Matches Sui’s native coin decimals (9), making conversions from token
+/// Why SD29x9:
+/// - Matches Sui's native coin decimals (9), making conversions from token
 ///   amounts straightforward and less error-prone.
 /// - Uses a decimal scale that is intuitive for humans, UIs, and offchain
 ///   systems, avoiding binary fixed-point surprises.
@@ -23,12 +23,13 @@ public struct SD29x9(u128) has copy, drop, store;
 const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
 const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
 const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
+const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Errors ===
 
-/// Value cannot be safely cast to `SD29x9` after apply
+/// Value cannot be represented as `SD29x9`
 #[error(code = 0)]
-const EOverflow: vector<u8> = b"Value overflows SD29x9 (must fit in 2^127 signed range)";
+const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed range)";
 
 // === Functions ===
 
@@ -37,36 +38,58 @@ public use fun openzeppelin_fp_math::sd29x9_base::add as SD29x9.add;
 public use fun openzeppelin_fp_math::sd29x9_base::and as SD29x9.and;
 public use fun openzeppelin_fp_math::sd29x9_base::and2 as SD29x9.and2;
 public use fun openzeppelin_fp_math::sd29x9_base::ceil as SD29x9.ceil;
+public use fun openzeppelin_fp_math::sd29x9_base::div as SD29x9.div;
 public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
 public use fun openzeppelin_fp_math::sd29x9_base::floor as SD29x9.floor;
 public use fun openzeppelin_fp_math::sd29x9_base::gt as SD29x9.gt;
 public use fun openzeppelin_fp_math::sd29x9_base::gte as SD29x9.gte;
+public use fun openzeppelin_fp_math::sd29x9_base::into_UD30x9 as SD29x9.into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::is_zero as SD29x9.is_zero;
 public use fun openzeppelin_fp_math::sd29x9_base::lshift as SD29x9.lshift;
 public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
 public use fun openzeppelin_fp_math::sd29x9_base::lte as SD29x9.lte;
 public use fun openzeppelin_fp_math::sd29x9_base::mod as SD29x9.mod;
+public use fun openzeppelin_fp_math::sd29x9_base::mul as SD29x9.mul;
 public use fun openzeppelin_fp_math::sd29x9_base::negate as SD29x9.negate;
 public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
 public use fun openzeppelin_fp_math::sd29x9_base::not as SD29x9.not;
 public use fun openzeppelin_fp_math::sd29x9_base::or as SD29x9.or;
+public use fun openzeppelin_fp_math::sd29x9_base::pow as SD29x9.pow;
 public use fun openzeppelin_fp_math::sd29x9_base::rshift as SD29x9.rshift;
 public use fun openzeppelin_fp_math::sd29x9_base::sub as SD29x9.sub;
+public use fun openzeppelin_fp_math::sd29x9_base::try_into_UD30x9 as SD29x9.try_into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchecked_add;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_sub as SD29x9.unchecked_sub;
 public use fun openzeppelin_fp_math::sd29x9_base::xor as SD29x9.xor;
 
-/// Returns a `SD29x9` value of zero.
+/// Constructs the zero value in `SD29x9` representation.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `0`.
 public fun zero(): SD29x9 {
     SD29x9(0)
 }
 
-/// Returns the representation of -2^127 in SD29x9
+/// Constructs the value of one in `SD29x9` representation.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `1`.
+public fun one(): SD29x9 {
+    SD29x9(SCALE)
+}
+
+/// Constructs the minimum representable `SD29x9` value.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `-2^127`.
 public fun min(): SD29x9 {
     SD29x9(MIN_NEGATIVE_VALUE)
 }
 
-/// Returns the representation of 2^127 - 1 in SD29x9
+/// Constructs the maximum representable `SD29x9` value.
+///
+/// #### Returns
+/// - The `SD29x9` representation of `2^127 - 1`.
 public fun max(): SD29x9 {
     SD29x9(MAX_POSITIVE_VALUE)
 }
@@ -80,7 +103,15 @@ public fun max(): SD29x9 {
 /// If `is_negative` is `true`, the value is converted to its two's complement
 /// form to represent a negative SD29x9.
 ///
-/// Aborts if `x` exceeds the SD29x9 magnitude bounds for a signed 128-bit integer.
+/// #### Parameters
+/// - `x`: Unsigned magnitude to wrap.
+/// - `is_negative`: Whether `x` should be encoded as a negative value.
+///
+/// #### Returns
+/// - The wrapped `SD29x9` value.
+///
+/// #### Aborts
+/// - Aborts if `x` exceeds the representable positive magnitude (`2^127 - 1`).
 ///
 /// NOTE: This function can't be used to obtain the minimum value, use `min()` instead.
 public fun wrap(x: u128, is_negative: bool): SD29x9 {
@@ -101,18 +132,39 @@ public fun wrap(x: u128, is_negative: bool): SD29x9 {
     }
 }
 
-/// Unwraps a `SD29x9` value into a `u128`.
+/// Returns the raw `u128` bits of an `SD29x9` value.
+///
+/// #### Parameters
+/// - `x`: Value to unwrap.
+///
+/// #### Returns
+/// - The underlying `u128` bit representation.
 public fun unwrap(x: SD29x9): u128 {
     x.0
 }
 
 // ==== Internal Functions ====
 
-public(package) fun two_complement(x: u128): u128 {
-    let bitwise_not = x ^ U128_MAX_VALUE;
-    bitwise_not + 1
+/// Compute the two's complement of a `u128` bit pattern.
+///
+/// #### Parameters
+/// - `bits`: Input bit pattern.
+///
+/// #### Returns
+/// - The two's complement of `bits`.
+public(package) fun two_complement(bits: u128): u128 {
+    let inverted = bits ^ U128_MAX_VALUE;
+    let sum = (inverted as u256) + 1;
+    (sum & (U128_MAX_VALUE as u256)) as u128
 }
 
+/// Wraps a raw `u128` bit pattern directly into an `SD29x9` value without validation.
+///
+/// #### Parameters
+/// - `bits`: Raw bit pattern to wrap.
+///
+/// #### Returns
+/// - The `SD29x9` value with the given underlying bit pattern.
 public(package) fun from_bits(bits: u128): SD29x9 {
     SD29x9(bits)
 }

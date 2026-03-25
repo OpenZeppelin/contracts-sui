@@ -23,7 +23,7 @@ Sui smart contracts are written in Move leveraging the Sui Move framework.
 
 Follow the installation guide in the [Sui documentation](https://docs.sui.io/guides/developer/getting-started/sui-install).
 
-**Required version**: Sui CLI [1.59.1](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.59.1).
+**Required version**: Sui CLI [1.67.3](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.67.3).
 
 ## Docs
 
@@ -46,15 +46,16 @@ ecosystems.
 
 ## Security
 
-> [!Warning]
-> This library has not been audited yet. Use at your own risk.
+This project is maintained by OpenZeppelin with the goal of providing a secure and reliable library of smart contract components
+for the Sui ecosystem. We address security through risk management in various areas such as engineering and open source best
+practices, scoping and API design, multi-layered review processes, and incident response preparedness.
 
-For security concerns, please refer to our [Security Policy](./SECURITY.md).
+Refer to [SECURITY.md](SECURITY.md) for more details.
 
-Smart contracts are an evolving technology and carry a high level of technical
-risk and uncertainty. Although OpenZeppelin is well known for its security
-audits, using OpenZeppelin Contracts for Sui is not a substitute for a security
-audit.
+Past audits can be found in [`audits/`](./audits).
+
+Smart contracts are an evolving technology and carry a high level of technical risk and uncertainty. Although OpenZeppelin is well known for its security audits, using this library is not a substitute for a security audit.
+
 
 ## Contribute
 

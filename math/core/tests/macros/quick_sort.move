@@ -483,7 +483,7 @@ fun quick_sort_preserves_all_elements() {
         };
 
         // Count this value in sorted
-        let mut count_sorted = 0;
+        let mut count_sorted = 0_u64;
         j = 0;
         while (j < len) {
             if (sorted[j] == value) {

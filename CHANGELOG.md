@@ -8,19 +8,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+## 1.1.0-rc.0 (10-03-2026)
+
 ### `openzeppelin_fp_math`
 
 #### Added
 
 - `UD30x9` fixed-point type with: (#129)
   - Core: `wrap`, `unwrap`
-  - Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
+  - Arithmetic: `add`, `sub`, `mul`, `div`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
   - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
   - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
 - `SD29x9` fixed-point type with: (#129)
   - Constants: `zero`, `min`, `max`
   - Core: `wrap`, `unwrap`
-  - Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
+  - Arithmetic: `add`, `sub`, `mul`, `div`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
   - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
   - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
 - `casting_u128` helpers for `UD30x9` and `SD29x9`. (#129)
@@ -31,7 +33,48 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - `is_power_of_ten` helpers for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`. (#125)
 
-##  1.0.0-rc.0 (28-11-2025)
+## 1.0.0 (04-03-2026)
+
+### `openzeppelin_access`
+
+#### Added
+
+- Add missing event emissions on state changes (#159)
+- `two_step_transfer::request_borrow_val` and `request_return_val` for borrowing the wrapper and its inner object during a pending transfer.
+- `two_step_transfer::RequestBorrow` hot potato to guarantee wrapper return after `request_borrow_val`.
+
+#### Changed (Breaking)
+
+- Redesigned `two_step_transfer` from a requester-initiated to an owner-initiated flow using shared `PendingOwnershipTransfer` and TTO.
+  - `request`, `transfer`, and `reject` replaced by `initiate_transfer`, `accept_transfer`, and `cancel_transfer`.
+- Renamed `two_step_transfer` events: `OwnershipRequested` → `TransferInitiated`, `OwnershipTransferred` → `TransferAccepted`, `OwnershipTransferRejected` → `TransferCancelled`.
+- All events in `two_step_transfer` and `delayed_transfer` now carry `phantom T` for type-specific indexing.
+- `two_step_transfer::unwrap` now accepts an additional `&mut TxContext` param (#159)
+- `delayed_transfer::wrap` now takes an explicit `recipient` and transfers the wrapper to that address instead of returning `DelayedTransferWrapper<T>`.
+- `delayed_transfer::schedule_transfer` and `schedule_unwrap` now derive `current_owner` from `ctx.sender()` instead of accepting it as a parameter (#174)
+- Emit dedicated `UnwrapExecuted` event on `delayed_transfer::unwrap` instead of `OwnershipTransferred` (#168)
+
+### `openzeppelin_math`
+
+#### Fixed
+
+- Preserve the remainder for `u512::div_rem_u256` even when the quotient overflows, preventing incorrect results in `mul_mod` for large operands (#151)
+
+## 1.0.0-rc.1 (19-12-2025)
+
+### `openzeppelin_math`
+
+#### Changed
+
+- Rename `coin_utils` module to `decimal_scaling` (#123)
+
+### All Packages
+
+#### Fixed
+
+- Add `#[test_only]` attribute to test modules (#122)
+
+## 1.0.0-rc.0 (28-11-2025)
 
 ### `openzeppelin_math`
 
@@ -46,5 +89,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- `two_step_transfer` module that wraps a `key + store` capability behind a request/approve flow.
-- `delayed_transfer` module that enforces configurable, clock-based delays before transferring or unwrapping a capability.
+- `two_step_transfer` module that wraps a `key + store` object behind a two-step transfer flow.
+- `delayed_transfer` module that enforces configurable, clock-based delays before transferring or unwrapping an object.

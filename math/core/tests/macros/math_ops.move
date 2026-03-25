@@ -136,8 +136,13 @@ fun mul_div_wide_matches_u512_downward() {
 #[test]
 fun mul_div_wide_respects_rounding_modes() {
     let large = (std::u128::max_value!() as u256) + 1;
-    let numerator = u512::mul_u256(large, large);
-    let (_, baseline, remainder) = u512::div_rem_u256(numerator, 7);
+    let max = std::u256::max_value!();
+
+    // large = 2^128, so large * large = 2^256 = u256::MAX + 1.
+    // Derive the exact quotient/remainder for 2^256 / d from u256-space arithmetic
+    // instead of running the slow wide division helper as a baseline.
+    let baseline = max / 7;
+    let remainder = (max % 7) + 1;
     assert!(remainder != 0);
 
     // Rounding up always bumps the truncated quotient when remainder is non-zero.
@@ -152,10 +157,8 @@ fun mul_div_wide_respects_rounding_modes() {
 
     // Nearest mirrors `rounding::down` when the remainder is small...
     let denom_down = 13;
-    let (_, baseline_down, remainder_down) = u512::div_rem_u256(
-        numerator,
-        denom_down,
-    );
+    let baseline_down = max / denom_down;
+    let remainder_down = (max % denom_down) + 1;
     assert!(remainder_down < denom_down - remainder_down);
     let (overflow_nearest_down, nearest_down) = macros::mul_div_u256_wide(
         large,
@@ -168,10 +171,8 @@ fun mul_div_wide_respects_rounding_modes() {
 
     // ...and bumps when the remainder dominates.
     let denom_up = 11;
-    let (_, baseline_up, remainder_up) = u512::div_rem_u256(
-        numerator,
-        denom_up,
-    );
+    let baseline_up = max / denom_up;
+    let remainder_up = (max % denom_up) + 1;
     assert!(remainder_up >= denom_up - remainder_up);
     let (overflow_nearest_up, nearest_up) = macros::mul_div_u256_wide(
         large,
@@ -234,7 +235,7 @@ fun inv_mod_extended_impl_rejects_zero_modulus() {
 
 #[test]
 fun inv_mod_macro_matches_impl() {
-    let macro_inverse = macros::inv_mod!(3, 11);
+    let macro_inverse = macros::inv_mod!(3u64, 11u64);
     assert_eq!(macro_inverse, option::some(4));
 }
 
@@ -266,6 +267,16 @@ fun mul_mod_impl_handles_wide_operands() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fun mul_mod_impl_handles_quotient_overflow() {
+    let a = std::u256::max_value!();
+    let b = a;
+    let modulus = 7;
+    let expected = ((a % modulus) * (b % modulus)) % modulus;
+    let result = macros::mul_mod_impl(a, b, modulus);
+    assert_eq!(result, expected);
+}
+
 #[test, expected_failure(abort_code = macros::EZeroModulus)]
 fun mul_mod_impl_rejects_zero_modulus() {
     macros::mul_mod_impl(5, 7, 0);
@@ -280,7 +291,7 @@ fun mul_mod_macro_matches_helper() {
 
 #[test, expected_failure(abort_code = macros::EZeroModulus)]
 fun mul_mod_macro_rejects_zero_modulus() {
-    macros::mul_mod!(1, 2, 0);
+    macros::mul_mod!(1, 2, 0u64);
 }
 
 #[test]
@@ -1130,7 +1141,7 @@ fun sqrt_handles_powers_of_two() {
     // Powers of 4 (perfect squares of powers of 2)
     let rounding_modes = vector[rounding::down(), rounding::up(), rounding::nearest()];
     rounding_modes.destroy!(|rounding| {
-        assert_eq!(macros::sqrt!(1u64 << 0, rounding), 1); // sqrt(1) = 1
+        assert_eq!(macros::sqrt!(1u64, rounding), 1); // sqrt(1) = 1
         assert_eq!(macros::sqrt!(1u64 << 2, rounding), 2); // sqrt(4) = 2
         assert_eq!(macros::sqrt!(1u64 << 4, rounding), 4); // sqrt(16) = 4
         assert_eq!(macros::sqrt!(1u64 << 6, rounding), 8); // sqrt(64) = 8

@@ -13,6 +13,14 @@ sui.keystore
 *.log
 logs/
 
+# Node.js artifacts
+node_modules
+package.json
+package-lock.json
+
 # Temporary folders
 tmp/
 temp/
+
+# Everyone uses their own local dev environment config, so we should not force specific VS Code configs
+.vscode/
