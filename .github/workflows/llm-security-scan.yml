@@ -3,6 +3,7 @@ name: LLM Security Scan (Codex)
 on:
   schedule:
     - cron: "0 1 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
