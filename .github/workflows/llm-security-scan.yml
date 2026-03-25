@@ -13,17 +13,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  security-scan:
-    name: Codex vulnerability scan (read-only)
+  detect-changes:
+    name: Detect recent Move changes
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    outputs:
+      should_scan: ${{ steps.detect_move_changes.outputs.should_scan }}
 
     steps:
-      - name: Harden the runner (Audit outbound calls)
-        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
-        with:
-          egress-policy: audit
-
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -50,8 +46,23 @@ jobs:
           echo "Detected .move changes in the last 7 days:"
           echo "$changed_files"
 
+  security-scan:
+    name: Codex vulnerability scan
+    needs: detect-changes
+    if: needs.detect-changes.outputs.should_scan == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Harden the runner (Audit outbound calls)
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Run Codex scan (read-only)
-        if: steps.detect_move_changes.outputs.should_scan == 'true'
         id: run_codex
         uses: openai/codex-action@c25d10f3f498316d4b2496cc4c6dd58057a7b031 # v1.6
         with:
@@ -103,7 +114,6 @@ jobs:
             - No markdown, no backticks, no extra text — JSON only.
 
       - name: Validate results & fail on meaningful findings
-        if: steps.detect_move_changes.outputs.should_scan == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -153,7 +163,7 @@ jobs:
           fi
 
       - name: Upload scan output
-        if: always() && steps.detect_move_changes.outputs.should_scan == 'true'
+        if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: codex-llm-security-scan-output
