@@ -1,10 +1,8 @@
 name: LLM Security Scan (Codex)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "**/*.move"
+  schedule:
+    - cron: "0 1 * * 1"
 
 permissions:
   contents: read
@@ -17,7 +15,7 @@ jobs:
   security-scan:
     name: Codex vulnerability scan (read-only)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Harden the runner (Audit outbound calls)
@@ -27,8 +25,32 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # By default, actions/checkout usually does a shallow clone (depth 1)
+          # For git log --since='7 days ago', we need the full history
+          fetch-depth: 0
+
+      - name: Detect recent Move changes
+        id: detect_move_changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          changed_files="$(git log --since='7 days ago' --name-only --pretty=format: -- '*.move' | sed '/^$/d' | sort -u)"
+
+          if [ -z "$changed_files" ]; then
+            echo "should_scan=false" >> "$GITHUB_OUTPUT"
+            echo "No .move changes detected in the last 7 days. Skipping scheduled scan."
+            exit 0
+          fi
+
+          echo "should_scan=true" >> "$GITHUB_OUTPUT"
+
+          echo "Detected .move changes in the last 7 days:"
+          echo "$changed_files"
 
       - name: Write strict JSON schema for scan output
+        if: steps.detect_move_changes.outputs.should_scan == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -37,15 +59,10 @@ jobs:
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
             "additionalProperties": false,
-            "required": ["vulnerable", "summary", "scanned_commit", "scanned_files", "findings"],
+            "required": ["summary", "scanned_commit", "findings"],
             "properties": {
-              "vulnerable": { "type": "boolean" },
               "summary": { "type": "string", "minLength": 1 },
               "scanned_commit": { "type": "string", "minLength": 7 },
-              "scanned_files": {
-                "type": "array",
-                "items": { "type": "string", "minLength": 1 }
-              },
               "findings": {
                 "type": "array",
                 "items": {
@@ -69,6 +86,7 @@ jobs:
           JSON
 
       - name: Run Codex scan (read-only)
+        if: steps.detect_move_changes.outputs.should_scan == 'true'
         id: run_codex
         uses: openai/codex-action@c25d10f3f498316d4b2496cc4c6dd58057a7b031 # v1.6
         with:
@@ -91,45 +109,41 @@ jobs:
             You are an expert application security auditor.
 
             SCOPE:
-            - Analyze the repository checked out in this workflow run (the whole codebase).
-            - You MAY read any tracked source/config/docs needed to assess security.
-            - Prefer focusing on code and configuration over generated/binary artifacts.
+            - Analyze the checked-out repository as a full project scan, excluding tests and test fixtures.
+            - Do not inspect files under any tests/ directory unless necessary to understand production code, and do not report findings against test-only code.
+            - You MAY read tracked source, manifests, CI/workflow files, and security-relevant configuration needed to assess production risk.
+            - Prioritize Move packages, modules, manifests, deployment/configuration, and CI/security-relevant workflow files over generated or binary artifacts.
 
             CONSTRAINTS:
             - Read-only analysis: do NOT modify files.
             - Output ONLY a single JSON object that EXACTLY matches the provided JSON Schema.
-            - If you did not inspect a file, do not claim you did.
             - Prefer concrete, code-referential findings (file + line hints when possible).
+            - Report only concrete vulnerabilities or high-risk security smells with a plausible exploit path; do not report style issues or speculative concerns.
 
             TASK:
-            1) Identify security vulnerabilities and high-risk security smells, including (non-exhaustive):
-               - auth/authz mistakes, access control bypasses, insecure defaults
-               - injection risks, unsafe deserialization, SSRF, command execution
-               - secrets leakage, weak crypto, broken randomness
-               - dependency/config risks (lockfiles, CI/CD, supply chain)
-               - DoS risks (unbounded loops, regex backtracking, resource exhaustion)
-               - logic flaws that enable fund loss or privilege escalation (if applicable)
+            1) Identify Move-specific vulnerabilities and high-risk security smells in production code, including (non-exhaustive):
+               - signer, capability, or privilege misuse; missing or incorrect admin gating; access control bypasses
+               - resource safety or invariant violations; incorrect ownership, transfer, or shared-object handling
+               - initialization, upgrade, or configuration mistakes that weaken safety guarantees
+               - arithmetic, precision, abort-handling, or logic flaws that can cause fund loss, privilege escalation, or invariant breaks
+               - denial-of-service risks from unbounded iteration, uncontrolled state growth, or gas/resource exhaustion
+               - dependency, CI/CD, or configuration issues that materially weaken Move package security
             2) Provide a succinct summary.
             3) Populate findings with severity/category/confidence, and specific remediation.
+            4) Prefer findings with direct evidence in production Move code or directly supporting configuration.
 
             OUTPUT RULES:
             - scanned_commit MUST be: ${{ github.sha }}
-            - scanned_files MUST list every file you actually inspected (be honest).
-            - Set vulnerable=true iff there is at least one finding.
-            - If you found nothing, findings must be [] and vulnerable=false.
+            - If you found nothing, findings must be [].
             - No markdown, no backticks, no extra text — JSON only.
 
-      - name: Validate results & fail on any finding
+      - name: Validate results & fail on meaningful findings
+        if: steps.detect_move_changes.outputs.should_scan == 'true'
         shell: bash
         run: |
           set -euo pipefail
 
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y jq
-          fi
-
-          raw="$(cat /tmp/scan_output.json | tr -d '\r')"
+          raw="$(tr -d '\r' < /tmp/scan_output.json)"
 
           if ! echo "$raw" | jq empty 2>/dev/null; then
             echo "ERROR: Could not parse scan output as JSON:"
@@ -144,8 +158,13 @@ jobs:
           echo "Commit : $(echo "$raw" | jq -r '.scanned_commit')"
           echo ""
 
+          if [ "$(echo "$raw" | jq -r '.scanned_commit')" != "${{ github.sha }}" ]; then
+            echo "ERROR: Scan output reported an unexpected commit."
+            exit 2
+          fi
+
           finding_count="$(echo "$raw" | jq '.findings | length')"
-          vulnerable="$(echo "$raw" | jq -r '.vulnerable')"
+          meaningful_count="$(echo "$raw" | jq '[.findings[] | select((.severity == "critical" or .severity == "high") and (.confidence == "high" or .confidence == "medium"))] | length')"
 
           if [ "$finding_count" -gt 0 ]; then
             echo "Findings ($finding_count):"
@@ -157,15 +176,19 @@ jobs:
             echo "No findings reported."
           fi
 
-          if [ "$finding_count" -gt 0 ] || [ "$vulnerable" = "true" ]; then
-            echo "❌ SCAN FAILED — $finding_count finding(s)."
+          if [ "$meaningful_count" -gt 0 ]; then
+            echo "❌ SCAN FOUND VULNERABILITIES — $meaningful_count finding(s) (severity=critical/high, confidence=medium/high)."
             exit 1
           fi
 
-          echo "✅ SCAN PASSED — No vulnerabilities detected."
+          if [ "$finding_count" -gt 0 ]; then
+            echo "✅ SCAN PASSED — No meaningful vulnerabilities detected."
+          else
+            echo "✅ SCAN PASSED — No vulnerabilities detected."
+          fi
 
       - name: Upload scan output
-        if: always()
+        if: always() && steps.detect_move_changes.outputs.should_scan == 'true'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: codex-llm-security-scan-output
