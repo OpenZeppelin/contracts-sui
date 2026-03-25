@@ -80,7 +80,6 @@ jobs:
           # Extra CLI args forwarded to `codex exec`
           codex-args: >-
             --ask-for-approval never
-            --ephemeral
 
           prompt: |
             You are an expert application security auditor.
