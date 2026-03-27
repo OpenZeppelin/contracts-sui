@@ -27,9 +27,8 @@ fun test_with_seed_0() {
 }
 
 #[random_test]
-fun test_rand_produces_distinct_sequential_values(seed: u64) {
-    let mut random = new(seed);
-    let r1 = random.rand();
-    let r2 = random.rand();
-    assert!(r1 != r2);
+fun test_same_seed_produces_same_sequence(seed: u64) {
+    let mut random1 = new(seed);
+    let mut random2 = new(seed);
+    assert_eq!(random1.rand(), random2.rand());
 }
