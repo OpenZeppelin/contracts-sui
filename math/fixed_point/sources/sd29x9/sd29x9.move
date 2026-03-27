@@ -15,15 +15,10 @@
 ///   values that might dip below zero, unlike unsigned types.
 module openzeppelin_fp_math::sd29x9;
 
+use openzeppelin_fp_math::fixed_point_common;
+
 /// The `SD29x9` decimal fixed-point type.
 public struct SD29x9(u128) has copy, drop, store;
-
-// === Constants ===
-
-const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
-const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
-const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
-const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Errors ===
 
@@ -75,7 +70,7 @@ public fun zero(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `1`.
 public fun one(): SD29x9 {
-    SD29x9(SCALE)
+    SD29x9(fixed_point_common::scale())
 }
 
 /// Constructs the minimum representable `SD29x9` value.
@@ -83,7 +78,7 @@ public fun one(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `-2^127`.
 public fun min(): SD29x9 {
-    SD29x9(MIN_NEGATIVE_VALUE)
+    SD29x9(fixed_point_common::min_sd29x9_value())
 }
 
 /// Constructs the maximum representable `SD29x9` value.
@@ -91,7 +86,7 @@ public fun min(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `2^127 - 1`.
 public fun max(): SD29x9 {
-    SD29x9(MAX_POSITIVE_VALUE)
+    SD29x9(fixed_point_common::max_sd29x9_magnitude())
 }
 
 // === Casting helpers ===
@@ -117,7 +112,7 @@ public fun max(): SD29x9 {
 public fun wrap(x: u128, is_negative: bool): SD29x9 {
     if (x == 0) {
         zero()
-    } else if (x > MAX_POSITIVE_VALUE) {
+    } else if (x > fixed_point_common::max_sd29x9_magnitude()) {
         // The value is too large to be represented as a positive SD29x9
         abort EOverflow
     } else if (is_negative) {
@@ -153,9 +148,9 @@ public fun unwrap(x: SD29x9): u128 {
 /// #### Returns
 /// - The two's complement of `bits`.
 public(package) fun two_complement(bits: u128): u128 {
-    let inverted = bits ^ U128_MAX_VALUE;
+    let inverted = bits ^ fixed_point_common::u128_max();
     let sum = (inverted as u256) + 1;
-    (sum & (U128_MAX_VALUE as u256)) as u128
+    (sum & (fixed_point_common::u128_max() as u256)) as u128
 }
 
 /// Wraps a raw `u128` bit pattern directly into an `SD29x9` value without validation.
