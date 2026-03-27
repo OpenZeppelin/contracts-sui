@@ -15,12 +15,10 @@
 ///   internally.
 module openzeppelin_fp_math::ud30x9;
 
+use openzeppelin_fp_math::fixed_point_common;
+
 /// The `UD30x9` decimal fixed-point type.
 public struct UD30x9(u128) has copy, drop, store;
-
-// === Constants ===
-
-const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Functions ===
 
@@ -65,7 +63,7 @@ public fun zero(): UD30x9 {
 /// #### Returns
 /// - The `UD30x9` representation of `1`.
 public fun one(): UD30x9 {
-    UD30x9(SCALE)
+    UD30x9(fixed_point_common::scale())
 }
 
 /// Constructs the maximum representable `UD30x9` value.
@@ -73,7 +71,7 @@ public fun one(): UD30x9 {
 /// #### Returns
 /// - The largest possible `UD30x9` value.
 public fun max(): UD30x9 {
-    UD30x9(std::u128::max_value!())
+    UD30x9(fixed_point_common::u128_max())
 }
 
 // === Casting helpers ===
