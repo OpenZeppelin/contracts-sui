@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_collections::random_tests;
 
 use openzeppelin_collections::random::new;
