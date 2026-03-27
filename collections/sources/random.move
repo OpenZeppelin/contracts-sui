@@ -14,7 +14,7 @@ public fun seed(r: &mut Random, seed: u64) {
     r.seed = ((((r.seed as u128) + (seed as u128) & 0x0000000000000000ffffffffffffffff)) as u64)
 }
 
-public fun rand_n(r: &mut Random, n: u64): u64 {
+public fun rand_below(r: &mut Random, n: u64): u64 {
     r.rand() % n
 }
 
@@ -27,7 +27,7 @@ public fun rand(r: &mut Random): u64 {
     r.seed
 }
 
-public fun seed_rand(r: &mut Random, seed: u64): u64 {
+public fun reseed_and_rand(r: &mut Random, seed: u64): u64 {
     r.seed(seed);
     r.rand()
 }
