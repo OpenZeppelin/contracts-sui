@@ -26,6 +26,14 @@ fun test_with_seed_0() {
     }
 }
 
+#[test]
+fun test_max_seed_produces_deterministic_values() {
+    let mut random = new(std::u64::max_value!());
+    assert_eq!(random.rand(), 4611686018427887908);
+    assert_eq!(random.rand(), 16140901064490107605);
+    assert_eq!(random.rand(), 5764607523106610609);
+}
+
 #[random_test]
 fun test_same_seed_produces_same_sequence(seed: u64) {
     let mut random1 = new(seed);
