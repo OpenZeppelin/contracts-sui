@@ -61,8 +61,8 @@ fun add_zero_is_identity() {
         fixed(1_000_000 * SCALE),
     ];
     cases.destroy!(|x| {
-        expect(x.add(zero), x);
-        expect(zero.add(x), x);
+        expect!(x.add(zero), x);
+        expect!(zero.add(x), x);
     });
 }
 

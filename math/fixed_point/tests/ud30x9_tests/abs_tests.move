@@ -36,11 +36,11 @@ fun abs_handles_zero() {
 fun abs_handles_edge_cases() {
     // 0.000000001 -> 0.000000001
     let tiny = fixed(1);
-    expect(tiny.abs(), tiny);
+    expect!(tiny.abs(), tiny);
 
     // 1000000.5 -> 1000000.5
     let large = fixed(1000000 * SCALE + 500_000_000);
-    expect(large.abs(), large);
+    expect!(large.abs(), large);
 
     // Max value remains unchanged
     let max = ud30x9::max();
@@ -59,7 +59,7 @@ fun abs_of_scale_minus_one() {
 
 #[test]
 fun abs_of_max() {
-    expect(ud30x9::max().abs(), ud30x9::max());
+    expect!(ud30x9::max().abs(), ud30x9::max());
 }
 
 #[test]

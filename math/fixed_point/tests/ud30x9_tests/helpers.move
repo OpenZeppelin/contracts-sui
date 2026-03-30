@@ -20,6 +20,8 @@ public(package) fun fixed(value: u128): UD30x9 {
     ud30x9::wrap(value)
 }
 
-public(package) fun expect(left: UD30x9, right: UD30x9) {
+public(package) macro fun expect($left: UD30x9, $right: UD30x9) {
+    let left = $left;
+    let right = $right;
     assert_eq!(left.unwrap(), right.unwrap());
 }

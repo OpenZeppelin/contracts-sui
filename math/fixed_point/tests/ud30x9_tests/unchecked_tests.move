@@ -36,7 +36,7 @@ fun unchecked_add_zero_is_identity() {
     let zero = fixed(0);
     let cases = vector[fixed(1), fixed(100), fixed(MAX_VALUE / 2), fixed(999)];
     cases.destroy!(|x| {
-        expect(x.unchecked_add(zero), x);
+        expect!(x.unchecked_add(zero), x);
     });
 }
 
@@ -45,7 +45,7 @@ fun unchecked_sub_zero_is_identity() {
     let zero = fixed(0);
     let cases = vector[fixed(1), fixed(100), fixed(MAX_VALUE / 2), fixed(999)];
     cases.destroy!(|x| {
-        expect(x.unchecked_sub(zero), x);
+        expect!(x.unchecked_sub(zero), x);
     });
 }
 
@@ -64,6 +64,6 @@ fun unchecked_add_and_sub_are_inverse() {
     let delta = fixed(5);
     let cases = vector[fixed(10), fixed(100), fixed(1_000_000), fixed(42)];
     cases.destroy!(|x| {
-        expect(x.unchecked_add(delta).unchecked_sub(delta), x);
+        expect!(x.unchecked_add(delta).unchecked_sub(delta), x);
     });
 }

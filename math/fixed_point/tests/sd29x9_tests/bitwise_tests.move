@@ -25,21 +25,21 @@ fun shifts_cover_positive_negative_and_large_offsets() {
     let neg_value = neg(8);
     let pos_value = pos(4);
 
-    expect(pos_value.lshift(0), pos_value);
-    expect(pos_value.lshift(1), pos(8));
-    expect(neg_value.lshift(1), neg(16));
+    expect!(pos_value.lshift(0), pos_value);
+    expect!(pos_value.lshift(1), pos(8));
+    expect!(neg_value.lshift(1), neg(16));
     assert!(pos_value.lshift(128).is_zero());
     assert!(pos_value.lshift(129).is_zero());
 
-    expect(pos_value.rshift(0), pos_value);
-    expect(pos_value.rshift(1), pos(2));
-    expect(neg_value.rshift(1), neg(4));
-    expect(neg_value.rshift(0), neg_value);
+    expect!(pos_value.rshift(0), pos_value);
+    expect!(pos_value.rshift(1), pos(2));
+    expect!(neg_value.rshift(1), neg(4));
+    expect!(neg_value.rshift(0), neg_value);
 
     let neg_one = neg(1);
-    expect(neg_one.rshift(127), neg_one);
-    expect(pos_value.rshift(128), sd29x9::zero());
-    expect(
+    expect!(neg_one.rshift(127), neg_one);
+    expect!(pos_value.rshift(128), sd29x9::zero());
+    expect!(
         neg_one.rshift(128),
         from_bits(0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF),
     );
@@ -85,16 +85,16 @@ fun or_combines_bits() {
 
 #[test]
 fun lshift_by_1_doubles_magnitude() {
-    expect(pos(4).lshift(1), pos(8));
+    expect!(pos(4).lshift(1), pos(8));
 }
 
 #[test]
 fun rshift_by_1_halves_magnitude() {
-    expect(pos(8).rshift(1), pos(4));
+    expect!(pos(8).rshift(1), pos(4));
 }
 
 #[test]
 fun rshift_preserves_negative_sign_for_large_shift() {
     // neg(1) in two's complement is all ones; arithmetic right shift keeps it all ones
-    expect(neg(1).rshift(127), neg(1));
+    expect!(neg(1).rshift(127), neg(1));
 }

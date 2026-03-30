@@ -24,6 +24,8 @@ public(package) fun neg(raw: u128): SD29x9 {
     sd29x9::wrap(raw, true)
 }
 
-public(package) fun expect(left: SD29x9, right: SD29x9) {
+public(package) macro fun expect($left: SD29x9, $right: SD29x9) {
+    let left = $left;
+    let right = $right;
     assert_eq!(left.unwrap(), right.unwrap());
 }

@@ -37,25 +37,25 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
 #[test]
 fun lshift_by_128_returns_zero() {
     let x = fixed(1);
-    expect(x.lshift(128), fixed(0));
+    expect!(x.lshift(128), fixed(0));
 }
 
 #[test]
 fun rshift_by_128_returns_zero() {
     let x = fixed(1);
-    expect(x.rshift(128), fixed(0));
+    expect!(x.rshift(128), fixed(0));
 }
 
 #[test]
 fun lshift_by_255_returns_zero() {
     let x = fixed(1);
-    expect(x.lshift(255), fixed(0));
+    expect!(x.lshift(255), fixed(0));
 }
 
 #[test]
 fun rshift_by_255_returns_zero() {
     let x = fixed(1);
-    expect(x.rshift(255), fixed(0));
+    expect!(x.rshift(255), fixed(0));
 }
 
 #[test]

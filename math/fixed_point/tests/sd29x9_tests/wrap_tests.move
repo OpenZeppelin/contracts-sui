@@ -12,7 +12,7 @@ const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000;
 #[test]
 fun wrap_max_positive() {
     let value = sd29x9::wrap(MAX_POSITIVE_VALUE, false);
-    expect(value, sd29x9::max());
+    expect!(value, sd29x9::max());
 }
 
 #[test]
@@ -27,7 +27,7 @@ fun wrap_negative_zero_is_zero() {
 
 #[test]
 fun wrap_min_value() {
-    expect(sd29x9::min(), from_bits(MIN_NEGATIVE_VALUE));
+    expect!(sd29x9::min(), from_bits(MIN_NEGATIVE_VALUE));
 }
 
 #[test, expected_failure(abort_code = sd29x9::EOverflow)]
@@ -58,15 +58,15 @@ fun from_bits_all_ones() {
 
 #[test]
 fun from_bits_max_positive() {
-    expect(from_bits(MAX_POSITIVE_VALUE), sd29x9::max());
+    expect!(from_bits(MAX_POSITIVE_VALUE), sd29x9::max());
 }
 
 #[test]
 fun from_bits_min_negative() {
-    expect(from_bits(MIN_NEGATIVE_VALUE), sd29x9::min());
+    expect!(from_bits(MIN_NEGATIVE_VALUE), sd29x9::min());
 }
 
 #[test]
 fun from_bits_one() {
-    expect(from_bits(1), pos(1));
+    expect!(from_bits(1), pos(1));
 }
