@@ -361,6 +361,7 @@ public fun pow(x: SD29x9, mut exp: u8): SD29x9 {
         exp = exp >> 1;
         if (exp != 0) {
             base_mag = base_mag * base_mag / SCALE;
+            assert!(base_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
         }
     };
 
