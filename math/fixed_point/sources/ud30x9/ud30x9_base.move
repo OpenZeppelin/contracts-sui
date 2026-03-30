@@ -1,7 +1,7 @@
 /// Base utility functions for the `UD30x9` fixed-point type.
 module openzeppelin_fp_math::ud30x9_base;
 
-use openzeppelin_fp_math::fixed_point_common;
+use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
 
@@ -28,7 +28,7 @@ const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD2
 /// - Aborts if `x` is greater than max positive `SD29x9` value.
 public fun into_SD29x9(x: UD30x9): SD29x9 {
     let value = x.unwrap();
-    assert!(value <= fixed_point_common::max_sd29x9_magnitude(), ECannotBeConvertedToSD29x9);
+    assert!(value <= common::max_sd29x9_magnitude(), ECannotBeConvertedToSD29x9);
     sd29x9::wrap(value, false)
 }
 
@@ -41,7 +41,7 @@ public fun into_SD29x9(x: UD30x9): SD29x9 {
 /// - The `SD29x9` representation of `x` if `x` is less than or equal to max positive `SD29x9` value, otherwise `none`.
 public fun try_into_SD29x9(x: UD30x9): Option<SD29x9> {
     let value = x.unwrap();
-    if (value > fixed_point_common::max_sd29x9_magnitude()) {
+    if (value > common::max_sd29x9_magnitude()) {
         option::none()
     } else {
         option::some(sd29x9::wrap(value, false))
@@ -113,7 +113,7 @@ public fun abs(x: UD30x9): UD30x9 {
 /// - Aborts if the rounded result exceeds the representable `UD30x9` range.
 public fun ceil(x: UD30x9): UD30x9 {
     let value = x.unwrap() as u256;
-    let scale = fixed_point_common::scale_u256();
+    let scale = common::scale_u256();
     let fractional = value % scale;
     if (fractional == 0) {
         x
@@ -145,7 +145,7 @@ public fun eq(x: UD30x9, y: UD30x9): bool {
 /// - `x` rounded down (floor) at integer precision.
 public fun floor(x: UD30x9): UD30x9 {
     let value = x.unwrap();
-    let fractional = value % fixed_point_common::scale();
+    let fractional = value % common::scale();
     if (fractional == 0) {
         x
     } else {
@@ -260,7 +260,7 @@ public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let product = x * y / fixed_point_common::scale_u256();
+    let product = x * y / common::scale_u256();
     wrap_u256(product)
 }
 
@@ -281,7 +281,7 @@ public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let numerator = x * fixed_point_common::scale_u256();
+    let numerator = x * common::scale_u256();
     wrap_u256(numerator / y)
 }
 
@@ -312,12 +312,12 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     if (exp == 1) {
         return x
     };
-    let max_value = fixed_point_common::u128_max() as u256;
+    let max_value = common::u128_max() as u256;
     let base = x.unwrap() as u256;
     let mut result = base;
     let times = exp - 1;
     times.do!(|_| {
-        result = result * base / fixed_point_common::scale_u256();
+        result = result * base / common::scale_u256();
         assert!(result <= max_value, EOverflow);
     });
 
@@ -344,7 +344,7 @@ public fun neq(x: UD30x9, y: UD30x9): bool {
 /// #### Returns
 /// - The result of bitwise NOT operation.
 public fun not(x: UD30x9): UD30x9 {
-    wrap(x.unwrap() ^ fixed_point_common::u128_max())
+    wrap(x.unwrap() ^ common::u128_max())
 }
 
 /// Performs a bitwise OR between two `UD30x9` raw bit patterns.
@@ -404,7 +404,7 @@ public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
 public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let sum = x + y;
-    let u128_max = fixed_point_common::u128_max() as u256;
+    let u128_max = common::u128_max() as u256;
 
     // Keep only the low 128 bits, safe to cast down to u128.
     let wrapped = (sum & u128_max) as u128;
@@ -421,7 +421,7 @@ public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The wrapping difference `x - y` modulo `2^128`.
 public fun unchecked_sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let u128_max = fixed_point_common::u128_max() as u256;
+    let u128_max = common::u128_max() as u256;
 
     // Effectively wraps subtraction like in modular arithmetic.
     // The result is (a + (2^128) - b).
@@ -447,6 +447,6 @@ public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
 // === Internal Functions ===
 
 fun wrap_u256(value: u256): UD30x9 {
-    assert!(value <= fixed_point_common::u128_max() as u256, EOverflow);
+    assert!(value <= common::u128_max() as u256, EOverflow);
     wrap(value as u128)
 }

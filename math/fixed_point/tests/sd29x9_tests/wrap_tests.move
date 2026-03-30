@@ -1,9 +1,9 @@
 #[test_only]
 module openzeppelin_fp_math::sd29x9_wrap_tests;
 
-use openzeppelin_fp_math::casting_u128;
 use openzeppelin_fp_math::sd29x9::{Self, from_bits};
 use openzeppelin_fp_math::sd29x9_test_helpers::{pos, expect};
+use openzeppelin_fp_math::u128_cast;
 use std::unit_test::assert_eq;
 
 const ALL_ONES: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
@@ -50,8 +50,8 @@ fun wrap_negative_one_is_all_ones() {
 #[test]
 fun raw_casting_from_u128_matches_wrap() {
     let raw = 987_654_321u128;
-    let positive = casting_u128::into_SD29x9(raw, false);
-    let negative = casting_u128::into_SD29x9(raw, true);
+    let positive = u128_cast::into_SD29x9(raw, false);
+    let negative = u128_cast::into_SD29x9(raw, true);
 
     assert_eq!(positive.unwrap(), raw);
     assert_eq!(negative, sd29x9::wrap(raw, true));

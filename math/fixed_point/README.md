@@ -13,21 +13,53 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
 
-## Raw Casting
+## Casting vs Converting
 
-The core `wrap` / `unwrap` APIs and `casting_u128` module are **raw casts**.
+This package uses **casting** and **converting** for different operations:
+
+- **Casting** preserves the fixed-point scale already present in the value.
+  It may reinterpret raw bits, or move between fixed-point types with only
+  sign and range checks. It does **not** multiply or divide by `10^9`.
+- **Converting** changes between whole-number semantics and fixed-point
+  semantics. It applies or removes the `10^9` scale factor.
+
+Rule of thumb:
+
+- Use a **cast** when your input is already in raw fixed-point form.
+- Use a **conversion** when your input is a whole integer like `42` and you
+  mean `42.0`.
+
+## Raw Casts
+
+The core `wrap` / `unwrap` APIs and `u128_cast` module are **raw casts**.
 They preserve the underlying fixed-point bits and do not multiply or divide by
 `10^9`.
 
 ```rust
-use openzeppelin_fp_math::{casting_u128, sd29x9, ud30x9};
+use openzeppelin_fp_math::{sd29x9, u128_cast, ud30x9};
 
 let one = ud30x9::wrap(1_000_000_000); // 1.0
-let raw = casting_u128::into_UD30x9(42); // Raw bits, not 42.0
+let raw = u128_cast::into_UD30x9(42); // Raw bits, not 42.0
 
 let positive = sd29x9::wrap(1_000_000_000, false); // 1.0
-let negative = casting_u128::into_SD29x9(42, true); // Raw bits for -0.000000042
+let negative = u128_cast::into_SD29x9(42, true); // Raw bits for -0.000000042
 ```
+
+## Cross-Type Fixed-Point Casts
+
+Casting also includes moves between fixed-point types that keep the same
+scaled numeric meaning and only validate signedness or range.
+
+```rust
+use openzeppelin_fp_math::{sd29x9, ud30x9_convert};
+
+let unsigned = ud30x9_convert::from_u128(42); // 42.0
+let signed = unsigned.into_SD29x9(); // 42.0 as SD29x9
+let roundtrip = signed.into_UD30x9(); // 42.0 as UD30x9
+```
+
+These casts do not rescale the value. For example, `42.123456789` stays
+`42.123456789`; only the target type changes.
 
 ## Whole-Number Conversions
 
@@ -38,10 +70,10 @@ apply the fixed-point scale for you.
 use openzeppelin_fp_math::{sd29x9_convert, ud30x9_convert};
 
 let whole = ud30x9_convert::from_u128(42); // 42.0
-let back = ud30x9_convert::to_u128_trunc(whole); // 42
+let back = whole.to_u128_trunc(); // 42
 
 let delta = sd29x9_convert::from_u128(5, true); // -5.0
-let (magnitude, is_negative) = sd29x9_convert::to_parts_trunc(delta);
+let (magnitude, is_negative) = delta.to_parts_trunc();
 // magnitude == 5, is_negative == true
 ```
 
@@ -65,8 +97,6 @@ let new_balance = balance.add(adjustment); // 7.5
 
 ## Notes
 
-- Stored as `u128` scaled by 10^9
-- Raw casts preserve scaled bits exactly; conversion helpers multiply or divide by `10^9`
 - Right shifts preserve sign for `SD29x9` (arithmetic) and zero-fill for `UD30x9` (logical)
 - `UD30x9.mul`/`UD30x9.div` and `SD29x9.mul`/`SD29x9.div` rescale with truncating integer
   division; for `UD30x9` this means rounding down, while for `SD29x9` this means truncation

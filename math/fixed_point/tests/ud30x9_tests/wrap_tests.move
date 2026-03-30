@@ -1,7 +1,7 @@
 #[test_only]
 module openzeppelin_fp_math::ud30x9_wrap_tests;
 
-use openzeppelin_fp_math::casting_u128::into_UD30x9;
+use openzeppelin_fp_math::u128_cast::into_UD30x9;
 use openzeppelin_fp_math::ud30x9;
 use openzeppelin_fp_math::ud30x9_test_helpers::fixed;
 use std::unit_test::assert_eq;

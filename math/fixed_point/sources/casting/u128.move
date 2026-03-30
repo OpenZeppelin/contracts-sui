@@ -7,7 +7,7 @@
 ///
 /// Use the dedicated conversion modules `ud30x9_convert` and `sd29x9_convert`
 /// when you want whole-number semantics that multiply or divide by `10^9`.
-module openzeppelin_fp_math::casting_u128;
+module openzeppelin_fp_math::u128_cast;
 
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};

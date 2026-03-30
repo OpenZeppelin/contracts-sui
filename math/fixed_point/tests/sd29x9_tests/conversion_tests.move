@@ -59,21 +59,21 @@ fun try_from_u128_returns_some_for_max_supported_whole_magnitude() {
 
 #[test]
 fun to_parts_trunc_handles_positive_fractional_values() {
-    let (magnitude, is_negative) = sd29x9_convert::to_parts_trunc(pos(42 * SCALE + 123_456_789));
+    let (magnitude, is_negative) = pos(42 * SCALE + 123_456_789).to_parts_trunc();
     assert_eq!(magnitude, 42);
     assert!(!is_negative);
 }
 
 #[test]
 fun to_parts_trunc_handles_negative_fractional_values() {
-    let (magnitude, is_negative) = sd29x9_convert::to_parts_trunc(neg(42 * SCALE + 123_456_789));
+    let (magnitude, is_negative) = neg(42 * SCALE + 123_456_789).to_parts_trunc();
     assert_eq!(magnitude, 42);
     assert!(is_negative);
 }
 
 #[test]
 fun to_parts_trunc_clears_sign_for_subunit_negative_values() {
-    let (magnitude, is_negative) = sd29x9_convert::to_parts_trunc(neg(1));
+    let (magnitude, is_negative) = neg(1).to_parts_trunc();
     assert_eq!(magnitude, 0);
     assert!(!is_negative);
 }
@@ -81,42 +81,62 @@ fun to_parts_trunc_clears_sign_for_subunit_negative_values() {
 #[test]
 fun to_u128_trunc_converts_supported_positive_values() {
     let value = pos(42 * SCALE + 999_999_999);
-    assert_eq!(sd29x9_convert::to_u128_trunc(value), 42);
+    assert_eq!(value.to_u128_trunc(), 42);
 }
 
 #[test, expected_failure(abort_code = sd29x9_convert::ENegativeValue)]
 fun to_u128_trunc_aborts_for_negative_values() {
-    sd29x9_convert::to_u128_trunc(neg(SCALE));
+    neg(SCALE).to_u128_trunc();
+}
+
+#[test, expected_failure(abort_code = sd29x9_convert::ENegativeValue)]
+fun to_u128_trunc_aborts_for_negative_subunit_values() {
+    neg(1).to_u128_trunc();
 }
 
 #[test]
 fun try_to_u128_trunc_returns_none_for_negative_values() {
-    assert_eq!(sd29x9_convert::try_to_u128_trunc(neg(SCALE)), option::none());
+    assert_eq!(neg(SCALE).try_to_u128_trunc(), option::none());
+}
+
+#[test]
+fun try_to_u128_trunc_returns_none_for_negative_subunit_values() {
+    assert_eq!(neg(1).try_to_u128_trunc(), option::none());
 }
 
 #[test]
 fun to_u64_trunc_converts_supported_positive_values() {
     let value = pos(42 * SCALE + 500_000_000);
-    assert_eq!(sd29x9_convert::to_u64_trunc(value), 42);
+    assert_eq!(value.to_u64_trunc(), 42);
 }
 
 #[test, expected_failure(abort_code = sd29x9_convert::EIntegerOverflow)]
 fun to_u64_trunc_aborts_when_whole_part_exceeds_u64_max() {
     let overflow_whole = (std::u64::max_value!() as u128) + 1;
     let value = sd29x9::wrap(overflow_whole * SCALE, false);
-    sd29x9_convert::to_u64_trunc(value);
+    value.to_u64_trunc();
 }
 
 #[test]
 fun try_to_u64_trunc_returns_none_for_negative_values() {
-    assert_eq!(sd29x9_convert::try_to_u64_trunc(neg(SCALE)), option::none());
+    assert_eq!(neg(SCALE).try_to_u64_trunc(), option::none());
+}
+
+#[test, expected_failure(abort_code = sd29x9_convert::ENegativeValue)]
+fun to_u64_trunc_aborts_for_negative_subunit_values() {
+    neg(1).to_u64_trunc();
+}
+
+#[test]
+fun try_to_u64_trunc_returns_none_for_negative_subunit_values() {
+    assert_eq!(neg(1).try_to_u64_trunc(), option::none());
 }
 
 #[test]
 fun try_to_u64_trunc_returns_none_when_whole_part_exceeds_u64_max() {
     let overflow_whole = (std::u64::max_value!() as u128) + 1;
     let value = sd29x9::wrap(overflow_whole * SCALE, false);
-    assert_eq!(sd29x9_convert::try_to_u64_trunc(value), option::none());
+    assert_eq!(value.try_to_u64_trunc(), option::none());
 }
 
 #[test]
@@ -125,6 +145,6 @@ fun whole_number_roundtrip_preserves_supported_positive_values() {
 
     samples.destroy!(|whole| {
         let fixed = sd29x9_convert::from_u128(whole, false);
-        assert_eq!(sd29x9_convert::to_u128_trunc(fixed), whole);
+        assert_eq!(fixed.to_u128_trunc(), whole);
     });
 }

@@ -4,7 +4,7 @@
 /// `wrap`/`unwrap` APIs over raw scaled representations. Conversion helpers
 /// live separately and reuse the constants in this module to keep scale-aware
 /// bounds, sign handling, and terminology consistent across the package.
-module openzeppelin_fp_math::fixed_point_common;
+module openzeppelin_fp_math::common;
 
 /// Decimal scale used by all fixed-point types in this package.
 const SCALE: u128 = 1_000_000_000; // 10^9
