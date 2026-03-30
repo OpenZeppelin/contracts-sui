@@ -8,6 +8,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_fp_math`
+
+#### Added
+
+- `ud30x9_convert` for scale-aware whole-number conversions to and from `UD30x9`.
+- `sd29x9_convert` for scale-aware whole-number conversions to and from `SD29x9`.
+- Cross-type casts between `UD30x9` and `SD29x9`, including checked `try_` variants.
+- Object-call syntax for whole-number conversion helpers on `UD30x9` and `SD29x9`.
+
+#### Changed (Breaking)
+
+- Renamed public module `casting_u128` to `u128_cast`.
+
 ## 1.1.0-rc.0 (10-03-2026)
 
 ### `openzeppelin_fp_math`

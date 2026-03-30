@@ -1,7 +1,10 @@
 /// Raw casting helpers from `u128` into fixed-point types.
 ///
-/// These helpers do **not** apply the fixed-point scale. They simply wrap the
-/// provided `u128` bits into the target type. For example, casting the integer
+/// These helpers do **not** apply the fixed-point scale. For `UD30x9`,
+/// `into_UD30x9` wraps the provided `u128` as raw fixed-point bits. For
+/// `SD29x9`, `into_SD29x9` interprets the provided `u128` as a raw scaled
+/// magnitude together with an explicit sign flag, then encodes the signed
+/// value in the `SD29x9` representation. For example, casting the integer
 /// `42` with these helpers produces the raw fixed-point value `42`, not the
 /// semantic decimal value `42.0`.
 ///
@@ -31,7 +34,8 @@ public fun into_UD30x9(x: u128): UD30x9 {
 /// - `is_negative`: Whether the wrapped value should be negative.
 ///
 /// #### Returns
-/// - The `SD29x9` value with raw scaled magnitude `x`.
+/// - The `SD29x9` value encoding the raw scaled magnitude `x` with the
+///   requested sign.
 ///
 /// #### Aborts
 /// - Aborts if the raw magnitude cannot be represented as `SD29x9`.
