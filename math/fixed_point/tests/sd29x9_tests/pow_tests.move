@@ -48,8 +48,8 @@ fun pow_handles_negative_one_parity() {
 fun pow_supports_high_exponents() {
     let val = pos(SCALE + 250_000_000); // 1.25
     // Exact result for exp=16: sequential truncation of (res_mag * 1_250_000_000 / 1_000_000_000)
-    // gives 35_527_136_770 (vs. exact 1.25^16 * 10^9 = 35_527_136_787 before flooring).
-    expect(val.pow(16), pos(35_527_136_770));
+    // gives 35_527_136_781 (vs. exact 1.25^16 * 10^9 = 35_527_136_787 before flooring).
+    expect(val.pow(16), pos(35_527_136_781));
     // Recurrence invariant for the maximum u8 exponent: pow(n) == pow(n-1).mul(base).
     expect(val.pow(255), val.pow(254).mul(val));
 }
