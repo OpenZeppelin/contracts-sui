@@ -362,6 +362,7 @@ public fun pow(x: SD29x9, mut exp: u8): SD29x9 {
             base_mag = base_mag * base_mag / SCALE;
         }
     };
+
     let result = Components { neg: res_neg, mag: res_mag };
     wrap_components(result)
 }
