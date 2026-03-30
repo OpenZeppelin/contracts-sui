@@ -40,10 +40,7 @@ fun mod_dividend_less_than_divisor() {
 
 #[test]
 fun mod_large_fractional() {
-    expect!(
-        pos(100 * SCALE + 500_000_000).mod(pos(SCALE)),
-        pos(500_000_000),
-    );
+    expect!(pos(100 * SCALE + 500_000_000).mod(pos(SCALE)), pos(500_000_000));
 }
 
 #[test]

@@ -68,10 +68,7 @@ fun div_self_is_one() {
 #[test]
 fun div_positive_fractions() {
     // 5 / 2 = 2.5
-    expect!(
-        pos(5 * SCALE).div(pos(2 * SCALE)),
-        pos(2 * SCALE + 500_000_000),
-    );
+    expect!(pos(5 * SCALE).div(pos(2 * SCALE)), pos(2 * SCALE + 500_000_000));
 }
 
 #[test]

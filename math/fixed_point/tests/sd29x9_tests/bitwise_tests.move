@@ -39,10 +39,7 @@ fun shifts_cover_positive_negative_and_large_offsets() {
     let neg_one = neg(1);
     expect!(neg_one.rshift(127), neg_one);
     expect!(pos_value.rshift(128), sd29x9::zero());
-    expect!(
-        neg_one.rshift(128),
-        from_bits(0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF),
-    );
+    expect!(neg_one.rshift(128), from_bits(0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF));
 }
 
 #[test]
