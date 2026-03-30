@@ -54,7 +54,7 @@ fun pow_supports_high_exponents() {
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun pow_overflow_aborts_for_large_base() {
-    sd29x9::max().pow(2);
+    sd29x9::max().pow(32);
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
