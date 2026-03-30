@@ -347,18 +347,19 @@ public fun pow(x: SD29x9, mut exp: u8): SD29x9 {
     if (exp == 1) {
         return x
     };
-    let Components { neg, mut mag } = decompose(x.unwrap());
+    let Components { neg, mag } = decompose(x.unwrap());
     let res_neg = neg && (exp % 2 != 0);
     let mut res_mag = SCALE;
+    let mut base_mag = mag;
 
     while (exp != 0) {
         if (exp & 1 == 1) {
-            res_mag = res_mag * mag / SCALE;
+            res_mag = res_mag * base_mag / SCALE;
             assert!(res_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
         };
         exp = exp >> 1;
         if (exp != 0) {
-            mag = mag * mag / SCALE;
+            base_mag = base_mag * base_mag / SCALE;
         }
     };
     let result = Components { neg: res_neg, mag: res_mag };
