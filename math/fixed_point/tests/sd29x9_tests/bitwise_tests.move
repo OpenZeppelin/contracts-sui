@@ -14,10 +14,10 @@ fun bitwise_operations_match_raw_behavior() {
     let pattern = from_bits(0xF0F0);
 
     assert_eq!(all_ones.and(mask).unwrap(), mask);
-    assert_eq!(all_ones.and2(pattern).unwrap(), pattern.unwrap());
+    assert_eq!(all_ones.and2(pattern), pattern);
     assert_eq!(pattern.or(from_bits(0x0F0F)).unwrap(), 0xFFFF);
     assert_eq!(pattern.xor(from_bits(0xFFFF)).unwrap(), 0x0F0F);
-    assert_eq!(pattern.not().unwrap(), from_bits(pattern.unwrap() ^ ALL_ONES).unwrap());
+    assert_eq!(pattern.not(), from_bits(pattern.unwrap() ^ ALL_ONES));
 }
 
 #[test]
@@ -75,7 +75,7 @@ fun not_of_zero_is_all_ones() {
 fun and2_commutativity() {
     let a = from_bits(0xF0F0_ABCD);
     let b = from_bits(0x0F0F_1234);
-    assert_eq!(a.and2(b).unwrap(), b.and2(a).unwrap());
+    assert_eq!(a.and2(b), b.and2(a));
 }
 
 #[test]

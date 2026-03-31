@@ -25,5 +25,5 @@ public(package) fun neg(raw: u128): SD29x9 {
 }
 
 public(package) fun expect(left: SD29x9, right: SD29x9) {
-    assert_eq!(left.unwrap(), right.unwrap());
+    assert_eq!(left, right);
 }

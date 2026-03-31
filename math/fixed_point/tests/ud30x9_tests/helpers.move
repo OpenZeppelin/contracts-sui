@@ -21,5 +21,5 @@ public(package) fun fixed(value: u128): UD30x9 {
 }
 
 public(package) fun expect(left: UD30x9, right: UD30x9) {
-    assert_eq!(left.unwrap(), right.unwrap());
+    assert_eq!(left, right);
 }

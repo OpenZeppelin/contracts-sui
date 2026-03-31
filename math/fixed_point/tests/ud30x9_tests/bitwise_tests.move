@@ -93,7 +93,7 @@ fun and2_commutativity() {
     ];
     pairs.destroy!(|p| {
         let (a, b) = p.unpack();
-        assert_eq!(a.and2(b).unwrap(), b.and2(a).unwrap());
+        assert_eq!(a.and2(b), b.and2(a));
     });
 }
 

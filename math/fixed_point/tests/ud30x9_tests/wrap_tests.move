@@ -51,7 +51,7 @@ fun wrap_scale() {
 
 #[test]
 fun wrap_max_value() {
-    assert_eq!(ud30x9::wrap(MAX_VALUE).unwrap(), ud30x9::max().unwrap());
+    assert_eq!(ud30x9::wrap(MAX_VALUE), ud30x9::max());
 }
 
 #[test]

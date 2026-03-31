@@ -88,7 +88,7 @@ fun add_commutativity() {
     ];
     pairs.destroy!(|p| {
         let (a, b) = p.unpack();
-        assert_eq!(a.add(b).unwrap(), b.add(a).unwrap());
+        assert_eq!(a.add(b), b.add(a));
     });
 }
 

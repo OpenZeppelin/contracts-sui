@@ -200,6 +200,6 @@ fun mul_commutativity() {
     ];
     pairs.destroy!(|p| {
         let (a, b) = p.unpack();
-        assert_eq!(a.mul(b).unwrap(), b.mul(a).unwrap());
+        assert_eq!(a.mul(b), b.mul(a));
     });
 }
