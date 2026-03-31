@@ -37,9 +37,9 @@ public(package) macro fun expect_ne($left: SD29x9, $right: SD29x9) {
     let res = left == right;
     if (res) {
         std::debug::print(&b"Assertion failed:".to_string());
-        std::debug::print(left);
+        std::debug::print(&left);
         std::debug::print(&b"==".to_string());
-        std::debug::print(right);
+        std::debug::print(&right);
         assert!(false);
     }
 }
