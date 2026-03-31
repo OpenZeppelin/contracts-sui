@@ -14,15 +14,15 @@ const SCALE: u128 = 1_000_000_000;
 fun abs_returns_same_value_for_unsigned() {
     // 5.0 -> 5.0
     let value = fixed(5 * SCALE);
-    assert_eq!(value.abs(), value);
+    assert_eq!(value.abs().unwrap(), value.unwrap());
 
     // 5.5 -> 5.5
     let value = fixed(5 * SCALE + 500_000_000);
-    assert_eq!(value.abs(), value);
+    assert_eq!(value.abs().unwrap(), value.unwrap());
 
     // 0.1 -> 0.1
     let value = fixed(100_000_000);
-    assert_eq!(value.abs(), value);
+    assert_eq!(value.abs().unwrap(), value.unwrap());
 }
 
 #[test]
