@@ -2,7 +2,7 @@
 module openzeppelin_fp_math::sd29x9_test_helpers;
 
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, assert_ne};
 
 public struct Pair has drop {
     x: SD29x9,
@@ -26,4 +26,10 @@ public(package) fun neg(raw: u128): SD29x9 {
 
 public(package) fun expect(left: SD29x9, right: SD29x9) {
     assert_eq!(left.unwrap(), right.unwrap());
+}
+
+public(package) macro fun expect_ne($left: SD29x9, $right: SD29x9) {
+    let left = $left;
+    let right = $right;
+    assert_ne!(left.unwrap(), right.unwrap());
 }

@@ -3,7 +3,7 @@ module openzeppelin_fp_math::sd29x9_pow_tests;
 
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
-use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect};
+use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect, expect_ne};
 
 const SCALE: u128 = 1_000_000_000;
 
@@ -50,6 +50,8 @@ fun pow_supports_high_exponents() {
     // Expected value is the result of sd29x9::pow's binary exponentiation with intermediate truncation, not simply floor(1.25^16 * 10^9) (the exact value before flooring is 35_527_136_787)
     expect(val.pow(16), pos(35_527_136_781));
     expect(val.pow(255), pos(5_152_918_999_790_606_401_120_741_084_983_548));
+    // with binary exponentiation, rounding/truncation behavior for larger exponents is affected by grouping
+    expect_ne!(val.pow(255), val.pow(254).mul(val));
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
