@@ -17,7 +17,7 @@ fun into_sd29x9_converts_zero() {
     let zero = ud30x9::zero();
     let converted = zero.into_SD29x9();
     assert!(converted.is_zero());
-    assert!(converted.eq(sd29x9::zero()));
+    assert_eq!(converted, sd29x9::zero());
 }
 
 #[test]
