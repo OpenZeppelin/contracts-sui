@@ -3,7 +3,6 @@
 /// Tailored to the signed `SD29x9` representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
-use openzeppelin_fp_math::pow_u256;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 
@@ -343,7 +342,7 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 ///
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
-public fun pow(x: SD29x9, exp: u8): SD29x9 {
+public fun pow(x: SD29x9, mut exp: u8): SD29x9 {
     if (exp == 0) {
         return one()
     };
@@ -352,9 +351,23 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     };
     let Components { neg, mag } = decompose(x.unwrap());
     let res_neg = neg && (exp % 2 != 0);
-    let result = pow_u256::binary_pow(mag, exp, SCALE, MIN_NEGATIVE_VALUE as u256);
-    assert!(result.is_some(), EOverflow);
-    wrap_components(Components { neg: res_neg, mag: result.destroy_some() })
+    let mut res_mag = SCALE;
+    let mut base_mag = mag;
+
+    while (exp != 0) {
+        if ((exp & 1) == 1) {
+            res_mag = res_mag * base_mag / SCALE;
+            assert!(res_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
+        };
+        exp = exp >> 1;
+        if (exp != 0) {
+            base_mag = base_mag * base_mag / SCALE;
+            assert!(base_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
+        };
+    };
+
+    let result = Components { neg: res_neg, mag: res_mag };
+    wrap_components(result)
 }
 
 /// Returns the arithmetic negation of `x`.

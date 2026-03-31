@@ -1,7 +1,6 @@
 /// Base utility functions for the `UD30x9` fixed-point type.
 module openzeppelin_fp_math::ud30x9_base;
 
-use openzeppelin_fp_math::pow_u256;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
 
@@ -314,16 +313,31 @@ public fun div(x: UD30x9, y: UD30x9): UD30x9 {
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
-public fun pow(x: UD30x9, exp: u8): UD30x9 {
+public fun pow(x: UD30x9, mut exp: u8): UD30x9 {
     if (exp == 0) {
         return one()
     };
     if (exp == 1) {
         return x
     };
-    let result = pow_u256::binary_pow(x.unwrap() as u256, exp, SCALE_U256, U128_MAX_VALUE as u256);
-    assert!(result.is_some(), EOverflow);
-    wrap_u256(result.destroy_some())
+
+    let max_value = U128_MAX_VALUE as u256;
+    let mut base = x.unwrap() as u256;
+    let mut result = SCALE_U256;
+
+    while (exp != 0) {
+        if ((exp & 1) == 1) {
+            result = result * base / SCALE_U256;
+            assert!(result <= max_value, EOverflow);
+        };
+        exp = exp >> 1;
+        if (exp != 0) {
+            base = base * base / SCALE_U256;
+            assert!(base <= max_value, EOverflow);
+        };
+    };
+
+    wrap_u256(result)
 }
 
 /// Checks whether two `UD30x9` values are not equal.
