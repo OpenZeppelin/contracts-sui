@@ -3,7 +3,8 @@ module openzeppelin_fp_math::sd29x9_div_tests;
 
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
-use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect};
+use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg};
+use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
@@ -14,9 +15,9 @@ fun div_handles_zero_sign_and_identity_cases() {
     let neg_one = neg(SCALE);
     let value = pos(7 * SCALE + 500_000_000); // 7.5
 
-    expect(zero.div(value), zero);
-    expect(value.div(one), value);
-    expect(value.div(neg_one), value.negate());
+    assert_eq!(zero.div(value), zero);
+    assert_eq!(value.div(one), value);
+    assert_eq!(value.div(neg_one), value.negate());
 }
 
 #[test]
@@ -24,21 +25,21 @@ fun div_handles_signs_and_exact_fractional_results() {
     // 7.5 / 2.5 = 3.0
     let numerator = pos(7 * SCALE + 500_000_000);
     let denominator = pos(2 * SCALE + 500_000_000);
-    expect(numerator.div(denominator), pos(3 * SCALE));
-    expect(numerator.div(denominator.negate()), neg(3 * SCALE));
-    expect(numerator.negate().div(denominator.negate()), pos(3 * SCALE));
+    assert_eq!(numerator.div(denominator), pos(3 * SCALE));
+    assert_eq!(numerator.div(denominator.negate()), neg(3 * SCALE));
+    assert_eq!(numerator.negate().div(denominator.negate()), pos(3 * SCALE));
 }
 
 #[test]
 fun div_truncates_towards_zero() {
     // 1.0 / 3.0 = 0.333333333...
-    expect(pos(SCALE).div(pos(3 * SCALE)), pos(333_333_333));
-    expect(neg(SCALE).div(pos(3 * SCALE)), neg(333_333_333));
+    assert_eq!(pos(SCALE).div(pos(3 * SCALE)), pos(333_333_333));
+    assert_eq!(neg(SCALE).div(pos(3 * SCALE)), neg(333_333_333));
 }
 
 #[test]
 fun div_handles_min_over_one() {
-    expect(sd29x9::min().div(pos(SCALE)), sd29x9::min());
+    assert_eq!(sd29x9::min().div(pos(SCALE)), sd29x9::min());
 }
 
 #[test, expected_failure(arithmetic_error, location = openzeppelin_fp_math::sd29x9_base)]
@@ -61,23 +62,20 @@ fun div_self_is_one() {
         pos(1_000_000_000_000),
     ];
     values.destroy!(|x| {
-        expect(x.div(x), one);
+        assert_eq!(x.div(x), one);
     });
 }
 
 #[test]
 fun div_positive_fractions() {
     // 5 / 2 = 2.5
-    expect(
-        pos(5 * SCALE).div(pos(2 * SCALE)),
-        pos(2 * SCALE + 500_000_000),
-    );
+    assert_eq!(pos(5 * SCALE).div(pos(2 * SCALE)), pos(2 * SCALE + 500_000_000));
 }
 
 #[test]
 fun div_small_by_large() {
     // 1 / 10 = 0.1
-    expect(pos(SCALE).div(pos(10 * SCALE)), pos(100_000_000));
+    assert_eq!(pos(SCALE).div(pos(10 * SCALE)), pos(100_000_000));
 }
 
 #[test]
@@ -87,8 +85,8 @@ fun div_sign_parity() {
     let two = pos(2 * SCALE);
     let three = pos(3 * SCALE);
 
-    expect(six.div(two), three);
-    expect(six.negate().div(two), three.negate());
-    expect(six.div(two.negate()), three.negate());
-    expect(six.negate().div(two.negate()), three);
+    assert_eq!(six.div(two), three);
+    assert_eq!(six.negate().div(two), three.negate());
+    assert_eq!(six.div(two.negate()), three.negate());
+    assert_eq!(six.negate().div(two.negate()), three);
 }
