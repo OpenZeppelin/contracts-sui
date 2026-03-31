@@ -1,0 +1,6 @@
+[package]
+name = "fixed_window_example"
+edition = "2024"
+
+[addresses]
+fixed_window_example = "0x0"

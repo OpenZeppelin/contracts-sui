@@ -1,0 +1,6 @@
+[package]
+name = "token_bucket_example"
+edition = "2024"
+
+[addresses]
+token_bucket_example = "0x0"

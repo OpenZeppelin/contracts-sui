@@ -1,0 +1,6 @@
+[package]
+name = "cooldown_example"
+edition = "2024"
+
+[addresses]
+cooldown_example = "0x0"
