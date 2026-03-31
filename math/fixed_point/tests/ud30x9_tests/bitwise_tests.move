@@ -1,7 +1,7 @@
 #[test_only]
 module openzeppelin_fp_math::ud30x9_bitwise_tests;
 
-use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, expect, pair, unpack};
+use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, pair, unpack};
 use std::unit_test::assert_eq;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
@@ -37,25 +37,25 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
 #[test]
 fun lshift_by_128_returns_zero() {
     let x = fixed(1);
-    expect!(x.lshift(128), fixed(0));
+    assert_eq!(x.lshift(128), fixed(0));
 }
 
 #[test]
 fun rshift_by_128_returns_zero() {
     let x = fixed(1);
-    expect!(x.rshift(128), fixed(0));
+    assert_eq!(x.rshift(128), fixed(0));
 }
 
 #[test]
 fun lshift_by_255_returns_zero() {
     let x = fixed(1);
-    expect!(x.lshift(255), fixed(0));
+    assert_eq!(x.lshift(255), fixed(0));
 }
 
 #[test]
 fun rshift_by_255_returns_zero() {
     let x = fixed(1);
-    expect!(x.rshift(255), fixed(0));
+    assert_eq!(x.rshift(255), fixed(0));
 }
 
 #[test]
