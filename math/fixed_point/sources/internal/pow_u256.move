@@ -15,7 +15,12 @@ module openzeppelin_fp_math::pow_u256;
 /// #### Returns
 /// - `option::some(result)` on success, or `option::none()` if any intermediate value or
 ///   the final result exceeds `max_value`.
-public(package) fun binary_pow(mut base: u256, mut exp: u8, scale: u256, max_value: u256): Option<u256> {
+public(package) fun binary_pow(
+    mut base: u256,
+    mut exp: u8,
+    scale: u256,
+    max_value: u256,
+): Option<u256> {
     let mut result = scale;
     while (exp != 0) {
         if ((exp & 1) == 1) {
