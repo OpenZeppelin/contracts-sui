@@ -3,7 +3,7 @@ module openzeppelin_fp_math::sd29x9_pow_tests;
 
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
-use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect};
+use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect, expect_ne};
 
 const SCALE: u128 = 1_000_000_000;
 
