@@ -354,7 +354,7 @@ public fun pow(x: SD29x9, mut exp: u8): SD29x9 {
     let mut base_mag = mag;
 
     while (exp != 0) {
-        if (exp & 1 == 1) {
+        if ((exp & 1) == 1) {
             res_mag = res_mag * base_mag / SCALE;
             assert!(res_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
         };
@@ -362,7 +362,7 @@ public fun pow(x: SD29x9, mut exp: u8): SD29x9 {
         if (exp != 0) {
             base_mag = base_mag * base_mag / SCALE;
             assert!(base_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
-        }
+        };
     };
 
     let result = Components { neg: res_neg, mag: res_mag };

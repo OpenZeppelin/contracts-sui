@@ -47,7 +47,7 @@ fun pow_handles_negative_one_parity() {
 #[test]
 fun pow_supports_high_exponents() {
     let val = pos(SCALE + 250_000_000); // 1.25
-    // 1.25^16 * 10^9 = 35_527_136_787 before flooring
+    // Expected value is the result of sd29x9::pow's binary exponentiation with intermediate truncation, not simply floor(1.25^16 * 10^9) (the exact value before flooring is 35_527_136_787)
     expect(val.pow(16), pos(35_527_136_781));
     expect(val.pow(255), pos(5_152_918_999_790_606_401_120_741_084_983_548));
 }

@@ -325,7 +325,7 @@ public fun pow(x: UD30x9, mut exp: u8): UD30x9 {
     let mut result = SCALE_U256;
 
     while (exp != 0) {
-        if (exp & 1 == 1) {
+        if ((exp & 1) == 1) {
             result = result * base / SCALE_U256;
             assert!(result <= max_value, EOverflow);
         };
@@ -333,7 +333,7 @@ public fun pow(x: UD30x9, mut exp: u8): UD30x9 {
         if (exp != 0) {
             base = base * base / SCALE_U256;
             assert!(base <= max_value, EOverflow);
-        }
+        };
     };
 
     wrap_u256(result)
