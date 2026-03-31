@@ -7,9 +7,9 @@ use sui::sui::SUI;
 use token_bucket_example::token_bucket;
 
 #[error(code = 0)]
-const EInsufficientVaultBalance: vector<u8> = b"Insufficient vault balance";
+const EInsufficientVaultBalance: vector<u8> = "Insufficient vault balance";
 #[error(code = 1)]
-const EWrongPolicy: vector<u8> = b"Wrong policy";
+const EWrongPolicy: vector<u8> = "Wrong policy";
 
 public struct Vault has key, store {
     id: UID,
@@ -51,12 +51,16 @@ public fun deposit(
     deposit_coin: Coin<SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): token_bucket::State<WithdrawTag> {
     assert_policy(self, policy);
     balance::join(&mut self.balance, coin::into_balance(deposit_coin));
     let withdrawer = tx_context::sender(ctx);
-    let state = token_bucket::create_for_address<WithdrawTag>(policy, withdrawer, clock, ctx);
-    transfer::public_transfer(state, withdrawer);
+    token_bucket::create_for_address<WithdrawTag>(
+        policy,
+        withdrawer,
+        clock,
+        ctx,
+    )
 }
 
 public fun value(self: &Vault): u64 {

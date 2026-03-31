@@ -26,7 +26,8 @@ fun partial_withdrawal_succeeds() {
     let mut vault = test.take_shared<vault::Vault>();
     let policy = test.take_shared<cooldown::Policy<vault::WithdrawTag>>();
     let deposit_a = coin::mint_for_testing<sui::sui::SUI>(70, test.ctx());
-    vault::deposit(&mut vault, &policy, deposit_a, &clk, test.ctx());
+    let state_a = vault::deposit(&mut vault, &policy, deposit_a, &clk, test.ctx());
+    transfer::public_transfer(state_a, withdrawer_a);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(policy);
 
@@ -34,7 +35,8 @@ fun partial_withdrawal_succeeds() {
     let mut vault = test.take_shared<vault::Vault>();
     let policy = test.take_shared<cooldown::Policy<vault::WithdrawTag>>();
     let deposit_b = coin::mint_for_testing<sui::sui::SUI>(40, test.ctx());
-    vault::deposit(&mut vault, &policy, deposit_b, &clk, test.ctx());
+    let state_b = vault::deposit(&mut vault, &policy, deposit_b, &clk, test.ctx());
+    transfer::public_transfer(state_b, withdrawer_b);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(policy);
 
@@ -112,7 +114,8 @@ fun withdrawal_is_rate_limited() {
     let mut vault = test.take_shared<vault::Vault>();
     let policy = test.take_shared<cooldown::Policy<vault::WithdrawTag>>();
     let deposit_a = coin::mint_for_testing<sui::sui::SUI>(60, test.ctx());
-    vault::deposit(&mut vault, &policy, deposit_a, &clk, test.ctx());
+    let state_a = vault::deposit(&mut vault, &policy, deposit_a, &clk, test.ctx());
+    transfer::public_transfer(state_a, withdrawer_a);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(policy);
 
@@ -120,7 +123,8 @@ fun withdrawal_is_rate_limited() {
     let mut vault = test.take_shared<vault::Vault>();
     let policy = test.take_shared<cooldown::Policy<vault::WithdrawTag>>();
     let deposit_b = coin::mint_for_testing<sui::sui::SUI>(40, test.ctx());
-    vault::deposit(&mut vault, &policy, deposit_b, &clk, test.ctx());
+    let state_b = vault::deposit(&mut vault, &policy, deposit_b, &clk, test.ctx());
+    transfer::public_transfer(state_b, withdrawer_b);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(policy);
 

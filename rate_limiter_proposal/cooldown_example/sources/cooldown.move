@@ -6,13 +6,13 @@ const SCOPE_KIND_GLOBAL: u8 = 0;
 const SCOPE_KIND_ADDRESS: u8 = 1;
 
 #[error(code = 0)]
-const EPolicyMismatch: vector<u8> = b"Policy mismatch";
+const EPolicyMismatch: vector<u8> = "Policy mismatch";
 #[error(code = 1)]
-const ERateLimited: vector<u8> = b"Rate limited";
+const ERateLimited: vector<u8> = "Rate limited";
 #[error(code = 2)]
-const EPolicyDisabled: vector<u8> = b"Policy disabled";
+const EPolicyDisabled: vector<u8> = "Policy disabled";
 #[error(code = 3)]
-const EInvalidPolicy: vector<u8> = b"Invalid policy";
+const EInvalidPolicy: vector<u8> = "Invalid policy";
 
 public struct Policy<phantom Tag> has key, store {
     id: UID,
@@ -40,7 +40,11 @@ public fun create_policy<Tag>(version: u16, cooldown_ms: u64, ctx: &mut TxContex
     }
 }
 
-public fun create_global_state<Tag>(policy: &Policy<Tag>, clock: &Clock, ctx: &mut TxContext): State<Tag> {
+public fun create_global_state<Tag>(
+    policy: &Policy<Tag>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): State<Tag> {
     State {
         id: object::new(ctx),
         policy_id: object::id(policy),
@@ -79,7 +83,12 @@ public fun available<Tag>(policy: &Policy<Tag>, state: &State<Tag>, clock: &Cloc
     }
 }
 
-public fun consume_or_abort<Tag>(policy: &Policy<Tag>, state: &mut State<Tag>, amount: u64, clock: &Clock) {
+public fun consume_or_abort<Tag>(
+    policy: &Policy<Tag>,
+    state: &mut State<Tag>,
+    amount: u64,
+    clock: &Clock,
+) {
     assert!(policy.enabled, EPolicyDisabled);
     assert_policy(policy, state);
     let _ = amount;
@@ -96,7 +105,14 @@ public fun destroy_policy<Tag>(policy: Policy<Tag>) {
 }
 
 public fun destroy_state<Tag>(state: State<Tag>) {
-    let State { id, policy_id: _, scope_kind: _, scope_key_hash: _, last_action_ms: _, has_acted: _ } = state;
+    let State {
+        id,
+        policy_id: _,
+        scope_kind: _,
+        scope_key_hash: _,
+        last_action_ms: _,
+        has_acted: _,
+    } = state;
     id.delete();
 }
 

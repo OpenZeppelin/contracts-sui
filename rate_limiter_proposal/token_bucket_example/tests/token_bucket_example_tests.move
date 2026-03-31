@@ -26,7 +26,8 @@ fun partial_withdrawal_succeeds() {
     let mut vault = test.take_shared<vault::Vault>();
     let policy = test.take_shared<token_bucket::Policy<vault::WithdrawTag>>();
     let deposit_a = coin::mint_for_testing<sui::sui::SUI>(60, test.ctx());
-    vault::deposit(&mut vault, &policy, deposit_a, &clk, test.ctx());
+    let state_a = vault::deposit(&mut vault, &policy, deposit_a, &clk, test.ctx());
+    transfer::public_transfer(state_a, withdrawer_a);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(policy);
 
@@ -34,7 +35,8 @@ fun partial_withdrawal_succeeds() {
     let mut vault = test.take_shared<vault::Vault>();
     let policy = test.take_shared<token_bucket::Policy<vault::WithdrawTag>>();
     let deposit_b = coin::mint_for_testing<sui::sui::SUI>(40, test.ctx());
-    vault::deposit(&mut vault, &policy, deposit_b, &clk, test.ctx());
+    let state_b = vault::deposit(&mut vault, &policy, deposit_b, &clk, test.ctx());
+    transfer::public_transfer(state_b, withdrawer_b);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(policy);
 
@@ -63,7 +65,7 @@ fun partial_withdrawal_succeeds() {
 
     assert_eq!(coin::value(&withdrawn_b), 30);
     assert_eq!(vault::value(&vault), 40);
-    assert_eq!(token_bucket::available(&policy, &state_b, &clk), 10);
+    assert_eq!(token_bucket::available(&policy, &state_b, &clk), 20);
 
     coin::burn_for_testing(withdrawn_b);
     token_bucket::destroy_state(state_b);
@@ -87,7 +89,7 @@ fun partial_withdrawal_succeeds() {
     );
     assert_eq!(coin::value(&withdrawn_a_again), 25);
     assert_eq!(vault::value(&vault), 15);
-    assert_eq!(token_bucket::available(&policy, &state_a, &clk), 0);
+    assert_eq!(token_bucket::available(&policy, &state_a, &clk), 5);
 
     coin::burn_for_testing(withdrawn_a_again);
     token_bucket::destroy_state(state_a);
@@ -123,7 +125,8 @@ fun withdrawal_is_rate_limited() {
     let mut vault = test.take_shared<vault::Vault>();
     let policy = test.take_shared<token_bucket::Policy<vault::WithdrawTag>>();
     let deposit_a = coin::mint_for_testing<sui::sui::SUI>(60, test.ctx());
-    vault::deposit(&mut vault, &policy, deposit_a, &clk, test.ctx());
+    let state_a = vault::deposit(&mut vault, &policy, deposit_a, &clk, test.ctx());
+    transfer::public_transfer(state_a, withdrawer_a);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(policy);
 
@@ -131,7 +134,8 @@ fun withdrawal_is_rate_limited() {
     let mut vault = test.take_shared<vault::Vault>();
     let policy = test.take_shared<token_bucket::Policy<vault::WithdrawTag>>();
     let deposit_b = coin::mint_for_testing<sui::sui::SUI>(40, test.ctx());
-    vault::deposit(&mut vault, &policy, deposit_b, &clk, test.ctx());
+    let state_b = vault::deposit(&mut vault, &policy, deposit_b, &clk, test.ctx());
+    transfer::public_transfer(state_b, withdrawer_b);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(policy);
 

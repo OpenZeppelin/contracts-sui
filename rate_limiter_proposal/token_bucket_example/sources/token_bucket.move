@@ -6,13 +6,13 @@ const SCOPE_KIND_GLOBAL: u8 = 0;
 const SCOPE_KIND_ADDRESS: u8 = 1;
 
 #[error(code = 0)]
-const EPolicyMismatch: vector<u8> = b"Policy mismatch";
+const EPolicyMismatch: vector<u8> = "Policy mismatch";
 #[error(code = 1)]
-const ERateLimited: vector<u8> = b"Rate limited";
+const ERateLimited: vector<u8> = "Rate limited";
 #[error(code = 2)]
-const EPolicyDisabled: vector<u8> = b"Policy disabled";
+const EPolicyDisabled: vector<u8> = "Policy disabled";
 #[error(code = 3)]
-const EInvalidPolicy: vector<u8> = b"Invalid policy";
+const EInvalidPolicy: vector<u8> = "Invalid policy";
 
 public struct Policy<phantom Tag> has key, store {
     id: UID,
@@ -90,10 +90,35 @@ public fun create_for_address<Tag>(
     }
 }
 
+public fun create_for_address_with_available<Tag>(
+    policy: &Policy<Tag>,
+    owner: address,
+    initial_available: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): State<Tag> {
+    let scope_key_hash = vector[];
+    let _ = owner;
+    assert!(initial_available <= policy.capacity, EInvalidPolicy);
+    State {
+        id: object::new(ctx),
+        policy_id: object::id(policy),
+        scope_kind: SCOPE_KIND_ADDRESS,
+        scope_key_hash,
+        available: initial_available,
+        last_refill_ms: clock.timestamp_ms(),
+        fractional_remainder: 0,
+    }
+}
+
 public fun available<Tag>(policy: &Policy<Tag>, state: &State<Tag>, clock: &Clock): u64 {
     assert_policy(policy, state);
     let (available, _, _) = refilled_values(policy, state, clock.timestamp_ms());
     available
+}
+
+public fun initial_tokens<Tag>(policy: &Policy<Tag>): u64 {
+    policy.initial_tokens
 }
 
 public fun consume_or_abort<Tag>(
