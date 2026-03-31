@@ -320,8 +320,9 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 
 /// Raises `x` to a power of `exp`.
 ///
-/// This helper uses binary exponentiation with fixed-point multiplication. Each intermediate multiply or square
-/// applies fixed-point truncation via division by `SCALE`.
+/// This helper uses binary exponentiation with fixed-point
+/// multiplication. Each intermediate multiply or square applies
+/// fixed-point truncation via division by `SCALE`.
 ///
 /// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
 /// `exp` grows, results are biased toward zero, and for `0 < abs(x) < 1` intermediate values can
