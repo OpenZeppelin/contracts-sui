@@ -2,6 +2,7 @@
 module openzeppelin_fp_math::ud30x9_comparison_tests;
 
 use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, pair, unpack};
+use std::unit_test::assert_eq;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 const SCALE: u128 = 1_000_000_000;
@@ -25,7 +26,7 @@ fun comparison_helpers_cover_all_outcomes() {
     assert!(low.lte(low));
     assert!(!high.lte(low));
 
-    assert!(low.eq(low));
+    assert_eq!(low, low);
     assert!(!low.eq(high));
 
     assert!(low.neq(high));
@@ -39,7 +40,7 @@ fun comparison_helpers_cover_all_outcomes() {
 #[test]
 fun compare_equal_values() {
     let x = fixed(42 * SCALE);
-    assert!(x.eq(fixed(42 * SCALE)));
+    assert_eq!(x, fixed(42 * SCALE));
     assert!(x.lte(fixed(42 * SCALE)));
     assert!(x.gte(fixed(42 * SCALE)));
 }
@@ -70,7 +71,7 @@ fun eq_and_neq_consistency() {
     ];
     pairs.destroy!(|p| {
         let (a, b) = p.unpack();
-        assert!(a.eq(b));
+        assert_eq!(a, b);
         assert!(!a.neq(b));
     });
 }

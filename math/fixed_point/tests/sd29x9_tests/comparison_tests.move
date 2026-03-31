@@ -3,6 +3,7 @@ module openzeppelin_fp_math::sd29x9_comparison_tests;
 
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg};
+use std::unit_test::assert_eq;
 
 const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 const SCALE: u128 = 1_000_000_000;
@@ -25,7 +26,7 @@ fun comparison_helpers_handle_all_cases() {
     assert!(neg_four.lte(neg_two));
     assert!(!pos_two.lte(neg_two));
 
-    assert!(pos_two.eq(pos_two));
+    assert_eq!(pos_two, pos_two);
     assert!(neg_two.neq(pos_two));
 }
 
@@ -59,8 +60,8 @@ fun compare_min_and_max() {
 
 #[test]
 fun compare_equal_values() {
-    assert!(pos(42 * SCALE).eq(pos(42 * SCALE)));
-    assert!(neg(7 * SCALE).eq(neg(7 * SCALE)));
+    assert_eq!(pos(42 * SCALE), pos(42 * SCALE));
+    assert_eq!(neg(7 * SCALE), neg(7 * SCALE));
     assert!(!pos(42 * SCALE).neq(pos(42 * SCALE)));
 }
 
@@ -88,7 +89,7 @@ fun eq_reflexivity() {
         sd29x9::min(),
     ];
     values.destroy!(|x| {
-        assert!(x.eq(x));
+        assert_eq!(x, x);
     });
 }
 
