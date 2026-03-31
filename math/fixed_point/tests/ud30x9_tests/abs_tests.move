@@ -2,7 +2,7 @@
 module openzeppelin_fp_math::ud30x9_abs_tests;
 
 use openzeppelin_fp_math::ud30x9;
-use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, expect};
+use openzeppelin_fp_math::ud30x9_test_helpers::fixed;
 use std::unit_test::assert_eq;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
@@ -36,11 +36,11 @@ fun abs_handles_zero() {
 fun abs_handles_edge_cases() {
     // 0.000000001 -> 0.000000001
     let tiny = fixed(1);
-    expect(tiny.abs(), tiny);
+    assert_eq!(tiny.abs(), tiny);
 
     // 1000000.5 -> 1000000.5
     let large = fixed(1000000 * SCALE + 500_000_000);
-    expect(large.abs(), large);
+    assert_eq!(large.abs(), large);
 
     // Max value remains unchanged
     let max = ud30x9::max();
@@ -59,7 +59,7 @@ fun abs_of_scale_minus_one() {
 
 #[test]
 fun abs_of_max() {
-    expect(ud30x9::max().abs(), ud30x9::max());
+    assert_eq!(ud30x9::max().abs(), ud30x9::max());
 }
 
 #[test]

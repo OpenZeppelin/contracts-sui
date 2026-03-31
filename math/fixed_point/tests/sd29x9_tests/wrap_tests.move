@@ -2,8 +2,7 @@
 module openzeppelin_fp_math::sd29x9_wrap_tests;
 
 use openzeppelin_fp_math::sd29x9::{Self, from_bits};
-use openzeppelin_fp_math::sd29x9_test_helpers::{pos, expect};
-use openzeppelin_fp_math::u128_cast;
+use openzeppelin_fp_math::sd29x9_test_helpers::pos;
 use std::unit_test::assert_eq;
 
 const ALL_ONES: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
@@ -13,7 +12,7 @@ const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000;
 #[test]
 fun wrap_max_positive() {
     let value = sd29x9::wrap(MAX_POSITIVE_VALUE, false);
-    expect(value, sd29x9::max());
+    assert_eq!(value, sd29x9::max());
 }
 
 #[test]
@@ -28,7 +27,7 @@ fun wrap_negative_zero_is_zero() {
 
 #[test]
 fun wrap_min_value() {
-    expect(sd29x9::min(), from_bits(MIN_NEGATIVE_VALUE));
+    assert_eq!(sd29x9::min(), from_bits(MIN_NEGATIVE_VALUE));
 }
 
 #[test, expected_failure(abort_code = sd29x9::EOverflow)]
@@ -69,15 +68,15 @@ fun from_bits_all_ones() {
 
 #[test]
 fun from_bits_max_positive() {
-    expect(from_bits(MAX_POSITIVE_VALUE), sd29x9::max());
+    assert_eq!(from_bits(MAX_POSITIVE_VALUE), sd29x9::max());
 }
 
 #[test]
 fun from_bits_min_negative() {
-    expect(from_bits(MIN_NEGATIVE_VALUE), sd29x9::min());
+    assert_eq!(from_bits(MIN_NEGATIVE_VALUE), sd29x9::min());
 }
 
 #[test]
 fun from_bits_one() {
-    expect(from_bits(1), pos(1));
+    assert_eq!(from_bits(1), pos(1));
 }
