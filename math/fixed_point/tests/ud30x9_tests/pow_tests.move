@@ -39,6 +39,7 @@ fun pow_handles_fractional_values_and_truncation() {
 fun pow_supports_high_exponents() {
     let val = fixed(SCALE + 250_000_000); // 1.25
     expect(val.pow(255), pos(5_152_918_999_790_606_401_120_741_084_983_548));
+    // with binary exponentiation, rounding/truncation behavior for larger exponents is affected by grouping
     expect_ne!(val.pow(255), val.pow(254).mul(val));
 }
 
