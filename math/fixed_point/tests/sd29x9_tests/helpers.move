@@ -30,8 +30,10 @@ public(package) fun expect(left: SD29x9, right: SD29x9) {
 
 // inspired by `std::unit_test::assert_ref_eq`
 public(package) macro fun expect_ne($left: SD29x9, $right: SD29x9) {
-    let left = $left.unwrap();
-    let right = $right.unwrap();
+    let left = $left;
+    let right = $right;
+    let left = left.unwrap();
+    let right = right.unwrap();
     let res = left == right;
     if (res) {
         std::debug::print(&b"Assertion failed:".to_string());
