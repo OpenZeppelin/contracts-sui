@@ -27,19 +27,3 @@ public(package) fun neg(raw: u128): SD29x9 {
 public(package) fun expect(left: SD29x9, right: SD29x9) {
     assert_eq!(left.unwrap(), right.unwrap());
 }
-
-// inspired by `std::unit_test::assert_ref_eq`
-public(package) macro fun expect_ne($left: SD29x9, $right: SD29x9) {
-    let left = $left;
-    let right = $right;
-    let left = left.unwrap();
-    let right = right.unwrap();
-    let res = left == right;
-    if (res) {
-        std::debug::print(&b"Assertion failed:".to_string());
-        std::debug::print(&left);
-        std::debug::print(&b"==".to_string());
-        std::debug::print(&right);
-        assert!(false);
-    }
-}

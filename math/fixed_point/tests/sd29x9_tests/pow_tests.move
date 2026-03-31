@@ -3,62 +3,64 @@ module openzeppelin_fp_math::sd29x9_pow_tests;
 
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
-use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect, expect_ne};
+use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg};
+use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
 #[test]
 fun pow_handles_zero_and_one_exponents() {
     let x = pos(12 * SCALE + 345_678_901);
-    expect(x.pow(0), sd29x9::one());
-    expect(x.pow(1), x);
-    expect(sd29x9::zero().pow(0), sd29x9::one());
+    assert_eq!(x.pow(0).unwrap(), sd29x9::one().unwrap());
+    assert_eq!(x.pow(1).unwrap(), x.unwrap());
+    assert_eq!(sd29x9::zero().pow(0).unwrap(), sd29x9::one().unwrap());
 }
 
 #[test]
 fun pow_handles_zero_base_and_sign_parity() {
     let zero = sd29x9::zero();
-    expect(zero.pow(5), zero);
+    assert_eq!(zero.pow(5).unwrap(), zero.unwrap());
 
     let neg_base = neg(2 * SCALE);
-    expect(neg_base.pow(2), pos(4 * SCALE));
-    expect(neg_base.pow(3), neg(8 * SCALE));
+    assert_eq!(neg_base.pow(2).unwrap(), pos(4 * SCALE).unwrap());
+    assert_eq!(neg_base.pow(3).unwrap(), neg(8 * SCALE).unwrap());
 }
 
 #[test]
 fun pow_handles_fractional_values_and_truncation() {
     // 1.5^2 = 2.25, 1.5^3 = 3.375
     let one_point_five = pos(1_500_000_000);
-    expect(one_point_five.pow(2), pos(2_250_000_000));
-    expect(one_point_five.pow(3), pos(3_375_000_000));
+    assert_eq!(one_point_five.pow(2).unwrap(), pos(2_250_000_000).unwrap());
+    assert_eq!(one_point_five.pow(3).unwrap(), pos(3_375_000_000).unwrap());
 
     // 1.000000001^2 = 1.000000002000000001 -> 1.000000002
     let epsilon = pos(SCALE + 1);
-    expect(epsilon.pow(2), pos(SCALE + 2));
+    assert_eq!(epsilon.pow(2).unwrap(), pos(SCALE + 2).unwrap());
 }
 
 #[test]
 fun pow_handles_negative_one_parity() {
     let neg_one = neg(SCALE);
-    expect(neg_one.pow(2), pos(SCALE));
-    expect(neg_one.pow(3), neg(SCALE));
+    assert_eq!(neg_one.pow(2).unwrap(), pos(SCALE).unwrap());
+    assert_eq!(neg_one.pow(3).unwrap(), neg(SCALE).unwrap());
 }
 
 #[test]
 fun pow_supports_high_exponents() {
     let val = pos(SCALE + 250_000_000); // 1.25
-    // Expected value is the result of sd29x9::pow's binary exponentiation with intermediate truncation, not simply floor(1.25^16 * 10^9) (the exact value before flooring is 35_527_136_787)
-    expect(val.pow(16), pos(35_527_136_781));
+    // Expected value is the result of `sd29x9::pow`'s binary exponentiation with intermediate
+    // truncation, not simply floor(1.25^16 * 10^9) (the exact value before flooring is 35_527_136_787)
+    assert_eq!(val.pow(16).unwrap(), pos(35_527_136_781).unwrap());
 
     let pow255 = val.pow(255);
-    expect(pow255, pos(5_152_918_999_790_606_401_120_741_084_983_548));
+    assert_eq!(pow255.unwrap(), pos(5_152_918_999_790_606_401_120_741_084_983_548).unwrap());
     // with binary exponentiation, rounding/truncation behavior for larger exponents is affected by grouping
-    expect_ne!(pow255, val.pow(254).mul(val));
+    assert!(pow255.unwrap() != val.pow(254).mul(val).unwrap());
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun pow_overflow_aborts_for_large_base() {
-    sd29x9::max().pow(32);
+    sd29x9::max().pow(2);
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
@@ -69,10 +71,10 @@ fun pow_overflow_aborts_for_large_exponent() {
 
 #[test]
 fun pow_two_squared() {
-    expect(pos(2 * SCALE).pow(2), pos(4 * SCALE));
+    assert_eq!(pos(2 * SCALE).pow(2).unwrap(), pos(4 * SCALE).unwrap());
 }
 
 #[test]
 fun pow_three_cubed() {
-    expect(pos(3 * SCALE).pow(3), pos(27 * SCALE));
+    assert_eq!(pos(3 * SCALE).pow(3).unwrap(), pos(27 * SCALE).unwrap());
 }
