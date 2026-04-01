@@ -1,7 +1,7 @@
 #[test_only]
 module openzeppelin_fp_math::sd29x9_wrap_tests;
 
-use openzeppelin_fp_math::sd29x9::{Self, from_bits};
+use openzeppelin_fp_math::sd29x9::{Self, from_bits, two_complement};
 use openzeppelin_fp_math::sd29x9_test_helpers::pos;
 use std::unit_test::assert_eq;
 
@@ -53,7 +53,7 @@ fun wrap_encodes_magnitude_with_sign() {
     let negative = sd29x9::wrap(raw, true);
 
     assert_eq!(positive.unwrap(), raw);
-    assert_eq!(negative, sd29x9::wrap(raw, true));
+    assert_eq!(negative.unwrap(), two_complement(raw));
 }
 
 #[test]
