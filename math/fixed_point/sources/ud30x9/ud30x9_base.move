@@ -21,6 +21,10 @@ const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigne
 #[error(code = 1)]
 const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
 
+/// Divisor must be non-zero
+#[error(code = 2)]
+const EDivideByZero: vector<u8> = "Divisor must be non-zero";
+
 // === Conversion ===
 
 /// Converts a `UD30x9` value to a `SD29x9` value.
@@ -245,8 +249,9 @@ public fun lte(x: UD30x9, y: UD30x9): bool {
 /// - The remainder of `x` divided by `y`.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
+    assert!(y.unwrap() != 0, EDivideByZero);
     wrap(x.unwrap() % y.unwrap())
 }
 
@@ -283,9 +288,10 @@ public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The quotient `x / y`, rounded down to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
+    assert!(y.unwrap() != 0, EDivideByZero);
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let numerator = x * SCALE_U256;
     wrap_u256(numerator / y)

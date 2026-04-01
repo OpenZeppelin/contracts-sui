@@ -24,8 +24,12 @@ const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed 
 #[error(code = 1)]
 const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD30x9";
 
-/// Cannot compute square root of a negative value
+/// Divisor must be non-zero
 #[error(code = 2)]
+const EDivideByZero: vector<u8> = "Divisor must be non-zero";
+
+/// Cannot compute square root of a negative value
+#[error(code = 3)]
 const ENegativeSqrt: vector<u8> = "Cannot compute square root of a negative value";
 
 // === Conversion ===
@@ -274,8 +278,9 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
 /// - Returns `0` when `x` is an exact multiple of `y`.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
+    assert!(y.unwrap() != 0, EDivideByZero);
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let remainder = x.mag % y.mag;
@@ -312,9 +317,10 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
 /// - The division result `x / y`.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div(x: SD29x9, y: SD29x9): SD29x9 {
+    assert!(y.unwrap() != 0, EDivideByZero);
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
