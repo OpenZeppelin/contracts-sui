@@ -1,6 +1,7 @@
 /// Base utility functions for the `UD30x9` fixed-point type.
 module openzeppelin_fp_math::ud30x9_base;
 
+use openzeppelin_fp_math::fp_helpers;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
 
@@ -333,6 +334,25 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     });
 
     wrap_u256(result)
+}
+
+/// Computes the square root of a `UD30x9` value.
+///
+/// The result is the largest `UD30x9` value `r` such that `r * r <= x`. In other words, the
+/// result is truncated (rounded down) to the nearest representable `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - The square root of `x`, rounded down to the nearest representable `UD30x9` value.
+public fun sqrt(x: UD30x9): UD30x9 {
+    let raw = x.unwrap() as u256;
+    if (raw == 0) {
+        return wrap(0)
+    };
+    let result = fp_helpers::sqrt_floor(raw * SCALE_U256);
+    wrap(result as u128)
 }
 
 /// Checks whether two `UD30x9` values are not equal.

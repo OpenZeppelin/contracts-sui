@@ -56,6 +56,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::not as SD29x9.not;
 public use fun openzeppelin_fp_math::sd29x9_base::or as SD29x9.or;
 public use fun openzeppelin_fp_math::sd29x9_base::pow as SD29x9.pow;
 public use fun openzeppelin_fp_math::sd29x9_base::rshift as SD29x9.rshift;
+public use fun openzeppelin_fp_math::sd29x9_base::sqrt as SD29x9.sqrt;
 public use fun openzeppelin_fp_math::sd29x9_base::sub as SD29x9.sub;
 public use fun openzeppelin_fp_math::sd29x9_base::try_into_UD30x9 as SD29x9.try_into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchecked_add;

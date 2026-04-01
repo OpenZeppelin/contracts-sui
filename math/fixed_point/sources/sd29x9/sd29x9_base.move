@@ -3,6 +3,7 @@
 /// Tailored to the signed `SD29x9` representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
+use openzeppelin_fp_math::fp_helpers;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 
@@ -26,6 +27,10 @@ const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD3
 /// Divisor must be non-zero
 #[error(code = 2)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
+
+/// Cannot compute square root of a negative value
+#[error(code = 3)]
+const ENegativeSqrt: vector<u8> = "Cannot compute square root of a negative value";
 
 // === Conversion ===
 
@@ -363,6 +368,30 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     });
     let result = Components { neg: res_neg, mag: res_mag };
     wrap_components(result)
+}
+
+/// Computes the square root of a `SD29x9` value.
+///
+/// The result is the largest `SD29x9` value `r` such that `r * r <= x`. In other words, the
+/// result is truncated (rounded down) to the nearest representable `SD29x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - The non-negative square root of `x`, rounded down to the nearest representable `SD29x9`
+///   value.
+///
+/// #### Aborts
+/// - Aborts if `x` is negative.
+public fun sqrt(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg, ENegativeSqrt);
+    if (mag == 0) {
+        return zero()
+    };
+    let result = fp_helpers::sqrt_floor(mag * SCALE);
+    wrap_components(Components { neg: false, mag: result })
 }
 
 /// Returns the arithmetic negation of `x`.

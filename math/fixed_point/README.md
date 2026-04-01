@@ -9,11 +9,19 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 ## Operations
 
-- Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
+- Arithmetic: `abs`, `add`, `ceil`, `div`, `floor`, `mod`, `mul`, `pow`, `sqrt`, `sub`,
+  `unchecked_add`, `unchecked_sub`
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
+- `SD29x9` only: `negate`
 
 ## Casting and helpers
+
+- `u128 -> UD30x9`: `into_UD30x9`
+- `UD30x9 -> SD29x9`: `into_SD29x9`, `try_into_SD29x9`
+- `SD29x9 -> UD30x9`: `into_UD30x9`, `try_into_UD30x9`
+- Constructors: `zero`, `one`, `max`, `wrap`
+- `SD29x9` only: `min`, `from_bits`
 
 ```rust
 use openzeppelin_fp_math::{sd29x9, ud30x9};
