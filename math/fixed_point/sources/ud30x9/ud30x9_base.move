@@ -313,7 +313,7 @@ public fun div(x: UD30x9, y: UD30x9): UD30x9 {
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
-public fun pow(x: UD30x9, mut exp: u8): UD30x9 {
+public fun pow(x: UD30x9, exp: u8): UD30x9 {
     if (exp == 0) {
         return one()
     };
@@ -324,6 +324,7 @@ public fun pow(x: UD30x9, mut exp: u8): UD30x9 {
     let max_value = U128_MAX_VALUE as u256;
     let mut base = x.unwrap() as u256;
     let mut result = SCALE_U256;
+    let mut exp = exp;
 
     while (exp != 0) {
         if ((exp & 1) == 1) {

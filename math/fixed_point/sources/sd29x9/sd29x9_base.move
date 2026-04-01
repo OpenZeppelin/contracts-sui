@@ -342,7 +342,7 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 ///
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
-public fun pow(x: SD29x9, mut exp: u8): SD29x9 {
+public fun pow(x: SD29x9, exp: u8): SD29x9 {
     if (exp == 0) {
         return one()
     };
@@ -353,6 +353,7 @@ public fun pow(x: SD29x9, mut exp: u8): SD29x9 {
     let res_neg = neg && (exp % 2 != 0);
     let mut res_mag = SCALE;
     let mut base_mag = mag;
+    let mut exp = exp;
 
     while (exp != 0) {
         if ((exp & 1) == 1) {
