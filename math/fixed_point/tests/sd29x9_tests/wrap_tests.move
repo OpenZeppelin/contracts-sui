@@ -47,10 +47,10 @@ fun wrap_negative_one_is_all_ones() {
 }
 
 #[test]
-fun raw_casting_from_u128_matches_wrap() {
+fun wrap_encodes_magnitude_with_sign() {
     let raw = 987_654_321u128;
-    let positive = u128_cast::into_SD29x9(raw, false);
-    let negative = u128_cast::into_SD29x9(raw, true);
+    let positive = sd29x9::wrap(raw, false);
+    let negative = sd29x9::wrap(raw, true);
 
     assert_eq!(positive.unwrap(), raw);
     assert_eq!(negative, sd29x9::wrap(raw, true));

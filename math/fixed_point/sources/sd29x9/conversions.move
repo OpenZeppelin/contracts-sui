@@ -9,8 +9,8 @@
 /// and conversions back to a simple signed form return `(magnitude, is_negative)`.
 ///
 /// This module is intentionally separate from raw casting helpers like
-/// `sd29x9::wrap`, `sd29x9::from_bits`, and `u128_cast::into_SD29x9`, which
-/// preserve raw scaled bits without applying or removing the `10^9` scale.
+/// `sd29x9::wrap` and `sd29x9::from_bits`, which preserve raw scaled bits
+/// without applying or removing the `10^9` scale.
 module openzeppelin_fp_math::sd29x9_convert;
 
 use openzeppelin_fp_math::common;

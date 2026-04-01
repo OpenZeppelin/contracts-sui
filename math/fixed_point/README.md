@@ -31,18 +31,17 @@ Rule of thumb:
 
 ## Raw Casts
 
-The core `wrap` / `unwrap` APIs and `u128_cast` module are **raw casts**.
-They preserve the underlying fixed-point bits and do not multiply or divide by
-`10^9`.
+The core `wrap` / `unwrap` APIs are **raw casts**. They preserve the
+underlying fixed-point representation and do not multiply or divide by `10^9`.
 
 ```rust
-use openzeppelin_fp_math::{sd29x9, u128_cast, ud30x9};
+use openzeppelin_fp_math::{sd29x9, ud30x9};
 
 let one = ud30x9::wrap(1_000_000_000); // 1.0
-let raw = u128_cast::into_UD30x9(42); // Raw bits, not 42.0
+let raw = ud30x9::wrap(42); // Raw bits, not 42.0
 
 let positive = sd29x9::wrap(1_000_000_000, false); // 1.0
-let negative = u128_cast::into_SD29x9(42, true); // Raw bits for -0.000000042
+let negative = sd29x9::wrap(42, true); // Raw bits for -0.000000042
 ```
 
 ## Cross-Type Fixed-Point Casts

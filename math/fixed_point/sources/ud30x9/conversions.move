@@ -5,8 +5,8 @@
 /// back into whole integers by truncating the fractional part.
 ///
 /// This module is intentionally separate from raw casting helpers like
-/// `ud30x9::wrap` and `u128_cast::into_UD30x9`, which preserve the raw
-/// fixed-point bits without applying the `10^9` scale factor.
+/// `ud30x9::wrap`, which preserve the raw fixed-point bits without applying
+/// the `10^9` scale factor.
 module openzeppelin_fp_math::ud30x9_convert;
 
 use openzeppelin_fp_math::common;
