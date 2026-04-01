@@ -55,12 +55,7 @@ fun sqrt_truncates_irrational_results() {
 
 #[test]
 fun sqrt_floor_property_for_non_perfect_squares() {
-    let values = vector[
-        pos(2 * SCALE),
-        pos(3 * SCALE),
-        pos(7 * SCALE),
-        pos(SCALE + 1),
-    ];
+    let values = vector[pos(2 * SCALE), pos(3 * SCALE), pos(7 * SCALE), pos(SCALE + 1)];
     values.destroy!(|x| {
         let r = x.sqrt().unwrap() as u256;
         let scaled = (x.unwrap() as u256) * (SCALE as u256);
