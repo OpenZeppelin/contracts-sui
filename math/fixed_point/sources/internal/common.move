@@ -9,9 +9,6 @@ module openzeppelin_fp_math::common;
 /// Decimal scale used by all fixed-point types in this package.
 const SCALE: u128 = 1_000_000_000; // 10^9
 
-/// All-ones mask for a 128-bit unsigned integer.
-const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
-
 /// Maximum positive raw magnitude representable by `SD29x9`.
 const MAX_SD29X9_MAGNITUDE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
 
@@ -35,14 +32,6 @@ public(package) fun scale(): u128 {
 /// - The `10^9` scale factor promoted to `u256`.
 public(package) fun scale_u256(): u256 {
     SCALE as u256
-}
-
-/// Returns the largest 128-bit unsigned integer value.
-///
-/// #### Returns
-/// - `2^128 - 1`.
-public(package) fun u128_max(): u128 {
-    U128_MAX_VALUE
 }
 
 /// Returns the sign bit used by `SD29x9`.
@@ -75,7 +64,7 @@ public(package) fun min_sd29x9_value(): u128 {
 /// #### Returns
 /// - `floor(u128::MAX / 10^9)`.
 public(package) fun max_ud30x9_whole(): u128 {
-    U128_MAX_VALUE / SCALE
+    (std::u128::max_value!()) / SCALE
 }
 
 /// Returns the largest whole-magnitude integer that can be converted into

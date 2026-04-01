@@ -222,7 +222,7 @@ public fun lshift(x: SD29x9, bits: u8): SD29x9 {
     if (bits >= 128) {
         return zero()
     };
-    from_bits((x.unwrap() << bits) & common::u128_max())
+    from_bits((x.unwrap() << bits) & std::u128::max_value!())
 }
 
 /// Compares whether `x` is less than `y`.
@@ -390,7 +390,7 @@ public fun neq(x: SD29x9, y: SD29x9): bool {
 /// #### Returns
 /// - The result of bitwise NOT operation.
 public fun not(x: SD29x9): SD29x9 {
-    from_bits(x.unwrap() ^ common::u128_max())
+    from_bits(x.unwrap() ^ std::u128::max_value!())
 }
 
 /// Performs a bitwise OR between two `SD29x9` raw bit patterns.
@@ -423,7 +423,7 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
         return x
     } else if (bits >= 128) {
         return if ((x.unwrap() & common::sign_bit()) != 0) {
-            from_bits(common::u128_max())
+            from_bits(std::u128::max_value!())
         } else {
             zero()
         }
@@ -434,7 +434,7 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
         from_bits(raw >> bits)
     } else {
         let shifted = raw >> bits;
-        let mask = common::u128_max() << (128 - bits);
+        let mask = (std::u128::max_value!()) << (128 - bits);
         from_bits(shifted | mask)
     }
 }
@@ -540,7 +540,7 @@ fun wrap_components(value: Components): SD29x9 {
 
 fun wrapping_add_bits(a: u128, b: u128): u128 {
     let sum = (a as u256) + (b as u256);
-    (sum & (common::u128_max() as u256)) as u128
+    (sum & ((std::u128::max_value!()) as u256)) as u128
 }
 
 fun wrapping_sub_bits(a: u128, b: u128): u128 {

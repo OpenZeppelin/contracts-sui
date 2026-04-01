@@ -162,9 +162,9 @@ public fun unwrap(x: SD29x9): u128 {
 /// #### Returns
 /// - The two's complement of `bits`.
 public(package) fun two_complement(bits: u128): u128 {
-    let inverted = bits ^ common::u128_max();
+    let inverted = bits ^ std::u128::max_value!();
     let sum = (inverted as u256) + 1;
-    (sum & (common::u128_max() as u256)) as u128
+    (sum & ((std::u128::max_value!()) as u256)) as u128
 }
 
 /// Wraps a raw `u128` bit pattern directly into an `SD29x9` value without validation.

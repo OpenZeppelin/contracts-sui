@@ -19,8 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Changed (Breaking)
 
-- Removed public module `casting_u128`/`u128_cast`; use `ud30x9::wrap` and
-  `sd29x9::wrap` directly for raw casts.
+- Removed public module `casting_u128`; use `ud30x9::wrap` and `sd29x9::wrap` directly for raw casts.
 
 ## 1.1.0-rc.0 (10-03-2026)
 

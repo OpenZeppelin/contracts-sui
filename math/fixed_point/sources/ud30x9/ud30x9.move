@@ -83,7 +83,7 @@ public fun one(): UD30x9 {
 /// #### Returns
 /// - The largest possible `UD30x9` value.
 public fun max(): UD30x9 {
-    UD30x9(common::u128_max())
+    UD30x9(std::u128::max_value!())
 }
 
 // === Casting helpers ===
