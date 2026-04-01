@@ -91,30 +91,6 @@ public fun add(x: SD29x9, y: SD29x9): SD29x9 {
     wrap_components(result)
 }
 
-/// Performs a bitwise AND between raw `SD29x9` bits and a `u128` mask.
-///
-/// #### Parameters
-/// - `x`: Input value.
-/// - `bits`: Bit mask applied to `x`'s underlying bits.
-///
-/// #### Returns
-/// - The result of bitwise AND operation.
-public fun and(x: SD29x9, bits: u128): SD29x9 {
-    from_bits(x.unwrap() & bits)
-}
-
-/// Performs a bitwise AND between two `SD29x9` raw bit patterns.
-///
-/// #### Parameters
-/// - `x`: First operand.
-/// - `y`: Second operand.
-///
-/// #### Returns
-/// - The result of bitwise AND operation.
-public fun and2(x: SD29x9, y: SD29x9): SD29x9 {
-    from_bits(x.unwrap() & y.unwrap())
-}
-
 /// Rounds toward positive infinity to the nearest integer multiple of `1e9`.
 ///
 /// #### Parameters
@@ -210,23 +186,6 @@ public fun gte(x: SD29x9, y: SD29x9): bool {
 /// - `true` if `x` is zero, otherwise `false`.
 public fun is_zero(x: SD29x9): bool {
     x.unwrap() == 0
-}
-
-/// Performs a logical left shift on the underlying 128-bit representation.
-/// Doesn't preserve the sign and can move 1s into the sign bit.
-///
-/// #### Parameters
-/// - `x`: Input value.
-/// - `bits`: Number of bit positions to shift left.
-///
-/// #### Returns
-/// - Zero if `bits >= 128` (all bits cleared).
-/// - Otherwise, shifts the raw bits left by `bits` and masks to 128 bits.
-public fun lshift(x: SD29x9, bits: u8): SD29x9 {
-    if (bits >= 128) {
-        return zero()
-    };
-    from_bits((x.unwrap() << bits) & U128_MAX_VALUE)
 }
 
 /// Compares whether `x` is less than `y`.
@@ -386,63 +345,6 @@ public fun neq(x: SD29x9, y: SD29x9): bool {
     !eq(x, y)
 }
 
-/// Performs a bitwise NOT on the raw `SD29x9` bits.
-///
-/// #### Parameters
-/// - `x`: Input value.
-///
-/// #### Returns
-/// - The result of bitwise NOT operation.
-public fun not(x: SD29x9): SD29x9 {
-    from_bits(x.unwrap() ^ U128_MAX_VALUE)
-}
-
-/// Performs a bitwise OR between two `SD29x9` raw bit patterns.
-///
-/// #### Parameters
-/// - `x`: First operand.
-/// - `y`: Second operand.
-///
-/// #### Returns
-/// - The result of bitwise OR operation.
-public fun or(x: SD29x9, y: SD29x9): SD29x9 {
-    from_bits(x.unwrap() | y.unwrap())
-}
-
-/// Performs an arithmetic right shift on the underlying 128-bit representation.
-/// Preserves the sign by sign-extending negative values.
-///
-/// #### Parameters
-/// - `x`: Input value.
-/// - `bits`: Number of bit positions to shift right.
-///
-/// #### Returns
-/// - `x` unchanged if `bits == 0`.
-/// - All 1s for negative values and zero for non-negative values if `bits >= 128`.
-/// - Otherwise, the result of an arithmetic right shift:
-///   - For non-negative values, this is a logical right shift.
-///   - For negative values, the shifted value is sign-extended with 1s.
-public fun rshift(x: SD29x9, bits: u8): SD29x9 {
-    if (bits == 0) {
-        return x
-    } else if (bits >= 128) {
-        return if ((x.unwrap() & SIGN_BIT) != 0) {
-            from_bits(U128_MAX_VALUE)
-        } else {
-            zero()
-        }
-    };
-
-    let raw = x.unwrap();
-    if ((raw & SIGN_BIT) == 0) {
-        from_bits(raw >> bits)
-    } else {
-        let shifted = raw >> bits;
-        let mask = U128_MAX_VALUE << (128 - bits);
-        from_bits(shifted | mask)
-    }
-}
-
 /// Subtracts `y` from `x`.
 ///
 /// #### Parameters
@@ -482,18 +384,6 @@ public fun unchecked_add(x: SD29x9, y: SD29x9): SD29x9 {
 /// - The result of raw bits subtraction.
 public fun unchecked_sub(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(wrapping_sub_bits(x.unwrap(), y.unwrap()))
-}
-
-/// Performs a bitwise XOR between two `SD29x9` raw bit patterns.
-///
-/// #### Parameters
-/// - `x`: First operand.
-/// - `y`: Second operand.
-///
-/// #### Returns
-/// - The result of bitwise XOR operation.
-public fun xor(x: SD29x9, y: SD29x9): SD29x9 {
-    from_bits(x.unwrap() ^ y.unwrap())
 }
 
 // === Internal helpers ===

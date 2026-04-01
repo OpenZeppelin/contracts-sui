@@ -35,8 +35,6 @@ const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed 
 
 public use fun openzeppelin_fp_math::sd29x9_base::abs as SD29x9.abs;
 public use fun openzeppelin_fp_math::sd29x9_base::add as SD29x9.add;
-public use fun openzeppelin_fp_math::sd29x9_base::and as SD29x9.and;
-public use fun openzeppelin_fp_math::sd29x9_base::and2 as SD29x9.and2;
 public use fun openzeppelin_fp_math::sd29x9_base::ceil as SD29x9.ceil;
 public use fun openzeppelin_fp_math::sd29x9_base::div as SD29x9.div;
 public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
@@ -45,22 +43,17 @@ public use fun openzeppelin_fp_math::sd29x9_base::gt as SD29x9.gt;
 public use fun openzeppelin_fp_math::sd29x9_base::gte as SD29x9.gte;
 public use fun openzeppelin_fp_math::sd29x9_base::into_UD30x9 as SD29x9.into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::is_zero as SD29x9.is_zero;
-public use fun openzeppelin_fp_math::sd29x9_base::lshift as SD29x9.lshift;
 public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
 public use fun openzeppelin_fp_math::sd29x9_base::lte as SD29x9.lte;
 public use fun openzeppelin_fp_math::sd29x9_base::mod as SD29x9.mod;
 public use fun openzeppelin_fp_math::sd29x9_base::mul as SD29x9.mul;
 public use fun openzeppelin_fp_math::sd29x9_base::negate as SD29x9.negate;
 public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
-public use fun openzeppelin_fp_math::sd29x9_base::not as SD29x9.not;
-public use fun openzeppelin_fp_math::sd29x9_base::or as SD29x9.or;
 public use fun openzeppelin_fp_math::sd29x9_base::pow as SD29x9.pow;
-public use fun openzeppelin_fp_math::sd29x9_base::rshift as SD29x9.rshift;
 public use fun openzeppelin_fp_math::sd29x9_base::sub as SD29x9.sub;
 public use fun openzeppelin_fp_math::sd29x9_base::try_into_UD30x9 as SD29x9.try_into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchecked_add;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_sub as SD29x9.unchecked_sub;
-public use fun openzeppelin_fp_math::sd29x9_base::xor as SD29x9.xor;
 
 /// Constructs the zero value in `SD29x9` representation.
 ///
