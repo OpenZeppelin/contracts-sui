@@ -3,34 +3,34 @@ module openzeppelin_fp_math::sd29x9_arithmetic_tests;
 
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
-use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect, pair, unpack};
+use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, pair, unpack};
 use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
 #[test]
 fun addition_and_subtraction_cover_signs() {
-    expect(pos(10 * SCALE).add(neg(5 * SCALE)), pos(5 * SCALE));
-    expect(neg(10 * SCALE).add(pos(5 * SCALE)), neg(5 * SCALE));
-    expect(neg(7 * SCALE).add(neg(9 * SCALE)), neg(16 * SCALE));
+    assert_eq!(pos(10 * SCALE).add(neg(5 * SCALE)), pos(5 * SCALE));
+    assert_eq!(neg(10 * SCALE).add(pos(5 * SCALE)), neg(5 * SCALE));
+    assert_eq!(neg(7 * SCALE).add(neg(9 * SCALE)), neg(16 * SCALE));
 
-    expect(pos(20 * SCALE).sub(pos(7 * SCALE)), pos(13 * SCALE));
-    expect(pos(7 * SCALE).sub(pos(20 * SCALE)), neg(13 * SCALE));
-    expect(neg(9 * SCALE).sub(neg(4 * SCALE)), neg(5 * SCALE));
+    assert_eq!(pos(20 * SCALE).sub(pos(7 * SCALE)), pos(13 * SCALE));
+    assert_eq!(pos(7 * SCALE).sub(pos(20 * SCALE)), neg(13 * SCALE));
+    assert_eq!(neg(9 * SCALE).sub(neg(4 * SCALE)), neg(5 * SCALE));
 }
 
 #[test]
 fun sum_handles_edge_cases() {
     let (min, max, zero) = (sd29x9::min(), sd29x9::max(), sd29x9::zero());
-    expect(min.add(zero), min);
-    expect(max.add(zero), max);
-    expect(zero.add(min), min);
-    expect(zero.add(max), max);
+    assert_eq!(min.add(zero), min);
+    assert_eq!(max.add(zero), max);
+    assert_eq!(zero.add(min), min);
+    assert_eq!(zero.add(max), max);
 
     let epsilon = pos(1);
-    expect(max.negate().add(epsilon.negate()), min);
-    expect(max.sub(epsilon).add(epsilon), max);
-    expect(min.add(epsilon).add(epsilon).negate().add(epsilon), max);
+    assert_eq!(max.negate().add(epsilon.negate()), min);
+    assert_eq!(max.sub(epsilon).add(epsilon), max);
+    assert_eq!(min.add(epsilon).add(epsilon).negate().add(epsilon), max);
 }
 
 #[test]
@@ -40,24 +40,24 @@ fun sum_can_reach_minimum_value() {
     let min_plus_epsilon = min.add(epsilon);
     let zero = sd29x9::zero();
 
-    expect(zero.add(min), min);
-    expect(min_plus_epsilon.add(neg(1)), min);
+    assert_eq!(zero.add(min), min);
+    assert_eq!(min_plus_epsilon.add(neg(1)), min);
 }
 
 #[test]
 fun sub_handles_edge_cases() {
     let (min, max, zero) = (sd29x9::min(), sd29x9::max(), sd29x9::zero());
-    expect(min.sub(zero), min);
-    expect(max.sub(zero), max);
+    assert_eq!(min.sub(zero), min);
+    assert_eq!(max.sub(zero), max);
 
     let epsilon = pos(1);
     let min_plus_epsilon = min.add(epsilon);
-    expect(zero.sub(min_plus_epsilon), max);
-    expect(zero.sub(max), min_plus_epsilon);
+    assert_eq!(zero.sub(min_plus_epsilon), max);
+    assert_eq!(zero.sub(max), min_plus_epsilon);
 
-    expect(max.negate().sub(epsilon), min);
-    expect(max.sub(epsilon).sub(epsilon.negate()), max);
-    expect(min.add(epsilon).add(epsilon).negate().sub(epsilon.negate()), max);
+    assert_eq!(max.negate().sub(epsilon), min);
+    assert_eq!(max.sub(epsilon).sub(epsilon.negate()), max);
+    assert_eq!(min.add(epsilon).add(epsilon).negate().sub(epsilon.negate()), max);
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
@@ -80,20 +80,20 @@ fun add_zero_is_identity() {
     let x_pos = pos(12_345_678_901);
     let x_neg = neg(9_876_543_210);
 
-    expect(x_pos.add(zero), x_pos);
-    expect(zero.add(x_pos), x_pos);
-    expect(x_neg.add(zero), x_neg);
-    expect(zero.add(x_neg), x_neg);
-    expect(zero.add(zero), zero);
+    assert_eq!(x_pos.add(zero), x_pos);
+    assert_eq!(zero.add(x_pos), x_pos);
+    assert_eq!(x_neg.add(zero), x_neg);
+    assert_eq!(zero.add(x_neg), x_neg);
+    assert_eq!(zero.add(zero), zero);
 }
 
 #[test]
 fun sub_self_is_zero() {
     let zero = sd29x9::zero();
-    expect(sd29x9::one().sub(sd29x9::one()), zero);
-    expect(neg(42 * SCALE).sub(neg(42 * SCALE)), zero);
-    expect(pos(999_999_999).sub(pos(999_999_999)), zero);
-    expect(sd29x9::max().sub(sd29x9::max()), zero);
+    assert_eq!(sd29x9::one().sub(sd29x9::one()), zero);
+    assert_eq!(neg(42 * SCALE).sub(neg(42 * SCALE)), zero);
+    assert_eq!(pos(999_999_999).sub(pos(999_999_999)), zero);
+    assert_eq!(sd29x9::max().sub(sd29x9::max()), zero);
 }
 
 #[test]
@@ -120,6 +120,6 @@ fun sub_negation_equivalence() {
     ];
     pairs.destroy!(|p| {
         let (a, b) = p.unpack();
-        expect(a.sub(b), a.add(b.negate()));
+        assert_eq!(a.sub(b), a.add(b.negate()));
     });
 }
