@@ -3,6 +3,8 @@ module openzeppelin_fp_math::casting_u128;
 
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap};
 
+// === Public Functions ===
+
 /// Converts a `u128` value into a `UD30x9` value.
 ///
 /// #### Parameters

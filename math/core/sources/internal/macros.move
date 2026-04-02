@@ -8,10 +8,14 @@ use openzeppelin_math::common;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
+// === Errors ===
+
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 #[error(code = 1)]
 const EZeroModulus: vector<u8> = "Modulus must be non-zero";
+
+// === Package Functions ===
 
 /// Compute the arithmetic mean of two unsigned integers with configurable rounding.
 ///

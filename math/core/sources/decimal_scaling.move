@@ -151,6 +151,8 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
     scale_amount(amount as u256, source_decimals, target_decimals)
 }
 
+// === Private Functions ===
+
 /// Internal helper to scale an amount between different decimal precisions.
 ///
 /// # Truncation Behavior

@@ -6,13 +6,6 @@ module openzeppelin_fp_math::sd29x9_base;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 
-// === Constants ===
-
-const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
-const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
-const SIGN_BIT: u128 = 1u128 << 127;
-const SCALE: u256 = 1_000_000_000; // 10^9
-
 // === Errors ===
 
 /// Value overflows `SD29x9` (must fit in 2^127 signed range)
@@ -22,6 +15,20 @@ const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed 
 /// Value cannot be converted to `UD30x9`
 #[error(code = 1)]
 const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD30x9";
+
+// === Constants ===
+
+const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
+const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
+const SIGN_BIT: u128 = 1u128 << 127;
+const SCALE: u256 = 1_000_000_000; // 10^9
+
+// === Structs ===
+
+public struct Components has copy, drop {
+    neg: bool,
+    mag: u256,
+}
 
 // === Conversion ===
 
@@ -496,12 +503,7 @@ public fun xor(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(x.unwrap() ^ y.unwrap())
 }
 
-// === Internal helpers ===
-
-public struct Components has copy, drop {
-    neg: bool,
-    mag: u256,
-}
+// === Private Functions ===
 
 fun decompose(bits: u128): Components {
     if ((bits & SIGN_BIT) != 0) {

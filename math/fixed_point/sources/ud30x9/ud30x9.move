@@ -15,14 +15,16 @@
 ///   internally.
 module openzeppelin_fp_math::ud30x9;
 
-/// The `UD30x9` decimal fixed-point type.
-public struct UD30x9(u128) has copy, drop, store;
-
 // === Constants ===
 
 const SCALE: u128 = 1_000_000_000; // 10^9
 
-// === Functions ===
+// === Structs ===
+
+/// The `UD30x9` decimal fixed-point type.
+public struct UD30x9(u128) has copy, drop, store;
+
+// === Method Aliases ===
 
 public use fun openzeppelin_fp_math::ud30x9_base::abs as UD30x9.abs;
 public use fun openzeppelin_fp_math::ud30x9_base::add as UD30x9.add;
@@ -75,6 +77,8 @@ public fun one(): UD30x9 {
 public fun max(): UD30x9 {
     UD30x9(std::u128::max_value!())
 }
+
+// === Public Functions ===
 
 // === Casting helpers ===
 

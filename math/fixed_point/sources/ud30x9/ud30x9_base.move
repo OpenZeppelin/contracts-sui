@@ -4,13 +4,6 @@ module openzeppelin_fp_math::ud30x9_base;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
 
-// === Constants ===
-
-const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
-const SCALE: u128 = 1_000_000_000; // 10^9
-const SCALE_U256: u256 = SCALE as u256; // 10^9
-const MAX_POSITIVE_SD29X9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
-
 // === Errors ===
 
 #[error(code = 0)]
@@ -19,6 +12,13 @@ const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigne
 /// Value cannot be converted to `SD29x9`
 #[error(code = 1)]
 const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
+
+// === Constants ===
+
+const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
+const SCALE: u128 = 1_000_000_000; // 10^9
+const SCALE_U256: u256 = SCALE as u256; // 10^9
+const MAX_POSITIVE_SD29X9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
 
 // === Conversion ===
 
@@ -449,7 +449,7 @@ public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() ^ y.unwrap())
 }
 
-// === Internal Functions ===
+// === Private Functions ===
 
 fun wrap_u256(value: u256): UD30x9 {
     assert!(value <= U128_MAX_VALUE as u256, EOverflow);

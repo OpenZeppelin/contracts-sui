@@ -17,8 +17,7 @@ use sui::clock::Clock;
 use sui::dynamic_object_field as dof;
 use sui::event;
 
-/// Dynamic field key for a wrapped object.
-public struct WrappedKey() has copy, drop, store;
+// === Errors ===
 
 /// A transfer or unwrap is already scheduled and must be executed or cancelled first.
 #[error(code = 0)]
@@ -38,6 +37,11 @@ const EWrongDelayedTransferWrapper: vector<u8> = "Wrong delayed transfer wrapper
 /// Borrow return was attempted with a different wrapped object than the one originally taken.
 #[error(code = 5)]
 const EWrongDelayedTransferObject: vector<u8> = "Wrong delayed transfer object";
+
+// === Structs ===
+
+/// Dynamic field key for a wrapped object.
+public struct WrappedKey() has copy, drop, store;
 
 /// Wrapper object that delays transfers by at least `min_delay_ms` after scheduling.
 public struct DelayedTransferWrapper<phantom T: key + store> has key {
@@ -99,6 +103,8 @@ public struct UnwrapExecuted<phantom T> has copy, drop {
     object_id: ID,
     owner: address,
 }
+
+// === Public Functions ===
 
 // === Wrap / unwrap / borrow ===
 
@@ -343,6 +349,8 @@ public fun cancel_schedule<T: key + store>(self: &mut DelayedTransferWrapper<T>)
     let PendingTransfer { .. } = self.pending.extract_or!(abort ENoPendingTransfer);
     event::emit(PendingTransferCancelled<T> { wrapper_id: object::id(self) });
 }
+
+// === Test-Only Helpers ===
 
 #[test_only]
 public fun test_new_wrap_executed<T>(

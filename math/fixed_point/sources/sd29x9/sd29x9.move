@@ -15,8 +15,11 @@
 ///   values that might dip below zero, unlike unsigned types.
 module openzeppelin_fp_math::sd29x9;
 
-/// The `SD29x9` decimal fixed-point type.
-public struct SD29x9(u128) has copy, drop, store;
+// === Errors ===
+
+/// Value cannot be represented as `SD29x9`
+#[error(code = 0)]
+const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed range)";
 
 // === Constants ===
 
@@ -25,13 +28,12 @@ const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -
 const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
 const SCALE: u128 = 1_000_000_000; // 10^9
 
-// === Errors ===
+// === Structs ===
 
-/// Value cannot be represented as `SD29x9`
-#[error(code = 0)]
-const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed range)";
+/// The `SD29x9` decimal fixed-point type.
+public struct SD29x9(u128) has copy, drop, store;
 
-// === Functions ===
+// === Method Aliases ===
 
 public use fun openzeppelin_fp_math::sd29x9_base::abs as SD29x9.abs;
 public use fun openzeppelin_fp_math::sd29x9_base::add as SD29x9.add;
@@ -94,6 +96,8 @@ public fun max(): SD29x9 {
     SD29x9(MAX_POSITIVE_VALUE)
 }
 
+// === Public Functions ===
+
 // === Casting helpers ===
 
 /// Converts an unsigned 128-bit integer (`u128`) into an `SD29x9` value type,
@@ -143,7 +147,7 @@ public fun unwrap(x: SD29x9): u128 {
     x.0
 }
 
-// ==== Internal Functions ====
+// === Package Functions ===
 
 /// Compute the two's complement of a `u128` bit pattern.
 ///

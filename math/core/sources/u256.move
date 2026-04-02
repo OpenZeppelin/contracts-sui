@@ -8,10 +8,14 @@ module openzeppelin_math::u256;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
+// === Constants ===
+
 /// Bit width for `u256`.
 ///
 /// Stored as `u16` because 256 cannot be represented as `u8`.
 const BIT_WIDTH: u16 = 256;
+
+// === Public Functions ===
 
 /// Compute the arithmetic mean of two `u256` values with configurable rounding.
 ///
