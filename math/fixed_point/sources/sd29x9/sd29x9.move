@@ -64,6 +64,8 @@ public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchec
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_sub as SD29x9.unchecked_sub;
 public use fun openzeppelin_fp_math::sd29x9_base::xor as SD29x9.xor;
 
+// === Public Functions ===
+
 /// Constructs the zero value in `SD29x9` representation.
 ///
 /// #### Returns
@@ -95,8 +97,6 @@ public fun min(): SD29x9 {
 public fun max(): SD29x9 {
     SD29x9(MAX_POSITIVE_VALUE)
 }
-
-// === Public Functions ===
 
 // === Casting helpers ===
 

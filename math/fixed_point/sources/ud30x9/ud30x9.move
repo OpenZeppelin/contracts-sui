@@ -54,6 +54,8 @@ public use fun openzeppelin_fp_math::ud30x9_base::unchecked_add as UD30x9.unchec
 public use fun openzeppelin_fp_math::ud30x9_base::unchecked_sub as UD30x9.unchecked_sub;
 public use fun openzeppelin_fp_math::ud30x9_base::xor as UD30x9.xor;
 
+// === Public Functions ===
+
 /// Constructs the zero value in `UD30x9` representation.
 ///
 /// #### Returns
@@ -77,8 +79,6 @@ public fun one(): UD30x9 {
 public fun max(): UD30x9 {
     UD30x9(std::u128::max_value!())
 }
-
-// === Public Functions ===
 
 // === Casting helpers ===
 
