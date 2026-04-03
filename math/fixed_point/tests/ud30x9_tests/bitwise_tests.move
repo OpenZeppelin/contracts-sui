@@ -29,9 +29,9 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
     let left_shifted = value.lshift(4);
     assert_eq!(left_shifted.unwrap(), raw << 4);
 
-    let right_zero = value.unchecked_rshift(0);
+    let right_zero = value.rshift(0);
     assert_eq!(right_zero.unwrap(), raw);
-    let right_shifted = value.unchecked_rshift(4);
+    let right_shifted = value.rshift(4);
     assert_eq!(right_shifted.unwrap(), raw >> 4);
 }
 
@@ -131,9 +131,9 @@ fun lshift_max_safe_shift() {
 }
 
 #[test]
-fun lshift_then_unchecked_rshift_is_identity_when_no_overflow() {
-    assert_eq!(fixed(4).lshift(2).unchecked_rshift(2).unwrap(), 4);
-    assert_eq!(fixed(0xABCD).lshift(16).unchecked_rshift(16).unwrap(), 0xABCD);
+fun lshift_then_rshift_is_identity_when_no_overflow() {
+    assert_eq!(fixed(4).lshift(2).rshift(2).unwrap(), 4);
+    assert_eq!(fixed(0xABCD).lshift(16).rshift(16).unwrap(), 0xABCD);
 }
 
 #[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
@@ -156,6 +156,66 @@ fun lshift_aborts_when_bits_is_255() {
 fun lshift_aborts_for_high_bits_overflow() {
     // Top nibble is non-zero, shifting by 4 pushes bits past u128
     fixed(0xF000_0000_0000_0000_0000_0000_0000_0001).lshift(4);
+}
+
+#[test]
+fun rshift_zero_by_any_amount_returns_zero() {
+    assert_eq!(fixed(0).rshift(0), fixed(0));
+    assert_eq!(fixed(0).rshift(1), fixed(0));
+    assert_eq!(fixed(0).rshift(127), fixed(0));
+    assert_eq!(fixed(0).rshift(128), fixed(0));
+    assert_eq!(fixed(0).rshift(255), fixed(0));
+}
+
+#[test]
+fun rshift_by_0_is_identity() {
+    assert_eq!(fixed(1).rshift(0).unwrap(), 1);
+    assert_eq!(fixed(MAX_VALUE).rshift(0).unwrap(), MAX_VALUE);
+}
+
+#[test]
+fun rshift_by_1_halves() {
+    assert_eq!(fixed(8).rshift(1).unwrap(), 4);
+}
+
+#[test]
+fun rshift_small_values() {
+    assert_eq!(fixed(16).rshift(4).unwrap(), 1);
+    assert_eq!(fixed(0xFF00).rshift(8).unwrap(), 0xFF);
+}
+
+#[test]
+fun rshift_discards_low_bits() {
+    // 0b1111 >> 2 = 0b11 (low two bits lost)
+    assert_eq!(fixed(0xF).rshift(2).unwrap(), 0x3);
+}
+
+#[test]
+fun rshift_max_value_by_127_returns_one() {
+    // MAX_VALUE >> 127 = 1 (only the top bit survives)
+    assert_eq!(fixed(MAX_VALUE).rshift(127).unwrap(), 1);
+}
+
+#[test]
+fun rshift_then_lshift_is_identity_when_low_bits_are_zero() {
+    assert_eq!(fixed(4).rshift(2).lshift(2).unwrap(), 4);
+    assert_eq!(fixed(0xABCD0000).rshift(16).lshift(16).unwrap(), 0xABCD0000);
+}
+
+#[test]
+fun rshift_then_lshift_truncates_low_bits() {
+    assert_eq!(fixed(5).rshift(2).lshift(2).unwrap(), 4);
+    assert_eq!(fixed(0xABCDE).rshift(16).lshift(16).unwrap(), 0xA0000);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun rshift_aborts_when_bits_is_128() {
+    fixed(1).rshift(128);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun rshift_aborts_when_bits_is_255() {
+    fixed(1).rshift(255);
 }
 
 #[test]

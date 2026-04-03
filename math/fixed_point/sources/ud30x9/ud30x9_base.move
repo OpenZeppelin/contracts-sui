@@ -387,6 +387,25 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 }
 
 /// Performs a logical right shift on the underlying 128-bit representation of a `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Number of bit positions to shift right.
+///
+/// #### Returns
+/// - The result of shifting the `x`'s raw bits right by `bits`.
+///
+/// #### Aborts
+/// - Aborts if `bits >= 128`.
+public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+    if (x.is_zero()) {
+        return ud30x9::zero()
+    };
+    assert!(bits < 128, EOverflow);
+    wrap(x.unwrap() >> bits)
+}
+
+/// Performs a logical right shift on the underlying 128-bit representation of a `UD30x9` value.
 /// Vacated high bits are filled with zeros.
 ///
 /// #### Parameters

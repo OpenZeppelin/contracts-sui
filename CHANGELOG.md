@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- Added new version of `UD30x9::lshift` that aborts on overflow. (#)
+- Added new versions of `UD30x9::lshift` and `UD30x9::rshift` that abort on overflow. (#)
 
 #### Changed (Breaking)
 
