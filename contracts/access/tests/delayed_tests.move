@@ -262,8 +262,8 @@ fun borrow_and_return_roundtrip() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let first_id = object::id(delayed_transfer::borrow(&wrapper));
-    assert_eq!(first_id, object::id(delayed_transfer::borrow_mut(&mut wrapper)));
+    let first_id = object::id(wrapper.borrow());
+    assert_eq!(first_id, object::id(wrapper.borrow_mut()));
 
     let (obj, borrow_token) = wrapper.borrow_val();
     wrapper.return_val(obj, borrow_token);
