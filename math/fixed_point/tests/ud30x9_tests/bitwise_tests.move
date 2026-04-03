@@ -1,6 +1,7 @@
 #[test_only]
 module openzeppelin_fp_math::ud30x9_bitwise_tests;
 
+use openzeppelin_fp_math::ud30x9_base;
 use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, pair, unpack};
 use std::unit_test::assert_eq;
 
@@ -35,33 +36,33 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
 }
 
 #[test]
-fun lshift_by_128_returns_zero() {
+fun unchecked_lshift_by_128_returns_zero() {
     let x = fixed(1);
-    assert_eq!(x.lshift(128), fixed(0));
+    assert_eq!(x.unchecked_lshift(128), fixed(0));
 }
 
 #[test]
-fun rshift_by_128_returns_zero() {
+fun unchecked_rshift_by_128_returns_zero() {
     let x = fixed(1);
-    assert_eq!(x.rshift(128), fixed(0));
+    assert_eq!(x.unchecked_rshift(128), fixed(0));
 }
 
 #[test]
-fun lshift_by_255_returns_zero() {
+fun unchecked_lshift_by_255_returns_zero() {
     let x = fixed(1);
-    assert_eq!(x.lshift(255), fixed(0));
+    assert_eq!(x.unchecked_lshift(255), fixed(0));
 }
 
 #[test]
-fun rshift_by_255_returns_zero() {
+fun unchecked_rshift_by_255_returns_zero() {
     let x = fixed(1);
-    assert_eq!(x.rshift(255), fixed(0));
+    assert_eq!(x.unchecked_rshift(255), fixed(0));
 }
 
 #[test]
-fun lshift_truncates_high_bits_before_full_width() {
+fun unchecked_lshift_truncates_high_bits_before_full_width() {
     let value = fixed(0xF000_0000_0000_0000_0000_0000_0000_0001);
-    assert_eq!(value.lshift(4).unwrap(), 0x0000_0000_0000_0000_0000_0000_0000_0010);
+    assert_eq!(value.unchecked_lshift(4).unwrap(), 0x0000_0000_0000_0000_0000_0000_0000_0010);
 }
 
 #[test]
@@ -98,8 +99,74 @@ fun and2_commutativity() {
 }
 
 #[test]
+fun lshift_zero_by_any_amount_returns_zero() {
+    assert_eq!(fixed(0).lshift(0), fixed(0));
+    assert_eq!(fixed(0).lshift(1), fixed(0));
+    assert_eq!(fixed(0).lshift(127), fixed(0));
+}
+
+#[test]
+fun lshift_by_0_is_identity() {
+    assert_eq!(fixed(1).lshift(0).unwrap(), 1);
+    assert_eq!(fixed(MAX_VALUE).lshift(0).unwrap(), MAX_VALUE);
+}
+
+#[test]
 fun lshift_by_1_doubles() {
     assert_eq!(fixed(4).lshift(1).unwrap(), 8);
+}
+
+#[test]
+fun lshift_small_values() {
+    assert_eq!(fixed(1).lshift(4).unwrap(), 16);
+    assert_eq!(fixed(0xFF).lshift(8).unwrap(), 0xFF00);
+}
+
+#[test]
+fun lshift_max_safe_shift() {
+    // 1 << 127 is the highest single-bit value in u128
+    assert_eq!(fixed(1).lshift(127).unwrap(), 1 << 127);
+}
+
+#[test]
+fun lshift_then_rshift_is_identity_when_no_overflow() {
+    assert_eq!(fixed(4).lshift(2).rshift(2).unwrap(), 4);
+    assert_eq!(fixed(0xABCD).lshift(16).rshift(16).unwrap(), 0xABCD);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun lshift_aborts_on_overflow() {
+    // 2 << 127 would require 129 bits
+    fixed(2).lshift(127);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EInvalidShiftSize)]
+fun lshift_aborts_when_bits_is_128() {
+    fixed(1).lshift(128);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EInvalidShiftSize)]
+fun lshift_aborts_when_bits_is_255() {
+    fixed(1).lshift(255);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun lshift_aborts_for_high_bits_overflow() {
+    // Top nibble is non-zero, shifting by 4 pushes bits past u128
+    fixed(0xF000_0000_0000_0000_0000_0000_0000_0001).lshift(4);
+}
+
+#[test]
+fun rshift_zero_by_any_amount_returns_zero() {
+    assert_eq!(fixed(0).rshift(0), fixed(0));
+    assert_eq!(fixed(0).rshift(1), fixed(0));
+    assert_eq!(fixed(0).rshift(127), fixed(0));
+}
+
+#[test]
+fun rshift_by_0_is_identity() {
+    assert_eq!(fixed(1).rshift(0).unwrap(), 1);
+    assert_eq!(fixed(MAX_VALUE).rshift(0).unwrap(), MAX_VALUE);
 }
 
 #[test]
@@ -108,6 +175,56 @@ fun rshift_by_1_halves() {
 }
 
 #[test]
-fun lshift_then_rshift_is_identity_when_no_overflow() {
-    assert_eq!(fixed(4).lshift(2).rshift(2).unwrap(), 4);
+fun rshift_small_values() {
+    assert_eq!(fixed(16).rshift(4).unwrap(), 1);
+    assert_eq!(fixed(0xFF00).rshift(8).unwrap(), 0xFF);
+}
+
+#[test]
+fun rshift_discards_low_bits() {
+    // 0b1111 >> 2 = 0b11 (low two bits lost)
+    assert_eq!(fixed(0xF).rshift(2).unwrap(), 0x3);
+}
+
+#[test]
+fun rshift_max_value_by_127_returns_one() {
+    // MAX_VALUE >> 127 = 1 (only the top bit survives)
+    assert_eq!(fixed(MAX_VALUE).rshift(127).unwrap(), 1);
+}
+
+#[test]
+fun rshift_then_lshift_is_identity_when_low_bits_are_zero() {
+    assert_eq!(fixed(4).rshift(2).lshift(2).unwrap(), 4);
+    assert_eq!(fixed(0xABCD0000).rshift(16).lshift(16).unwrap(), 0xABCD0000);
+}
+
+#[test]
+fun rshift_then_lshift_truncates_low_bits() {
+    assert_eq!(fixed(5).rshift(2).lshift(2).unwrap(), 4);
+    assert_eq!(fixed(0xABCDE).rshift(16).lshift(16).unwrap(), 0xA0000);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EInvalidShiftSize)]
+fun rshift_aborts_when_bits_is_128() {
+    fixed(1).rshift(128);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EInvalidShiftSize)]
+fun rshift_aborts_when_bits_is_255() {
+    fixed(1).rshift(255);
+}
+
+#[test]
+fun unchecked_lshift_by_1_doubles() {
+    assert_eq!(fixed(4).unchecked_lshift(1).unwrap(), 8);
+}
+
+#[test]
+fun unchecked_rshift_by_1_halves() {
+    assert_eq!(fixed(8).unchecked_rshift(1).unwrap(), 4);
+}
+
+#[test]
+fun unchecked_lshift_then_unchecked_rshift_is_identity_when_no_overflow() {
+    assert_eq!(fixed(4).unchecked_lshift(2).unchecked_rshift(2).unwrap(), 4);
 }

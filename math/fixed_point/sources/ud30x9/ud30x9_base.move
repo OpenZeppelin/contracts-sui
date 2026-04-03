@@ -2,7 +2,7 @@
 module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
-use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
+use openzeppelin_fp_math::ud30x9::{Self, UD30x9, wrap, one};
 
 // === Constants ===
 
@@ -13,12 +13,17 @@ const MAX_POSITIVE_SD29X9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 
 
 // === Errors ===
 
+/// Value overflows `UD30x9` (must fit in 2^128 unsigned range)
 #[error(code = 0)]
 const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigned range)";
 
 /// Value cannot be converted to `SD29x9`
 #[error(code = 1)]
 const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
+
+/// Shift size is out of range (must be less than 128)
+#[error(code = 2)]
+const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
 
 // === Conversion ===
 
@@ -194,6 +199,25 @@ public fun is_zero(x: UD30x9): bool {
 }
 
 /// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Number of bit positions to shift left.
+///
+/// #### Returns
+/// - The result of shifting the `x`'s raw bits left by `bits`.
+///
+/// #### Aborts
+/// - Aborts if `bits >= 128`.
+/// - Aborts if the result overflows `u128`.
+public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+    assert!(bits < 128, EInvalidShiftSize);
+    let raw = x.unwrap();
+    assert!(raw <= U128_MAX_VALUE >> bits, EOverflow);
+    wrap(raw << bits)
+}
+
+/// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
 /// The high bits are dropped if they overflow past the 128-bit boundary.
 ///
 /// #### Parameters
@@ -203,9 +227,9 @@ public fun is_zero(x: UD30x9): bool {
 /// #### Returns
 /// - Zero if `bits >= 128` (all bits shifted out).
 /// - Otherwise, the result of shifting the `x`'s raw bits left by `bits`.
-public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return wrap(0)
+        return ud30x9::zero()
     };
     wrap(x.unwrap() << bits)
 }
@@ -365,6 +389,22 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 }
 
 /// Performs a logical right shift on the underlying 128-bit representation of a `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Number of bit positions to shift right.
+///
+/// #### Returns
+/// - The result of shifting the `x`'s raw bits right by `bits`.
+///
+/// #### Aborts
+/// - Aborts if `bits >= 128`.
+public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+    assert!(bits < 128, EInvalidShiftSize);
+    wrap(x.unwrap() >> bits)
+}
+
+/// Performs a logical right shift on the underlying 128-bit representation of a `UD30x9` value.
 /// Vacated high bits are filled with zeros.
 ///
 /// #### Parameters
@@ -374,9 +414,9 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 /// #### Returns
 /// - Zero if `bits >= 128`.
 /// - Otherwise, the result of shifting the `x`'s raw bits right by `bits`.
-public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+public fun unchecked_rshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return wrap(0)
+        return ud30x9::zero()
     };
     wrap(x.unwrap() >> bits)
 }
