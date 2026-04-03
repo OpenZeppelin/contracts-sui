@@ -23,9 +23,9 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
     let inverted = value.not();
     assert_eq!(inverted.unwrap(), MAX_VALUE ^ raw);
 
-    let left_zero = value.lshift(0);
+    let left_zero = value.unchecked_lshift(0);
     assert_eq!(left_zero.unwrap(), raw);
-    let left_shifted = value.lshift(4);
+    let left_shifted = value.unchecked_lshift(4);
     assert_eq!(left_shifted.unwrap(), raw << 4);
 
     let right_zero = value.rshift(0);
@@ -35,9 +35,9 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
 }
 
 #[test]
-fun lshift_by_128_returns_zero() {
+fun unchecked_lshift_by_128_returns_zero() {
     let x = fixed(1);
-    assert_eq!(x.lshift(128), fixed(0));
+    assert_eq!(x.unchecked_lshift(128), fixed(0));
 }
 
 #[test]
@@ -47,9 +47,9 @@ fun rshift_by_128_returns_zero() {
 }
 
 #[test]
-fun lshift_by_255_returns_zero() {
+fun unchecked_lshift_by_255_returns_zero() {
     let x = fixed(1);
-    assert_eq!(x.lshift(255), fixed(0));
+    assert_eq!(x.unchecked_lshift(255), fixed(0));
 }
 
 #[test]
@@ -59,9 +59,9 @@ fun rshift_by_255_returns_zero() {
 }
 
 #[test]
-fun lshift_truncates_high_bits_before_full_width() {
+fun unchecked_lshift_truncates_high_bits_before_full_width() {
     let value = fixed(0xF000_0000_0000_0000_0000_0000_0000_0001);
-    assert_eq!(value.lshift(4).unwrap(), 0x0000_0000_0000_0000_0000_0000_0000_0010);
+    assert_eq!(value.unchecked_lshift(4).unwrap(), 0x0000_0000_0000_0000_0000_0000_0000_0010);
 }
 
 #[test]
@@ -98,8 +98,8 @@ fun and2_commutativity() {
 }
 
 #[test]
-fun lshift_by_1_doubles() {
-    assert_eq!(fixed(4).lshift(1).unwrap(), 8);
+fun unchecked_lshift_by_1_doubles() {
+    assert_eq!(fixed(4).unchecked_lshift(1).unwrap(), 8);
 }
 
 #[test]
@@ -108,6 +108,6 @@ fun rshift_by_1_halves() {
 }
 
 #[test]
-fun lshift_then_rshift_is_identity_when_no_overflow() {
-    assert_eq!(fixed(4).lshift(2).rshift(2).unwrap(), 4);
+fun unchecked_lshift_then_rshift_is_identity_when_no_overflow() {
+    assert_eq!(fixed(4).unchecked_lshift(2).rshift(2).unwrap(), 4);
 }

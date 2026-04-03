@@ -36,7 +36,7 @@ public use fun openzeppelin_fp_math::ud30x9_base::gt as UD30x9.gt;
 public use fun openzeppelin_fp_math::ud30x9_base::gte as UD30x9.gte;
 public use fun openzeppelin_fp_math::ud30x9_base::into_SD29x9 as UD30x9.into_SD29x9;
 public use fun openzeppelin_fp_math::ud30x9_base::is_zero as UD30x9.is_zero;
-public use fun openzeppelin_fp_math::ud30x9_base::lshift as UD30x9.lshift;
+public use fun openzeppelin_fp_math::ud30x9_base::unchecked_lshift as UD30x9.unchecked_lshift;
 public use fun openzeppelin_fp_math::ud30x9_base::lt as UD30x9.lt;
 public use fun openzeppelin_fp_math::ud30x9_base::lte as UD30x9.lte;
 public use fun openzeppelin_fp_math::ud30x9_base::mod as UD30x9.mod;

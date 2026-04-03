@@ -203,7 +203,7 @@ public fun is_zero(x: UD30x9): bool {
 /// #### Returns
 /// - Zero if `bits >= 128` (all bits shifted out).
 /// - Otherwise, the result of shifting the `x`'s raw bits left by `bits`.
-public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
         return wrap(0)
     };
