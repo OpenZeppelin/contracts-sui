@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_fp_math`
+
+#### Added
+
+- Added new version of `UD30x9::lshift` that aborts on overflow. (#)
+
+#### Changed (Breaking)
+
+- Renamed `UD30x9::lshift` to `unchecked_lshift`. (#)
+
 ## 1.1.0-rc.0 (10-03-2026)
 
 ### `openzeppelin_fp_math`
