@@ -204,11 +204,9 @@ public fun is_zero(x: UD30x9): bool {
 /// - The result of shifting the `x`'s raw bits left by `bits`.
 ///
 /// #### Aborts
-/// - Aborts if an overflow occurs.
+/// - Aborts if `bits >= 128`.
+/// - Aborts if the result overflows `u128`.
 public fun lshift(x: UD30x9, bits: u8): UD30x9 {
-    if (x.is_zero()) {
-        return ud30x9::zero()
-    };
     assert!(bits < 128, EOverflow);
     let raw = x.unwrap();
     assert!(raw <= U128_MAX_VALUE >> bits, EOverflow);
@@ -398,9 +396,6 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 /// #### Aborts
 /// - Aborts if `bits >= 128`.
 public fun rshift(x: UD30x9, bits: u8): UD30x9 {
-    if (x.is_zero()) {
-        return ud30x9::zero()
-    };
     assert!(bits < 128, EOverflow);
     wrap(x.unwrap() >> bits)
 }
