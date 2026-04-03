@@ -396,7 +396,7 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 /// #### Returns
 /// - Zero if `bits >= 128`.
 /// - Otherwise, the result of shifting the `x`'s raw bits right by `bits`.
-public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+public fun unchecked_rshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
         return ud30x9::zero()
     };

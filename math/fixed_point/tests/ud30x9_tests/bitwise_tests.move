@@ -29,9 +29,9 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
     let left_shifted = value.lshift(4);
     assert_eq!(left_shifted.unwrap(), raw << 4);
 
-    let right_zero = value.rshift(0);
+    let right_zero = value.unchecked_rshift(0);
     assert_eq!(right_zero.unwrap(), raw);
-    let right_shifted = value.rshift(4);
+    let right_shifted = value.unchecked_rshift(4);
     assert_eq!(right_shifted.unwrap(), raw >> 4);
 }
 
@@ -42,9 +42,9 @@ fun unchecked_lshift_by_128_returns_zero() {
 }
 
 #[test]
-fun rshift_by_128_returns_zero() {
+fun unchecked_rshift_by_128_returns_zero() {
     let x = fixed(1);
-    assert_eq!(x.rshift(128), fixed(0));
+    assert_eq!(x.unchecked_rshift(128), fixed(0));
 }
 
 #[test]
@@ -54,9 +54,9 @@ fun unchecked_lshift_by_255_returns_zero() {
 }
 
 #[test]
-fun rshift_by_255_returns_zero() {
+fun unchecked_rshift_by_255_returns_zero() {
     let x = fixed(1);
-    assert_eq!(x.rshift(255), fixed(0));
+    assert_eq!(x.unchecked_rshift(255), fixed(0));
 }
 
 #[test]
@@ -131,9 +131,9 @@ fun lshift_max_safe_shift() {
 }
 
 #[test]
-fun lshift_then_rshift_is_identity_when_no_overflow() {
-    assert_eq!(fixed(4).lshift(2).rshift(2).unwrap(), 4);
-    assert_eq!(fixed(0xABCD).lshift(16).rshift(16).unwrap(), 0xABCD);
+fun lshift_then_unchecked_rshift_is_identity_when_no_overflow() {
+    assert_eq!(fixed(4).lshift(2).unchecked_rshift(2).unwrap(), 4);
+    assert_eq!(fixed(0xABCD).lshift(16).unchecked_rshift(16).unwrap(), 0xABCD);
 }
 
 #[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
@@ -164,11 +164,11 @@ fun unchecked_lshift_by_1_doubles() {
 }
 
 #[test]
-fun rshift_by_1_halves() {
-    assert_eq!(fixed(8).rshift(1).unwrap(), 4);
+fun unchecked_rshift_by_1_halves() {
+    assert_eq!(fixed(8).unchecked_rshift(1).unwrap(), 4);
 }
 
 #[test]
-fun unchecked_lshift_then_rshift_is_identity_when_no_overflow() {
-    assert_eq!(fixed(4).unchecked_lshift(2).rshift(2).unwrap(), 4);
+fun unchecked_lshift_then_unchecked_rshift_is_identity_when_no_overflow() {
+    assert_eq!(fixed(4).unchecked_lshift(2).unchecked_rshift(2).unwrap(), 4);
 }

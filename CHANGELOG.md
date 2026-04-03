@@ -16,7 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Changed (Breaking)
 
-- Renamed `UD30x9::lshift` to `unchecked_lshift`. (#)
+- Renamed `UD30x9::lshift` to `unchecked_lshift`, and `UD30x9::rshift` to `unchecked_rshift`. (#)
 
 ## 1.1.0-rc.0 (10-03-2026)
 
