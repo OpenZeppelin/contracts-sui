@@ -1,5 +1,7 @@
 module openzeppelin_math::vector;
 
+// === Public Functions ===
+
 /// Sort an unsigned integer vector in-place using the quicksort algorithm.
 ///
 /// NOTE: This is an unstable in-place sort.
