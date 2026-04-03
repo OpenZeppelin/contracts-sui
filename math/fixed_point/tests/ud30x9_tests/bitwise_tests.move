@@ -1,6 +1,7 @@
 #[test_only]
 module openzeppelin_fp_math::ud30x9_bitwise_tests;
 
+use openzeppelin_fp_math::ud30x9_base;
 use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, pair, unpack};
 use std::unit_test::assert_eq;
 
@@ -23,9 +24,9 @@ fun bitwise_and_shift_helpers_behave_like_u128() {
     let inverted = value.not();
     assert_eq!(inverted.unwrap(), MAX_VALUE ^ raw);
 
-    let left_zero = value.unchecked_lshift(0);
+    let left_zero = value.lshift(0);
     assert_eq!(left_zero.unwrap(), raw);
-    let left_shifted = value.unchecked_lshift(4);
+    let left_shifted = value.lshift(4);
     assert_eq!(left_shifted.unwrap(), raw << 4);
 
     let right_zero = value.rshift(0);
@@ -95,6 +96,66 @@ fun and2_commutativity() {
         let (a, b) = p.unpack();
         assert_eq!(a.and2(b).unwrap(), b.and2(a).unwrap());
     });
+}
+
+#[test]
+fun lshift_zero_by_any_amount_returns_zero() {
+    assert_eq!(fixed(0).lshift(0), fixed(0));
+    assert_eq!(fixed(0).lshift(1), fixed(0));
+    assert_eq!(fixed(0).lshift(127), fixed(0));
+    assert_eq!(fixed(0).lshift(128), fixed(0));
+    assert_eq!(fixed(0).lshift(255), fixed(0));
+}
+
+#[test]
+fun lshift_by_0_is_identity() {
+    assert_eq!(fixed(1).lshift(0).unwrap(), 1);
+    assert_eq!(fixed(MAX_VALUE).lshift(0).unwrap(), MAX_VALUE);
+}
+
+#[test]
+fun lshift_by_1_doubles() {
+    assert_eq!(fixed(4).lshift(1).unwrap(), 8);
+}
+
+#[test]
+fun lshift_small_values() {
+    assert_eq!(fixed(1).lshift(4).unwrap(), 16);
+    assert_eq!(fixed(0xFF).lshift(8).unwrap(), 0xFF00);
+}
+
+#[test]
+fun lshift_max_safe_shift() {
+    // 1 << 127 is the highest single-bit value in u128
+    assert_eq!(fixed(1).lshift(127).unwrap(), 1 << 127);
+}
+
+#[test]
+fun lshift_then_rshift_is_identity_when_no_overflow() {
+    assert_eq!(fixed(4).lshift(2).rshift(2).unwrap(), 4);
+    assert_eq!(fixed(0xABCD).lshift(16).rshift(16).unwrap(), 0xABCD);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun lshift_aborts_on_overflow() {
+    // 2 << 127 would require 129 bits
+    fixed(2).lshift(127);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun lshift_aborts_when_bits_is_128() {
+    fixed(1).lshift(128);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun lshift_aborts_when_bits_is_255() {
+    fixed(1).lshift(255);
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun lshift_aborts_for_high_bits_overflow() {
+    // Top nibble is non-zero, shifting by 4 pushes bits past u128
+    fixed(0xF000_0000_0000_0000_0000_0000_0000_0001).lshift(4);
 }
 
 #[test]

@@ -195,6 +195,27 @@ public fun is_zero(x: UD30x9): bool {
 }
 
 /// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Number of bit positions to shift left.
+///
+/// #### Returns
+/// - The result of shifting the `x`'s raw bits left by `bits`.
+///
+/// #### Aborts
+/// - Aborts if an overflow occurs.
+public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+    if (x.is_zero()) {
+        return ud30x9::zero()
+    };
+    assert!(bits < 128, EOverflow);
+    let shifted = x.unwrap() as u256 << bits;
+    assert!(shifted <= U128_MAX_VALUE as u256, EOverflow);
+    wrap(shifted as u128)
+}
+
+/// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
 /// The high bits are dropped if they overflow past the 128-bit boundary.
 ///
 /// #### Parameters
