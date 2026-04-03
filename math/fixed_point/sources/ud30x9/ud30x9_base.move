@@ -210,9 +210,9 @@ public fun lshift(x: UD30x9, bits: u8): UD30x9 {
         return ud30x9::zero()
     };
     assert!(bits < 128, EOverflow);
-    let shifted = x.unwrap() as u256 << bits;
-    assert!(shifted <= U128_MAX_VALUE as u256, EOverflow);
-    wrap(shifted as u128)
+    let raw = x.unwrap();
+    assert!(raw <= U128_MAX_VALUE >> bits, EOverflow);
+    wrap(raw << bits)
 }
 
 /// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
