@@ -21,6 +21,10 @@ const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigne
 #[error(code = 1)]
 const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
 
+/// Shift size is out of range (must be less than 128)
+#[error(code = 2)]
+const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
+
 // === Conversion ===
 
 /// Converts a `UD30x9` value to a `SD29x9` value.
@@ -207,7 +211,7 @@ public fun is_zero(x: UD30x9): bool {
 /// - Aborts if `bits >= 128`.
 /// - Aborts if the result overflows `u128`.
 public fun lshift(x: UD30x9, bits: u8): UD30x9 {
-    assert!(bits < 128, EOverflow);
+    assert!(bits < 128, EInvalidShiftSize);
     let raw = x.unwrap();
     assert!(raw <= U128_MAX_VALUE >> bits, EOverflow);
     wrap(raw << bits)
@@ -396,7 +400,7 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 /// #### Aborts
 /// - Aborts if `bits >= 128`.
 public fun rshift(x: UD30x9, bits: u8): UD30x9 {
-    assert!(bits < 128, EOverflow);
+    assert!(bits < 128, EInvalidShiftSize);
     wrap(x.unwrap() >> bits)
 }
 

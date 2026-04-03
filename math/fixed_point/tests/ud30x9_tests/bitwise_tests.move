@@ -140,12 +140,12 @@ fun lshift_aborts_on_overflow() {
     fixed(2).lshift(127);
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+#[test, expected_failure(abort_code = ud30x9_base::EInvalidShiftSize)]
 fun lshift_aborts_when_bits_is_128() {
     fixed(1).lshift(128);
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+#[test, expected_failure(abort_code = ud30x9_base::EInvalidShiftSize)]
 fun lshift_aborts_when_bits_is_255() {
     fixed(1).lshift(255);
 }
@@ -204,12 +204,12 @@ fun rshift_then_lshift_truncates_low_bits() {
     assert_eq!(fixed(0xABCDE).rshift(16).lshift(16).unwrap(), 0xA0000);
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+#[test, expected_failure(abort_code = ud30x9_base::EInvalidShiftSize)]
 fun rshift_aborts_when_bits_is_128() {
     fixed(1).rshift(128);
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+#[test, expected_failure(abort_code = ud30x9_base::EInvalidShiftSize)]
 fun rshift_aborts_when_bits_is_255() {
     fixed(1).rshift(255);
 }
