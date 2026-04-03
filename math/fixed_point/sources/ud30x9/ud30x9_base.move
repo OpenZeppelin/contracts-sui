@@ -13,6 +13,7 @@ const MAX_POSITIVE_SD29X9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 
 
 // === Errors ===
 
+/// Value overflows `UD30x9` (must fit in 2^128 unsigned range)
 #[error(code = 0)]
 const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigned range)";
 
