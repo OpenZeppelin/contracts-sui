@@ -2,7 +2,7 @@
 module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
-use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
+use openzeppelin_fp_math::ud30x9::{Self, UD30x9, wrap, one};
 
 // === Constants ===
 
@@ -206,7 +206,7 @@ public fun is_zero(x: UD30x9): bool {
 /// - Otherwise, the result of shifting the `x`'s raw bits left by `bits`.
 public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return wrap(0)
+        return ud30x9::zero()
     };
     wrap(x.unwrap() << bits)
 }
@@ -377,7 +377,7 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 /// - Otherwise, the result of shifting the `x`'s raw bits right by `bits`.
 public fun rshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return wrap(0)
+        return ud30x9::zero()
     };
     wrap(x.unwrap() >> bits)
 }
