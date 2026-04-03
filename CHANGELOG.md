@@ -12,11 +12,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- Added new versions of `UD30x9::lshift` and `UD30x9::rshift` that abort on overflow. (#)
+- Added new versions of `UD30x9::lshift` and `UD30x9::rshift` that abort on overflow. (#280)
 
 #### Changed (Breaking)
 
-- Renamed `UD30x9::lshift` to `unchecked_lshift`, and `UD30x9::rshift` to `unchecked_rshift`. (#)
+- Renamed `UD30x9::lshift` to `unchecked_lshift`, and `UD30x9::rshift` to `unchecked_rshift`. (#280)
 
 ## 1.1.0-rc.0 (10-03-2026)
 
