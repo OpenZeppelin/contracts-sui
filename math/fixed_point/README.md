@@ -11,7 +11,7 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 - Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
-- Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
+- Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`, `unchecked_lshift`, `unchecked_rshift`
 
 ## Casting and helpers
 
