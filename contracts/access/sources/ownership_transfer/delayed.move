@@ -218,10 +218,12 @@ public fun schedule_transfer<T: key + store>(
 ) {
     assert!(self.pending.is_none(), ETransferAlreadyScheduled);
     let execute_after = clock.timestamp_ms() + self.min_delay_ms;
-    self.pending.fill(PendingTransfer {
-        recipient: option::some(new_owner),
-        execute_after_ms: execute_after,
-    });
+    self
+        .pending
+        .fill(PendingTransfer {
+            recipient: option::some(new_owner),
+            execute_after_ms: execute_after,
+        });
     event::emit(TransferScheduled<T> {
         wrapper_id: object::id(self),
         current_owner: ctx.sender(),
@@ -247,10 +249,12 @@ public fun schedule_unwrap<T: key + store>(
 ) {
     assert!(self.pending.is_none(), ETransferAlreadyScheduled);
     let execute_after = clock.timestamp_ms() + self.min_delay_ms;
-    self.pending.fill(PendingTransfer {
-        recipient: option::none(),
-        execute_after_ms: execute_after,
-    });
+    self
+        .pending
+        .fill(PendingTransfer {
+            recipient: option::none(),
+            execute_after_ms: execute_after,
+        });
     event::emit(UnwrapScheduled<T> {
         wrapper_id: object::id(self),
         current_owner: ctx.sender(),
