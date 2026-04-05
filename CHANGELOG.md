@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_fp_math`
+
+#### Added
+
+- Explicit `mul_trunc`, `mul_away`, `div_trunc`, and `div_away` helpers for `UD30x9` and `SD29x9`.
+
 ## 1.1.0-rc.0 (10-03-2026)
 
 ### `openzeppelin_fp_math`

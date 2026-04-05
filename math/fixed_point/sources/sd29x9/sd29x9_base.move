@@ -279,16 +279,37 @@ public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
 
 /// Multiplies two `SD29x9` values with fixed-point scaling.
 ///
+/// This is the truncating multiplication helper.
+///
 /// #### Parameters
 /// - `x`: First operand.
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The product `x * y`.
+/// - The product `x * y`, rounded toward zero to the nearest representable `SD29x9` value.
 ///
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
+    mul_trunc(x, y)
+}
+
+/// Multiplies two `SD29x9` values with fixed-point scaling and truncation toward zero.
+///
+/// The sign is derived from the operand signs, while the magnitude is rescaled using integer
+/// division by `SCALE`. Whenever the exact product cannot be represented with 9 decimals, the
+/// magnitude is rounded toward zero.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`, rounded toward zero to the nearest representable `SD29x9` value.
+///
+/// #### Aborts
+/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+public fun mul_trunc(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
@@ -297,24 +318,94 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
     wrap_components(Components { neg, mag })
 }
 
+/// Multiplies two `SD29x9` values with fixed-point scaling and rounds away from zero.
+///
+/// The sign is derived from the operand signs. When the exact product cannot be represented with
+/// 9 decimals and a non-zero remainder is discarded, the magnitude is incremented by one unit in
+/// the last place so that the result moves away from zero.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`, rounded away from zero to the nearest representable `SD29x9` value.
+///
+/// #### Aborts
+/// - Aborts if the rounded magnitude exceeds the representable `SD29x9` range.
+public fun mul_away(x: SD29x9, y: SD29x9): SD29x9 {
+    let x = decompose(x.unwrap());
+    let y = decompose(y.unwrap());
+    let neg = x.neg != y.neg;
+    let mag = div_away_u256(x.mag * y.mag, SCALE);
+    wrap_components(Components { neg, mag })
+}
+
 /// Divides `x` by `y` with fixed-point scaling.
+///
+/// This is the truncating division helper.
 ///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The division result `x / y`.
+/// - The division result `x / y`, rounded toward zero to the nearest representable `SD29x9` value.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div(x: SD29x9, y: SD29x9): SD29x9 {
+    div_trunc(x, y)
+}
+
+/// Divides `x` by `y` with fixed-point scaling and truncation toward zero.
+///
+/// The sign is derived from the operand signs, while the scaled numerator is reduced using integer
+/// division. Whenever the exact quotient cannot be represented with 9 decimals, the magnitude is
+/// rounded toward zero.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The division result `x / y`, rounded toward zero to the nearest representable `SD29x9` value.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+public fun div_trunc(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
     let numerator = x.mag * SCALE;
     let mag = numerator / y.mag;
+    wrap_components(Components { neg, mag })
+}
+
+/// Divides `x` by `y` with fixed-point scaling and rounds away from zero.
+///
+/// The sign is derived from the operand signs. When the exact quotient cannot be represented with
+/// 9 decimals and a non-zero remainder is discarded, the magnitude is incremented by one unit in
+/// the last place so that the result moves away from zero.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The division result `x / y`, rounded away from zero to the nearest representable `SD29x9` value.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the rounded magnitude exceeds the representable `SD29x9` range.
+public fun div_away(x: SD29x9, y: SD29x9): SD29x9 {
+    let x = decompose(x.unwrap());
+    let y = decompose(y.unwrap());
+    let neg = x.neg != y.neg;
+    let numerator = x.mag * SCALE;
+    let mag = div_away_u256(numerator, y.mag);
     wrap_components(Components { neg, mag })
 }
 
@@ -467,7 +558,7 @@ public fun sub(x: SD29x9, y: SD29x9): SD29x9 {
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The result of raw bits addition.
+/// - The wrapping sum of the raw bit patterns modulo `2^128`.
 public fun unchecked_add(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(wrapping_add_bits(x.unwrap(), y.unwrap()))
 }
@@ -479,7 +570,7 @@ public fun unchecked_add(x: SD29x9, y: SD29x9): SD29x9 {
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The result of raw bits subtraction.
+/// - The wrapping difference of the raw bit patterns modulo `2^128`.
 public fun unchecked_sub(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(wrapping_sub_bits(x.unwrap(), y.unwrap()))
 }
@@ -539,6 +630,15 @@ fun wrap_components(value: Components): SD29x9 {
     } else {
         assert!(value.mag < min_negative, EOverflow);
         wrap(value.mag as u128, value.neg)
+    }
+}
+
+fun div_away_u256(numerator: u256, denominator: u256): u256 {
+    let quotient = numerator / denominator;
+    if (numerator % denominator == 0) {
+        quotient
+    } else {
+        quotient + 1
     }
 }
 

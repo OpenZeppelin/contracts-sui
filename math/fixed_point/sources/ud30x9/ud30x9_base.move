@@ -251,43 +251,125 @@ public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
 
 /// Multiplies two `UD30x9` values with fixed-point scaling.
 ///
+/// This is the truncating multiplication helper.
+///
 /// The intermediate product is rescaled using integer division by `SCALE`, so the result is
-/// rounded down toward zero whenever the exact product cannot be represented with 9 decimals.
+/// rounded toward zero whenever the exact product cannot be represented with 9 decimals.
 ///
 /// #### Parameters
 /// - `x`: First operand.
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The product `x * y`, rounded down to the nearest representable `UD30x9` value.
+/// - The product `x * y`, rounded toward zero to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
+    mul_trunc(x, y)
+}
+
+/// Multiplies two `UD30x9` values with fixed-point scaling and truncation toward zero.
+///
+/// The intermediate product is rescaled using integer division by `SCALE`, so the result is
+/// rounded toward zero whenever the exact product cannot be represented with 9 decimals.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`, rounded toward zero to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+public fun mul_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let product = x * y / SCALE_U256;
-    wrap_u256(product)
+    wrap_u256(x * y / SCALE_U256)
+}
+
+/// Multiplies two `UD30x9` values with fixed-point scaling and rounds away from zero.
+///
+/// The intermediate product is rescaled using integer division by `SCALE`. When the exact product
+/// cannot be represented with 9 decimals and a non-zero remainder is discarded, the result is
+/// incremented by one unit in the last place.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`, rounded away from zero to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+public fun mul_away(x: UD30x9, y: UD30x9): UD30x9 {
+    let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
+    wrap_u256(div_away_u256(x * y, SCALE_U256))
 }
 
 /// Divides `x` by `y` with fixed-point scaling.
 ///
-/// The scaled numerator is reduced using integer division, so the result is rounded down toward
-/// zero whenever the exact quotient cannot be represented with 9 decimals.
+/// This is the truncating division helper.
+///
+/// The scaled numerator is reduced using integer division, so the result is rounded toward zero
+/// whenever the exact quotient cannot be represented with 9 decimals.
 ///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The quotient `x / y`, rounded down to the nearest representable `UD30x9` value.
+/// - The quotient `x / y`, rounded toward zero to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
+    div_trunc(x, y)
+}
+
+/// Divides `x` by `y` with fixed-point scaling and truncation toward zero.
+///
+/// The scaled numerator is reduced using integer division, so the result is rounded toward zero
+/// whenever the exact quotient cannot be represented with 9 decimals.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The quotient `x / y`, rounded toward zero to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+public fun div_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let numerator = x * SCALE_U256;
     wrap_u256(numerator / y)
+}
+
+/// Divides `x` by `y` with fixed-point scaling and rounds away from zero.
+///
+/// The scaled numerator is reduced using integer division. When the exact quotient cannot be
+/// represented with 9 decimals and a non-zero remainder is discarded, the result is incremented
+/// by one unit in the last place.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The quotient `x / y`, rounded away from zero to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+public fun div_away(x: UD30x9, y: UD30x9): UD30x9 {
+    let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
+    let numerator = x * SCALE_U256;
+    wrap_u256(div_away_u256(numerator, y))
 }
 
 /// Raises `x` to a power of `exp`.
@@ -454,4 +536,13 @@ public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
 fun wrap_u256(value: u256): UD30x9 {
     assert!(value <= U128_MAX_VALUE as u256, EOverflow);
     wrap(value as u128)
+}
+
+fun div_away_u256(numerator: u256, denominator: u256): u256 {
+    let quotient = numerator / denominator;
+    if (numerator % denominator == 0) {
+        quotient
+    } else {
+        quotient + 1
+    }
 }

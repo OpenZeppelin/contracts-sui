@@ -9,7 +9,7 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 ## Operations
 
-- Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
+- Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
 
@@ -40,14 +40,18 @@ let total = price1.add(price2); // 3.5
 let balance = sd29x9::wrap(10000000000, false); // 10.0
 let adjustment = sd29x9::wrap(2500000000, true); // -2.5
 let new_balance = balance.add(adjustment); // 7.5
+
+let one = ud30x9::wrap(1000000000); // 1.0
+let third_down = one.div_trunc(ud30x9::wrap(3000000000)); // 0.333333333
+let third_up = one.div_away(ud30x9::wrap(3000000000)); // 0.333333334
 ```
 
 ## Notes
 
 - Stored as `u128` scaled by 10^9
 - Right shifts preserve sign for `SD29x9` (arithmetic) and zero-fill for `UD30x9` (logical)
-- `UD30x9.mul`/`UD30x9.div` and `SD29x9.mul`/`SD29x9.div` rescale with truncating integer
-  division; for `UD30x9` this means rounding down, while for `SD29x9` this means truncation
-  toward zero when results cannot be represented exactly with 9 decimals
+- `mul` and `div` are the truncating shorthands; `mul_trunc` / `div_trunc` and `mul_away` / `div_away` expose the rounding direction explicitly
+- For `UD30x9`, truncation and rounding down are equivalent; for `SD29x9`, truncation means rounding toward zero
+- `ceil` and `floor` round a single fixed-point value to integer precision, not to the next representable 9-decimal value after `mul` or `div`
 - `pow` uses iterative truncating multiplication, so fractional results are approximate and can
   drift toward zero for large exponents
