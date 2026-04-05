@@ -33,7 +33,7 @@ fun checked_sub_underflow_aborts_as_expected() {
     fixed(0).sub(fixed(1));
 }
 
-#[test, expected_failure(arithmetic_error, location = openzeppelin_fp_math::ud30x9_base)]
+#[test, expected_failure(abort_code = ud30x9_base::EDivisionByZero)]
 fun modulo_with_zero_divisor_aborts() {
     fixed(10).mod(fixed(0));
 }
