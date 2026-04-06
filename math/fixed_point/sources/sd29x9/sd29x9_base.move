@@ -36,7 +36,7 @@ const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD3
 /// #### Aborts
 /// - Aborts if `x` is negative.
 public fun into_UD30x9(x: SD29x9): UD30x9 {
-    let Components { neg, mag } = decompose_bits(x.unwrap());
+    let (neg, mag) = decompose(x);
     assert!(!neg, ECannotBeConvertedToUD30x9);
     ud30x9::wrap(mag as u128)
 }
@@ -49,7 +49,7 @@ public fun into_UD30x9(x: SD29x9): UD30x9 {
 /// #### Returns
 /// - The `UD30x9` representation of `x` if `x` is non-negative, otherwise `none`.
 public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
-    let Components { neg, mag } = decompose_bits(x.unwrap());
+    let (neg, mag) = decompose(x);
     if (neg) {
         option::none()
     } else {
@@ -138,6 +138,20 @@ public fun ceil(x: SD29x9): SD29x9 {
         Components { mag: int_part * SCALE, neg: true }
     };
     wrap_components(result)
+}
+
+/// Decomposes a `SD29x9` value into its sign and magnitude.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - A tuple `(is_negative, magnitude)` where:
+///   - `is_negative`: `true` if `x` is negative.
+///   - `magnitude`: The absolute value of `x` as a `u128`.
+public fun decompose(x: SD29x9): (bool, u128) {
+    let Components { neg, mag } = decompose_bits(x.unwrap());
+    (neg, mag as u128)
 }
 
 /// Checks whether two `SD29x9` values are bitwise equal.

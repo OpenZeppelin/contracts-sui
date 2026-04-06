@@ -38,6 +38,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::add as SD29x9.add;
 public use fun openzeppelin_fp_math::sd29x9_base::and as SD29x9.and;
 public use fun openzeppelin_fp_math::sd29x9_base::and2 as SD29x9.and2;
 public use fun openzeppelin_fp_math::sd29x9_base::ceil as SD29x9.ceil;
+public use fun openzeppelin_fp_math::sd29x9_base::decompose as SD29x9.decompose;
 public use fun openzeppelin_fp_math::sd29x9_base::div as SD29x9.div;
 public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
 public use fun openzeppelin_fp_math::sd29x9_base::floor as SD29x9.floor;

@@ -26,6 +26,8 @@ let value = 1000000000_u128.into_UD30x9(); // Casting
 let positive = sd29x9::wrap(1000000000, false); // 1.0
 let negative = sd29x9::wrap(1000000000, true); // -1.0
 let zero = sd29x9::zero();
+
+let (is_negative, magnitude) = negative.decompose(); // Sign and magnitude extraction
 ```
 
 ## Usage example
