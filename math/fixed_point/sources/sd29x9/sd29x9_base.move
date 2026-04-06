@@ -277,19 +277,17 @@ public fun rem(x: SD29x9, y: SD29x9): SD29x9 {
     wrap_components(Components { neg: x.neg, mag: remainder })
 }
 
-/// Computes the truncating remainder of dividing one `SD29x9` value by another.
+/// Computes the Euclidean remainder of dividing one `SD29x9` value by another.
 ///
-/// This helper follows remainder semantics, not Euclidean modulo semantics. The magnitude is
-/// computed as `abs(x) % abs(y)`, and the sign of the result follows the dividend `x`. In
-/// particular, a negative dividend can produce a negative non-zero remainder, while the sign of
-/// `y` does not affect the result apart from the zero-divisor check.
+/// The result is always non-negative and satisfies `0 <= result < abs(y)`. When the
+/// truncating remainder is negative, `abs(y)` is added to produce the Euclidean result.
 ///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The truncating remainder of `x` divided by `y`.
+/// - The Euclidean remainder of `x` divided by `y`, always non-negative.
 /// - Returns `0` when `x` is an exact multiple of `y`.
 ///
 /// #### Aborts
@@ -298,7 +296,11 @@ public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let remainder = x.mag % y.mag;
-    wrap_components(Components { neg: x.neg, mag: remainder })
+    if (x.neg && remainder > 0) {
+        wrap_components(Components { neg: false, mag: y.mag - remainder })
+    } else {
+        wrap_components(Components { neg: false, mag: remainder })
+    }
 }
 
 /// Multiplies two `SD29x9` values with fixed-point scaling.
