@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Fixed
 
-- `u256::is_power_of_ten` helper now properly handles valid `10^77` value. (#)
+- `u256::is_power_of_ten` helper now properly handles valid `10^77` value. (#291)
 
 ## 1.1.0-rc.0 (10-03-2026)
 
