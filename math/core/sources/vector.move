@@ -74,7 +74,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         let end = stack_end.pop_back();
 
         // Use insertion sort for small sub-partitions.
-        if (start + 10 >= end) {
+        if (end - start <= 10) {
             // Inline insertion sort for the sub-range [start, end).
             let mut i = start + 1;
             while (i < end) {
