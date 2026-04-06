@@ -105,8 +105,8 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         };
 
         // Three-way partition (Dutch National Flag) around the pivot.
-        // Regions: [start, lt) < pivot, [lt, i) == pivot, [i, gt] unprocessed, (gt, end) > pivot.
-        // The pivot value is at `pivot_index` (end - 1). We'll move it into place at the end.
+        // Regions: [start, lt) < pivot, [lt, i) == pivot, [i, gt) unprocessed, [gt, pivot_index) > pivot.
+        // The pivot value is at `pivot_index` (end - 1) and will be moved into the equal region after partitioning.
         let mut lt = start;
         let mut i = start;
         let mut gt = pivot_index; // gt points to pivot_index initially; pivot is excluded from scan.
