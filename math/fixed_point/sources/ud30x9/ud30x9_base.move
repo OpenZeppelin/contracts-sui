@@ -20,6 +20,10 @@ const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigne
 #[error(code = 1)]
 const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
 
+/// Arithmetic underflow: the result would be negative, which is unrepresentable in `UD30x9`
+#[error(code = 2)]
+const EUnderflow: vector<u8> = "Value underflows UD30x9 (result would be negative)";
+
 // === Conversion ===
 
 /// Converts a `UD30x9` value to a `SD29x9` value.
@@ -394,7 +398,7 @@ public fun rshift(x: UD30x9, bits: u8): UD30x9 {
 /// - Aborts if `y > x`.
 public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap(), y.unwrap());
-    assert!(x >= y, EOverflow);
+    assert!(x >= y, EUnderflow);
     wrap(x - y)
 }
 
