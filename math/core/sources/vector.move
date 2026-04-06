@@ -4,10 +4,10 @@ module openzeppelin_math::vector;
 ///
 /// NOTE: This is an unstable in-place sort.
 ///
-/// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
-/// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
-/// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
-/// selected as the pivot.
+/// This macro implements the iterative quicksort algorithm with three-way partitioning
+/// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
+/// average-case time complexity and `O(n²)` worst-case complexity, when the smallest or
+/// largest element is consistently selected as the pivot.
 ///
 /// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
 /// it suitable for arbitrarily large vectors.
@@ -32,10 +32,10 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 ///
 /// NOTE: This is an unstable in-place sort.
 ///
-/// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
-/// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
-/// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
-/// selected as the pivot.
+/// This macro implements the iterative quicksort algorithm with three-way partitioning
+/// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
+/// average-case time complexity and `O(n²)` worst-case complexity, when the smallest or
+/// largest element is consistently selected as the pivot.
 ///
 /// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
 /// it suitable for arbitrarily large vectors.
@@ -65,10 +65,6 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
     let vec = $vec;
     let len = vec.length();
 
-    if (len <= 10) {
-        return insertion_sort_by!(vec, $le)
-    };
-
     // Iterative implementation based on stack data structure (vector).
     let mut stack_start = vector[0];
     let mut stack_end = vector[len];
@@ -77,8 +73,18 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         let start = stack_start.pop_back();
         let end = stack_end.pop_back();
 
-        // Ensure we have at least two elements in vector.
-        if (start + 1 >= end) {
+        // Use insertion sort for small sub-partitions.
+        if (start + 10 >= end) {
+            // Inline insertion sort for the sub-range [start, end).
+            let mut i = start + 1;
+            while (i < end) {
+                let mut j = i;
+                while (j != start && $le(&vec[j], &vec[j - 1])) {
+                    vec.swap(j, j - 1);
+                    j = j - 1;
+                };
+                i = i + 1;
+            };
             continue
         };
 
@@ -98,59 +104,59 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             vec.swap(mid, pivot_index);
         };
 
-        // Partition vector around pivot_index.
+        // Three-way partition (Dutch National Flag) around the pivot.
+        // Regions: [start, lt) < pivot, [lt, i) == pivot, [i, gt] unprocessed, (gt, end) > pivot.
+        // The pivot value is at `pivot_index` (end - 1). We'll move it into place at the end.
+        let mut lt = start;
         let mut i = start;
-        let mut j = start;
-        while (j < pivot_index) {
-            // If second index `j` is smaller (or equal) than pivot,
-            if ($le(&vec[j], &vec[pivot_index])) {
-                // swap it with element from the first partition.
-                vec.swap(i, j);
-                i = i + 1;
+        let mut gt = pivot_index; // gt points to pivot_index initially; pivot is excluded from scan.
+
+        while (i < gt) {
+            if ($le(&vec[i], &vec[pivot_index])) {
+                if ($le(&vec[pivot_index], &vec[i])) {
+                    // vec[i] == pivot: element is equal, just advance `i`.
+                    i = i + 1;
+                } else {
+                    // vec[i] < pivot: swap to the less-than region.
+                    vec.swap(lt, i);
+                    lt = lt + 1;
+                    i = i + 1;
+                }
+            } else {
+                // vec[i] > pivot: swap to the greater-than region.
+                gt = gt - 1;
+                vec.swap(i, gt);
+                // Don't advance `i`; the swapped-in element needs to be examined.
             };
-            j = j + 1;
         };
 
-        // Swap pivot to the partition index. Swapped element will be greater,
-        // than a pivot since it was already processed.
-        // Index `i` is now partition index.
-        vec.swap(i, pivot_index);
+        // Move the pivot from `pivot_index` into the equal region.
+        // `gt` is now the start of the greater-than region, and pivot is at `pivot_index` (== end - 1).
+        // Swap pivot with vec[gt] to place it adjacent to the equal region.
+        vec.swap(gt, pivot_index);
+        // After swap: [start, lt) < pivot, [lt, gt + 1) == pivot, (gt, end) > pivot.
+        let eq_end = gt + 1;
 
         // Push partitions: larger first, smaller second.
         // Since we use pop_back, smaller will be processed first.
         // Stack size will be no longer than O(log(n)).
-        let left_size = i - start;
-        let right_size = end - (i + 1);
+        let left_size = lt - start;
+        let right_size = end - eq_end;
 
         if (left_size <= right_size) {
             // Left ≤ right: push right (larger) first, left (smaller) second.
-            stack_start.push_back(i + 1);
+            stack_start.push_back(eq_end);
             stack_end.push_back(end);
 
             stack_start.push_back(start);
-            stack_end.push_back(i);
+            stack_end.push_back(lt);
         } else {
             // Left > right: push left (larger) first, right (smaller) second.
             stack_start.push_back(start);
-            stack_end.push_back(i);
+            stack_end.push_back(lt);
 
-            stack_start.push_back(i + 1);
+            stack_start.push_back(eq_end);
             stack_end.push_back(end);
         };
-    };
-}
-
-public(package) macro fun insertion_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
-    let vec = $vec;
-    let len = vec.length();
-
-    let mut i = 1;
-    while (i < len) {
-        let mut j = i;
-        while (j != 0 && $le(&vec[j], &vec[j - 1])) {
-            vec.swap(j, j - 1);
-            j = j - 1;
-        };
-        i = i + 1;
     };
 }
