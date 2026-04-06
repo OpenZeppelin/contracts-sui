@@ -65,6 +65,10 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
     let vec = $vec;
     let len = vec.length();
 
+    if (len <= 10) {
+        return insertion_sort_by!(vec, $le)
+    };
+
     // Iterative implementation based on stack data structure (vector).
     let mut stack_start = vector[0];
     let mut stack_end = vector[len];
@@ -133,5 +137,20 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             stack_start.push_back(i + 1);
             stack_end.push_back(end);
         };
+    };
+}
+
+public(package) macro fun insertion_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
+    let vec = $vec;
+    let len = vec.length();
+
+    let mut i = 1;
+    while (i < len) {
+        let mut j = i;
+        while (j != 0 && $le(&vec[j], &vec[j - 1])) {
+            vec.swap(j, j - 1);
+            j = j - 1;
+        };
+        i = i + 1;
     };
 }
