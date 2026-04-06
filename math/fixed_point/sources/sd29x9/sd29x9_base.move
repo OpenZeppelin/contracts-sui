@@ -36,7 +36,7 @@ const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD3
 /// #### Aborts
 /// - Aborts if `x` is negative.
 public fun into_UD30x9(x: SD29x9): UD30x9 {
-    let Components { neg, mag } = decompose(x.unwrap());
+    let Components { neg, mag } = decompose_bits(x.unwrap());
     assert!(!neg, ECannotBeConvertedToUD30x9);
     ud30x9::wrap(mag as u128)
 }
@@ -49,7 +49,7 @@ public fun into_UD30x9(x: SD29x9): UD30x9 {
 /// #### Returns
 /// - The `UD30x9` representation of `x` if `x` is non-negative, otherwise `none`.
 public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
-    let Components { neg, mag } = decompose(x.unwrap());
+    let Components { neg, mag } = decompose_bits(x.unwrap());
     if (neg) {
         option::none()
     } else {
@@ -70,7 +70,7 @@ public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
 /// #### Aborts
 /// - Aborts if `x` is the minimum representable value (`-2^127`), because `+2^127` is not representable.
 public fun abs(x: SD29x9): SD29x9 {
-    let mut components = decompose(x.unwrap());
+    let mut components = decompose_bits(x.unwrap());
     components.neg = false;
     wrap_components(components)
 }
@@ -87,7 +87,7 @@ public fun abs(x: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun add(x: SD29x9, y: SD29x9): SD29x9 {
-    let result = add_components(decompose(x.unwrap()), decompose(y.unwrap()));
+    let result = add_components(decompose_bits(x.unwrap()), decompose_bits(y.unwrap()));
     wrap_components(result)
 }
 
@@ -126,7 +126,7 @@ public fun and2(x: SD29x9, y: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Aborts if the rounded positive result exceeds the representable `SD29x9` range.
 public fun ceil(x: SD29x9): SD29x9 {
-    let Components { neg, mag } = decompose(x.unwrap());
+    let Components { neg, mag } = decompose_bits(x.unwrap());
     let fractional = mag % SCALE;
     if (fractional == 0) {
         return x
@@ -163,7 +163,7 @@ public fun eq(x: SD29x9, y: SD29x9): bool {
 /// #### Aborts
 /// - Aborts if the rounded negative result magnitude exceeds the representable `SD29x9` range.
 public fun floor(x: SD29x9): SD29x9 {
-    let Components { neg, mag } = decompose(x.unwrap());
+    let Components { neg, mag } = decompose_bits(x.unwrap());
     let fractional = mag % SCALE;
     if (fractional == 0) {
         return x
@@ -271,8 +271,8 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
 /// #### Aborts
 /// - Aborts if `y` is zero.
 public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
-    let x = decompose(x.unwrap());
-    let y = decompose(y.unwrap());
+    let x = decompose_bits(x.unwrap());
+    let y = decompose_bits(y.unwrap());
     let remainder = x.mag % y.mag;
     wrap_components(Components { neg: x.neg, mag: remainder })
 }
@@ -289,8 +289,8 @@ public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
-    let x = decompose(x.unwrap());
-    let y = decompose(y.unwrap());
+    let x = decompose_bits(x.unwrap());
+    let y = decompose_bits(y.unwrap());
     let neg = x.neg != y.neg;
     let prod = x.mag * y.mag;
     let mag = prod / SCALE;
@@ -310,8 +310,8 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
 /// - Aborts if `y` is zero.
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div(x: SD29x9, y: SD29x9): SD29x9 {
-    let x = decompose(x.unwrap());
-    let y = decompose(y.unwrap());
+    let x = decompose_bits(x.unwrap());
+    let y = decompose_bits(y.unwrap());
     let neg = x.neg != y.neg;
     let numerator = x.mag * SCALE;
     let mag = numerator / y.mag;
@@ -347,7 +347,7 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     if (exp == 1) {
         return x
     };
-    let Components { neg, mag } = decompose(x.unwrap());
+    let Components { neg, mag } = decompose_bits(x.unwrap());
     let res_neg = neg && (exp % 2 != 0);
     let mut res_mag = mag;
     let times = exp - 1;
@@ -370,7 +370,7 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
 /// #### Aborts
 /// - Aborts if `x` is the minimum representable value (`-2^127`), because `+2^127` is not representable.
 public fun negate(x: SD29x9): SD29x9 {
-    let value = decompose(x.unwrap());
+    let value = decompose_bits(x.unwrap());
     wrap_components(negate_components(value))
 }
 
@@ -455,8 +455,8 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun sub(x: SD29x9, y: SD29x9): SD29x9 {
-    let negated_y = negate_components(decompose(y.unwrap()));
-    let result = add_components(decompose(x.unwrap()), negated_y);
+    let negated_y = negate_components(decompose_bits(y.unwrap()));
+    let result = add_components(decompose_bits(x.unwrap()), negated_y);
     wrap_components(result)
 }
 
@@ -503,7 +503,7 @@ public struct Components has copy, drop {
     mag: u256,
 }
 
-fun decompose(bits: u128): Components {
+fun decompose_bits(bits: u128): Components {
     if ((bits & SIGN_BIT) != 0) {
         Components { neg: true, mag: two_complement(bits) as u256 }
     } else {
@@ -555,8 +555,8 @@ fun greater_than_bits(x_bits: u128, y_bits: u128): bool {
     if (x_bits == y_bits) {
         return false
     };
-    let x = decompose(x_bits);
-    let y = decompose(y_bits);
+    let x = decompose_bits(x_bits);
+    let y = decompose_bits(y_bits);
 
     if (x.neg != y.neg) {
         !x.neg
