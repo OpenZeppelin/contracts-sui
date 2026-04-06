@@ -296,11 +296,12 @@ public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let remainder = x.mag % y.mag;
-    if (x.neg && remainder > 0) {
-        wrap_components(Components { neg: false, mag: y.mag - remainder })
+    let mag = if (x.neg && remainder > 0) {
+        y.mag - remainder
     } else {
-        wrap_components(Components { neg: false, mag: remainder })
-    }
+        remainder
+    };
+    wrap_components(Components { neg: false, mag })
 }
 
 /// Multiplies two `SD29x9` values with fixed-point scaling.
