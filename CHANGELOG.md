@@ -13,7 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 #### Changed
 
 - `vector::quick_sort_by` now uses Dutch National Flag partition scheme. (#298)
-- `vector::quick_sort_by` falls back to insertion sort for vectors of up to 10 elements. (#298)
+- `vector::quick_sort_by` falls back to insertion sort for sub-partitions of size <= 10. (#298)
 
 ## 1.1.0-rc.0 (10-03-2026)
 
