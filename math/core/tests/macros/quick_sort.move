@@ -657,7 +657,7 @@ fun quick_sort_by_large_two_distinct_values() {
 #[test]
 fun quick_sort_by_large_reverse_sorted() {
     // >10 elements in reverse order: pivot (last=smallest) < start (largest),
-    // exercises median-of-three swap at line 100-101
+    // exercises median-of-three swap
     let mut vec = vector[20u64, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
     vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
     assert_eq!(
@@ -676,7 +676,7 @@ fun quick_sort_by_large_with_many_duplicates() {
 
 #[test]
 fun quick_sort_by_large_skewed_left_partition() {
-    // Crafted so left partition > right partition: exercises lines 154-159
+    // Crafted so left partition > right partition
     // Most values are small (go to left partition), few are large
     let mut vec = vector[2u64, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 100];
     vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
@@ -685,7 +685,7 @@ fun quick_sort_by_large_skewed_left_partition() {
 
 #[test]
 fun quick_sort_by_large_skewed_right_partition() {
-    // Crafted so right partition > left partition: exercises lines 148-152
+    // Crafted so right partition > left partition
     // Most values are large (go to right partition), few are small
     let mut vec = vector[100u64, 90, 80, 70, 60, 50, 40, 30, 20, 10, 1, 2];
     vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
@@ -790,10 +790,10 @@ fun quick_sort_by_sort_by_id_ascending() {
 
 #[test]
 fun quick_sort_by_median_of_three_all_branches() {
-    // Crafted to exercise all median-of-three branches (lines 97-105):
+    // Crafted to exercise all median-of-three branches:
     // For a sub-array [start..end), mid = (start+end)/2, pivot_index = end-1
-    // We need: vec[mid] < vec[start] (line 97 true => swap start,mid)
-    // Then after swap: vec[pivot_index] < vec[start] (line 100 true => swap start,pivot)
+    // We need: vec[mid] < vec[start] (swap start,mid)
+    // Then after swap: vec[pivot_index] < vec[start] (swap start,pivot)
     // This requires start > mid AND start > pivot for the original arrangement.
     // With >10 elements, first partition uses start=0, mid=7, pivot_index=14
     let mut vec = vector[
