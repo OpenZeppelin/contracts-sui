@@ -474,6 +474,37 @@ fun quick_sort_preserves_all_elements() {
     };
 }
 
+#[test]
+fun quick_sort_large_reverse_sorted() {
+    // >10 elements in strict reverse order forces quicksort partitioning where many elements
+    // are greater than the pivot, exercising the greater-than branch in three-way partition.
+    // Sub-partitions then fall back to insertion sort.
+    let mut vec = vector[20u64, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+    vector::quick_sort!(&mut vec);
+    assert_eq!(
+        vec,
+        vector[1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    );
+}
+
+#[test]
+fun quick_sort_large_many_duplicates() {
+    // >10 elements with heavy duplicates: most elements equal to pivot,
+    // producing a large equal partition and small left/right partitions (left_size <= right_size).
+    let mut vec = vector[5u64, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 5, 5, 5];
+    vector::quick_sort!(&mut vec);
+    assert_eq!(vec, vector[1u64, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]);
+}
+
+#[test]
+fun quick_sort_large_skewed_partitions() {
+    // >10 elements crafted so most values are smaller than the pivot (last element),
+    // producing left_size > right_size to exercise the else branch in partition push ordering.
+    let mut vec = vector[3u64, 1, 4, 2, 6, 5, 7, 8, 9, 10, 11, 100];
+    vector::quick_sort!(&mut vec);
+    assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 100]);
+}
+
 // === quick_sort_by ===
 
 #[test]
