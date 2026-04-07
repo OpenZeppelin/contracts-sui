@@ -24,7 +24,7 @@ const ESkipListIsEmpty: vector<u8> = "Skip list is empty";
 const EInvalidListP: vector<u8> = "Invalid list P-value";
 
 /// The skip list.
-public struct SkipList<Key: store, V: store> has key, store {
+public struct SkipList<Key: copy + drop + store, V: store> has key, store {
     /// The id of this skip list.
     id: UID,
     /// The skip list header of each level. i.e. the score of node.
@@ -44,7 +44,7 @@ public struct SkipList<Key: store, V: store> has key, store {
 }
 
 /// The node of skip list.
-public struct Node<Key: store, V: store> has store {
+public struct Node<Key: copy + drop + store, V: store> has store {
     /// The score of node.
     score: Key,
     /// The next node score of node's each level.
@@ -55,131 +55,137 @@ public struct Node<Key: store, V: store> has store {
     value: V,
 }
 
-// /// Create a new empty skip list.
-// public fun new<Key: store, V: store>(
-//     max_level: u64,
-//     list_p: u64,
-//     seed: u64,
-//     ctx: &mut TxContext,
-// ): SkipList<Key, V> {
-//     assert!(list_p > 1, EInvalidListP);
-//     let list = SkipList<Key, V> {
-//         id: object::new(ctx),
-//         head: vector::empty(),
-//         tail: option::none(),
-//         level: 0,
-//         max_level,
-//         list_p,
-//         random: random::new(seed),
-//         inner: table::new(ctx),
-//     };
-//     list
-// }
+/// Create a new empty skip list.
+public fun new<Key: copy + drop + store, V: store>(
+    max_level: u64,
+    list_p: u64,
+    seed: u64,
+    ctx: &mut TxContext,
+): SkipList<Key, V> {
+    assert!(list_p > 1, EInvalidListP);
+    let list = SkipList<Key, V> {
+        id: object::new(ctx),
+        head: vector::empty(),
+        tail: option::none(),
+        level: 0,
+        max_level,
+        list_p,
+        random: random::new(seed),
+        inner: table::new(ctx),
+    };
+    list
+}
 
-// /// Return the length of the skip list.
-// public fun length<Key: store, V: store>(list: &SkipList<Key, V>): u64 {
-//     list.inner.length()
-// }
+/// Return the length of the skip list.
+public fun length<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>): u64 {
+    list.inner.length()
+}
 
-// /// Returns true if the skip list is empty (if `length` returns `0`)
-// public fun is_empty<Key: store, V: store>(list: &SkipList<Key, V>): bool {
-//     list.inner.length() == 0
-// }
+/// Returns true if the skip list is empty (if `length` returns `0`)
+public fun is_empty<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>): bool {
+    list.inner.length() == 0
+}
 
-// /// Return the head of the skip list.
-// public fun head<Key: store, V: store>(list: &SkipList<Key, V>): Option<Key> {
-//     if (is_empty(list)) {
-//         return option::none()
-//     };
-//     *vector::borrow(&list.head, 0)
-// }
+/// Return the head of the skip list.
+public fun head<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>): Option<Key> {
+    if (is_empty(list)) {
+        return option::none()
+    };
+    *vector::borrow(&list.head, 0)
+}
 
-// /// Return the tail of the skip list.
-// public fun tail<Key: store, V: store>(list: &SkipList<Key, V>): Option<Key> {
-//     list.tail
-// }
+/// Return the tail of the skip list.
+public fun tail<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>): Option<Key> {
+    list.tail
+}
 
-// /// Destroys an empty skip list
-// /// Aborts with `ETableNotEmpty` if the list still contains values
-// public fun destroy_empty<Key: store, V: store + drop>(list: SkipList<Key, V>) {
-//     let SkipList<Key, V> {
-//         id,
-//         head: _,
-//         tail: _,
-//         level: _,
-//         max_level: _,
-//         list_p: _,
-//         random: _,
-//         inner,
-//     } = list;
-//     assert!(inner.length() == 0, ESkipListNotEmpty);
-//     inner.destroy_empty();
-//     id.delete();
-// }
+/// Destroys an empty skip list
+/// Aborts with `ETableNotEmpty` if the list still contains values
+public fun destroy_empty<Key: copy + drop + store, V: store + drop>(list: SkipList<Key, V>) {
+    let SkipList<Key, V> {
+        id,
+        head: _,
+        tail: _,
+        level: _,
+        max_level: _,
+        list_p: _,
+        random: _,
+        inner,
+    } = list;
+    assert!(inner.length() == 0, ESkipListNotEmpty);
+    inner.destroy_empty();
+    id.delete();
+}
 
-// /// Returns true if there is a value associated with the score `score` in skip list
-// public fun contains<Key: store, V: store>(list: &SkipList<Key, V>, score: Key): bool {
-//     list.inner.contains(score)
-// }
+/// Returns true if there is a value associated with the score `score` in skip list
+public fun contains<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>, score: Key): bool {
+    list.inner.contains(score)
+}
 
-// /// Acquire an immutable reference to the `score` element of the skip list `list`.
-// /// Aborts if element not exist.
-// public fun borrow<Key: store, V: store>(list: &SkipList<Key, V>, score: Key): &V {
-//     let node = list.inner.borrow(score);
-//     &node.value
-// }
+/// Acquire an immutable reference to the `score` element of the skip list `list`.
+/// Aborts if element not exist.
+public fun borrow<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>, score: Key): &V {
+    let node = list.inner.borrow(score);
+    &node.value
+}
 
-// /// Return a mutable reference to the `score` element in the skip list `list`.
-// /// Aborts if element is not exist.
-// public fun borrow_mut<Key: store, V: store>(list: &mut SkipList<Key, V>, score: Key): &mut V {
-//     let node = list.inner.borrow_mut(score);
-//     &mut node.value
-// }
+/// Return a mutable reference to the `score` element in the skip list `list`.
+/// Aborts if element is not exist.
+public fun borrow_mut<Key: copy + drop + store, V: store>(
+    list: &mut SkipList<Key, V>,
+    score: Key,
+): &mut V {
+    let node = list.inner.borrow_mut(score);
+    &mut node.value
+}
 
-// /// Acquire an immutable reference to the `score` node of the skip list `list`.
-// /// Aborts if node not exist.
-// public fun borrow_node<Key: store, V: store>(list: &SkipList<Key, V>, score: Key): &Node<Key, V> {
-//     list.inner.borrow(score)
-// }
+/// Acquire an immutable reference to the `score` node of the skip list `list`.
+/// Aborts if node not exist.
+public fun borrow_node<Key: copy + drop + store, V: store>(
+    list: &SkipList<Key, V>,
+    score: Key,
+): &Node<Key, V> {
+    list.inner.borrow(score)
+}
 
-// /// Return a mutable reference to the `score` node in the skip list `list`.
-// /// Aborts if node is not exist.
-// public fun borrow_mut_node<Key: store, V: store>(
-//     list: &mut SkipList<Key, V>,
-//     score: Key,
-// ): &mut Node<Key, V> {
-//     list.inner.borrow_mut(score)
-// }
+/// Return a mutable reference to the `score` node in the skip list `list`.
+/// Aborts if node is not exist.
+public fun borrow_mut_node<Key: copy + drop + store, V: store>(
+    list: &mut SkipList<Key, V>,
+    score: Key,
+): &mut Node<Key, V> {
+    list.inner.borrow_mut(score)
+}
 
-// /// Return the metadata info of skip list.
-// public fun metadata<Key: store, V: store>(
-//     list: &SkipList<Key, V>,
-// ): (vector<Option<Key>>, Option<Key>, u64, u64, u64, u64) {
-//     (list.head, list.tail, list.level, list.max_level, list.list_p, list.inner.length())
-// }
+/// Return the metadata info of skip list.
+public fun metadata<Key: copy + drop + store, V: store>(
+    list: &SkipList<Key, V>,
+): (vector<Option<Key>>, Option<Key>, u64, u64, u64, u64) {
+    (list.head, list.tail, list.level, list.max_level, list.list_p, list.inner.length())
+}
 
-// /// Return the next score of the node.
-// public fun next_score<Key: store, V: store>(node: &Node<Key, V>): Option<Key> {
-//     *vector::borrow(&node.nexts, 0)
-// }
+/// Return the next score of the node.
+public fun next_score<Key: copy + drop + store, V: store>(node: &Node<Key, V>): Option<Key> {
+    *vector::borrow(&node.nexts, 0)
+}
 
-// /// Return the prev score of the node.
-// public fun prev_score<Key: store, V: store>(node: &Node<Key, V>): Option<Key> {
-//     node.prev
-// }
+/// Return the prev score of the node.
+public fun prev_score<Key: copy + drop + store, V: store>(node: &Node<Key, V>): Option<Key> {
+    node.prev
+}
 
-// /// Return the immutable reference to the ndoe's value.
-// public fun borrow_value<Key: store, V: store>(node: &Node<Key, V>): &V {
-//     &node.value
-// }
+/// Return the immutable reference to the ndoe's value.
+public fun borrow_value<Key: copy + drop + store, V: store>(node: &Node<Key, V>): &V {
+    &node.value
+}
 
-// /// Return the mutable reference to the ndoe's value.
-// public fun borrow_mut_value<Key: store, V: store>(node: &mut Node<Key, V>): &mut V {
-//     &mut node.value
-// }
+/// Return the mutable reference to the ndoe's value.
+public fun borrow_mut_value<Key: copy + drop + store, V: store>(node: &mut Node<Key, V>): &mut V {
+    &mut node.value
+}
 
 // /// Insert a score-value into skip list, abort if the score alread exist.
-// public fun insert<Key: store, V: store>(list: &mut SkipList<Key, V>, score: Key, v: V) {
+// public fun insert<Key: copy + drop + store, V: store>(list: &mut SkipList<Key, V>, score: Key, v: V) {
 //     assert!(!list.contains(score), ENodeAlreadyExist);
 //     let (level, mut new_node) = list.create_node(score, v);
 //     let (mut l, mut nexts, mut prev) = (list.level, &mut list.head, option::none());
@@ -220,7 +226,7 @@ public struct Node<Key: store, V: store> has store {
 // }
 
 // /// Remove the score-value from skip list, abort if the score not exist in list.
-// public fun remove<Key: store, V: store>(list: &mut SkipList<Key, V>, score: Key): V {
+// public fun remove<Key: copy + drop + store, V: store>(list: &mut SkipList<Key, V>, score: Key): V {
 //     assert!(list.contains(score), ENodeDoesNotExist);
 //     let (mut l, mut nexts) = (list.level, &mut list.head);
 //     let node = list.inner.remove(score);
@@ -253,7 +259,7 @@ public struct Node<Key: store, V: store> has store {
 // }
 
 // /// Return the next score.
-// public fun find_next<Key: store, V: store>(
+// public fun find_next<Key: copy + drop + store, V: store>(
 //     list: &SkipList<Key, V>,
 //     score: Key,
 //     include: bool,
@@ -271,7 +277,7 @@ public struct Node<Key: store, V: store> has store {
 // }
 
 // /// Return the prev socre.
-// public fun find_prev<Key: store, V: store>(
+// public fun find_prev<Key: copy + drop + store, V: store>(
 //     list: &SkipList<Key, V>,
 //     score: Key,
 //     include: bool,
@@ -289,7 +295,7 @@ public struct Node<Key: store, V: store> has store {
 // }
 
 // /// Find the nearest score. 1. score, 2. prev, 3. next
-// fun find<Key: store, V: store>(list: &SkipList<Key, V>, score: Key): Option<Key> {
+// fun find<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>, score: Key): Option<Key> {
 //     if (list.level == 0) {
 //         return option::none()
 //     };
@@ -315,57 +321,57 @@ public struct Node<Key: store, V: store> has store {
 //     return *vector::borrow(&list.head, 0)
 // }
 
-// fun rand_level<Key: store, V: store>(seed: u64, list: &SkipList<Key, V>): u64 {
-//     let mut level = 1;
-//     let mut mod = list.list_p;
-//     while ((seed % mod) == 0 && level < list.level + 1) {
-//         mod = mod * list.list_p;
-//         level = level + 1;
-//         if (level > list.level) {
-//             if (level >= list.max_level) {
-//                 level = list.max_level;
-//                 break
-//             } else {
-//                 level = list.level + 1;
-//                 break
-//             }
-//         }
-//     };
-//     level
-// }
+fun rand_level<Key: copy + drop + store, V: store>(seed: u64, list: &SkipList<Key, V>): u64 {
+    let mut level = 1;
+    let mut mod = list.list_p;
+    while ((seed % mod) == 0 && level < list.level + 1) {
+        mod = mod * list.list_p;
+        level = level + 1;
+        if (level > list.level) {
+            if (level >= list.max_level) {
+                level = list.max_level;
+                break
+            } else {
+                level = list.level + 1;
+                break
+            }
+        }
+    };
+    level
+}
 
-// /// Create a new skip list node
-// fun create_node<Key: store, V: store>(
-//     list: &mut SkipList<Key, V>,
-//     score: Key,
-//     value: V,
-// ): (u64, Node<Key, V>) {
-//     let rand = random::rand(&mut list.random);
-//     let level = rand_level(rand, list);
+/// Create a new skip list node
+fun create_node<Key: copy + drop + store, V: store>(
+    list: &mut SkipList<Key, V>,
+    score: Key,
+    value: V,
+): (u64, Node<Key, V>) {
+    let rand = random::rand(&mut list.random);
+    let level = rand_level(rand, list);
 
-//     // Create a new level for skip list.
-//     if (level > list.level) {
-//         list.level = level;
-//         list.head.push_back(option::none());
-//     };
+    // Create a new level for skip list.
+    if (level > list.level) {
+        list.level = level;
+        list.head.push_back(option::none());
+    };
 
-//     (
-//         level,
-//         Node<Key, V> {
-//             score,
-//             nexts: vector::empty(),
-//             prev: option::none(),
-//             value,
-//         },
-//     )
-// }
+    (
+        level,
+        Node<Key, V> {
+            score,
+            nexts: vector::empty(),
+            prev: option::none(),
+            value,
+        },
+    )
+}
 
-// fun drop_node<Key: store, V: store>(node: Node<Key, V>): V {
-//     let Node {
-//         score: _,
-//         nexts: _,
-//         prev: _,
-//         value,
-//     } = node;
-//     value
-// }
+fun drop_node<Key: copy + drop + store, V: store>(node: Node<Key, V>): V {
+    let Node {
+        score: _,
+        nexts: _,
+        prev: _,
+        value,
+    } = node;
+    value
+}
