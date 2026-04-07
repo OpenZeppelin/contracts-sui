@@ -3,6 +3,7 @@
 /// Tailored to the signed `SD29x9` representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
+use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 
@@ -345,7 +346,7 @@ public fun mul_away(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
-    let mag = div_away_u256(x.mag * y.mag, SCALE);
+    let mag = common::div_away_u256(x.mag * y.mag, SCALE);
     wrap_components(Components { neg, mag })
 }
 
@@ -419,7 +420,7 @@ public fun div_away(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let neg = x.neg != y.neg;
     let numerator = x.mag * SCALE;
-    let mag = div_away_u256(numerator, y.mag);
+    let mag = common::div_away_u256(numerator, y.mag);
     wrap_components(Components { neg, mag })
 }
 
@@ -644,15 +645,6 @@ fun wrap_components(value: Components): SD29x9 {
     } else {
         assert!(value.mag < min_negative, EOverflow);
         wrap(value.mag as u128, value.neg)
-    }
-}
-
-fun div_away_u256(numerator: u256, denominator: u256): u256 {
-    let quotient = numerator / denominator;
-    if (quotient * denominator == numerator) {
-        quotient
-    } else {
-        quotient + 1
     }
 }
 

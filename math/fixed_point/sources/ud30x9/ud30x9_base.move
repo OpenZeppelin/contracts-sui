@@ -1,6 +1,7 @@
 /// Base utility functions for the `UD30x9` fixed-point type.
 module openzeppelin_fp_math::ud30x9_base;
 
+use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
 
@@ -307,7 +308,7 @@ public fun mul_trunc(x: UD30x9, y: UD30x9): UD30x9 {
 /// - Aborts if the rounded result exceeds the representable `UD30x9` range.
 public fun mul_away(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    wrap_u256(div_away_u256(x * y, SCALE_U256))
+    wrap_u256(common::div_away_u256(x * y, SCALE_U256))
 }
 
 /// Divides `x` by `y` with fixed-point scaling.
@@ -372,7 +373,7 @@ public fun div_away(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     assert!(y != 0, EDivisionByZero);
     let numerator = x * SCALE_U256;
-    wrap_u256(div_away_u256(numerator, y))
+    wrap_u256(common::div_away_u256(numerator, y))
 }
 
 /// Raises `x` to a power of `exp`.
@@ -539,13 +540,4 @@ public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
 fun wrap_u256(value: u256): UD30x9 {
     assert!(value <= U128_MAX_VALUE as u256, EOverflow);
     wrap(value as u128)
-}
-
-fun div_away_u256(numerator: u256, denominator: u256): u256 {
-    let quotient = numerator / denominator;
-    if (quotient * denominator == numerator) {
-        quotient
-    } else {
-        quotient + 1
-    }
 }
