@@ -275,10 +275,10 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
 /// #### Aborts
 /// - Aborts if `y` is zero.
 public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
-    let x = decompose(x.unwrap());
     let y_bits = y.unwrap();
     assert!(y_bits != 0, EDivisionByZero);
     let y = decompose(y_bits);
+    let x = decompose(x.unwrap());
     let remainder = x.mag % y.mag;
     wrap_components(Components { neg: x.neg, mag: remainder })
 }
@@ -332,6 +332,10 @@ public fun mul_trunc(x: SD29x9, y: SD29x9): SD29x9 {
 /// - `x`: First operand.
 /// - `y`: Second operand.
 ///
+/// #### Examples
+/// - `1.000000001 * 1.000000001` returns `1.000000003`.
+/// - `-1.000000001 * 1.000000001` returns `-1.000000003`.
+///
 /// #### Returns
 /// - The product `x * y`, rounded away from zero when inexact.
 ///
@@ -355,7 +359,7 @@ public fun mul_away(x: SD29x9, y: SD29x9): SD29x9 {
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The division result `x / y`, rounded toward zero.
+/// - The quotient `x / y`, rounded toward zero.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
@@ -373,16 +377,16 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The division result `x / y`, rounded toward zero.
+/// - The quotient `x / y`, rounded toward zero.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div_trunc(x: SD29x9, y: SD29x9): SD29x9 {
-    let x = decompose(x.unwrap());
     let y_bits = y.unwrap();
     assert!(y_bits != 0, EDivisionByZero);
     let y = decompose(y_bits);
+    let x = decompose(x.unwrap());
     let neg = x.neg != y.neg;
     let numerator = x.mag * SCALE;
     let mag = numerator / y.mag;
@@ -398,17 +402,21 @@ public fun div_trunc(x: SD29x9, y: SD29x9): SD29x9 {
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
+/// #### Examples
+/// - `1.0 / 3.0` returns `0.333333334`.
+/// - `-1.0 / 3.0` returns `-0.333333334`.
+///
 /// #### Returns
-/// - The division result `x / y`, rounded away from zero when inexact.
+/// - The quotient `x / y`, rounded away from zero when inexact.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
 /// - Aborts if the rounded magnitude exceeds the representable `SD29x9` range.
 public fun div_away(x: SD29x9, y: SD29x9): SD29x9 {
-    let x = decompose(x.unwrap());
     let y_bits = y.unwrap();
     assert!(y_bits != 0, EDivisionByZero);
     let y = decompose(y_bits);
+    let x = decompose(x.unwrap());
     let neg = x.neg != y.neg;
     let numerator = x.mag * SCALE;
     let mag = div_away_u256(numerator, y.mag);

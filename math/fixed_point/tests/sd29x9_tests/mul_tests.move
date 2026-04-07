@@ -215,6 +215,11 @@ fun mul_overflow_aborts_for_min_times_negative_one() {
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun mul_away_overflow_aborts_for_min_times_negative_one() {
+    sd29x9::min().mul_away(neg(SCALE));
+}
+
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun mul_overflow_aborts_for_large_positive_result() {
     sd29x9::max().mul(pos(SCALE + 1));
 }

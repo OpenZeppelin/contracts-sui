@@ -359,6 +359,9 @@ public fun div_trunc(x: UD30x9, y: UD30x9): UD30x9 {
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
+/// #### Examples
+/// - `1.0 / 3.0` returns `0.333333334`.
+///
 /// #### Returns
 /// - The quotient `x / y`, rounded away from zero when inexact.
 ///

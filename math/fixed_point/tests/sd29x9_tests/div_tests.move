@@ -94,12 +94,12 @@ fun div_away_by_zero_aborts() {
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
-fun div_handles_min_div_negative_one() {
+fun div_overflow_aborts_for_min_div_negative_one() {
     sd29x9::min().div(neg(SCALE));
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
-fun div_away_handles_min_div_negative_one() {
+fun div_away_overflow_aborts_for_min_div_negative_one() {
     sd29x9::min().div_away(neg(SCALE));
 }
 
