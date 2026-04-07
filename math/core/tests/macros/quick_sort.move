@@ -632,7 +632,8 @@ fun quick_sort_by_struct_member_large_vector() {
 
 #[test]
 fun quick_sort_by_descending_large_vector() {
-    // >10 elements triggers quicksort partitioning path (not insertion sort)
+    // >10 elements forces at least one quicksort partition step before any small-partition
+    // insertion sorting
     let mut vec = vector[15u64, 3, 12, 7, 1, 9, 14, 5, 11, 2, 8, 13, 6, 10, 4];
     vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x >= *y);
     assert_eq!(vec, vector[15u64, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
@@ -757,7 +758,7 @@ fun quick_sort_by_large_struct_with_duplicate_values() {
 }
 
 #[test]
-fun quick_sort_by_sort_by_id_ascending() {
+fun quick_sort_by_id_ascending() {
     // Sort structs by id field instead of value, >10 elements
     let mut vec = vector[
         Transfer { id: 11, value: 100 },
