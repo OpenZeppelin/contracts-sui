@@ -3,10 +3,6 @@ module openzeppelin_collections::skip_list;
 use openzeppelin_collections::random::{Self, Random};
 use sui::dynamic_field as field;
 
-/// A transfer or unwrap is already scheduled and must be executed or cancelled first.
-#[error(code = 0)]
-const ETransferAlreadyScheduled: vector<u8> = "Transfer already scheduled";
-
 ///
 #[error(code = 0)]
 const ENodeAlreadyExist: vector<u8> = "Node already exists";
@@ -167,6 +163,47 @@ public fun borrow_value<V: store>(node: &Node<V>): &V {
 /// Return the mutable reference to the ndoe's value.
 public fun borrow_mut_value<V: store>(node: &mut Node<V>): &mut V {
     &mut node.value
+}
+
+/// Insert a score-value into skip list, abort if the score alread exist.
+public fun insert<V: store>(list: &mut SkipList<V>, score: u64, v: V) {
+    assert!(!contains(list, score), ENodeAlreadyExist);
+    let (level, mut new_node) = list.create_node(score, v);
+    let (mut l, mut nexts, mut prev) = (list.level, &mut list.head, option::none());
+    let mut opt_l0_next_score = option::none();
+    while (l > 0) {
+        let mut opt_next_score = nexts.borrow_mut(l - 1);
+        while (option::is_some_and!(opt_next_score, |next_score| *next_score <= score)) {
+            let node = field::borrow_mut<u64, Node<V>>(
+                &mut list.id,
+                *opt_next_score.borrow(),
+            );
+            prev = option::some(node.score);
+            nexts = &mut node.nexts;
+            opt_next_score = nexts.borrow_mut(l - 1);
+        };
+        if (level >= l) {
+            new_node.nexts.push_back(*opt_next_score);
+            if (l == 1) {
+                new_node.prev = prev;
+                if (opt_next_score.is_some()) {
+                    opt_l0_next_score = *opt_next_score;
+                } else {
+                    list.tail = option::some(score);
+                }
+            };
+            opt_next_score.swap_or_fill(score);
+        };
+        l = l - 1;
+    };
+    if (opt_l0_next_score.is_some()) {
+        let next_node = list.borrow_mut_node(*opt_l0_next_score.borrow());
+        next_node.prev = option::some(score);
+    };
+
+    new_node.nexts.reverse();
+    field::add(&mut list.id, score, new_node);
+    list.size = list.size + 1;
 }
 
 /// Remove the score-value from skip list, abort if the score not exist in list.
