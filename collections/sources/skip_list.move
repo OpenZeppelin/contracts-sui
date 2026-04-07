@@ -169,6 +169,54 @@ public fun borrow_mut_value<V: store>(node: &mut Node<V>): &mut V {
     &mut node.value
 }
 
+/// Remove the score-value from skip list, abort if the score not exist in list.
+public fun remove<V: store>(list: &mut SkipList<V>, score: u64): V {
+    assert!(contains(list, score), ENodeDoesNotExist);
+    let (mut l, mut nexts) = (list.level, &mut list.head);
+    let node: Node<V> = field::remove(&mut list.id, score);
+    while (l > 0) {
+        let mut opt_next_score = nexts.borrow_mut(l - 1);
+        while (option::is_some_and!(opt_next_score, |next_score| *next_score <= score)) {
+            let next_score = opt_next_score.borrow();
+            if (next_score == score) {
+                *opt_next_score = *node.nexts.borrow(l - 1);
+            } else {
+                let node = list.borrow_mut_node(*next_score);
+                nexts = &mut node.nexts;
+                opt_next_score = nexts.borrow_mut(l - 1);
+            }
+        };
+        l = l - 1;
+    };
+
+    if (list.tail.borrow() == score) {
+        list.tail = node.prev;
+    };
+
+    let opt_l0_next_score = node.nexts.borrow(0);
+    if (opt_l0_next_score.is_some()) {
+        let next_node = list.borrow_mut_node(*opt_l0_next_score.borrow());
+        next_node.prev = node.prev;
+    };
+    list.size = list.size - 1;
+
+    node.drop_node()
+}
+
+/// Return the next score.
+public fun find_next<V: store>(list: &SkipList<V>, score: u64, include: bool): Option<u64> {
+    let opt_finded_score = list.find(score);
+    if (opt_finded_score.is_none()) {
+        return opt_finded_score
+    };
+    let finded_score = *opt_finded_score.borrow();
+    if ((include && finded_score == score) || (finded_score > score)) {
+        return opt_finded_score
+    };
+    let node = list.borrow_node(finded_score);
+    *node.nexts.borrow(0)
+}
+
 /// Return the prev socre.
 public fun find_prev<V: store>(list: &SkipList<V>, score: u64, include: bool): Option<u64> {
     let opt_finded_score = list.find(score);
@@ -190,7 +238,7 @@ fun find<V: store>(list: &SkipList<V>, score: u64): Option<u64> {
     };
     let (mut l, mut nexts, mut current_score) = (list.level, &list.head, option::none());
     while (l > 0) {
-        let mut opt_next_score = *vector::borrow(nexts, l - 1);
+        let mut opt_next_score = *nexts.borrow(l - 1);
         while (option::is_some_and!(&opt_next_score, |next_score| *next_score <= score)) {
             let next_score = opt_next_score.borrow();
             if (next_score == score) {
