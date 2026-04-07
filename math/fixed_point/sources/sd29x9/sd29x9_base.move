@@ -436,7 +436,7 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
         from_bits(raw >> bits)
     } else {
         let shifted = raw >> bits;
-        let mask = (std::u128::max_value!()) << (128 - bits);
+        let mask = std::u128::max_value!() << (128 - bits);
         from_bits(shifted | mask)
     }
 }
@@ -542,7 +542,7 @@ fun wrap_components(value: Components): SD29x9 {
 
 fun wrapping_add_bits(a: u128, b: u128): u128 {
     let sum = (a as u256) + (b as u256);
-    (sum & ((std::u128::max_value!()) as u256)) as u128
+    (sum & (std::u128::max_value!() as u256)) as u128
 }
 
 fun wrapping_sub_bits(a: u128, b: u128): u128 {

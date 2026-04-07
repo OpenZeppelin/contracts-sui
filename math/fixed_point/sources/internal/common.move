@@ -64,7 +64,7 @@ public(package) fun min_sd29x9_value(): u128 {
 /// #### Returns
 /// - `floor(u128::MAX / 10^9)`.
 public(package) fun max_ud30x9_whole(): u128 {
-    (std::u128::max_value!()) / SCALE
+    std::u128::max_value!() / SCALE
 }
 
 /// Returns the largest whole-magnitude integer that can be converted into

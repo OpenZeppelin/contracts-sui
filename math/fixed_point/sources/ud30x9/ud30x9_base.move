@@ -312,7 +312,7 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     if (exp == 1) {
         return x
     };
-    let max_value = (std::u128::max_value!()) as u256;
+    let max_value = std::u128::max_value!() as u256;
     let base = x.unwrap() as u256;
     let mut result = base;
     let times = exp - 1;
@@ -404,7 +404,7 @@ public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
 public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let sum = x + y;
-    let u128_max = (std::u128::max_value!()) as u256;
+    let u128_max = std::u128::max_value!() as u256;
 
     // Keep only the low 128 bits, safe to cast down to u128.
     let wrapped = (sum & u128_max) as u128;
@@ -421,7 +421,7 @@ public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The wrapping difference `x - y` modulo `2^128`.
 public fun unchecked_sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let u128_max = (std::u128::max_value!()) as u256;
+    let u128_max = std::u128::max_value!() as u256;
 
     // Effectively wraps subtraction like in modular arithmetic.
     // The result is (a + (2^128) - b).
@@ -447,6 +447,6 @@ public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
 // === Internal Functions ===
 
 fun wrap_u256(value: u256): UD30x9 {
-    assert!(value <= (std::u128::max_value!()) as u256, EOverflow);
+    assert!(value <= std::u128::max_value!() as u256, EOverflow);
     wrap(value as u128)
 }
