@@ -88,10 +88,10 @@ public fun is_empty<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>)
 
 /// Return the head of the skip list.
 public fun head<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>): Option<Key> {
-    if (is_empty(list)) {
+    if (list.is_empty()) {
         return option::none()
     };
-    *vector::borrow(&list.head, 0)
+    *list.head.borrow(0)
 }
 
 /// Return the tail of the skip list.
