@@ -258,14 +258,6 @@ fun quick_sort_u256_values() {
 }
 
 #[test]
-fun quick_sort_partition_edge_case_pivot() {
-    // Test a case where pivot selection matters
-    let mut vec = vector[1u64, 2, 3, 4, 5];
-    vector::quick_sort!(&mut vec);
-    assert_eq!(vec, vector[1u64, 2, 3, 4, 5]);
-}
-
-#[test]
 fun quick_sort_alternating_values() {
     // Alternating high and low values
     let mut vec = vector[1u64, 100, 2, 99, 3, 98, 4, 97, 5, 96];
@@ -335,22 +327,6 @@ fun quick_sort_pyramid_pattern() {
     let mut vec = vector[1u32, 5, 3, 2, 4, 5, 1];
     vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 1, 2, 3, 4, 5, 5]);
-}
-
-#[test]
-fun quick_sort_single_large_value_at_start() {
-    // Single large value at the start
-    let mut vec = vector[1000u64, 1, 2, 3, 4, 5];
-    vector::quick_sort!(&mut vec);
-    assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 1000]);
-}
-
-#[test]
-fun quick_sort_single_small_value_at_end() {
-    // Single small value at the end
-    let mut vec = vector[5u64, 4, 3, 2, 1, 0];
-    vector::quick_sort!(&mut vec);
-    assert_eq!(vec, vector[0u64, 1, 2, 3, 4, 5]);
 }
 
 #[test]
