@@ -223,7 +223,7 @@ public fun mul_mod(a: u256, b: u256, modulus: u256): u256 {
 /// Returns `true` if `n` is a power of ten.
 ///
 /// Uses a lookup table with binary search for efficiency.
-/// For `u256`, valid powers of ten range from 10^0 to 10^76.
+/// For `u256`, valid powers of ten range from 10^0 to 10^77.
 ///
 /// #### Parameters
 /// - `n`: Input value.
@@ -231,7 +231,7 @@ public fun mul_mod(a: u256, b: u256, modulus: u256): u256 {
 /// #### Returns
 /// - `true` if `n` is a power of ten within the `u256` range, otherwise `false`.
 public fun is_power_of_ten(n: u256): bool {
-    // Powers of 10 from 10^0 to 10^76 for u256
+    // Powers of 10 from 10^0 to 10^77 for u256
     let powers = vector[
         1u256,
         10u256,
@@ -310,6 +310,7 @@ public fun is_power_of_ten(n: u256): bool {
         100000000000000000000000000000000000000000000000000000000000000000000000000u256,
         1000000000000000000000000000000000000000000000000000000000000000000000000000u256,
         10000000000000000000000000000000000000000000000000000000000000000000000000000u256,
+        100000000000000000000000000000000000000000000000000000000000000000000000000000u256,
     ];
 
     macros::binary_search!(powers, n)
