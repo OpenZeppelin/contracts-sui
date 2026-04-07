@@ -79,7 +79,11 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             let mut i = start + 1;
             while (i < end) {
                 let mut j = i;
-                while (j != start && $le(&vec[j], &vec[j - 1])) {
+                while (
+                    j != start
+                        && $le(&vec[j], &vec[j - 1])
+                        && !$le(&vec[j - 1], &vec[j])
+                ) {
                     vec.swap(j, j - 1);
                     j = j - 1;
                 };
