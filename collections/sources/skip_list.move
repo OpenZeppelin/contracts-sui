@@ -169,6 +169,20 @@ public fun borrow_mut_value<V: store>(node: &mut Node<V>): &mut V {
     &mut node.value
 }
 
+/// Return the prev socre.
+public fun find_prev<V: store>(list: &SkipList<V>, score: u64, include: bool): Option<u64> {
+    let opt_finded_score = list.find(score);
+    if (opt_finded_score.is_none()) {
+        return opt_finded_score
+    };
+    let finded_score = *opt_finded_score.borrow();
+    if ((include && finded_score == score) || (finded_score < score)) {
+        return opt_finded_score
+    };
+    let node = list.borrow_node(finded_score);
+    node.prev
+}
+
 /// Find the nearest score. 1. score, 2. prev, 3. next
 fun find<V: store>(list: &SkipList<V>, score: u64): Option<u64> {
     if (list.size == 0) {
