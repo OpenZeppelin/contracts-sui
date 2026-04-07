@@ -41,7 +41,7 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// it suitable for arbitrarily large vectors.
 ///
 /// #### Generics
-/// - `$Int`: Any type that can be compared using the provided comparison function.
+/// - `$T`: Any type that can be compared using the provided comparison function.
 ///
 /// #### Parameters
 /// - `$vec`: A mutable reference to the vector to be sorted in-place.
