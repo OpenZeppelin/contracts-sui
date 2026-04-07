@@ -276,50 +276,80 @@ public fun borrow_mut_value<Key: copy + drop + store, V: store>(node: &mut Node<
 //     *node.nexts.borrow(0)
 // }
 
-// /// Return the prev socre.
-// public fun find_prev<Key: copy + drop + store, V: store>(
-//     list: &SkipList<Key, V>,
-//     score: Key,
-//     include: bool,
-// ): Option<Key> {
-//     let opt_finded_score = list.find(score);
-//     if (opt_finded_score.is_none()) {
-//         return opt_finded_score
-//     };
-//     let finded_score = *opt_finded_score.borrow();
-//     if ((include && finded_score == score) || (finded_score < score)) {
-//         return opt_finded_score
-//     };
-//     let node = list.borrow_node(finded_score);
-//     node.prev
-// }
+public(package) fun find_prev_u64<V: store>(
+    list: &SkipList<u64, V>,
+    score: u64,
+    include: bool,
+): Option<u64> {
+    find_prev_by!(list, score, include, |x, y| *x <= *y)
+}
 
-// /// Find the nearest score. 1. score, 2. prev, 3. next
-// fun find<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>, score: Key): Option<Key> {
-//     if (list.level == 0) {
-//         return option::none()
-//     };
-//     let (mut l, mut nexts, mut current_score) = (list.level, &list.head, option::none());
-//     while (l > 0) {
-//         let mut opt_next_score = *nexts.borrow(l - 1);
-//         while (option::is_some_and!(&opt_next_score, |next_score| *next_score <= score)) {
-//             let next_score = opt_next_score.borrow();
-//             if (next_score == score) {
-//                 return option::some(*next_score)
-//             } else {
-//                 let node = list.borrow_node(*next_score);
-//                 current_score = opt_next_score;
-//                 nexts = &node.nexts;
-//                 opt_next_score = *vector::borrow(nexts, l - 1);
-//             };
-//         };
-//         if (l == 1 && current_score.is_some()) {
-//             return current_score
-//         };
-//         l = l - 1;
-//     };
-//     return *vector::borrow(&list.head, 0)
-// }
+public(package) fun find_prev_u128<V: store>(
+    list: &SkipList<u128, V>,
+    score: u128,
+    include: bool,
+): Option<u128> {
+    find_prev_by!(list, score, include, |x, y| *x <= *y)
+}
+
+/// Return the prev socre.
+public macro fun find_prev_by<$Key: copy + drop + store, $V: store>(
+    $list: &SkipList<$Key, $V>,
+    $score: $Key,
+    $include: bool,
+    $le: |&$Key, &$Key| -> bool,
+): Option<$Key> {
+    let list = $list;
+    let score = $score;
+    let include = $include;
+
+    let opt_finded_score = find_by!(list, score, $le);
+    if (opt_finded_score.is_none()) {
+        return opt_finded_score
+    };
+    let finded_score = opt_finded_score.borrow();
+    if ($le(finded_score, &score)) {
+        if (!$le(&score, finded_score) || include) {
+            return opt_finded_score
+        };
+    };
+    let node = list.borrow_node(*finded_score);
+    node.prev
+}
+
+/// Find the nearest score. 1. score, 2. prev, 3. next
+macro fun find_by<$Key: copy + drop + store, $V: store>(
+    $list: &SkipList<$Key, $V>,
+    $score: $Key,
+    $le: |&$Key, &$Key| -> bool,
+): Option<$Key> {
+    let list = $list;
+    let score = $score;
+
+    if (list.level == 0) {
+        return option::none()
+    };
+    let (mut l, mut nexts, mut current_score) = (list.level, &list.head, option::none());
+    while (l > 0) {
+        let mut opt_next_score = *nexts.borrow(l - 1);
+        while (option::is_some_and!(&opt_next_score, |next_score| $le(next_score, &score))) {
+            let next_score = opt_next_score.borrow();
+            if ($le(&score, next_score)) {
+                return option::some(*next_score)
+            } else {
+                let node = list.borrow_node(*next_score);
+                current_score = opt_next_score;
+                nexts = &node.nexts;
+                opt_next_score = *nexts.borrow(l - 1);
+            };
+        };
+        if (l == 1 && current_score.is_some()) {
+            return current_score
+        };
+        l = l - 1;
+    };
+    return *list.head.borrow(0)
+}
 
 fun rand_level<Key: copy + drop + store, V: store>(seed: u64, list: &SkipList<Key, V>): u64 {
     let mut level = 1;
