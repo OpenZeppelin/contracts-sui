@@ -649,7 +649,7 @@ fun wrap_components(value: Components): SD29x9 {
 
 fun div_away_u256(numerator: u256, denominator: u256): u256 {
     let quotient = numerator / denominator;
-    if (numerator % denominator == 0) {
+    if (quotient * denominator == numerator) {
         quotient
     } else {
         quotient + 1
