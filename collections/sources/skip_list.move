@@ -6,9 +6,11 @@ use sui::dynamic_field as field;
 ///
 #[error(code = 0)]
 const ENodeAlreadyExist: vector<u8> = "Node already exists";
+
 ///
 #[error(code = 1)]
 const ENodeDoesNotExist: vector<u8> = "Node does not exist";
+
 ///
 #[error(code = 2)]
 const ESkipListNotEmpty: vector<u8> = "Skip list not empty";
