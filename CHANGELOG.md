@@ -14,6 +14,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - Removed bitwise operations from `SD29x9`.
 
+### `openzeppelin_math`
+
+#### Fixed
+
+- `u256::is_power_of_ten` helper now properly handles valid `10^77` value. (#291)
+
 ## 1.1.0-rc.0 (10-03-2026)
 
 ### `openzeppelin_fp_math`
