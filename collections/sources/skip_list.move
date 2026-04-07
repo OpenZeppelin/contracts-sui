@@ -258,23 +258,46 @@ public fun borrow_mut_value<Key: copy + drop + store, V: store>(node: &mut Node<
 //     node.drop_node()
 // }
 
-// /// Return the next score.
-// public fun find_next<Key: copy + drop + store, V: store>(
-//     list: &SkipList<Key, V>,
-//     score: Key,
-//     include: bool,
-// ): Option<Key> {
-//     let opt_finded_score = list.find(score);
-//     if (opt_finded_score.is_none()) {
-//         return opt_finded_score
-//     };
-//     let finded_score = *opt_finded_score.borrow();
-//     if ((include && finded_score == score) || (finded_score > score)) {
-//         return opt_finded_score
-//     };
-//     let node = list.borrow_node(finded_score);
-//     *node.nexts.borrow(0)
-// }
+public(package) fun find_next_u64<V: store>(
+    list: &SkipList<u64, V>,
+    score: u64,
+    include: bool,
+): Option<u64> {
+    find_next_by!(list, score, include, |x, y| *x <= *y)
+}
+
+public(package) fun find_next_u128<V: store>(
+    list: &SkipList<u128, V>,
+    score: u128,
+    include: bool,
+): Option<u128> {
+    find_next_by!(list, score, include, |x, y| *x <= *y)
+}
+
+/// Return the next score.
+public macro fun find_next_by<$Key: copy + drop + store, $V: store>(
+    $list: &SkipList<$Key, $V>,
+    $score: $Key,
+    $include: bool,
+    $le: |&$Key, &$Key| -> bool,
+): Option<$Key> {
+    let list = $list;
+    let score = $score;
+    let include = $include;
+
+    let opt_finded_score = list.find_by!(score, $le);
+    if (opt_finded_score.is_none()) {
+        return opt_finded_score
+    };
+    let finded_score = opt_finded_score.borrow();
+    if ($le(&score, finded_score)) {
+        if (!$le(finded_score, &score) || include) {
+            return opt_finded_score
+        };
+    };
+    let node = list.borrow_node(*finded_score);
+    *node.nexts.borrow(0)
+}
 
 public(package) fun find_prev_u64<V: store>(
     list: &SkipList<u64, V>,
@@ -303,7 +326,7 @@ public macro fun find_prev_by<$Key: copy + drop + store, $V: store>(
     let score = $score;
     let include = $include;
 
-    let opt_finded_score = find_by!(list, score, $le);
+    let opt_finded_score = list.find_by!(score, $le);
     if (opt_finded_score.is_none()) {
         return opt_finded_score
     };
