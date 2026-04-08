@@ -25,6 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `SD29x9::rem` function for truncated remainder semantics (sign follows the dividend) (#301)
 - `SD29x9::mod` now uses Euclidean remainder semantics (result is always non-negative). The previous truncated remainder behavior is available via `SD29x9::rem` (#301)
 - `UD30x9::sub` now aborts with `EUnderflow` instead of `EOverflow` when the result would be negative (#297)
+- `ud30x9_base` abort codes renumbered: `EDivisionByZero` added at code `2`, `ECannotBeConvertedToSD29x9` moved from code `1` to code `3`. Code matching on numeric abort codes must be updated.
 
 ### `openzeppelin_math`
 
