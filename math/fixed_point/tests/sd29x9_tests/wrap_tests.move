@@ -1,7 +1,7 @@
 #[test_only]
 module openzeppelin_fp_math::sd29x9_wrap_tests;
 
-use openzeppelin_fp_math::sd29x9::{Self, from_bits};
+use openzeppelin_fp_math::sd29x9::{Self, from_bits, two_complement};
 use openzeppelin_fp_math::sd29x9_test_helpers::pos;
 use std::unit_test::assert_eq;
 
@@ -44,6 +44,16 @@ fun wrap_small_positive() {
 #[test]
 fun wrap_negative_one_is_all_ones() {
     assert_eq!(sd29x9::wrap(1, true).unwrap(), ALL_ONES);
+}
+
+#[test]
+fun wrap_encodes_magnitude_with_sign() {
+    let raw = 987_654_321u128;
+    let positive = sd29x9::wrap(raw, false);
+    let negative = sd29x9::wrap(raw, true);
+
+    assert_eq!(positive.unwrap(), raw);
+    assert_eq!(negative.unwrap(), two_complement(raw));
 }
 
 #[test]
