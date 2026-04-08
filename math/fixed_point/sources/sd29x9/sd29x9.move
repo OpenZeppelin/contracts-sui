@@ -52,15 +52,6 @@ public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
 public use fun openzeppelin_fp_math::sd29x9_base::lte as SD29x9.lte;
 public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
 
-// Bitwise
-public use fun openzeppelin_fp_math::sd29x9_base::and as SD29x9.and;
-public use fun openzeppelin_fp_math::sd29x9_base::and2 as SD29x9.and2;
-public use fun openzeppelin_fp_math::sd29x9_base::lshift as SD29x9.lshift;
-public use fun openzeppelin_fp_math::sd29x9_base::not as SD29x9.not;
-public use fun openzeppelin_fp_math::sd29x9_base::or as SD29x9.or;
-public use fun openzeppelin_fp_math::sd29x9_base::rshift as SD29x9.rshift;
-public use fun openzeppelin_fp_math::sd29x9_base::xor as SD29x9.xor;
-
 // Cross-Type Casting
 public use fun openzeppelin_fp_math::sd29x9_base::into_UD30x9 as SD29x9.into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::try_into_UD30x9 as SD29x9.try_into_UD30x9;
