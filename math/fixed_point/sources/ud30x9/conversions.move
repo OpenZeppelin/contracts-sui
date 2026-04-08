@@ -46,8 +46,8 @@ public fun from_u64(x: u64): UD30x9 {
 /// #### Aborts
 /// - Aborts if `x * 10^9` would overflow the `UD30x9` raw representation.
 public fun from_u128(x: u128): UD30x9 {
-    assert!(x <= common::max_ud30x9_whole(), EOverflow);
-    ud30x9::wrap(x * common::scale())
+    assert!(x <= common::max_ud30x9_whole!(), EOverflow);
+    ud30x9::wrap(x * common::scale!())
 }
 
 /// Tries to convert a whole `u128` integer into `UD30x9` by multiplying it by
@@ -59,10 +59,10 @@ public fun from_u128(x: u128): UD30x9 {
 /// #### Returns
 /// - `some(UD30x9)` when `x` fits once scaled, otherwise `none`.
 public fun try_from_u128(x: u128): Option<UD30x9> {
-    if (x > common::max_ud30x9_whole()) {
+    if (x > common::max_ud30x9_whole!()) {
         option::none()
     } else {
-        option::some(ud30x9::wrap(x * common::scale()))
+        option::some(ud30x9::wrap(x * common::scale!()))
     }
 }
 
@@ -77,7 +77,7 @@ public fun try_from_u128(x: u128): Option<UD30x9> {
 /// #### Returns
 /// - The whole-number portion of `x`, computed as `floor(x)`.
 public fun to_u128_trunc(x: UD30x9): u128 {
-    x.unwrap() / common::scale()
+    x.unwrap() / common::scale!()
 }
 
 /// Converts a `UD30x9` value into a whole `u64` by truncating its fractional

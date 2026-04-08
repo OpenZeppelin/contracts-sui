@@ -28,7 +28,7 @@ const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD2
 /// - Aborts if `x` is greater than max positive `SD29x9` value.
 public fun into_SD29x9(x: UD30x9): SD29x9 {
     let value = x.unwrap();
-    assert!(value <= common::max_sd29x9_magnitude(), ECannotBeConvertedToSD29x9);
+    assert!(value <= common::max_sd29x9_magnitude!(), ECannotBeConvertedToSD29x9);
     sd29x9::wrap(value, false)
 }
 
@@ -41,7 +41,7 @@ public fun into_SD29x9(x: UD30x9): SD29x9 {
 /// - The `SD29x9` representation of `x` if `x` is less than or equal to max positive `SD29x9` value, otherwise `none`.
 public fun try_into_SD29x9(x: UD30x9): Option<SD29x9> {
     let value = x.unwrap();
-    if (value > common::max_sd29x9_magnitude()) {
+    if (value > common::max_sd29x9_magnitude!()) {
         option::none()
     } else {
         option::some(sd29x9::wrap(value, false))
@@ -113,7 +113,7 @@ public fun abs(x: UD30x9): UD30x9 {
 /// - Aborts if the rounded result exceeds the representable `UD30x9` range.
 public fun ceil(x: UD30x9): UD30x9 {
     let value = x.unwrap() as u256;
-    let scale = common::scale_u256();
+    let scale = common::scale_u256!();
     let fractional = value % scale;
     if (fractional == 0) {
         x
@@ -145,7 +145,7 @@ public fun eq(x: UD30x9, y: UD30x9): bool {
 /// - `x` rounded down (floor) at integer precision.
 public fun floor(x: UD30x9): UD30x9 {
     let value = x.unwrap();
-    let fractional = value % common::scale();
+    let fractional = value % common::scale!();
     if (fractional == 0) {
         x
     } else {
@@ -260,7 +260,7 @@ public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let product = x * y / common::scale_u256();
+    let product = x * y / common::scale_u256!();
     wrap_u256(product)
 }
 
@@ -281,7 +281,7 @@ public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let numerator = x * common::scale_u256();
+    let numerator = x * common::scale_u256!();
     wrap_u256(numerator / y)
 }
 
@@ -317,7 +317,7 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     let mut result = base;
     let times = exp - 1;
     times.do!(|_| {
-        result = result * base / common::scale_u256();
+        result = result * base / common::scale_u256!();
         assert!(result <= max_value, EOverflow);
     });
 

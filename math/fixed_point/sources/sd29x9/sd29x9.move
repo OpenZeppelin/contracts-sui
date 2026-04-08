@@ -84,7 +84,7 @@ public fun zero(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `1`.
 public fun one(): SD29x9 {
-    SD29x9(common::scale())
+    SD29x9(common::scale!())
 }
 
 /// Constructs the minimum representable `SD29x9` value.
@@ -92,7 +92,7 @@ public fun one(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `-2^127`.
 public fun min(): SD29x9 {
-    SD29x9(common::min_sd29x9_value())
+    SD29x9(common::min_sd29x9_value!())
 }
 
 /// Constructs the maximum representable `SD29x9` value.
@@ -100,7 +100,7 @@ public fun min(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `2^127 - 1`.
 public fun max(): SD29x9 {
-    SD29x9(common::max_sd29x9_magnitude())
+    SD29x9(common::max_sd29x9_magnitude!())
 }
 
 // === Casting helpers ===
@@ -126,7 +126,7 @@ public fun max(): SD29x9 {
 public fun wrap(x: u128, is_negative: bool): SD29x9 {
     if (x == 0) {
         zero()
-    } else if (x > common::max_sd29x9_magnitude()) {
+    } else if (x > common::max_sd29x9_magnitude!()) {
         // The value is too large to be represented as a positive SD29x9
         abort EOverflow
     } else if (is_negative) {

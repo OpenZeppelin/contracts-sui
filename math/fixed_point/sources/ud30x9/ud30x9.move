@@ -75,7 +75,7 @@ public fun zero(): UD30x9 {
 /// #### Returns
 /// - The `UD30x9` representation of `1`.
 public fun one(): UD30x9 {
-    UD30x9(common::scale())
+    UD30x9(common::scale!())
 }
 
 /// Constructs the maximum representable `UD30x9` value.

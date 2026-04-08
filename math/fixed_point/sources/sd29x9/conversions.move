@@ -59,8 +59,8 @@ public fun from_u64(x: u64, is_negative: bool): SD29x9 {
 /// #### Aborts
 /// - Aborts if `x * 10^9` would overflow the `SD29x9` raw representation.
 public fun from_u128(x: u128, is_negative: bool): SD29x9 {
-    assert!(x <= common::max_sd29x9_whole(), EOverflow);
-    sd29x9::wrap(x * common::scale(), is_negative)
+    assert!(x <= common::max_sd29x9_whole!(), EOverflow);
+    sd29x9::wrap(x * common::scale!(), is_negative)
 }
 
 /// Tries to convert a whole `u128` magnitude into `SD29x9` by multiplying it
@@ -73,10 +73,10 @@ public fun from_u128(x: u128, is_negative: bool): SD29x9 {
 /// #### Returns
 /// - `some(SD29x9)` when the scaled magnitude fits, otherwise `none`.
 public fun try_from_u128(x: u128, is_negative: bool): Option<SD29x9> {
-    if (x > common::max_sd29x9_whole()) {
+    if (x > common::max_sd29x9_whole!()) {
         option::none()
     } else {
-        option::some(sd29x9::wrap(x * common::scale(), is_negative))
+        option::some(sd29x9::wrap(x * common::scale!(), is_negative))
     }
 }
 
@@ -95,12 +95,12 @@ public fun try_from_u128(x: u128, is_negative: bool): Option<SD29x9> {
 /// The sign flag is always `false` when the `magnitude` part is zero.
 public fun to_parts_trunc(x: SD29x9): (u128, bool) {
     let bits = x.unwrap();
-    let (neg, mag) = if ((bits & common::sign_bit()) != 0) {
+    let (neg, mag) = if ((bits & common::sign_bit!()) != 0) {
         (true, two_complement(bits))
     } else {
         (false, bits)
     };
-    let whole = mag / common::scale();
+    let whole = mag / common::scale!();
     (whole, neg && (whole != 0))
 }
 
@@ -117,8 +117,8 @@ public fun to_parts_trunc(x: SD29x9): (u128, bool) {
 /// - Aborts if `x` is negative.
 public fun to_u128_trunc(x: SD29x9): u128 {
     let bits = x.unwrap();
-    assert!((bits & common::sign_bit()) == 0, ENegativeValue);
-    bits / common::scale()
+    assert!((bits & common::sign_bit!()) == 0, ENegativeValue);
+    bits / common::scale!()
 }
 
 /// Tries to convert a non-negative `SD29x9` value into a whole `u128` by
@@ -131,10 +131,10 @@ public fun to_u128_trunc(x: SD29x9): u128 {
 /// - `some(u128)` when `x` is non-negative, otherwise `none`.
 public fun try_to_u128_trunc(x: SD29x9): Option<u128> {
     let bits = x.unwrap();
-    if ((bits & common::sign_bit()) != 0) {
+    if ((bits & common::sign_bit!()) != 0) {
         option::none()
     } else {
-        option::some(bits / common::scale())
+        option::some(bits / common::scale!())
     }
 }
 

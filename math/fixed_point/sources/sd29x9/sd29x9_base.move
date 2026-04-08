@@ -121,7 +121,7 @@ public fun and2(x: SD29x9, y: SD29x9): SD29x9 {
 /// - Aborts if the rounded positive result exceeds the representable `SD29x9` range.
 public fun ceil(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
-    let scale = common::scale_u256();
+    let scale = common::scale_u256!();
     let fractional = mag % scale;
     if (fractional == 0) {
         return x
@@ -159,7 +159,7 @@ public fun eq(x: SD29x9, y: SD29x9): bool {
 /// - Aborts if the rounded negative result magnitude exceeds the representable `SD29x9` range.
 public fun floor(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
-    let scale = common::scale_u256();
+    let scale = common::scale_u256!();
     let fractional = mag % scale;
     if (fractional == 0) {
         return x
@@ -289,7 +289,7 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
     let prod = x.mag * y.mag;
-    let mag = prod / common::scale_u256();
+    let mag = prod / common::scale_u256!();
     wrap_components(Components { neg, mag })
 }
 
@@ -309,7 +309,7 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
-    let numerator = x.mag * common::scale_u256();
+    let numerator = x.mag * common::scale_u256!();
     let mag = numerator / y.mag;
     wrap_components(Components { neg, mag })
 }
@@ -346,8 +346,8 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     let res_neg = neg && (exp % 2 != 0);
     let mut res_mag = mag;
-    let scale = common::scale_u256();
-    let max_mag = common::min_sd29x9_value() as u256;
+    let scale = common::scale_u256!();
+    let max_mag = common::min_sd29x9_value!() as u256;
     let times = exp - 1;
     times.do!(|_| {
         res_mag = res_mag * mag / scale;
@@ -424,7 +424,7 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
     if (bits == 0) {
         return x
     } else if (bits >= 128) {
-        return if ((x.unwrap() & common::sign_bit()) != 0) {
+        return if ((x.unwrap() & common::sign_bit!()) != 0) {
             from_bits(std::u128::max_value!())
         } else {
             zero()
@@ -432,7 +432,7 @@ public fun rshift(x: SD29x9, bits: u8): SD29x9 {
     };
 
     let raw = x.unwrap();
-    if ((raw & common::sign_bit()) == 0) {
+    if ((raw & common::sign_bit!()) == 0) {
         from_bits(raw >> bits)
     } else {
         let shifted = raw >> bits;
@@ -502,7 +502,7 @@ public struct Components has copy, drop {
 }
 
 fun decompose(bits: u128): Components {
-    if ((bits & common::sign_bit()) != 0) {
+    if ((bits & common::sign_bit!()) != 0) {
         Components { neg: true, mag: two_complement(bits) as u256 }
     } else {
         Components { neg: false, mag: bits as u256 }
@@ -531,7 +531,7 @@ fun wrap_components(value: Components): SD29x9 {
     if (value.mag == 0) {
         return zero()
     };
-    let min_negative = common::min_sd29x9_value() as u256;
+    let min_negative = common::min_sd29x9_value!() as u256;
     if (value.neg && value.mag == min_negative) {
         min()
     } else {
