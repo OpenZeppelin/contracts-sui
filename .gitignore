@@ -8,6 +8,7 @@ sui.keystore
 # OS generated files
 .DS_Store
 ._*
+.fuse_hidden*
 
 # Logs
 *.log
@@ -24,3 +25,7 @@ temp/
 
 # Everyone uses their own local dev environment config, so we should not force specific VS Code configs
 .vscode/
+
+# Claude Code
+.claude/
+.gitmodules
