@@ -50,8 +50,9 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// - `$le`: A comparison function that takes two references and returns `true` if the first
 ///   element should be ordered before or equal to the second element. **Must implement
 ///   non-strict ordering** (i.e., `<=` for ascending, `>=` for descending). Using a strict
-///   comparator (e.g., `<` instead of `<=`) defeats three-way partitioning and can degrade
-///   performance to `O(n²)` when duplicate elements are present.
+///   comparator (e.g., `<` instead of `<=`) defeats three-way partitioning, which can degrade
+///   performance to `O(n²)` when duplicate elements are present. Always use non-strict
+///   operators to ensure optimal behavior.
 ///
 /// #### Example
 /// ```move
