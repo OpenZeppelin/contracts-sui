@@ -17,9 +17,9 @@ const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed 
 #[error(code = 1)]
 const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD30x9";
 
-/// Divisor cannot be zero
+/// Divisor must be non-zero
 #[error(code = 2)]
-const EDivisionByZero: vector<u8> = "Divisor cannot be zero";
+const EDivisionByZero: vector<u8> = "Divisor must be non-zero";
 
 // === Conversion ===
 
