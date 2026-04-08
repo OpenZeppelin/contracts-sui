@@ -2,6 +2,7 @@
 module openzeppelin_fp_math::sd29x9_rem_tests;
 
 use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::sd29x9_base;
 use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg};
 use std::unit_test::assert_eq;
 
@@ -14,7 +15,7 @@ fun rem_tracks_dividend_sign() {
     assert_eq!(pos(42 * SCALE).rem(neg(21 * SCALE)), sd29x9::zero());
 }
 
-#[test, expected_failure(arithmetic_error, location = openzeppelin_fp_math::sd29x9_base)]
+#[test, expected_failure(abort_code = sd29x9_base::EDivisionByZero)]
 fun rem_with_zero_divisor_aborts() {
     pos(10).rem(sd29x9::zero());
 }

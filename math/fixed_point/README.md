@@ -9,7 +9,7 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 ## Operations
 
-- Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
+- Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`, `unchecked_lshift`, `unchecked_rshift`
 
@@ -92,4 +92,8 @@ let total = price1.add(price2); // 3.5
 let balance = sd29x9_convert::from_u128(10, false); // 10.0
 let adjustment = sd29x9_convert::from_u128(2, true).add(sd29x9::wrap(500_000_000, true)); // -2.5
 let new_balance = balance.add(adjustment); // 7.5
+
+let one = ud30x9::wrap(1000000000); // 1.0
+let third_down = one.div_trunc(ud30x9::wrap(3000000000)); // 0.333333333
+let third_up = one.div_away(ud30x9::wrap(3000000000)); // 0.333333334
 ```

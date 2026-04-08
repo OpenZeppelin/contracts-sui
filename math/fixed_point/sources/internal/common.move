@@ -52,7 +52,7 @@ public(package) macro fun min_sd29x9_value(): u128 {
 /// #### Returns
 /// - `floor(u128::MAX / 10^9)`.
 public(package) macro fun max_ud30x9_whole(): u128 {
-    340_282_366_920_938_463_463_374_607_431 // floor(u128::MAX / 10^9)
+    std::u128::max_value!() / scale!()
 }
 
 /// Returns the largest whole-magnitude integer that can be converted into
@@ -66,5 +66,22 @@ public(package) macro fun max_ud30x9_whole(): u128 {
 /// #### Returns
 /// - `floor((2^127 - 1) / 10^9)`.
 public(package) macro fun max_sd29x9_whole(): u128 {
-    170_141_183_460_469_231_731_687_303_715 // floor((2^127 - 1) / 10^9)
+    max_sd29x9_magnitude!() / scale!()
+}
+
+/// Divides `numerator` by `denominator` and rounds up when the division is inexact.
+///
+/// #### Parameters
+/// - `numerator`: Dividend.
+/// - `denominator`: Divisor. Must be non-zero.
+///
+/// #### Returns
+/// - `numerator / denominator` when exact, otherwise that quotient plus one.
+public(package) fun div_away_u256(numerator: u256, denominator: u256): u256 {
+    let quotient = numerator / denominator;
+    if (quotient * denominator == numerator) {
+        quotient
+    } else {
+        quotient + 1
+    }
 }

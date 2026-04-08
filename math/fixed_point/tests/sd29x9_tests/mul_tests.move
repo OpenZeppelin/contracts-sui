@@ -127,6 +127,40 @@ fun mul_truncates_towards_zero_at_scale_boundary() {
 }
 
 #[test]
+fun mul_trunc_and_away_variants_cover_signs_and_exactness() {
+    let x = pos(SCALE + 1);
+    let y = pos(SCALE + 1);
+    assert_eq!(x.mul(y), x.mul_trunc(y));
+    assert_eq!(x.mul_trunc(y), pos(SCALE + 2));
+    assert_eq!(x.mul_away(y), pos(SCALE + 3));
+    assert_eq!(x.negate().mul_trunc(y), neg(SCALE + 2));
+    assert_eq!(x.negate().mul_away(y), neg(SCALE + 3));
+
+    let left = pos(1_500_000_000);
+    let right = pos(2_250_000_000);
+    let expected = pos(3_375_000_000);
+    assert_eq!(left.mul_trunc(right), expected);
+    assert_eq!(left.mul_away(right), expected);
+}
+
+#[test]
+fun mul_trunc_and_away_handle_zero_and_smallest_nonzero_products() {
+    let zero = sd29x9::zero();
+    let ulp = pos(1);
+    let neg_one = neg(SCALE);
+
+    assert_eq!(zero.mul_trunc(neg_one), zero);
+    assert_eq!(zero.mul_away(neg_one), zero);
+
+    // 0.000000001 * 0.000000001 = 0.000000000000000001
+    assert_eq!(ulp.mul_trunc(ulp), zero);
+    assert_eq!(ulp.mul_away(ulp), pos(1));
+    assert_eq!(ulp.negate().mul_trunc(ulp), zero);
+    assert_eq!(ulp.negate().mul_away(ulp), neg(1));
+    assert_eq!(ulp.negate().mul_away(ulp.negate()), pos(1));
+}
+
+#[test]
 fun mul_handles_difficult_fractional_magnitudes() {
     // (999999999.999999999)^2 = 999999999999999998.000000000000000001
     let value = pos(999_999_999_999_999_999);
@@ -181,6 +215,11 @@ fun mul_overflow_aborts_for_min_times_negative_one() {
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun mul_away_overflow_aborts_for_min_times_negative_one() {
+    sd29x9::min().mul_away(neg(SCALE));
+}
+
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun mul_overflow_aborts_for_large_positive_result() {
     sd29x9::max().mul(pos(SCALE + 1));
 }
@@ -188,6 +227,16 @@ fun mul_overflow_aborts_for_large_positive_result() {
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun mul_overflow_aborts_for_large_negative_result() {
     sd29x9::min().mul(pos(SCALE + 1));
+}
+
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun mul_away_overflow_aborts_for_large_negative_result() {
+    sd29x9::min().mul_away(pos(SCALE + 1));
+}
+
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun mul_away_overflow_aborts_for_large_positive_result() {
+    sd29x9::max().mul_away(pos(SCALE + 1));
 }
 
 #[test]
