@@ -3,15 +3,9 @@
 /// Tailored to the signed `SD29x9` representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
+use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
-
-// === Constants ===
-
-const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
-const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
-const SIGN_BIT: u128 = 1u128 << 127;
-const SCALE: u256 = 1_000_000_000; // 10^9
 
 // === Errors ===
 
@@ -103,15 +97,16 @@ public fun add(x: SD29x9, y: SD29x9): SD29x9 {
 /// - Aborts if the rounded positive result exceeds the representable `SD29x9` range.
 public fun ceil(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
-    let fractional = mag % SCALE;
+    let scale = common::scale_u256!();
+    let fractional = mag % scale;
     if (fractional == 0) {
         return x
     };
-    let int_part = mag / SCALE;
+    let int_part = mag / scale;
     let result = if (!neg) {
-        Components { mag: (int_part + 1) * SCALE, neg: false }
+        Components { mag: (int_part + 1) * scale, neg: false }
     } else {
-        Components { mag: int_part * SCALE, neg: true }
+        Components { mag: int_part * scale, neg: true }
     };
     wrap_components(result)
 }
@@ -140,15 +135,16 @@ public fun eq(x: SD29x9, y: SD29x9): bool {
 /// - Aborts if the rounded negative result magnitude exceeds the representable `SD29x9` range.
 public fun floor(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
-    let fractional = mag % SCALE;
+    let scale = common::scale_u256!();
+    let fractional = mag % scale;
     if (fractional == 0) {
         return x
     };
-    let int_part = mag / SCALE;
+    let int_part = mag / scale;
     let result = if (!neg) {
-        Components { mag: int_part * SCALE, neg: false }
+        Components { mag: int_part * scale, neg: false }
     } else {
-        Components { mag: (int_part + 1) * SCALE, neg: true }
+        Components { mag: (int_part + 1) * scale, neg: true }
     };
     wrap_components(result)
 }
@@ -214,7 +210,7 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
 
 /// Computes the truncating remainder of dividing one `SD29x9` value by another.
 ///
-/// This helper follows remainder semantics, not Euclidean modulo semantics. The magnitude is
+/// This function follows remainder semantics, not Euclidean modulo semantics. The magnitude is
 /// computed as `abs(x) % abs(y)`, and the sign of the result follows the dividend `x`. In
 /// particular, a negative dividend can produce a negative non-zero remainder, while the sign of
 /// `y` does not affect the result apart from the zero-divisor check.
@@ -229,11 +225,38 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
-public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
+public fun rem(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let remainder = x.mag % y.mag;
     wrap_components(Components { neg: x.neg, mag: remainder })
+}
+
+/// Computes the Euclidean remainder of dividing one `SD29x9` value by another.
+///
+/// The result is always non-negative and satisfies `0 <= result < abs(y)`. When the
+/// truncating remainder is negative, `abs(y)` is added to produce the Euclidean result.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The Euclidean remainder of `x` divided by `y`, always non-negative.
+/// - Returns `0` when `x` is an exact multiple of `y`.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
+    let x = decompose(x.unwrap());
+    let y = decompose(y.unwrap());
+    let remainder = x.mag % y.mag;
+    let mag = if (x.neg && remainder > 0) {
+        y.mag - remainder
+    } else {
+        remainder
+    };
+    wrap_components(Components { neg: false, mag })
 }
 
 /// Multiplies two `SD29x9` values with fixed-point scaling.
@@ -252,7 +275,7 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
     let prod = x.mag * y.mag;
-    let mag = prod / SCALE;
+    let mag = prod / common::scale_u256!();
     wrap_components(Components { neg, mag })
 }
 
@@ -272,30 +295,32 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
     let neg = x.neg != y.neg;
-    let numerator = x.mag * SCALE;
+    let numerator = x.mag * common::scale_u256!();
     let mag = numerator / y.mag;
     wrap_components(Components { neg, mag })
 }
 
 /// Raises `x` to a power of `exp`.
 ///
-/// This helper uses repeated fixed-point multiplication with truncation after each step. It updates
-/// the magnitude via `res_mag = (res_mag * mag) / SCALE`, while the sign is derived separately from
-/// the sign of `x` and the parity of `exp`. As a result, the signed output follows truncation
-/// toward zero rather than `floor` for negative values, and this step is applied `exp - 1` times
-/// rather than computing the exact power and rounding once at the end.
+/// This helper uses binary exponentiation with fixed-point
+/// multiplication. Each intermediate multiply or square applies
+/// fixed-point truncation via division by `SCALE`.
 ///
 /// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
 /// `exp` grows, results are biased toward zero, and for `0 < abs(x) < 1` intermediate values can
 /// reach zero before the final mathematically scaled result would.
+///
+/// Because truncation is applied at intermediate steps, the result generally matches neither the
+/// exact real-valued power rounded once at the end nor the result of left-to-right repeated
+/// multiplication. In particular, fixed-point multiplication is not associative under truncation,
+/// so the grouping of operations used by binary exponentiation affects the final value.
 ///
 /// #### Parameters
 /// - `x`: Base value.
 /// - `exp`: Exponent.
 ///
 /// #### Returns
-/// - An approximation of `x^exp` using the same stepwise truncation semantics as repeated
-///   fixed-point multiplication.
+/// - An approximation of `x^exp` computed using binary exponentiation and fixed-point truncation.
 ///
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
@@ -308,12 +333,24 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     };
     let Components { neg, mag } = decompose(x.unwrap());
     let res_neg = neg && (exp % 2 != 0);
-    let mut res_mag = mag;
-    let times = exp - 1;
-    times.do!(|_| {
-        res_mag = res_mag * mag / SCALE;
-        assert!(res_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
-    });
+    let scale = common::scale_u256!();
+    let max_mag = common::min_sd29x9_value!() as u256;
+    let mut res_mag = scale;
+    let mut base_mag = mag;
+    let mut exp = exp;
+
+    while (exp != 0) {
+        if ((exp & 1) == 1) {
+            res_mag = res_mag * base_mag / scale;
+            assert!(res_mag <= max_mag, EOverflow);
+        };
+        exp = exp >> 1;
+        if (exp != 0) {
+            base_mag = base_mag * base_mag / scale;
+            assert!(base_mag <= max_mag, EOverflow);
+        };
+    };
+
     let result = Components { neg: res_neg, mag: res_mag };
     wrap_components(result)
 }
@@ -394,7 +431,7 @@ public struct Components has copy, drop {
 }
 
 fun decompose(bits: u128): Components {
-    if ((bits & SIGN_BIT) != 0) {
+    if ((bits & common::sign_bit!()) != 0) {
         Components { neg: true, mag: two_complement(bits) as u256 }
     } else {
         Components { neg: false, mag: bits as u256 }
@@ -423,7 +460,7 @@ fun wrap_components(value: Components): SD29x9 {
     if (value.mag == 0) {
         return zero()
     };
-    let min_negative = MIN_NEGATIVE_VALUE as u256;
+    let min_negative = common::min_sd29x9_value!() as u256;
     if (value.neg && value.mag == min_negative) {
         min()
     } else {
@@ -434,7 +471,7 @@ fun wrap_components(value: Components): SD29x9 {
 
 fun wrapping_add_bits(a: u128, b: u128): u128 {
     let sum = (a as u256) + (b as u256);
-    (sum & (U128_MAX_VALUE as u256)) as u128
+    (sum & (std::u128::max_value!() as u256)) as u128
 }
 
 fun wrapping_sub_bits(a: u128, b: u128): u128 {
