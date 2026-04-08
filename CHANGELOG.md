@@ -12,14 +12,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- `ud30x9_convert` for scale-aware whole-number conversions to and from `UD30x9`.
-- `sd29x9_convert` for scale-aware whole-number conversions to and from `SD29x9`.
-- Cross-type casts between `UD30x9` and `SD29x9`, including checked `try_` variants.
-- Object-call syntax for whole-number conversion helpers on `UD30x9` and `SD29x9`.
+- `ud30x9_convert` for scale-aware whole-number conversions to and from `UD30x9`. (#264)
+- `sd29x9_convert` for scale-aware whole-number conversions to and from `SD29x9`. (#264)
+- Cross-type casts between `UD30x9` and `SD29x9`, including checked `try_` variants. (#264)
+- Object-call syntax for whole-number conversion helpers on `UD30x9` and `SD29x9`. (#264)
 
 #### Changed (Breaking)
 
-- Removed public module `casting_u128`; use `ud30x9::wrap` and `sd29x9::wrap` directly for raw casts.
+- Removed public module `casting_u128`; use `ud30x9::wrap` and `sd29x9::wrap` directly for raw casts. (#264)
+- `UD30x9::sub` now aborts with `EUnderflow` instead of `EOverflow` when the result would be negative (#297)
 
 ### `openzeppelin_math`
 
