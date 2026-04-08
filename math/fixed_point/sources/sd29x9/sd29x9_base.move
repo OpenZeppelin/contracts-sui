@@ -546,11 +546,11 @@ fun wrap_components(value: Components): SD29x9 {
     if (value.mag == 0) {
         return zero()
     };
-    let min_negative = MIN_NEGATIVE_VALUE as u256;
-    if (value.neg && value.mag == min_negative) {
+    let max_mag = MIN_NEGATIVE_VALUE as u256;
+    if (value.neg && value.mag == max_mag) {
         min()
     } else {
-        assert!(value.mag < min_negative, EOverflow);
+        assert!(value.mag < max_mag, EOverflow);
         wrap(value.mag as u128, value.neg)
     }
 }
