@@ -38,6 +38,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::mod as SD29x9.mod;
 public use fun openzeppelin_fp_math::sd29x9_base::mul as SD29x9.mul;
 public use fun openzeppelin_fp_math::sd29x9_base::negate as SD29x9.negate;
 public use fun openzeppelin_fp_math::sd29x9_base::pow as SD29x9.pow;
+public use fun openzeppelin_fp_math::sd29x9_base::rem as SD29x9.rem;
 public use fun openzeppelin_fp_math::sd29x9_base::sub as SD29x9.sub;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchecked_add;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_sub as SD29x9.unchecked_sub;
