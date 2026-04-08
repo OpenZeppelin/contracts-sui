@@ -790,30 +790,36 @@ fun quick_sort_by_id_ascending() {
 }
 
 #[test]
-fun quick_sort_by_median_of_three_all_branches() {
-    // Crafted to exercise all median-of-three branches:
-    // For a sub-array [start..end), mid = (start+end)/2, pivot_index = end-1
-    // We need: vec[mid] < vec[start] (swap start,mid)
-    // Then after swap: vec[pivot_index] < vec[start] (swap start,pivot)
-    // This requires start > mid AND start > pivot for the original arrangement.
-    // With >10 elements, first partition uses start=0, mid=7, pivot_index=14
-    let mut vec = vector[
-        50u64, // idx 0 (start) — largest of three
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        1, // idx 7 (mid) — smallest of three
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        40, // idx 14 (pivot_index) — middle of three
-    ];
-    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
-    assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 40, 50]);
+fun quick_sort_by_median_of_three_crafted_inputs() {
+    // Exercises all three median-of-three conditional branches across separate inputs.
+    // For 15 elements the first partition uses start=0, mid=7, pivot_index=14.
+    // All three swaps cannot fire in a single call (branch 1+2 imply branch 3 is a no-op),
+    // so we use three vectors that each target a different branch.
+
+    // Vector 1: triggers branch 1 (swap start,mid) and branch 2 (swap start,pivot_index).
+    // Initial: vec[0]=50 > vec[7]=40 > vec[14]=30.
+    // Branch 1: 40 <= 50 → swap(0,7) → vec[0]=40, vec[7]=50.
+    // Branch 2: 30 <= 40 → swap(0,14) → vec[0]=30, vec[14]=40.
+    // Branch 3: 50 <= 40 → false, no swap.
+    let mut vec1 = vector[50u64, 2, 3, 4, 5, 6, 7, 40, 9, 10, 11, 12, 13, 14, 30];
+    vector::quick_sort_by!(&mut vec1, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec1, vector[2u64, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 30, 40, 50]);
+
+    // Vector 2: triggers branch 1 (swap start,mid) and branch 3 (swap mid,pivot_index).
+    // Initial: vec[0]=30 > vec[7]=20, vec[14]=40.
+    // Branch 1: 20 <= 30 → swap(0,7) → vec[0]=20, vec[7]=30.
+    // Branch 2: 40 <= 20 → false, no swap.
+    // Branch 3: 30 <= 40 → swap(7,14) → vec[7]=40, vec[14]=30.
+    let mut vec2 = vector[30u64, 2, 3, 4, 5, 6, 7, 20, 9, 10, 11, 12, 13, 14, 40];
+    vector::quick_sort_by!(&mut vec2, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec2, vector[2u64, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 20, 30, 40]);
+
+    // Vector 3: triggers branch 2 (swap start,pivot_index) only.
+    // Initial: vec[0]=50, vec[7]=60, vec[14]=30.
+    // Branch 1: 60 <= 50 → false, no swap.
+    // Branch 2: 30 <= 50 → swap(0,14) → vec[0]=30, vec[14]=50.
+    // Branch 3: 60 <= 50 → false, no swap.
+    let mut vec3 = vector[50u64, 2, 3, 4, 5, 6, 7, 60, 9, 10, 11, 12, 13, 14, 30];
+    vector::quick_sort_by!(&mut vec3, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec3, vector[2u64, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 30, 50, 60]);
 }
