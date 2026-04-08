@@ -38,18 +38,74 @@ fun div_truncates_towards_zero() {
 }
 
 #[test]
+fun div_trunc_and_away_variants_cover_signs_and_exactness() {
+    let numerator = pos(SCALE);
+    let denominator = pos(3 * SCALE);
+    assert_eq!(numerator.div(denominator), numerator.div_trunc(denominator));
+    assert_eq!(numerator.div_trunc(denominator), pos(333_333_333));
+    assert_eq!(numerator.div_away(denominator), pos(333_333_334));
+    assert_eq!(numerator.negate().div_trunc(denominator), neg(333_333_333));
+    assert_eq!(numerator.negate().div_away(denominator), neg(333_333_334));
+
+    let exact_numerator = pos(7 * SCALE + 500_000_000);
+    let exact_denominator = pos(2 * SCALE + 500_000_000);
+    let expected = pos(3 * SCALE);
+    assert_eq!(exact_numerator.div_trunc(exact_denominator), expected);
+    assert_eq!(exact_numerator.div_away(exact_denominator), expected);
+}
+
+#[test]
+fun div_trunc_and_away_handle_zero_smallest_nonzero_and_sign_parity() {
+    let zero = sd29x9::zero();
+    let ulp = pos(1);
+    let two = pos(2 * SCALE);
+    let neg_one = neg(SCALE);
+
+    assert_eq!(zero.div_trunc(neg_one), zero);
+    assert_eq!(zero.div_away(neg_one), zero);
+
+    // 0.000000001 / 2.0 = 0.0000000005
+    assert_eq!(ulp.div_trunc(two), zero);
+    assert_eq!(ulp.div_away(two), pos(1));
+    assert_eq!(ulp.negate().div_trunc(two), zero);
+    assert_eq!(ulp.negate().div_away(two), neg(1));
+    assert_eq!(ulp.div_away(two.negate()), neg(1));
+    assert_eq!(ulp.negate().div_away(two.negate()), pos(1));
+}
+
+#[test]
 fun div_handles_min_over_one() {
     assert_eq!(sd29x9::min().div(pos(SCALE)), sd29x9::min());
 }
 
-#[test, expected_failure(arithmetic_error, location = openzeppelin_fp_math::sd29x9_base)]
+#[test, expected_failure(abort_code = sd29x9_base::EDivisionByZero)]
 fun div_by_zero_aborts() {
     pos(10 * SCALE).div(sd29x9::zero());
 }
 
+#[test, expected_failure(abort_code = sd29x9_base::EDivisionByZero)]
+fun div_trunc_by_zero_aborts() {
+    pos(10 * SCALE).div_trunc(sd29x9::zero());
+}
+
+#[test, expected_failure(abort_code = sd29x9_base::EDivisionByZero)]
+fun div_away_by_zero_aborts() {
+    pos(10 * SCALE).div_away(sd29x9::zero());
+}
+
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
-fun div_handles_min_div_negative_one() {
+fun div_overflow_aborts_for_min_div_negative_one() {
     sd29x9::min().div(neg(SCALE));
+}
+
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun div_away_overflow_aborts_for_min_div_negative_one() {
+    sd29x9::min().div_away(neg(SCALE));
+}
+
+#[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
+fun div_away_overflow_aborts_for_large_positive_result() {
+    sd29x9::max().div_away(pos(1));
 }
 
 #[test]
