@@ -18,6 +18,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - Renamed `UD30x9::lshift` to `unchecked_lshift`, and `UD30x9::rshift` to `unchecked_rshift`. (#280)
 
+### `openzeppelin_math`
+
+#### Fixed
+
+- `u256::is_power_of_ten` helper now properly handles valid `10^77` value. (#291)
+
 ## 1.1.0-rc.0 (10-03-2026)
 
 ### `openzeppelin_fp_math`
