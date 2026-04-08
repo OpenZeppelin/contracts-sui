@@ -449,7 +449,7 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     while (exp != 0) {
         if ((exp & 1) == 1) {
             res_mag = res_mag * base_mag / scale;
-            assert!(res_mag <= max_mag, EOverflow);
+            assert!(res_mag < max_mag || (res_neg && res_mag == max_mag), EOverflow);
         };
         exp = exp >> 1;
         if (exp != 0) {
@@ -567,11 +567,11 @@ fun wrap_components(value: Components): SD29x9 {
     if (value.mag == 0) {
         return zero()
     };
-    let min_negative = common::min_sd29x9_value!() as u256;
-    if (value.neg && value.mag == min_negative) {
+    let max_mag = common::min_sd29x9_value!() as u256;
+    if (value.neg && value.mag == max_mag) {
         min()
     } else {
-        assert!(value.mag < min_negative, EOverflow);
+        assert!(value.mag < max_mag, EOverflow);
         wrap(value.mag as u128, value.neg)
     }
 }
