@@ -21,7 +21,7 @@ module openzeppelin_math::vector;
 /// #### Example
 /// ```move
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
-/// macros::quick_sort!(&mut vec);
+/// vector::quick_sort!(&mut vec);
 /// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
 /// ```
 public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
