@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Fixed
 
-- `SD29x9::pow` now properly handles overflow cases. (#292)
+- `SD29x9::pow` now properly handles overflow cases. (#280)
 
 ### `openzeppelin_math`
 
