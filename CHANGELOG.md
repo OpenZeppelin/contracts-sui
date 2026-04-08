@@ -24,7 +24,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Removed bitwise operations from `SD29x9`.
 - Removed public module `casting_u128`; use `ud30x9::wrap` and `sd29x9::wrap` directly for raw casts. (#264)
 - `UD30x9::lshift` now aborts on overflow, and both `lshift` and `rshift` now abort on invalid shift sizes. (#288)
-- `SD29x9::rem` function for truncated remainder semantics (sign follows the dividend) (#301)
 - `SD29x9::mod` now uses Euclidean remainder semantics (result is always non-negative). The previous truncated remainder behavior is available via `SD29x9::rem` (#301)
 - `UD30x9::sub` now aborts with `EUnderflow` instead of `EOverflow` when the result would be negative (#297)
 
