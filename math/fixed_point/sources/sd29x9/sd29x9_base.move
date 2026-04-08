@@ -347,23 +347,25 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 
 /// Raises `x` to a power of `exp`.
 ///
-/// This helper uses repeated fixed-point multiplication with truncation after each step. It updates
-/// the magnitude via `res_mag = (res_mag * mag) / SCALE`, while the sign is derived separately from
-/// the sign of `x` and the parity of `exp`. As a result, the signed output follows truncation
-/// toward zero rather than `floor` for negative values, and this step is applied `exp - 1` times
-/// rather than computing the exact power and rounding once at the end.
+/// This helper uses binary exponentiation with fixed-point
+/// multiplication. Each intermediate multiply or square applies
+/// fixed-point truncation via division by `SCALE`.
 ///
 /// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
 /// `exp` grows, results are biased toward zero, and for `0 < abs(x) < 1` intermediate values can
 /// reach zero before the final mathematically scaled result would.
+///
+/// Because truncation is applied at intermediate steps, the result generally matches neither the
+/// exact real-valued power rounded once at the end nor the result of left-to-right repeated
+/// multiplication. In particular, fixed-point multiplication is not associative under truncation,
+/// so the grouping of operations used by binary exponentiation affects the final value.
 ///
 /// #### Parameters
 /// - `x`: Base value.
 /// - `exp`: Exponent.
 ///
 /// #### Returns
-/// - An approximation of `x^exp` using the same stepwise truncation semantics as repeated
-///   fixed-point multiplication.
+/// - An approximation of `x^exp` computed using binary exponentiation and fixed-point truncation.
 ///
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
@@ -376,12 +378,22 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     };
     let Components { neg, mag } = decompose(x.unwrap());
     let res_neg = neg && (exp % 2 != 0);
-    let mut res_mag = mag;
-    let times = exp - 1;
-    times.do!(|_| {
-        res_mag = res_mag * mag / SCALE;
-        assert!(res_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
-    });
+    let mut res_mag = SCALE;
+    let mut base_mag = mag;
+    let mut exp = exp;
+
+    while (exp != 0) {
+        if ((exp & 1) == 1) {
+            res_mag = res_mag * base_mag / SCALE;
+            assert!(res_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
+        };
+        exp = exp >> 1;
+        if (exp != 0) {
+            base_mag = base_mag * base_mag / SCALE;
+            assert!(base_mag <= MIN_NEGATIVE_VALUE as u256, EOverflow);
+        };
+    };
+
     let result = Components { neg: res_neg, mag: res_mag };
     wrap_components(result)
 }

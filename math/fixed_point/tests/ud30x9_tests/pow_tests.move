@@ -39,7 +39,10 @@ fun pow_handles_fractional_values_and_truncation() {
 #[test]
 fun pow_supports_high_exponents() {
     let val = fixed(SCALE + 250_000_000); // 1.25
-    val.pow(255);
+    let pow255 = val.pow(255);
+    assert_eq!(pow255, fixed(5_152_918_999_790_606_401_120_741_084_983_548));
+    // with binary exponentiation, rounding/truncation behavior for larger exponents is affected by grouping
+    assert!(pow255 != val.pow(254).mul(val));
 }
 
 #[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
