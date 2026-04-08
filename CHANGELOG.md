@@ -27,6 +27,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `UD30x9::sub` now aborts with `EUnderflow` instead of `EOverflow` when the result would be negative (#297)
 - `ud30x9_base` abort codes renumbered: `EDivisionByZero` added at code `2`, `ECannotBeConvertedToSD29x9` moved from code `1` to code `3`. Code matching on numeric abort codes must be updated.
 
+#### Fixed
+
+- `SD29x9::pow` now properly handles overflow cases. (#280)
+
 ### `openzeppelin_math`
 
 #### Changed
