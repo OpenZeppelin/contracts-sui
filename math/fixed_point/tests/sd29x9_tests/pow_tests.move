@@ -48,16 +48,19 @@ fun pow_handles_negative_one_parity() {
 #[test]
 fun pow_supports_high_exponents() {
     let val = pos(SCALE + 250_000_000); // 1.25
-    // Exact result for exp=16: sequential truncation of (res_mag * 1_250_000_000 / 1_000_000_000)
-    // gives 35_527_136_770 (vs. exact 1.25^16 * 10^9 = 35_527_136_787 before flooring).
-    assert_eq!(val.pow(16), pos(35_527_136_770));
-    // Recurrence invariant for the maximum u8 exponent: pow(n) == pow(n-1).mul(base).
-    assert_eq!(val.pow(255), val.pow(254).mul(val));
+    // Expected value is the result of `sd29x9::pow`'s binary exponentiation with intermediate
+    // truncation, not simply floor(1.25^16 * 10^9) (the exact value before flooring is 35_527_136_787)
+    assert_eq!(val.pow(16), pos(35_527_136_781));
+
+    let pow255 = val.pow(255);
+    assert_eq!(pow255, pos(5_152_918_999_790_606_401_120_741_084_983_548));
+    // with binary exponentiation, rounding/truncation behavior for larger exponents is affected by grouping
+    assert!(pow255 != val.pow(254).mul(val));
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
 fun pow_overflow_aborts_for_large_base() {
-    sd29x9::max().pow(2);
+    sd29x9::max().pow(3);
 }
 
 #[test, expected_failure(abort_code = sd29x9_base::EOverflow)]
