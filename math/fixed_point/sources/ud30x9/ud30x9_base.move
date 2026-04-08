@@ -14,6 +14,10 @@ const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigne
 #[error(code = 1)]
 const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
 
+/// Arithmetic underflow: the result would be negative, which is unrepresentable in `UD30x9`
+#[error(code = 2)]
+const EUnderflow: vector<u8> = "Value underflows UD30x9 (result would be negative)";
+
 // === Conversion ===
 
 /// Converts a `UD30x9` value to a `SD29x9` value.
@@ -287,21 +291,24 @@ public fun div(x: UD30x9, y: UD30x9): UD30x9 {
 
 /// Raises `x` to a power of `exp`.
 ///
-/// This helper uses repeated fixed-point multiplication with truncation after each step. It applies
-/// the recurrence `result = floor(result * base / SCALE)` `exp - 1` times rather than computing the
-/// exact power and rounding once at the end.
+/// This helper uses binary exponentiation with fixed-point multiplication. Each intermediate
+/// multiply or square applies fixed-point truncation via division by `SCALE`.
 ///
 /// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
 /// `exp` grows, results are biased toward zero, and for `0 < x < 1` intermediate values can reach
 /// zero before the final mathematically scaled result would.
+///
+/// Because truncation is applied at intermediate steps, the result generally matches neither the
+/// exact real-valued power rounded once at the end nor the result of left-to-right repeated
+/// multiplication. In particular, fixed-point multiplication is not associative under truncation,
+/// so the grouping of operations used by binary exponentiation affects the final value.
 ///
 /// #### Parameters
 /// - `x`: Base value.
 /// - `exp`: Exponent.
 ///
 /// #### Returns
-/// - An approximation of `x^exp` using the same stepwise truncation semantics as repeated
-///   fixed-point multiplication.
+/// - An approximation of `x^exp` computed using binary exponentiation and fixed-point truncation.
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
@@ -312,14 +319,24 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     if (exp == 1) {
         return x
     };
+
+    let scale = common::scale_u256!();
     let max_value = std::u128::max_value!() as u256;
-    let base = x.unwrap() as u256;
-    let mut result = base;
-    let times = exp - 1;
-    times.do!(|_| {
-        result = result * base / common::scale_u256!();
-        assert!(result <= max_value, EOverflow);
-    });
+    let mut base = x.unwrap() as u256;
+    let mut result = scale;
+    let mut exp = exp;
+
+    while (exp != 0) {
+        if ((exp & 1) == 1) {
+            result = result * base / scale;
+            assert!(result <= max_value, EOverflow);
+        };
+        exp = exp >> 1;
+        if (exp != 0) {
+            base = base * base / scale;
+            assert!(base <= max_value, EOverflow);
+        };
+    };
 
     wrap_u256(result)
 }
@@ -389,7 +406,7 @@ public fun rshift(x: UD30x9, bits: u8): UD30x9 {
 /// - Aborts if `y > x`.
 public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap(), y.unwrap());
-    assert!(x >= y, EOverflow);
+    assert!(x >= y, EUnderflow);
     wrap(x - y)
 }
 
