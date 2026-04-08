@@ -21,8 +21,12 @@ const EOverflow: vector<u8> = "Value overflows UD30x9 (must be less than 2^128)"
 #[error(code = 1)]
 const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
 
-/// Shift size is out of range (must be less than 128)
+/// Arithmetic underflow: the result would be negative, which is unrepresentable in `UD30x9`
 #[error(code = 2)]
+const EUnderflow: vector<u8> = "Value underflows UD30x9 (result would be negative)";
+
+/// Shift size is out of range (must be less than 128)
+#[error(code = 3)]
 const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
 
 // === Conversion ===
@@ -453,7 +457,7 @@ public fun unchecked_rshift(x: UD30x9, bits: u8): UD30x9 {
 /// - Aborts if `y > x`.
 public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap(), y.unwrap());
-    assert!(x >= y, EOverflow);
+    assert!(x >= y, EUnderflow);
     wrap(x - y)
 }
 
