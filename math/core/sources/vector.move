@@ -6,8 +6,9 @@ module openzeppelin_math::vector;
 ///
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
-/// average-case time complexity and `O(n²)` worst-case complexity, when the smallest or
-/// largest element is consistently selected as the pivot.
+/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
+/// pivot selection combined with three-way partitioning makes this practically unreachable
+/// — it requires adversarially crafted inputs.
 ///
 /// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
 /// it suitable for arbitrarily large vectors.
@@ -34,8 +35,9 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 ///
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
-/// average-case time complexity and `O(n²)` worst-case complexity, when the smallest or
-/// largest element is consistently selected as the pivot.
+/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
+/// pivot selection combined with three-way partitioning makes this practically unreachable
+/// — it requires adversarially crafted inputs or an incorrect comparator (see `$le` below).
 ///
 /// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
 /// it suitable for arbitrarily large vectors.
@@ -46,8 +48,10 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// #### Parameters
 /// - `$vec`: A mutable reference to the vector to be sorted in-place.
 /// - `$le`: A comparison function that takes two references and returns `true` if the first
-///   element should be ordered before or equal to the second element. For ascending order,
-///   this should implement "less than or equal to" semantics.
+///   element should be ordered before or equal to the second element. **Must implement
+///   non-strict ordering** (i.e., `<=` for ascending, `>=` for descending). Using a strict
+///   comparator (e.g., `<` instead of `<=`) defeats three-way partitioning and can degrade
+///   performance to `O(n²)` when duplicate elements are present.
 ///
 /// #### Example
 /// ```move
