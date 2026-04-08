@@ -12,11 +12,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- Added new versions of `UD30x9::lshift` and `UD30x9::rshift` that abort on overflow. (#288)
+- Added `UD30x9::unchecked_lshift` and `UD30x9::unchecked_rshift` with truncating / zero-return behavior for shift operations. (#288)
 
 #### Changed (Breaking)
 
-- Renamed `UD30x9::lshift` to `unchecked_lshift`, and `UD30x9::rshift` to `unchecked_rshift`. (#288)
+- `UD30x9::lshift` now aborts on overflow, and both `lshift` and `rshift` now abort on invalid shift sizes. (#288)
 
 ### `openzeppelin_math`
 
