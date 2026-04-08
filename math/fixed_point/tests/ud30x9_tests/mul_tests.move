@@ -70,6 +70,38 @@ fun mul_truncates_towards_zero_at_scale_boundary() {
 }
 
 #[test]
+fun mul_trunc_and_away_variants_cover_inexact_and_exact_products() {
+    let x = fixed(SCALE + 1);
+    let y = fixed(SCALE + 1);
+    assert_eq!(x.mul(y), x.mul_trunc(y));
+    assert_eq!(x.mul_trunc(y), fixed(SCALE + 2));
+    assert_eq!(x.mul_away(y), fixed(SCALE + 3));
+
+    let left = fixed(1_500_000_000);
+    let right = fixed(2_250_000_000);
+    let expected = fixed(3_375_000_000);
+    assert_eq!(left.mul_trunc(right), expected);
+    assert_eq!(left.mul_away(right), expected);
+}
+
+#[test]
+fun mul_trunc_and_away_handle_zero_identity_and_smallest_nonzero_products() {
+    let zero = fixed(0);
+    let one = fixed(SCALE);
+    let value = fixed(5 * SCALE + 250_000_000);
+    let ulp = fixed(1);
+
+    assert_eq!(zero.mul_trunc(value), zero);
+    assert_eq!(zero.mul_away(value), zero);
+    assert_eq!(value.mul_trunc(one), value);
+    assert_eq!(value.mul_away(one), value);
+
+    // 0.000000001 * 0.000000001 = 0.000000000000000001
+    assert_eq!(ulp.mul_trunc(ulp), zero);
+    assert_eq!(ulp.mul_away(ulp), ulp);
+}
+
+#[test]
 fun mul_handles_difficult_fractional_magnitudes() {
     // (999999999.999999999)^2 = 999999999999999998.000000000000000001
     let value = fixed(999_999_999_999_999_999);
@@ -101,6 +133,11 @@ fun mul_handles_max_times_one() {
 #[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
 fun mul_overflow_aborts_for_large_result() {
     ud30x9::max().mul(fixed(SCALE + 1));
+}
+
+#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+fun mul_away_overflow_aborts_for_large_result() {
+    ud30x9::max().mul_away(fixed(SCALE + 1));
 }
 
 #[test]
