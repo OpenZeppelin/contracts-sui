@@ -17,6 +17,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 #### Changed (Breaking)
 
 - `SD29x9::mod` now uses Euclidean remainder semantics (result is always non-negative). The previous truncated remainder behavior is available via `SD29x9::rem` (#301)
+- `UD30x9::sub` now aborts with `EUnderflow` instead of `EOverflow` when the result would be negative (#297)
+
+### `openzeppelin_math`
 
 #### Fixed
 
