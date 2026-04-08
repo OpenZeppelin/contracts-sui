@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_fp_math`
+
+#### Fixed
+
+- `SD29x9::pow` now properly handles overflow cases. (#292)
+
 ### `openzeppelin_math`
 
 #### Fixed
