@@ -10,13 +10,17 @@ use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
 #[error(code = 0)]
 const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigned range)";
 
-/// Value cannot be converted to `SD29x9`
-#[error(code = 1)]
-const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
-
 /// Arithmetic underflow: the result would be negative, which is unrepresentable in `UD30x9`
-#[error(code = 2)]
+#[error(code = 1)]
 const EUnderflow: vector<u8> = "Value underflows UD30x9 (result would be negative)";
+
+/// Divisor must be non-zero
+#[error(code = 2)]
+const EDivisionByZero: vector<u8> = "Divisor must be non-zero";
+
+/// Value cannot be converted to `SD29x9`
+#[error(code = 3)]
+const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
 
 // === Conversion ===
 
@@ -245,54 +249,135 @@ public fun lte(x: UD30x9, y: UD30x9): bool {
 /// #### Aborts
 /// - Aborts if `y` is zero.
 public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
-    wrap(x.unwrap() % y.unwrap())
+    let (x, y) = (x.unwrap(), y.unwrap());
+    assert!(y != 0, EDivisionByZero);
+    wrap(x % y)
 }
 
 /// Multiplies two `UD30x9` values with fixed-point scaling.
 ///
-/// The intermediate product is rescaled using integer division by `SCALE`, so the result is
-/// rounded down toward zero whenever the exact product cannot be represented with 9 decimals.
+/// This function rounds toward zero when the exact product cannot be represented with 9 decimals.
+/// Equivalent to `mul_trunc`.
 ///
 /// #### Parameters
 /// - `x`: First operand.
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The product `x * y`, rounded down to the nearest representable `UD30x9` value.
+/// - The product `x * y`, rounded toward zero.
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
+    mul_trunc(x, y)
+}
+
+/// Multiplies two `UD30x9` values with fixed-point scaling and truncation toward zero.
+///
+/// This function rounds toward zero when the exact product cannot be represented with 9 decimals.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`, rounded toward zero.
+///
+/// #### Aborts
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+public fun mul_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let product = x * y / common::scale_u256!();
-    wrap_u256(product)
+    wrap_u256(x * y / common::scale_u256!())
+}
+
+/// Multiplies two `UD30x9` values with fixed-point scaling and rounds away from zero.
+///
+/// This function rounds away from zero when the exact product cannot be represented with 9
+/// decimals.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`, rounded away from zero when inexact.
+///
+/// #### Aborts
+/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+public fun mul_away(x: UD30x9, y: UD30x9): UD30x9 {
+    let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
+    wrap_u256(common::div_away_u256(x * y, common::scale_u256!()))
 }
 
 /// Divides `x` by `y` with fixed-point scaling.
 ///
-/// The scaled numerator is reduced using integer division, so the result is rounded down toward
-/// zero whenever the exact quotient cannot be represented with 9 decimals.
+/// This function rounds toward zero when the exact quotient cannot be represented with 9 decimals.
+/// Equivalent to `div_trunc`.
 ///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The quotient `x / y`, rounded down to the nearest representable `UD30x9` value.
+/// - The quotient `x / y`, rounded toward zero.
 ///
 /// #### Aborts
 /// - Aborts if `y` is zero.
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
+    div_trunc(x, y)
+}
+
+/// Divides `x` by `y` with fixed-point scaling and truncation toward zero.
+///
+/// This function rounds toward zero when the exact quotient cannot be represented with 9 decimals.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The quotient `x / y`, rounded toward zero.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+public fun div_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
+    assert!(y != 0, EDivisionByZero);
     let numerator = x * common::scale_u256!();
     wrap_u256(numerator / y)
+}
+
+/// Divides `x` by `y` with fixed-point scaling and rounds away from zero.
+///
+/// This function rounds away from zero when the exact quotient cannot be represented with 9
+/// decimals.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Examples
+/// - `1.0 / 3.0` returns `0.333333334`.
+///
+/// #### Returns
+/// - The quotient `x / y`, rounded away from zero when inexact.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+public fun div_away(x: UD30x9, y: UD30x9): UD30x9 {
+    let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
+    assert!(y != 0, EDivisionByZero);
+    let numerator = x * common::scale_u256!();
+    wrap_u256(common::div_away_u256(numerator, y))
 }
 
 /// Raises `x` to a power of `exp`.
 ///
 /// This helper uses binary exponentiation with fixed-point multiplication. Each intermediate
-/// multiply or square applies fixed-point truncation via division by `SCALE`.
+/// multiply or square applies fixed-point truncation via division by `common::scale_u256!()`.
 ///
 /// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
 /// `exp` grows, results are biased toward zero, and for `0 < x < 1` intermediate values can reach

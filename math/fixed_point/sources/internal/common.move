@@ -68,3 +68,20 @@ public(package) macro fun max_ud30x9_whole(): u128 {
 public(package) macro fun max_sd29x9_whole(): u128 {
     max_sd29x9_magnitude!() / scale!()
 }
+
+/// Divides `numerator` by `denominator` and rounds up when the division is inexact.
+///
+/// #### Parameters
+/// - `numerator`: Dividend.
+/// - `denominator`: Divisor. Must be non-zero.
+///
+/// #### Returns
+/// - `numerator / denominator` when exact, otherwise that quotient plus one.
+public(package) fun div_away_u256(numerator: u256, denominator: u256): u256 {
+    let quotient = numerator / denominator;
+    if (quotient * denominator == numerator) {
+        quotient
+    } else {
+        quotient + 1
+    }
+}
