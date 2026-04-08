@@ -79,6 +79,15 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         let start = stack_start.pop_back();
         let end = stack_end.pop_back();
 
+        // Empty range: nothing to sort.
+        if (start == end) {
+            continue
+        };
+        // Single-element range: already sorted.
+        if (start + 1 == end) {
+            continue
+        };
+
         // Use insertion sort for small sub-partitions.
         if (end - start <= 10) {
             // Inline insertion sort for the sub-range [start, end).
@@ -156,18 +165,30 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 
         if (left_size <= right_size) {
             // Left ≤ right: push right (larger) first, left (smaller) second.
-            stack_start.push_back(eq_end);
-            stack_end.push_back(end);
+            // Skip empty and single-element right partitions.
+            if (right_size > 1) {
+                stack_start.push_back(eq_end);
+                stack_end.push_back(end);
+            };
 
-            stack_start.push_back(start);
-            stack_end.push_back(lt);
+            // Skip empty and single-element left partitions.
+            if (left_size > 1) {
+                stack_start.push_back(start);
+                stack_end.push_back(lt);
+            };
         } else {
             // Left > right: push left (larger) first, right (smaller) second.
-            stack_start.push_back(start);
-            stack_end.push_back(lt);
+            // Skip empty and single-element left partitions.
+            if (left_size > 1) {
+                stack_start.push_back(start);
+                stack_end.push_back(lt);
+            };
 
-            stack_start.push_back(eq_end);
-            stack_end.push_back(end);
+            // Skip empty and single-element right partitions.
+            if (right_size > 1) {
+                stack_start.push_back(eq_end);
+                stack_end.push_back(end);
+            };
         };
     };
 }
