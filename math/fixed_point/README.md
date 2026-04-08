@@ -11,7 +11,7 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 - Arithmetic: `add`, `sub`, `unchecked_add`, `unchecked_sub`, `mod`
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
-- Bitwise: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
+- `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
 
 ## Casting vs Converting
 
@@ -93,12 +93,3 @@ let balance = sd29x9_convert::from_u128(10, false); // 10.0
 let adjustment = sd29x9_convert::from_u128(2, true).add(sd29x9::wrap(500_000_000, true)); // -2.5
 let new_balance = balance.add(adjustment); // 7.5
 ```
-
-## Notes
-
-- Right shifts preserve sign for `SD29x9` (arithmetic) and zero-fill for `UD30x9` (logical)
-- `UD30x9.mul`/`UD30x9.div` and `SD29x9.mul`/`SD29x9.div` rescale with truncating integer
-  division; for `UD30x9` this means rounding down, while for `SD29x9` this means truncation
-  toward zero when results cannot be represented exactly with 9 decimals
-- `pow` uses iterative truncating multiplication, so fractional results are approximate and can
-  drift toward zero for large exponents
