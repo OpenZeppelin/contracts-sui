@@ -12,12 +12,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
+- `SD29x9::rem` function for truncated remainder semantics (sign follows the dividend) (#301)
 - Added `UD30x9::unchecked_lshift` and `UD30x9::unchecked_rshift` with truncating / zero-return behavior for shift operations. (#288)
 
 #### Changed (Breaking)
 
 - `UD30x9::lshift` now aborts on overflow, and both `lshift` and `rshift` now abort on invalid shift sizes. (#288)
-- `SD29x9::rem` function for truncated remainder semantics (sign follows the dividend) (#301)
 - `SD29x9::mod` now uses Euclidean remainder semantics (result is always non-negative). The previous truncated remainder behavior is available via `SD29x9::rem` (#301)
 - `UD30x9::sub` now aborts with `EUnderflow` instead of `EOverflow` when the result would be negative (#297)
 
