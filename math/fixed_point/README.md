@@ -11,7 +11,7 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 - Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
-- `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`
+- `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`, `unchecked_lshift`, `unchecked_rshift`
 
 ## Casting vs Converting
 
