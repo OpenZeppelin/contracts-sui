@@ -217,8 +217,12 @@ public fun lshift(x: UD30x9, bits: u8): UD30x9 {
     wrap(raw << bits)
 }
 
-/// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
-/// The high bits are dropped if they overflow past the 128-bit boundary.
+/// Performs an unchecked left shift on the underlying 128-bit representation of a `UD30x9`
+/// value, truncating high bits that overflow past the 128-bit boundary and returning zero
+/// when `bits >= 128`.
+///
+/// A checked version of this function is available via `lshift`, which aborts on invalid
+/// shift sizes and overflow.
 ///
 /// #### Parameters
 /// - `x`: Input value.
@@ -416,8 +420,11 @@ public fun rshift(x: UD30x9, bits: u8): UD30x9 {
     wrap(x.unwrap() >> bits)
 }
 
-/// Performs a logical right shift on the underlying 128-bit representation of a `UD30x9` value.
-/// Vacated high bits are filled with zeros.
+/// Performs an unchecked right shift on the underlying 128-bit representation of a `UD30x9`
+/// value, filling vacated high bits with zeros and returning zero when `bits >= 128`.
+///
+/// A checked version of this function is available via `rshift`, which aborts on invalid
+/// shift sizes.
 ///
 /// #### Parameters
 /// - `x`: Input value.
