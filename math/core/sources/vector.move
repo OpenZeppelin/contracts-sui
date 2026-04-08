@@ -7,8 +7,8 @@ module openzeppelin_math::vector;
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
 /// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
-/// pivot selection combined with three-way partitioning makes this practically unreachable
-/// — it requires adversarially crafted inputs.
+/// pivot selection makes it much less likely for common inputs, while three-way partitioning
+/// improves practical performance when duplicate elements are present.
 ///
 /// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
 /// it suitable for arbitrarily large vectors.
@@ -36,8 +36,9 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
 /// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
-/// pivot selection combined with three-way partitioning makes this practically unreachable
-/// — it requires adversarially crafted inputs or an incorrect comparator (see `$le` below).
+/// pivot selection makes it much less likely for common inputs, while three-way partitioning
+/// improves practical performance when duplicate elements are present. Using an incorrect
+/// comparator (see `$le` below) can also degrade performance.
 ///
 /// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
 /// it suitable for arbitrarily large vectors.
@@ -114,7 +115,8 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         };
 
         // Three-way partition (Dutch National Flag) around the pivot.
-        // Regions: [start, lt) < pivot, [lt, i) == pivot, [i, gt) unprocessed, [gt, pivot_index) > pivot.
+        // Regions: [start, lt) ordered before pivot, [lt, i) equal to pivot, [i, gt) unprocessed,
+        // [gt, pivot_index) ordered after pivot.
         // The pivot value is at `pivot_index` (end - 1) and will be moved into the equal region after partitioning.
         let mut lt = start;
         let mut i = start;
@@ -123,16 +125,16 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         while (i < gt) {
             if ($le(&vec[i], &vec[pivot_index])) {
                 if ($le(&vec[pivot_index], &vec[i])) {
-                    // vec[i] == pivot: element is equal, just advance `i`.
+                    // vec[i] equal to pivot: element belongs in the equal region, just advance `i`.
                     i = i + 1;
                 } else {
-                    // vec[i] < pivot: swap to the less-than region.
+                    // vec[i] ordered before pivot: swap to the before-pivot region.
                     vec.swap(lt, i);
                     lt = lt + 1;
                     i = i + 1;
                 }
             } else {
-                // vec[i] > pivot: swap to the greater-than region.
+                // vec[i] ordered after pivot: swap to the after-pivot region.
                 gt = gt - 1;
                 vec.swap(i, gt);
                 // Don't advance `i`; the swapped-in element needs to be examined.
@@ -140,10 +142,10 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         };
 
         // Move the pivot from `pivot_index` into the equal region.
-        // `gt` is now the start of the greater-than region, and pivot is at `pivot_index` (== end - 1).
+        // `gt` is now the start of the after-pivot region, and pivot is at `pivot_index` (== end - 1).
         // Swap pivot with vec[gt] to place it adjacent to the equal region.
         vec.swap(gt, pivot_index);
-        // After swap: [start, lt) < pivot, [lt, gt + 1) == pivot, (gt, end) > pivot.
+        // After swap: [start, lt) before pivot, [lt, gt + 1) equal to pivot, (gt, end) after pivot.
         let eq_end = gt + 1;
 
         // Push partitions: larger first, smaller second.
