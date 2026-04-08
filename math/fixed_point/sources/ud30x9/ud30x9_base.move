@@ -212,7 +212,7 @@ public fun is_zero(x: UD30x9): bool {
 public fun lshift(x: UD30x9, bits: u8): UD30x9 {
     assert!(bits < 128, EInvalidShiftSize);
     let raw = x.unwrap();
-    assert!(raw <= U128_MAX_VALUE >> bits, EOverflow);
+    assert!(raw <= std::u128::max_value!() >> bits, EOverflow);
     wrap(raw << bits)
 }
 
