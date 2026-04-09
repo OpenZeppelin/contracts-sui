@@ -176,6 +176,29 @@ public fun head_vec<Key: copy + drop + store, V: store>(
     &list.head
 }
 
+/// Return a mutable reference to the head vector of the skip list.
+public fun head_vec_mut<Key: copy + drop + store, V: store>(
+    list: &mut SkipList<Key, V>,
+): &mut vector<Option<Key>> {
+    &mut list.head
+}
+
+/// Set the tail of the skip list.
+public fun set_tail<Key: copy + drop + store, V: store>(
+    list: &mut SkipList<Key, V>,
+    new_tail: Option<Key>,
+) {
+    list.tail = new_tail;
+}
+
+/// Remove a node from the skip list's inner table and return it.
+public fun remove_node<Key: copy + drop + store, V: store>(
+    list: &mut SkipList<Key, V>,
+    score: Key,
+): Node<Key, V> {
+    list.inner.remove(score)
+}
+
 /// Return the next score of the node.
 public fun next_score<Key: copy + drop + store, V: store>(node: &Node<Key, V>): Option<Key> {
     *node.nexts.borrow(0)
@@ -186,9 +209,24 @@ public fun nexts<Key: copy + drop + store, V: store>(node: &Node<Key, V>): &vect
     &node.nexts
 }
 
+/// Return a mutable reference to the nexts vector of the node.
+public fun nexts_mut<Key: copy + drop + store, V: store>(
+    node: &mut Node<Key, V>,
+): &mut vector<Option<Key>> {
+    &mut node.nexts
+}
+
 /// Return the prev score of the node.
 public fun prev_score<Key: copy + drop + store, V: store>(node: &Node<Key, V>): Option<Key> {
     node.prev
+}
+
+/// Set the prev score of the node.
+public fun set_prev<Key: copy + drop + store, V: store>(
+    node: &mut Node<Key, V>,
+    prev: Option<Key>,
+) {
+    node.prev = prev;
 }
 
 /// Return the immutable reference to the ndoe's value.
@@ -242,38 +280,52 @@ public fun borrow_mut_value<Key: copy + drop + store, V: store>(node: &mut Node<
 //     list.inner.add(score, new_node);
 // }
 
-// /// Remove the score-value from skip list, abort if the score not exist in list.
-// public fun remove<Key: copy + drop + store, V: store>(list: &mut SkipList<Key, V>, score: Key): V {
-//     assert!(list.contains(score), ENodeDoesNotExist);
-//     let (mut l, mut nexts) = (list.level, &mut list.head);
-//     let node = list.inner.remove(score);
-//     while (l > 0) {
-//         let mut opt_next_score = nexts.borrow_mut(l - 1);
-//         while (option::is_some_and!(opt_next_score, |next_score| *next_score <= score)) {
-//             let next_score = opt_next_score.borrow();
-//             if (next_score == score) {
-//                 *opt_next_score = *node.nexts.borrow(l - 1);
-//             } else {
-//                 let node = list.borrow_mut_node(*next_score);
-//                 nexts = &mut node.nexts;
-//                 opt_next_score = nexts.borrow_mut(l - 1);
-//             }
-//         };
-//         l = l - 1;
-//     };
+/// Remove the score-value from skip list, abort if the score not exist in list.
+/// Works only with unsigned integer keys.
+public macro fun remove<$Int, $V: store>($list: &mut SkipList<$Int, $V>, $score: $Int): $V {
+    remove_by!($list, $score, |x, y| *x <= *y)
+}
 
-//     if (list.tail.borrow() == score) {
-//         list.tail = node.prev;
-//     };
+/// Remove the score-value from skip list, abort if the score not exist in list.
+/// Accepts a `$le` comparator for generic key types.
+public macro fun remove_by<$Key: copy + drop + store, $V: store>(
+    $list: &mut SkipList<$Key, $V>,
+    $score: $Key,
+    $le: |&$Key, &$Key| -> bool,
+): $V {
+    let list = $list;
+    let score = $score;
 
-//     let opt_l0_next_score = node.nexts.borrow(0);
-//     if (opt_l0_next_score.is_some()) {
-//         let next_node = list.inner.borrow_mut(*opt_l0_next_score.borrow());
-//         next_node.prev = node.prev;
-//     };
+    assert!(list.contains(score), ENodeDoesNotExist);
+    let (mut l, mut nexts) = (list.level(), list.head_vec_mut());
+    let node = list.remove_node(score);
+    while (l > 0) {
+        let mut opt_next_score = nexts.borrow_mut(l - 1);
+        while (opt_next_score.is_some_and!(|next_score| $le(next_score, &score))) {
+            let next_score = opt_next_score.borrow();
+            if ($le(&score, next_score)) {
+                *opt_next_score = *node.nexts().borrow(l - 1);
+            } else {
+                let node = list.borrow_mut_node(*next_score);
+                nexts = node.nexts_mut();
+                opt_next_score = nexts.borrow_mut(l - 1);
+            }
+        };
+        l = l - 1;
+    };
 
-//     node.drop_node()
-// }
+    if (list.tail().is_some_and!(|t| $le(t, &score) && $le(&score, t))) {
+        list.set_tail(node.prev_score());
+    };
+
+    let opt_l0_next_score = node.next_score();
+    if (opt_l0_next_score.is_some()) {
+        let next_node = list.borrow_mut_node(*opt_l0_next_score.borrow());
+        next_node.set_prev(node.prev_score());
+    };
+
+    node.drop_node()
+}
 
 public macro fun find_next<$Int, $V: store>(
     $list: &SkipList<$Int, $V>,
