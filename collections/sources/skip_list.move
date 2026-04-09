@@ -131,6 +131,15 @@ public fun assert_not_contains<Key: copy + drop + store, V: store>(
     assert!(!list.contains(score), ENodeAlreadyExist);
 }
 
+/// Asserts that the skip list contains the given score.
+/// Aborts with `ENodeDoesNotExist` if it does not.
+public fun assert_contains<Key: copy + drop + store, V: store>(
+    list: &SkipList<Key, V>,
+    score: Key,
+) {
+    assert!(list.contains(score), ENodeDoesNotExist);
+}
+
 /// Acquire an immutable reference to the `score` element of the skip list `list`.
 /// Aborts if element not exist.
 public fun borrow<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>, score: Key): &V {
@@ -335,9 +344,9 @@ public macro fun remove_by<$Key: copy + drop + store, $V: store>(
     let list = $list;
     let score = $score;
 
-    assert!(list.contains(score), ENodeDoesNotExist);
-    let (mut l, mut nexts) = (list.level(), list.head_vec_mut());
+    list.assert_contains(score);
     let node = list.remove_node(score);
+    let (mut l, mut nexts) = (list.level(), list.head_vec_mut());
     while (l > 0) {
         let mut opt_next_score = nexts.borrow_mut(l - 1);
         while (opt_next_score.is_some_and!(|next_score| $le(next_score, &score))) {
@@ -433,7 +442,7 @@ public macro fun find_prev_by<$Key: copy + drop + store, $V: store>(
 }
 
 /// Find the nearest score. 1. score, 2. prev, 3. next
-macro fun find_by<$Key: copy + drop + store, $V: store>(
+public macro fun find_by<$Key: copy + drop + store, $V: store>(
     $list: &SkipList<$Key, $V>,
     $score: $Key,
     $le: |&$Key, &$Key| -> bool,
@@ -511,7 +520,7 @@ public fun create_node<Key: copy + drop + store, V: store>(
     )
 }
 
-fun drop_node<Key: copy + drop + store, V: store>(node: Node<Key, V>): V {
+public fun drop_node<Key: copy + drop + store, V: store>(node: Node<Key, V>): V {
     let Node {
         score: _,
         nexts: _,
