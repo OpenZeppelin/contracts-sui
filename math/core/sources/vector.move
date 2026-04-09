@@ -154,7 +154,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         // `gt` is now the start of the after-pivot region, and pivot is at `pivot_index` (== end - 1).
         // Swap pivot with vec[gt] to place it adjacent to the equal region.
         vec.swap(gt, pivot_index);
-        // After swap: [start, lt) before pivot, [lt, gt + 1) equal to pivot, (gt, end) after pivot.
+        // After swap: [start, lt) before pivot, [lt, eq_end) equal to pivot, [eq_end, end) after pivot.
         let eq_end = gt + 1;
 
         // Push partitions: larger first, smaller second.
