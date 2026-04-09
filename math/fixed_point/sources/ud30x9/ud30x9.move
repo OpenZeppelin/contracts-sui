@@ -52,9 +52,11 @@ public use fun openzeppelin_fp_math::ud30x9_base::neq as UD30x9.neq;
 public use fun openzeppelin_fp_math::ud30x9_base::and as UD30x9.and;
 public use fun openzeppelin_fp_math::ud30x9_base::and2 as UD30x9.and2;
 public use fun openzeppelin_fp_math::ud30x9_base::lshift as UD30x9.lshift;
+public use fun openzeppelin_fp_math::ud30x9_base::unchecked_lshift as UD30x9.unchecked_lshift;
 public use fun openzeppelin_fp_math::ud30x9_base::not as UD30x9.not;
 public use fun openzeppelin_fp_math::ud30x9_base::or as UD30x9.or;
 public use fun openzeppelin_fp_math::ud30x9_base::rshift as UD30x9.rshift;
+public use fun openzeppelin_fp_math::ud30x9_base::unchecked_rshift as UD30x9.unchecked_rshift;
 public use fun openzeppelin_fp_math::ud30x9_base::xor as UD30x9.xor;
 
 // Cross-Type Casting
