@@ -346,7 +346,7 @@ public fun mul_away(x: SD29x9, y: SD29x9): SD29x9 {
 /// - The quotient `x / y`, rounded toward zero.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     div_trunc(x, y)

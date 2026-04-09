@@ -275,7 +275,7 @@ public fun lte(x: UD30x9, y: UD30x9): bool {
 /// - The remainder of `x` divided by `y`.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap(), y.unwrap());
     assert!(y != 0, EDivideByZero);
@@ -350,7 +350,7 @@ public fun mul_away(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The quotient `x / y`, rounded toward zero.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
     div_trunc(x, y)
