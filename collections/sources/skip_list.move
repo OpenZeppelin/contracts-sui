@@ -614,7 +614,7 @@ public macro fun check_skip_list_by<$Key: copy + drop + store, $V: store>(
 }
 
 #[test_only]
-public fun get_all_socres<Key: copy + drop + store, V: store>(
+public fun get_all_scores<Key: copy + drop + store, V: store>(
     list: &SkipList<Key, V>,
 ): vector<Key> {
     let (mut opt_next_score, mut scores) = (list.head(), vector::empty<Key>());
