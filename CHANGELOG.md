@@ -35,6 +35,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### `openzeppelin_math`
 
+#### Changed
+
+- `vector::quick_sort_by` and `vector::quick_sort` now use the Dutch National Flag partition scheme. (#298)
+- `vector::quick_sort_by` and `vector::quick_sort` fall back to insertion sort for sub-partitions of size <= 10. (#298)
+
 #### Fixed
 
 - `u256::is_power_of_ten` helper now properly handles valid `10^77` value. (#291)
