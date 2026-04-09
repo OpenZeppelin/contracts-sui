@@ -78,17 +78,17 @@ fun div_handles_min_over_one() {
     assert_eq!(sd29x9::min().div(pos(SCALE)), sd29x9::min());
 }
 
-#[test, expected_failure(abort_code = sd29x9_base::EDivisionByZero)]
+#[test, expected_failure(abort_code = sd29x9_base::EDivideByZero)]
 fun div_by_zero_aborts() {
     pos(10 * SCALE).div(sd29x9::zero());
 }
 
-#[test, expected_failure(abort_code = sd29x9_base::EDivisionByZero)]
+#[test, expected_failure(abort_code = sd29x9_base::EDivideByZero)]
 fun div_trunc_by_zero_aborts() {
     pos(10 * SCALE).div_trunc(sd29x9::zero());
 }
 
-#[test, expected_failure(abort_code = sd29x9_base::EDivisionByZero)]
+#[test, expected_failure(abort_code = sd29x9_base::EDivideByZero)]
 fun div_away_by_zero_aborts() {
     pos(10 * SCALE).div_away(sd29x9::zero());
 }
