@@ -199,6 +199,20 @@ public fun remove_node<Key: copy + drop + store, V: store>(
     list.inner.remove(score)
 }
 
+/// Add a node to the skip list's inner table.
+public fun add_node<Key: copy + drop + store, V: store>(
+    list: &mut SkipList<Key, V>,
+    score: Key,
+    node: Node<Key, V>,
+) {
+    list.inner.add(score, node);
+}
+
+/// Return the score of the node.
+public fun score<Key: copy + drop + store, V: store>(node: &Node<Key, V>): Key {
+    node.score
+}
+
 /// Return the next score of the node.
 public fun next_score<Key: copy + drop + store, V: store>(node: &Node<Key, V>): Option<Key> {
     *node.nexts.borrow(0)
@@ -239,46 +253,57 @@ public fun borrow_mut_value<Key: copy + drop + store, V: store>(node: &mut Node<
     &mut node.value
 }
 
-// /// Insert a score-value into skip list, abort if the score alread exist.
-// public fun insert<Key: copy + drop + store, V: store>(list: &mut SkipList<Key, V>, score: Key, v: V) {
-//     assert!(!list.contains(score), ENodeAlreadyExist);
-//     let (level, mut new_node) = list.create_node(score, v);
-//     let (mut l, mut nexts, mut prev) = (list.level, &mut list.head, option::none());
-//     let mut opt_l0_next_score = option::none();
-//     while (l > 0) {
-//         let mut opt_next_score = nexts.borrow_mut(l - 1);
-//         while (option::is_some_and!(opt_next_score, |next_score| *next_score <= score)) {
-//             let node = list
-//                 .inner
-//                 .borrow_mut(
-//                     *opt_next_score.borrow(),
-//                 );
-//             prev = option::some(node.score);
-//             nexts = &mut node.nexts;
-//             opt_next_score = nexts.borrow_mut(l - 1);
-//         };
-//         if (level >= l) {
-//             new_node.nexts.push_back(*opt_next_score);
-//             if (l == 1) {
-//                 new_node.prev = prev;
-//                 if (opt_next_score.is_some()) {
-//                     opt_l0_next_score = *opt_next_score;
-//                 } else {
-//                     list.tail = option::some(score);
-//                 }
-//             };
-//             opt_next_score.swap_or_fill(score);
-//         };
-//         l = l - 1;
-//     };
-//     if (opt_l0_next_score.is_some()) {
-//         let next_node = list.borrow_mut_node(*opt_l0_next_score.borrow());
-//         next_node.prev = option::some(score);
-//     };
+/// Insert a score-value into skip list, abort if the score already exist.
+/// Works only with unsigned integer keys.
+public macro fun insert<$Int, $V: store>($list: &mut SkipList<$Int, $V>, $score: $Int, $v: $V) {
+    insert_by!($list, $score, $v, |x, y| *x <= *y)
+}
 
-//     new_node.nexts.reverse();
-//     list.inner.add(score, new_node);
-// }
+/// Insert a score-value into skip list, abort if the score already exist.
+/// Accepts a `$le` comparator for generic key types.
+public macro fun insert_by<$Key: copy + drop + store, $V: store>(
+    $list: &mut SkipList<$Key, $V>,
+    $score: $Key,
+    $v: $V,
+    $le: |&$Key, &$Key| -> bool,
+) {
+    let list = $list;
+    let score = $score;
+
+    assert!(!list.contains(score), ENodeAlreadyExist);
+    let (level, mut new_node) = list.create_node(score, $v);
+    let (mut l, mut nexts, mut prev) = (list.level(), list.head_vec_mut(), option::none());
+    let mut opt_l0_next_score = option::none();
+    while (l > 0) {
+        let mut opt_next_score = nexts.borrow_mut(l - 1);
+        while (opt_next_score.is_some_and!(|next_score| $le(next_score, &score))) {
+            let node = list.borrow_mut_node(*opt_next_score.borrow());
+            prev = option::some(node.score());
+            nexts = node.nexts_mut();
+            opt_next_score = nexts.borrow_mut(l - 1);
+        };
+        if (level >= l) {
+            new_node.nexts_mut().push_back(*opt_next_score);
+            if (l == 1) {
+                new_node.set_prev(prev);
+                if (opt_next_score.is_some()) {
+                    opt_l0_next_score = *opt_next_score;
+                } else {
+                    list.set_tail(option::some(score));
+                }
+            };
+            opt_next_score.swap_or_fill(score);
+        };
+        l = l - 1;
+    };
+    if (opt_l0_next_score.is_some()) {
+        let next_node = list.borrow_mut_node(*opt_l0_next_score.borrow());
+        next_node.set_prev(option::some(score));
+    };
+
+    new_node.nexts_mut().reverse();
+    list.add_node(score, new_node);
+}
 
 /// Remove the score-value from skip list, abort if the score not exist in list.
 /// Works only with unsigned integer keys.
@@ -447,7 +472,7 @@ fun rand_level<Key: copy + drop + store, V: store>(seed: u64, list: &SkipList<Ke
 }
 
 /// Create a new skip list node
-fun create_node<Key: copy + drop + store, V: store>(
+public fun create_node<Key: copy + drop + store, V: store>(
     list: &mut SkipList<Key, V>,
     score: Key,
     value: V,
