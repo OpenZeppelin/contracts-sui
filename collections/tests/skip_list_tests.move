@@ -12,10 +12,6 @@ fun new_list(ctx: &mut TxContext): SkipList<u64, u64> {
     skip_list::new(16, 2, 42, ctx)
 }
 
-fun assert_scores(list: &SkipList<u64, u64>, expected: vector<u64>) {
-    assert_eq!(skip_list::get_all_scores(list), expected);
-}
-
 // ============================================================
 // Construction
 // ============================================================
@@ -63,7 +59,7 @@ fun test_insert_and_remove_single_element() {
     assert_eq!(*list.tail().borrow(), 10);
     assert!(list.contains(10));
     assert_eq!(*list.borrow(10), 100);
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     let val = list.remove!(10);
     assert_eq!(val, 100);
@@ -85,8 +81,8 @@ fun test_insert_ascending_order() {
     assert_eq!(list.length(), 10);
     assert_eq!(*list.head().borrow(), 1);
     assert_eq!(*list.tail().borrow(), 10);
-    assert_scores(&list, vector[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    skip_list::check_skip_list!(&list);
+    assert_eq!(list.get_all_scores(), vector[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    list.check_skip_list!();
 
     i = 1;
     while (i <= 10) { list.remove!(i); i = i + 1; };
@@ -105,8 +101,8 @@ fun test_insert_descending_order() {
 
     assert_eq!(*list.head().borrow(), 1);
     assert_eq!(*list.tail().borrow(), 10);
-    assert_scores(&list, vector[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    skip_list::check_skip_list!(&list);
+    assert_eq!(list.get_all_scores(), vector[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    list.check_skip_list!();
 
     i = 1;
     while (i <= 10) { list.remove!(i); i = i + 1; };
@@ -127,8 +123,8 @@ fun test_insert_random_order() {
 
     assert_eq!(*list.head().borrow(), 1);
     assert_eq!(*list.tail().borrow(), 10);
-    assert_scores(&list, vector[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    skip_list::check_skip_list!(&list);
+    assert_eq!(list.get_all_scores(), vector[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    list.check_skip_list!();
 
     i = 1;
     while (i <= 10) { list.remove!(i); i = i + 1; };
@@ -151,7 +147,7 @@ fun test_remove_head() {
     assert_eq!(val, 10);
     assert_eq!(*list.head().borrow(), 2);
     assert_eq!(list.length(), 2);
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     list.remove!(2);
     list.remove!(3);
@@ -169,7 +165,7 @@ fun test_remove_tail() {
     let val = list.remove!(3);
     assert_eq!(val, 30);
     assert_eq!(*list.tail().borrow(), 2);
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     list.remove!(1);
     list.remove!(2);
@@ -186,8 +182,8 @@ fun test_remove_middle() {
 
     let val = list.remove!(2);
     assert_eq!(val, 20);
-    assert_scores(&list, vector[1, 3]);
-    skip_list::check_skip_list!(&list);
+    assert_eq!(list.get_all_scores(), vector[1, 3]);
+    list.check_skip_list!();
 
     list.remove!(1);
     list.remove!(3);
@@ -214,7 +210,7 @@ fun test_remove_all_then_reinsert() {
     assert_eq!(list.length(), 2);
     assert_eq!(*list.head().borrow(), 20);
     assert_eq!(*list.tail().borrow(), 25);
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     list.remove!(20);
     list.remove!(25);
@@ -614,7 +610,7 @@ fun test_prev_next_links_consistent_after_removals() {
     assert_eq!(*node20.next_score().borrow(), 40);
     let node40 = list.borrow_node(40);
     assert_eq!(*node40.prev_score().borrow(), 20);
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     list.remove!(10);
     list.remove!(20);
@@ -638,7 +634,7 @@ fun test_insert_100_elements() {
     assert_eq!(list.length(), n);
     assert_eq!(*list.head().borrow(), 0);
     assert_eq!(*list.tail().borrow(), n - 1);
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     i = 0;
     while (i < n) { assert_eq!(*list.borrow(i), i); i = i + 1; };
@@ -659,7 +655,7 @@ fun test_insert_reverse_50_elements() {
     assert_eq!(list.length(), n);
     assert_eq!(*list.head().borrow(), 1);
     assert_eq!(*list.tail().borrow(), n);
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     i = 1;
     while (i <= n) { list.remove!(i); i = i + 1; };
@@ -677,8 +673,8 @@ fun test_remove_evens_preserves_odds() {
     while (i <= 20) { list.remove!(i); i = i + 2; };
 
     assert_eq!(list.length(), 10);
-    assert_scores(&list, vector[1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
-    skip_list::check_skip_list!(&list);
+    assert_eq!(list.get_all_scores(), vector[1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
+    list.check_skip_list!();
 
     i = 1;
     while (i <= 19) { list.remove!(i); i = i + 2; };
@@ -700,7 +696,7 @@ fun test_small_max_level_large_list_p() {
     assert_eq!(*list.head().borrow(), 1);
     assert_eq!(*list.tail().borrow(), 30);
     assert!(list.level() <= 2);
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     i = 1;
     while (i <= 30) { list.remove!(i); i = i + 1; };
@@ -782,7 +778,7 @@ fun test_prop_ordering_invariant(seed: u64) {
         i = i + 1;
     };
 
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     let scores = skip_list::get_all_scores(&list);
     let mut j = 1u64;
@@ -815,7 +811,7 @@ fun test_prop_insert_then_remove_all_is_empty(seed: u64) {
     while (i > 0) {
         i = i - 1;
         list.remove!(i);
-        skip_list::check_skip_list!(&list);
+        list.check_skip_list!();
     };
 
     assert!(list.is_empty());
@@ -841,7 +837,7 @@ fun test_prop_contains_correct_after_partial_removal(seed: u64) {
         if (i % 2 == 0) { assert!(!list.contains(i)); } else { assert!(list.contains(i)); };
         i = i + 1;
     };
-    skip_list::check_skip_list!(&list);
+    list.check_skip_list!();
 
     i = 1;
     while (i < n) { list.remove!(i); i = i + 2; };

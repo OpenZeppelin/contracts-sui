@@ -532,7 +532,7 @@ public fun drop_node<Key: copy + drop + store, V: store>(node: Node<Key, V>): V 
 
 #[test_only]
 public fun print_skip_list<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>) {
-    if (list.length() == 0) {
+    if (list.is_empty()) {
         return
     };
     let mut next_score = list.head();
@@ -553,9 +553,11 @@ public macro fun check_skip_list_by<$Key: copy + drop + store, $V: store>(
     $list: &SkipList<$Key, $V>,
     $gt: |&$Key, &$Key| -> bool,
 ) {
+    use std::unit_test::assert_eq;
+
     let list = $list;
     if (list.level() == 0) {
-        assert!(list.length() == 0, 0);
+        assert!(list.is_empty());
     } else {
         // Check level 0
         let (mut size, mut opt_next_score, mut tail, mut prev, mut current_score) = (
@@ -569,13 +571,13 @@ public macro fun check_skip_list_by<$Key: copy + drop + store, $V: store>(
             let next_score = *opt_next_score.borrow();
             let next_node = list.borrow_node(next_score);
             if (current_score.is_some()) {
-                assert!($gt(&next_score, current_score.borrow()), 0);
+                assert!($gt(&next_score, current_score.borrow()));
             };
-            assert!(next_node.score() == next_score, 0);
+            assert_eq!(next_node.score(), next_score);
             if (prev.is_none()) {
-                assert!(next_node.prev_score().is_none(), 0)
+                assert!(next_node.prev_score().is_none())
             } else {
-                assert!(*next_node.prev_score().borrow() == *prev.borrow(), 0);
+                assert_eq!(*next_node.prev_score().borrow(), *prev.borrow());
             };
             prev = option::some(next_node.score());
             tail = option::some(next_node.score());
@@ -584,11 +586,11 @@ public macro fun check_skip_list_by<$Key: copy + drop + store, $V: store>(
             opt_next_score = next_node.next_score();
         };
         if (tail.is_none()) {
-            assert!(list.tail().is_none(), 0);
+            assert!(list.tail().is_none());
         } else {
-            assert!(*list.tail().borrow() == *tail.borrow(), 0);
+            assert_eq!(*list.tail().borrow(), *tail.borrow());
         };
-        assert!(size == list.length(), 0);
+        assert!(size == list.length());
 
         // Check indexer levels
         let mut l = list.level() - 1;
@@ -599,10 +601,10 @@ public macro fun check_skip_list_by<$Key: copy + drop + store, $V: store>(
                 let next_0_score = *opt_next_0_score.borrow();
                 let node = list.borrow_node(next_0_score);
                 if (opt_next_l_score.is_none() || $gt(opt_next_l_score.borrow(), &node.score())) {
-                    assert!(node.nexts().length() <= l, 0);
+                    assert!(node.nexts().length() <= l);
                 } else {
                     if (node.nexts().length() > l) {
-                        assert!(*opt_next_l_score.borrow() == node.score(), 0);
+                        assert!(*opt_next_l_score.borrow() == node.score());
                         opt_next_l_score = *node.nexts().borrow(l);
                     }
                 };
