@@ -170,7 +170,9 @@ public fun level<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>): u
 }
 
 /// Return an immutable reference to the head vector of the skip list.
-public fun head<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>): &vector<Option<Key>> {
+public fun head_vec<Key: copy + drop + store, V: store>(
+    list: &SkipList<Key, V>,
+): &vector<Option<Key>> {
     &list.head
 }
 
@@ -273,20 +275,12 @@ public fun borrow_mut_value<Key: copy + drop + store, V: store>(node: &mut Node<
 //     node.drop_node()
 // }
 
-public(package) fun find_next_u64<V: store>(
-    list: &SkipList<u64, V>,
-    score: u64,
-    include: bool,
-): Option<u64> {
-    find_next_by!(list, score, include, |x, y| *x <= *y)
-}
-
-public(package) fun find_next_u128<V: store>(
-    list: &SkipList<u128, V>,
-    score: u128,
-    include: bool,
-): Option<u128> {
-    find_next_by!(list, score, include, |x, y| *x <= *y)
+public macro fun find_next<$Int, $V: store>(
+    $list: &SkipList<$Int, $V>,
+    $score: $Int,
+    $include: bool,
+): Option<$Int> {
+    find_next_by!($list, $score, $include, |x, y| *x <= *y)
 }
 
 /// Return the next score.
@@ -314,20 +308,12 @@ public macro fun find_next_by<$Key: copy + drop + store, $V: store>(
     node.next_score()
 }
 
-public(package) fun find_prev_u64<V: store>(
-    list: &SkipList<u64, V>,
-    score: u64,
-    include: bool,
-): Option<u64> {
-    find_prev_by!(list, score, include, |x, y| *x <= *y)
-}
-
-public(package) fun find_prev_u128<V: store>(
-    list: &SkipList<u128, V>,
-    score: u128,
-    include: bool,
-): Option<u128> {
-    find_prev_by!(list, score, include, |x, y| *x <= *y)
+public macro fun find_prev<$Int, $V: store>(
+    $list: &SkipList<$Int, $V>,
+    $score: $Int,
+    $include: bool,
+): Option<$Int> {
+    find_prev_by!($list, $score, $include, |x, y| *x <= *y)
 }
 
 /// Return the prev socre.
@@ -367,7 +353,7 @@ macro fun find_by<$Key: copy + drop + store, $V: store>(
     if (list.level() == 0) {
         return option::none()
     };
-    let (mut l, mut nexts, mut current_score) = (list.level(), list.head(), option::none());
+    let (mut l, mut nexts, mut current_score) = (list.level(), list.head_vec(), option::none());
     while (l > 0) {
         let mut opt_next_score = *nexts.borrow(l - 1);
         while (option::is_some_and!(&opt_next_score, |next_score| $le(next_score, &score))) {
@@ -386,7 +372,7 @@ macro fun find_by<$Key: copy + drop + store, $V: store>(
         };
         l = l - 1;
     };
-    return *list.head().borrow(0)
+    return list.head()
 }
 
 fun rand_level<Key: copy + drop + store, V: store>(seed: u64, list: &SkipList<Key, V>): u64 {
