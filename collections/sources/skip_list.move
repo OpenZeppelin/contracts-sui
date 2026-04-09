@@ -122,6 +122,15 @@ public fun contains<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>,
     list.inner.contains(score)
 }
 
+/// Asserts that the skip list does not contain the given score.
+/// Aborts with `ENodeAlreadyExist` if it does.
+public fun assert_not_contains<Key: copy + drop + store, V: store>(
+    list: &SkipList<Key, V>,
+    score: Key,
+) {
+    assert!(!list.contains(score), ENodeAlreadyExist);
+}
+
 /// Acquire an immutable reference to the `score` element of the skip list `list`.
 /// Aborts if element not exist.
 public fun borrow<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>, score: Key): &V {
@@ -270,10 +279,12 @@ public macro fun insert_by<$Key: copy + drop + store, $V: store>(
     let list = $list;
     let score = $score;
 
-    assert!(!list.contains(score), ENodeAlreadyExist);
+    list.assert_not_contains(score);
+
     let (level, mut new_node) = list.create_node(score, $v);
     let (mut l, mut nexts, mut prev) = (list.level(), list.head_vec_mut(), option::none());
     let mut opt_l0_next_score = option::none();
+    let mut is_new_tail = false;
     while (l > 0) {
         let mut opt_next_score = nexts.borrow_mut(l - 1);
         while (opt_next_score.is_some_and!(|next_score| $le(next_score, &score))) {
@@ -289,12 +300,15 @@ public macro fun insert_by<$Key: copy + drop + store, $V: store>(
                 if (opt_next_score.is_some()) {
                     opt_l0_next_score = *opt_next_score;
                 } else {
-                    list.set_tail(option::some(score));
+                    is_new_tail = true;
                 }
             };
             opt_next_score.swap_or_fill(score);
         };
         l = l - 1;
+    };
+    if (is_new_tail) {
+        list.set_tail(option::some(score));
     };
     if (opt_l0_next_score.is_some()) {
         let next_node = list.borrow_mut_node(*opt_l0_next_score.borrow());
@@ -505,4 +519,101 @@ fun drop_node<Key: copy + drop + store, V: store>(node: Node<Key, V>): V {
         value,
     } = node;
     value
+}
+
+#[test_only]
+public fun print_skip_list<Key: copy + drop + store, V: store>(list: &SkipList<Key, V>) {
+    if (list.length() == 0) {
+        return
+    };
+    let mut next_score = list.head();
+    while (next_score.is_some()) {
+        let node = list.borrow_node(*next_score.borrow());
+        next_score = node.next_score();
+        std::debug::print(node);
+    };
+}
+
+#[test_only]
+public macro fun check_skip_list<$Key: copy + drop + store, $V: store>($list: &SkipList<$Key, $V>) {
+    check_skip_list_by!($list, |a, b| *a > *b)
+}
+
+#[test_only]
+public macro fun check_skip_list_by<$Key: copy + drop + store, $V: store>(
+    $list: &SkipList<$Key, $V>,
+    $gt: |&$Key, &$Key| -> bool,
+) {
+    let list = $list;
+    if (list.level() == 0) {
+        assert!(list.length() == 0, 0);
+    } else {
+        // Check level 0
+        let (mut size, mut opt_next_score, mut tail, mut prev, mut current_score) = (
+            0,
+            list.head(),
+            option::none(),
+            option::none(),
+            option::none(),
+        );
+        while (opt_next_score.is_some()) {
+            let next_score = *opt_next_score.borrow();
+            let next_node = list.borrow_node(next_score);
+            if (current_score.is_some()) {
+                assert!($gt(&next_score, current_score.borrow()), 0);
+            };
+            assert!(next_node.score() == next_score, 0);
+            if (prev.is_none()) {
+                assert!(next_node.prev_score().is_none(), 0)
+            } else {
+                assert!(*next_node.prev_score().borrow() == *prev.borrow(), 0);
+            };
+            prev = option::some(next_node.score());
+            tail = option::some(next_node.score());
+            current_score.swap_or_fill(next_node.score());
+            size = size + 1;
+            opt_next_score = next_node.next_score();
+        };
+        if (tail.is_none()) {
+            assert!(list.tail().is_none(), 0);
+        } else {
+            assert!(*list.tail().borrow() == *tail.borrow(), 0);
+        };
+        assert!(size == list.length(), 0);
+
+        // Check indexer levels
+        let mut l = list.level() - 1;
+        while (l > 0) {
+            let mut opt_next_l_score = *list.head_vec().borrow(l);
+            let mut opt_next_0_score = *list.head_vec().borrow(0);
+            while (opt_next_0_score.is_some()) {
+                let next_0_score = *opt_next_0_score.borrow();
+                let node = list.borrow_node(next_0_score);
+                if (opt_next_l_score.is_none() || $gt(opt_next_l_score.borrow(), &node.score())) {
+                    assert!(node.nexts().length() <= l, 0);
+                } else {
+                    if (node.nexts().length() > l) {
+                        assert!(*opt_next_l_score.borrow() == node.score(), 0);
+                        opt_next_l_score = *node.nexts().borrow(l);
+                    }
+                };
+                opt_next_0_score = *node.nexts().borrow(0);
+            };
+            l = l - 1;
+        };
+    };
+}
+
+#[test_only]
+public fun get_all_socres<Key: copy + drop + store, V: store>(
+    list: &SkipList<Key, V>,
+): vector<Key> {
+    let (mut opt_next_score, mut scores) = (list.head(), vector::empty<Key>());
+    while (opt_next_score.is_some()) {
+        let next_score = *opt_next_score.borrow();
+        let next_node = list.borrow_node(next_score);
+        scores.push_back(next_node.score());
+        opt_next_score = next_node.next_score();
+    };
+    scores
 }
