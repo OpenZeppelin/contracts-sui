@@ -78,17 +78,17 @@ fun div_handles_extreme_but_valid_inputs() {
     assert_eq!(ud30x9::max().div(ud30x9::max()), fixed(SCALE));
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EDivisionByZero)]
+#[test, expected_failure(abort_code = ud30x9_base::EDivideByZero)]
 fun div_by_zero_aborts() {
     fixed(10 * SCALE).div(fixed(0));
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EDivisionByZero)]
+#[test, expected_failure(abort_code = ud30x9_base::EDivideByZero)]
 fun div_trunc_by_zero_aborts() {
     fixed(10 * SCALE).div_trunc(fixed(0));
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EDivisionByZero)]
+#[test, expected_failure(abort_code = ud30x9_base::EDivideByZero)]
 fun div_away_by_zero_aborts() {
     fixed(10 * SCALE).div_away(fixed(0));
 }
