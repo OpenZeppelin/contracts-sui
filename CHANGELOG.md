@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
-## 1.1.0-rc.0 (10-03-2026)
+## 1.1.0 (21-04-2026)
 
 ### `openzeppelin_fp_math`
 
