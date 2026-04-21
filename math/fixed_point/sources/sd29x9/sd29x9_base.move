@@ -19,7 +19,7 @@ const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD3
 
 /// Divisor must be non-zero
 #[error(code = 2)]
-const EDivisionByZero: vector<u8> = "Divisor must be non-zero";
+const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 
 // === Conversion ===
 
@@ -231,7 +231,7 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
 /// - Aborts if `y` is zero.
 public fun rem(x: SD29x9, y: SD29x9): SD29x9 {
     let y_bits = y.unwrap();
-    assert!(y_bits != 0, EDivisionByZero);
+    assert!(y_bits != 0, EDivideByZero);
     let y = decompose(y_bits);
     let x = decompose(x.unwrap());
     let remainder = x.mag % y.mag;
@@ -255,7 +255,7 @@ public fun rem(x: SD29x9, y: SD29x9): SD29x9 {
 /// - Aborts if `y` is zero.
 public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
     let y_bits = y.unwrap();
-    assert!(y_bits != 0, EDivisionByZero);
+    assert!(y_bits != 0, EDivideByZero);
     let y = decompose(y_bits);
     let x = decompose(x.unwrap());
     let remainder = x.mag % y.mag;
@@ -368,7 +368,7 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div_trunc(x: SD29x9, y: SD29x9): SD29x9 {
     let y_bits = y.unwrap();
-    assert!(y_bits != 0, EDivisionByZero);
+    assert!(y_bits != 0, EDivideByZero);
     let y = decompose(y_bits);
     let x = decompose(x.unwrap());
     let neg = x.neg != y.neg;
@@ -398,7 +398,7 @@ public fun div_trunc(x: SD29x9, y: SD29x9): SD29x9 {
 /// - Aborts if the rounded magnitude exceeds the representable `SD29x9` range.
 public fun div_away(x: SD29x9, y: SD29x9): SD29x9 {
     let y_bits = y.unwrap();
-    assert!(y_bits != 0, EDivisionByZero);
+    assert!(y_bits != 0, EDivideByZero);
     let y = decompose(y_bits);
     let x = decompose(x.unwrap());
     let neg = x.neg != y.neg;

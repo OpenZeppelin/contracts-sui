@@ -17,7 +17,7 @@ const EUnderflow: vector<u8> = "Value underflows UD30x9 (result would be negativ
 
 /// Divisor must be non-zero
 #[error(code = 2)]
-const EDivisionByZero: vector<u8> = "Divisor must be non-zero";
+const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 
 /// Value cannot be converted to `SD29x9`
 #[error(code = 3)]
@@ -278,7 +278,7 @@ public fun lte(x: UD30x9, y: UD30x9): bool {
 /// - Aborts if `y` is zero.
 public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap(), y.unwrap());
-    assert!(y != 0, EDivisionByZero);
+    assert!(y != 0, EDivideByZero);
     wrap(x % y)
 }
 
@@ -372,7 +372,7 @@ public fun div(x: UD30x9, y: UD30x9): UD30x9 {
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    assert!(y != 0, EDivisionByZero);
+    assert!(y != 0, EDivideByZero);
     let numerator = x * common::scale_u256!();
     wrap_u256(numerator / y)
 }
@@ -397,7 +397,7 @@ public fun div_trunc(x: UD30x9, y: UD30x9): UD30x9 {
 /// - Aborts if the rounded result exceeds the representable `UD30x9` range.
 public fun div_away(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    assert!(y != 0, EDivisionByZero);
+    assert!(y != 0, EDivideByZero);
     let numerator = x * common::scale_u256!();
     wrap_u256(common::div_away_u256(numerator, y))
 }
