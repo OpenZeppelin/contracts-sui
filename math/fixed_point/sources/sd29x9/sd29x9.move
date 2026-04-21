@@ -15,15 +15,10 @@
 ///   values that might dip below zero, unlike unsigned types.
 module openzeppelin_fp_math::sd29x9;
 
+use openzeppelin_fp_math::common;
+
 /// The `SD29x9` decimal fixed-point type.
 public struct SD29x9(u128) has copy, drop, store;
-
-// === Constants ===
-
-const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
-const MIN_NEGATIVE_VALUE: u128 = 0x8000_0000_0000_0000_0000_0000_0000_0000; // -2^127 in two's complement
-const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
-const SCALE: u128 = 1_000_000_000; // 10^9
 
 // === Errors ===
 
@@ -31,36 +26,46 @@ const SCALE: u128 = 1_000_000_000; // 10^9
 #[error(code = 0)]
 const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed range)";
 
-// === Functions ===
+// === Method Exports ===
 
+// Arithmetic
 public use fun openzeppelin_fp_math::sd29x9_base::abs as SD29x9.abs;
 public use fun openzeppelin_fp_math::sd29x9_base::add as SD29x9.add;
-public use fun openzeppelin_fp_math::sd29x9_base::and as SD29x9.and;
-public use fun openzeppelin_fp_math::sd29x9_base::and2 as SD29x9.and2;
 public use fun openzeppelin_fp_math::sd29x9_base::ceil as SD29x9.ceil;
 public use fun openzeppelin_fp_math::sd29x9_base::div as SD29x9.div;
-public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
+public use fun openzeppelin_fp_math::sd29x9_base::div_away as SD29x9.div_away;
+public use fun openzeppelin_fp_math::sd29x9_base::div_trunc as SD29x9.div_trunc;
 public use fun openzeppelin_fp_math::sd29x9_base::floor as SD29x9.floor;
-public use fun openzeppelin_fp_math::sd29x9_base::gt as SD29x9.gt;
-public use fun openzeppelin_fp_math::sd29x9_base::gte as SD29x9.gte;
-public use fun openzeppelin_fp_math::sd29x9_base::into_UD30x9 as SD29x9.into_UD30x9;
-public use fun openzeppelin_fp_math::sd29x9_base::is_zero as SD29x9.is_zero;
-public use fun openzeppelin_fp_math::sd29x9_base::lshift as SD29x9.lshift;
-public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
-public use fun openzeppelin_fp_math::sd29x9_base::lte as SD29x9.lte;
 public use fun openzeppelin_fp_math::sd29x9_base::mod as SD29x9.mod;
 public use fun openzeppelin_fp_math::sd29x9_base::mul as SD29x9.mul;
+public use fun openzeppelin_fp_math::sd29x9_base::mul_away as SD29x9.mul_away;
+public use fun openzeppelin_fp_math::sd29x9_base::mul_trunc as SD29x9.mul_trunc;
 public use fun openzeppelin_fp_math::sd29x9_base::negate as SD29x9.negate;
-public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
-public use fun openzeppelin_fp_math::sd29x9_base::not as SD29x9.not;
-public use fun openzeppelin_fp_math::sd29x9_base::or as SD29x9.or;
 public use fun openzeppelin_fp_math::sd29x9_base::pow as SD29x9.pow;
-public use fun openzeppelin_fp_math::sd29x9_base::rshift as SD29x9.rshift;
+public use fun openzeppelin_fp_math::sd29x9_base::rem as SD29x9.rem;
 public use fun openzeppelin_fp_math::sd29x9_base::sub as SD29x9.sub;
-public use fun openzeppelin_fp_math::sd29x9_base::try_into_UD30x9 as SD29x9.try_into_UD30x9;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchecked_add;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_sub as SD29x9.unchecked_sub;
-public use fun openzeppelin_fp_math::sd29x9_base::xor as SD29x9.xor;
+
+// Comparison
+public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
+public use fun openzeppelin_fp_math::sd29x9_base::gt as SD29x9.gt;
+public use fun openzeppelin_fp_math::sd29x9_base::gte as SD29x9.gte;
+public use fun openzeppelin_fp_math::sd29x9_base::is_zero as SD29x9.is_zero;
+public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
+public use fun openzeppelin_fp_math::sd29x9_base::lte as SD29x9.lte;
+public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
+
+// Cross-Type Casting
+public use fun openzeppelin_fp_math::sd29x9_base::into_UD30x9 as SD29x9.into_UD30x9;
+public use fun openzeppelin_fp_math::sd29x9_base::try_into_UD30x9 as SD29x9.try_into_UD30x9;
+
+// Whole-Number Conversions
+public use fun openzeppelin_fp_math::sd29x9_convert::to_parts_trunc as SD29x9.to_parts_trunc;
+public use fun openzeppelin_fp_math::sd29x9_convert::to_u128_trunc as SD29x9.to_u128_trunc;
+public use fun openzeppelin_fp_math::sd29x9_convert::try_to_u128_trunc as SD29x9.try_to_u128_trunc;
+public use fun openzeppelin_fp_math::sd29x9_convert::to_u64_trunc as SD29x9.to_u64_trunc;
+public use fun openzeppelin_fp_math::sd29x9_convert::try_to_u64_trunc as SD29x9.try_to_u64_trunc;
 
 /// Constructs the zero value in `SD29x9` representation.
 ///
@@ -75,7 +80,7 @@ public fun zero(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `1`.
 public fun one(): SD29x9 {
-    SD29x9(SCALE)
+    SD29x9(common::scale!())
 }
 
 /// Constructs the minimum representable `SD29x9` value.
@@ -83,7 +88,7 @@ public fun one(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `-2^127`.
 public fun min(): SD29x9 {
-    SD29x9(MIN_NEGATIVE_VALUE)
+    SD29x9(common::min_sd29x9_value!())
 }
 
 /// Constructs the maximum representable `SD29x9` value.
@@ -91,7 +96,7 @@ public fun min(): SD29x9 {
 /// #### Returns
 /// - The `SD29x9` representation of `2^127 - 1`.
 public fun max(): SD29x9 {
-    SD29x9(MAX_POSITIVE_VALUE)
+    SD29x9(common::max_sd29x9_magnitude!())
 }
 
 // === Casting helpers ===
@@ -117,7 +122,7 @@ public fun max(): SD29x9 {
 public fun wrap(x: u128, is_negative: bool): SD29x9 {
     if (x == 0) {
         zero()
-    } else if (x > MAX_POSITIVE_VALUE) {
+    } else if (x > common::max_sd29x9_magnitude!()) {
         // The value is too large to be represented as a positive SD29x9
         abort EOverflow
     } else if (is_negative) {
@@ -153,9 +158,9 @@ public fun unwrap(x: SD29x9): u128 {
 /// #### Returns
 /// - The two's complement of `bits`.
 public(package) fun two_complement(bits: u128): u128 {
-    let inverted = bits ^ U128_MAX_VALUE;
+    let inverted = bits ^ std::u128::max_value!();
     let sum = (inverted as u256) + 1;
-    (sum & (U128_MAX_VALUE as u256)) as u128
+    (sum & (std::u128::max_value!() as u256)) as u128
 }
 
 /// Wraps a raw `u128` bit pattern directly into an `SD29x9` value without validation.
