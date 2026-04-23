@@ -7,9 +7,12 @@ module openzeppelin_math::u8;
 
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
-use std::u256::try_as_u8;
+
+// === Constants ===
 
 const BIT_WIDTH: u8 = 8;
+
+// === Public Functions ===
 
 /// Compute the arithmetic mean of two `u8` values with configurable rounding.
 ///
