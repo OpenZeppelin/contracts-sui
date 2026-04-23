@@ -6,6 +6,8 @@
 /// bounds, sign handling, and terminology consistent across the package.
 module openzeppelin_fp_math::common;
 
+// === Package Functions ===
+
 /// Returns the raw fixed-point scale shared by `UD30x9` and `SD29x9`.
 ///
 /// #### Returns

@@ -8,8 +8,6 @@ use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Tests ====
-
 #[test]
 fun pow_handles_zero_and_one_exponents() {
     let x = fixed(12 * SCALE + 345_678_901);

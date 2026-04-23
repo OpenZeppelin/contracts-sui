@@ -142,6 +142,6 @@ fun try_into_ud30x9_matches_into_ud30x9_on_convertible_values() {
 
     samples.destroy!(|raw| {
         let x = pos(raw);
-        assert_eq!(sd29x9_base::try_into_UD30x9(x), option::some(x.into_UD30x9()));
+        assert_eq!(x.try_into_UD30x9(), option::some(x.into_UD30x9()));
     });
 }

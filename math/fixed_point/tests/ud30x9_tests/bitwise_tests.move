@@ -7,8 +7,6 @@ use std::unit_test::assert_eq;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 
-// ==== Tests ====
-
 #[test]
 fun bitwise_and_shift_helpers_behave_like_u128() {
     let raw = 0xF0F0;

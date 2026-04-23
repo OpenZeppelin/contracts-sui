@@ -10,8 +10,6 @@ use std::unit_test::assert_eq;
 const MAX_POSITIVE_SD29X9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Tests ====
-
 #[test]
 fun into_sd29x9_converts_zero() {
     let zero = ud30x9::zero();
@@ -134,6 +132,6 @@ fun try_into_sd29x9_matches_into_sd29x9_on_convertible_values() {
 
     samples.destroy!(|raw| {
         let x = fixed(raw);
-        assert_eq!(ud30x9_base::try_into_SD29x9(x), option::some(x.into_SD29x9()));
+        assert_eq!(x.try_into_SD29x9(), option::some(x.into_SD29x9()));
     });
 }

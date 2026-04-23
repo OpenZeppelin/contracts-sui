@@ -17,6 +17,8 @@ module openzeppelin_fp_math::ud30x9;
 
 use openzeppelin_fp_math::common;
 
+// === Structs ===
+
 /// The `UD30x9` decimal fixed-point type.
 public struct UD30x9(u128) has copy, drop, store;
 
@@ -67,6 +69,8 @@ public use fun openzeppelin_fp_math::ud30x9_base::try_into_SD29x9 as UD30x9.try_
 public use fun openzeppelin_fp_math::ud30x9_convert::to_u128_trunc as UD30x9.to_u128_trunc;
 public use fun openzeppelin_fp_math::ud30x9_convert::to_u64_trunc as UD30x9.to_u64_trunc;
 public use fun openzeppelin_fp_math::ud30x9_convert::try_to_u64_trunc as UD30x9.try_to_u64_trunc;
+
+// === Public Functions ===
 
 /// Constructs the zero value in `UD30x9` representation.
 ///

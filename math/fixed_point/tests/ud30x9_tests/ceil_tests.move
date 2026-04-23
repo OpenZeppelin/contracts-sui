@@ -8,8 +8,6 @@ use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Tests ====
-
 #[test]
 fun ceil_rounds_up_fractional_values() {
     // 5.3 -> 6.0

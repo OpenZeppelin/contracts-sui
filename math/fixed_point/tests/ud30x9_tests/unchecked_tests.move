@@ -6,8 +6,6 @@ use std::unit_test::assert_eq;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 
-// ==== Tests ====
-
 #[test]
 fun unchecked_add_wraps_on_overflow() {
     let a = fixed(5);
