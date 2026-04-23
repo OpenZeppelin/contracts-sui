@@ -8,10 +8,24 @@ use openzeppelin_math::common;
 use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::u512;
 
+// === Errors ===
+
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 #[error(code = 1)]
 const EZeroModulus: vector<u8> = "Modulus must be non-zero";
+
+// === Constants ===
+
+const MAX_LOG_10: u8 = 77;
+const TEN_POW_2: u256 = 100;
+const TEN_POW_4: u256 = TEN_POW_2 * TEN_POW_2;
+const TEN_POW_8: u256 = TEN_POW_4 * TEN_POW_4;
+const TEN_POW_16: u256 = TEN_POW_8 * TEN_POW_8;
+const TEN_POW_32: u256 = TEN_POW_16 * TEN_POW_16;
+const TEN_POW_64: u256 = TEN_POW_32 * TEN_POW_32;
+
+// === Package Functions ===
 
 /// Compute the arithmetic mean of two unsigned integers with configurable rounding.
 ///
@@ -390,14 +404,6 @@ public(package) macro fun log10<$Int>($value: $Int, $rounding_mode: RoundingMode
     }
 }
 
-const MAX_LOG_10: u8 = 77;
-const TEN_POW_2: u256 = 100;
-const TEN_POW_4: u256 = TEN_POW_2 * TEN_POW_2;
-const TEN_POW_8: u256 = TEN_POW_4 * TEN_POW_4;
-const TEN_POW_16: u256 = TEN_POW_8 * TEN_POW_8;
-const TEN_POW_32: u256 = TEN_POW_16 * TEN_POW_16;
-const TEN_POW_64: u256 = TEN_POW_32 * TEN_POW_32;
-
 /// Compute floor(log10(value)) using binary search over powers of 10.
 ///
 /// This helper uses precomputed constants (`TEN_POW_2`, `TEN_POW_4`, etc.) to efficiently
@@ -442,7 +448,7 @@ public(package) fun log10_floor(value: u256): u8 {
     result
 }
 
-/// === Helper functions ===
+// === Helper functions ===
 
 /// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
 ///
@@ -910,7 +916,7 @@ public(package) fun round_sqrt_result(
     }
 }
 
-/// === Internal helpers for modular arithmetic ===
+// === Internal helpers for modular arithmetic ===
 
 /// Extended Euclidean algorithm that powers `inv_mod!`.
 ///
