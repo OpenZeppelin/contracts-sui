@@ -8,8 +8,6 @@ use std::unit_test::assert_eq;
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Tests ====
-
 #[test]
 fun wrap_and_unwrap_roundtrip() {
     let raw = 123_456_789u128;

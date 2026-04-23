@@ -22,6 +22,8 @@ const EOverflow: vector<u8> = "Whole integer overflows UD30x9 once scaled by 10^
 #[error(code = 1)]
 const EIntegerOverflow: vector<u8> = "Truncated whole part does not fit in u64";
 
+// === Public Functions ===
+
 // === Integer -> Fixed-Point ===
 
 /// Converts a whole `u64` integer into `UD30x9` by multiplying it by `10^9`.

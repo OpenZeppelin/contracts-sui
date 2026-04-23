@@ -31,6 +31,8 @@ const ENegativeValue: vector<u8> =
 #[error(code = 2)]
 const EIntegerOverflow: vector<u8> = "Truncated whole part does not fit in u64";
 
+// === Public Functions ===
+
 // === Integer -> Fixed-Point ===
 
 /// Converts a whole `u64` magnitude into `SD29x9` by multiplying it by `10^9`

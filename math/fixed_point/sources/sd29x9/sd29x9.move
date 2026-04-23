@@ -17,14 +17,16 @@ module openzeppelin_fp_math::sd29x9;
 
 use openzeppelin_fp_math::common;
 
-/// The `SD29x9` decimal fixed-point type.
-public struct SD29x9(u128) has copy, drop, store;
-
 // === Errors ===
 
 /// Value cannot be represented as `SD29x9`
 #[error(code = 0)]
 const EOverflow: vector<u8> = "Value overflows SD29x9 (must fit in 2^127 signed range)";
+
+// === Structs ===
+
+/// The `SD29x9` decimal fixed-point type.
+public struct SD29x9(u128) has copy, drop, store;
 
 // === Method Exports ===
 
@@ -66,6 +68,8 @@ public use fun openzeppelin_fp_math::sd29x9_convert::to_u128_trunc as SD29x9.to_
 public use fun openzeppelin_fp_math::sd29x9_convert::try_to_u128_trunc as SD29x9.try_to_u128_trunc;
 public use fun openzeppelin_fp_math::sd29x9_convert::to_u64_trunc as SD29x9.to_u64_trunc;
 public use fun openzeppelin_fp_math::sd29x9_convert::try_to_u64_trunc as SD29x9.try_to_u64_trunc;
+
+// === Public Functions ===
 
 /// Constructs the zero value in `SD29x9` representation.
 ///
@@ -148,7 +152,7 @@ public fun unwrap(x: SD29x9): u128 {
     x.0
 }
 
-// ==== Internal Functions ====
+// === Package Functions ===
 
 /// Compute the two's complement of a `u128` bit pattern.
 ///

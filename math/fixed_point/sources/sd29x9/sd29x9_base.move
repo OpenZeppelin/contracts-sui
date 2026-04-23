@@ -21,6 +21,15 @@ const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD3
 #[error(code = 2)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 
+// === Structs ===
+
+public struct Components has copy, drop {
+    neg: bool,
+    mag: u256,
+}
+
+// === Public Functions ===
+
 // === Conversion ===
 
 /// Converts a `SD29x9` value to a `UD30x9` value.
@@ -54,8 +63,6 @@ public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
         option::some(ud30x9::wrap(mag as u128))
     }
 }
-
-// === Public Functions ===
 
 /// Returns the absolute value of a `SD29x9`.
 ///
@@ -530,12 +537,7 @@ public fun unchecked_sub(x: SD29x9, y: SD29x9): SD29x9 {
     from_bits(wrapping_sub_bits(x.unwrap(), y.unwrap()))
 }
 
-// === Internal helpers ===
-
-public struct Components has copy, drop {
-    neg: bool,
-    mag: u256,
-}
+// === Private Functions ===
 
 fun decompose(bits: u128): Components {
     if ((bits & common::sign_bit!()) != 0) {

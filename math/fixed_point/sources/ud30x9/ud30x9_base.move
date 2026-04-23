@@ -27,6 +27,8 @@ const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD2
 #[error(code = 4)]
 const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
 
+// === Public Functions ===
+
 // === Conversion ===
 
 /// Converts a `UD30x9` value to a `SD29x9` value.
@@ -60,8 +62,6 @@ public fun try_into_SD29x9(x: UD30x9): Option<SD29x9> {
         option::some(sd29x9::wrap(value, false))
     }
 }
-
-// === Public Functions ===
 
 /// Adds two `UD30x9` values.
 ///
@@ -593,7 +593,7 @@ public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() ^ y.unwrap())
 }
 
-// === Internal Functions ===
+// === Private Functions ===
 
 fun wrap_u256(value: u256): UD30x9 {
     assert!(value <= std::u128::max_value!() as u256, EOverflow);

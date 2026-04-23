@@ -9,8 +9,6 @@ use std::unit_test::assert_eq;
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Tests ====
-
 #[test]
 fun mul_handles_multiplication_by_zero() {
     let zero = fixed(0);

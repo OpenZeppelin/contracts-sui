@@ -8,8 +8,6 @@ use std::unit_test::assert_eq;
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Tests ====
-
 #[test]
 fun abs_returns_same_value_for_unsigned() {
     // 5.0 -> 5.0
