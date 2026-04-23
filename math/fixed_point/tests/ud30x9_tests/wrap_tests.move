@@ -1,17 +1,12 @@
 #[test_only]
 module openzeppelin_fp_math::ud30x9_wrap_tests;
 
-use openzeppelin_fp_math::casting_u128::into_UD30x9;
 use openzeppelin_fp_math::ud30x9;
 use openzeppelin_fp_math::ud30x9_test_helpers::fixed;
 use std::unit_test::assert_eq;
 
-use fun into_UD30x9 as u128.into_UD30x9;
-
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 const SCALE: u128 = 1_000_000_000;
-
-// ==== Tests ====
 
 #[test]
 fun wrap_and_unwrap_roundtrip() {
@@ -24,13 +19,14 @@ fun wrap_and_unwrap_roundtrip() {
 }
 
 #[test]
-fun casting_from_u128_matches_wrap() {
+fun helper_fixed_matches_wrap() {
     let raw = 987_654_321u128;
-    let casted = raw.into_UD30x9();
-    assert_eq!(casted.unwrap(), raw);
+    let wrapped = ud30x9::wrap(raw);
+    assert_eq!(wrapped.unwrap(), raw);
 
     let manual = fixed(raw);
     assert_eq!(manual.unwrap(), raw);
+    assert_eq!(wrapped, manual);
 }
 
 #[test]

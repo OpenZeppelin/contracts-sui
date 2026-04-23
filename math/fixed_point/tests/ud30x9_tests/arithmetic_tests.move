@@ -2,7 +2,7 @@
 module openzeppelin_fp_math::ud30x9_arithmetic_tests;
 
 use openzeppelin_fp_math::ud30x9_base;
-use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, expect, pair, unpack};
+use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, pair, unpack};
 use std::unit_test::assert_eq;
 
 const MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
@@ -28,7 +28,7 @@ fun checked_add_overflow_aborts_as_expected() {
     fixed(MAX_VALUE).add(fixed(1));
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::EOverflow)]
+#[test, expected_failure(abort_code = ud30x9_base::EUnderflow)]
 fun checked_sub_underflow_aborts_as_expected() {
     fixed(0).sub(fixed(1));
 }
@@ -61,8 +61,8 @@ fun add_zero_is_identity() {
         fixed(1_000_000 * SCALE),
     ];
     cases.destroy!(|x| {
-        expect(x.add(zero), x);
-        expect(zero.add(x), x);
+        assert_eq!(x.add(zero), x);
+        assert_eq!(zero.add(x), x);
     });
 }
 

@@ -1,28 +1,33 @@
 /// Base utility functions for the `UD30x9` fixed-point type.
 module openzeppelin_fp_math::ud30x9_base;
 
+use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
-use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
-
-// === Constants ===
-
-const U128_MAX_VALUE: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^128 - 1
-const SCALE: u128 = 1_000_000_000; // 10^9
-const SCALE_U256: u256 = SCALE as u256; // 10^9
-const MAX_POSITIVE_SD29X9: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF; // 2^127 - 1
+use openzeppelin_fp_math::ud30x9::{Self, UD30x9, wrap, one};
 
 // === Errors ===
 
+/// Value overflows `UD30x9` (must be less than 2^128)
 #[error(code = 0)]
-const EOverflow: vector<u8> = "Value overflows UD30x9 (must fit in 2^128 unsigned range)";
+const EOverflow: vector<u8> = "Value overflows UD30x9 (must be less than 2^128)";
 
-/// Value cannot be converted to `SD29x9`
+/// Arithmetic underflow: the result would be negative, which is unrepresentable in `UD30x9`
 #[error(code = 1)]
-const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
+const EUnderflow: vector<u8> = "Value underflows UD30x9 (result would be negative)";
 
 /// Divisor must be non-zero
 #[error(code = 2)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
+
+/// Value cannot be converted to `SD29x9`
+#[error(code = 3)]
+const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD29x9";
+
+/// Shift size is out of range (must be less than 128)
+#[error(code = 4)]
+const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
+
+// === Public Functions ===
 
 // === Conversion ===
 
@@ -38,7 +43,7 @@ const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 /// - Aborts if `x` is greater than max positive `SD29x9` value.
 public fun into_SD29x9(x: UD30x9): SD29x9 {
     let value = x.unwrap();
-    assert!(value <= MAX_POSITIVE_SD29X9, ECannotBeConvertedToSD29x9);
+    assert!(value <= common::max_sd29x9_magnitude!(), ECannotBeConvertedToSD29x9);
     sd29x9::wrap(value, false)
 }
 
@@ -51,14 +56,12 @@ public fun into_SD29x9(x: UD30x9): SD29x9 {
 /// - The `SD29x9` representation of `x` if `x` is less than or equal to max positive `SD29x9` value, otherwise `none`.
 public fun try_into_SD29x9(x: UD30x9): Option<SD29x9> {
     let value = x.unwrap();
-    if (value > MAX_POSITIVE_SD29X9) {
+    if (value > common::max_sd29x9_magnitude!()) {
         option::none()
     } else {
         option::some(sd29x9::wrap(value, false))
     }
 }
-
-// === Public Functions ===
 
 /// Adds two `UD30x9` values.
 ///
@@ -123,12 +126,13 @@ public fun abs(x: UD30x9): UD30x9 {
 /// - Aborts if the rounded result exceeds the representable `UD30x9` range.
 public fun ceil(x: UD30x9): UD30x9 {
     let value = x.unwrap() as u256;
-    let fractional = value % SCALE_U256;
+    let scale = common::scale_u256!();
+    let fractional = value % scale;
     if (fractional == 0) {
         x
     } else {
         let int_part = value - fractional;
-        let new_value = int_part + SCALE_U256;
+        let new_value = int_part + scale;
         wrap_u256(new_value)
     }
 }
@@ -154,7 +158,7 @@ public fun eq(x: UD30x9, y: UD30x9): bool {
 /// - `x` rounded down (floor) at integer precision.
 public fun floor(x: UD30x9): UD30x9 {
     let value = x.unwrap();
-    let fractional = value % SCALE;
+    let fractional = value % common::scale!();
     if (fractional == 0) {
         x
     } else {
@@ -198,7 +202,30 @@ public fun is_zero(x: UD30x9): bool {
 }
 
 /// Performs a logical left shift on the underlying 128-bit representation of a `UD30x9` value.
-/// The high bits are dropped if they overflow past the 128-bit boundary.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Number of bit positions to shift left.
+///
+/// #### Returns
+/// - The result of shifting the `x`'s raw bits left by `bits`.
+///
+/// #### Aborts
+/// - Aborts if `bits >= 128`.
+/// - Aborts if the result overflows `u128`.
+public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+    assert!(bits < 128, EInvalidShiftSize);
+    let raw = x.unwrap();
+    assert!(raw <= std::u128::max_value!() >> bits, EOverflow);
+    wrap(raw << bits)
+}
+
+/// Performs an unchecked left shift on the underlying 128-bit representation of a `UD30x9`
+/// value, truncating high bits that overflow past the 128-bit boundary and returning zero
+/// when `bits >= 128`.
+///
+/// A checked version of this function is available via `lshift`, which aborts on invalid
+/// shift sizes and overflow.
 ///
 /// #### Parameters
 /// - `x`: Input value.
@@ -207,9 +234,9 @@ public fun is_zero(x: UD30x9): bool {
 /// #### Returns
 /// - Zero if `bits >= 128` (all bits shifted out).
 /// - Otherwise, the result of shifting the `x`'s raw bits left by `bits`.
-public fun lshift(x: UD30x9, bits: u8): UD30x9 {
+public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return wrap(0)
+        return ud30x9::zero()
     };
     wrap(x.unwrap() << bits)
 }
@@ -250,69 +277,151 @@ public fun lte(x: UD30x9, y: UD30x9): bool {
 /// #### Aborts
 /// - `EDivideByZero` if `y` is zero.
 public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
-    assert!(y.unwrap() != 0, EDivideByZero);
-    wrap(x.unwrap() % y.unwrap())
+    let (x, y) = (x.unwrap(), y.unwrap());
+    assert!(y != 0, EDivideByZero);
+    wrap(x % y)
 }
 
 /// Multiplies two `UD30x9` values with fixed-point scaling.
 ///
-/// The intermediate product is rescaled using integer division by `SCALE`, so the result is
-/// rounded down toward zero whenever the exact product cannot be represented with 9 decimals.
+/// This function rounds toward zero when the exact product cannot be represented with 9 decimals.
+/// Equivalent to `mul_trunc`.
 ///
 /// #### Parameters
 /// - `x`: First operand.
 /// - `y`: Second operand.
 ///
 /// #### Returns
-/// - The product `x * y`, rounded down to the nearest representable `UD30x9` value.
+/// - The product `x * y`, rounded toward zero.
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
+    mul_trunc(x, y)
+}
+
+/// Multiplies two `UD30x9` values with fixed-point scaling and truncation toward zero.
+///
+/// This function rounds toward zero when the exact product cannot be represented with 9 decimals.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`, rounded toward zero.
+///
+/// #### Aborts
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+public fun mul_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let product = x * y / SCALE_U256;
-    wrap_u256(product)
+    wrap_u256(x * y / common::scale_u256!())
+}
+
+/// Multiplies two `UD30x9` values with fixed-point scaling and rounds away from zero.
+///
+/// This function rounds away from zero when the exact product cannot be represented with 9
+/// decimals.
+///
+/// #### Parameters
+/// - `x`: First operand.
+/// - `y`: Second operand.
+///
+/// #### Returns
+/// - The product `x * y`, rounded away from zero when inexact.
+///
+/// #### Aborts
+/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+public fun mul_away(x: UD30x9, y: UD30x9): UD30x9 {
+    let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
+    wrap_u256(common::div_away_u256(x * y, common::scale_u256!()))
 }
 
 /// Divides `x` by `y` with fixed-point scaling.
 ///
-/// The scaled numerator is reduced using integer division, so the result is rounded down toward
-/// zero whenever the exact quotient cannot be represented with 9 decimals.
+/// This function rounds toward zero when the exact quotient cannot be represented with 9 decimals.
+/// Equivalent to `div_trunc`.
 ///
 /// #### Parameters
 /// - `x`: Dividend.
 /// - `y`: Divisor.
 ///
 /// #### Returns
-/// - The quotient `x / y`, rounded down to the nearest representable `UD30x9` value.
+/// - The quotient `x / y`, rounded toward zero.
 ///
 /// #### Aborts
 /// - `EDivideByZero` if `y` is zero.
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
-    assert!(y.unwrap() != 0, EDivideByZero);
+    div_trunc(x, y)
+}
+
+/// Divides `x` by `y` with fixed-point scaling and truncation toward zero.
+///
+/// This function rounds toward zero when the exact quotient cannot be represented with 9 decimals.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Returns
+/// - The quotient `x / y`, rounded toward zero.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+public fun div_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let numerator = x * SCALE_U256;
+    assert!(y != 0, EDivideByZero);
+    let numerator = x * common::scale_u256!();
     wrap_u256(numerator / y)
+}
+
+/// Divides `x` by `y` with fixed-point scaling and rounds away from zero.
+///
+/// This function rounds away from zero when the exact quotient cannot be represented with 9
+/// decimals.
+///
+/// #### Parameters
+/// - `x`: Dividend.
+/// - `y`: Divisor.
+///
+/// #### Examples
+/// - `1.0 / 3.0` returns `0.333333334`.
+///
+/// #### Returns
+/// - The quotient `x / y`, rounded away from zero when inexact.
+///
+/// #### Aborts
+/// - Aborts if `y` is zero.
+/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+public fun div_away(x: UD30x9, y: UD30x9): UD30x9 {
+    let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
+    assert!(y != 0, EDivideByZero);
+    let numerator = x * common::scale_u256!();
+    wrap_u256(common::div_away_u256(numerator, y))
 }
 
 /// Raises `x` to a power of `exp`.
 ///
-/// This helper uses repeated fixed-point multiplication with truncation after each step. It applies
-/// the recurrence `result = floor(result * base / SCALE)` `exp - 1` times rather than computing the
-/// exact power and rounding once at the end.
+/// This helper uses binary exponentiation with fixed-point multiplication. Each intermediate
+/// multiply or square applies fixed-point truncation via division by `common::scale_u256!()`.
 ///
 /// As a consequence, `pow` is approximate for most fractional values: rounding error compounds as
 /// `exp` grows, results are biased toward zero, and for `0 < x < 1` intermediate values can reach
 /// zero before the final mathematically scaled result would.
+///
+/// Because truncation is applied at intermediate steps, the result generally matches neither the
+/// exact real-valued power rounded once at the end nor the result of left-to-right repeated
+/// multiplication. In particular, fixed-point multiplication is not associative under truncation,
+/// so the grouping of operations used by binary exponentiation affects the final value.
 ///
 /// #### Parameters
 /// - `x`: Base value.
 /// - `exp`: Exponent.
 ///
 /// #### Returns
-/// - An approximation of `x^exp` using the same stepwise truncation semantics as repeated
-///   fixed-point multiplication.
+/// - An approximation of `x^exp` computed using binary exponentiation and fixed-point truncation.
 ///
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
@@ -323,14 +432,24 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     if (exp == 1) {
         return x
     };
-    let max_value = U128_MAX_VALUE as u256;
-    let base = x.unwrap() as u256;
-    let mut result = base;
-    let times = exp - 1;
-    times.do!(|_| {
-        result = result * base / SCALE_U256;
-        assert!(result <= max_value, EOverflow);
-    });
+
+    let scale = common::scale_u256!();
+    let max_value = std::u128::max_value!() as u256;
+    let mut base = x.unwrap() as u256;
+    let mut result = scale;
+    let mut exp = exp;
+
+    while (exp != 0) {
+        if ((exp & 1) == 1) {
+            result = result * base / scale;
+            assert!(result <= max_value, EOverflow);
+        };
+        exp = exp >> 1;
+        if (exp != 0) {
+            base = base * base / scale;
+            assert!(base <= max_value, EOverflow);
+        };
+    };
 
     wrap_u256(result)
 }
@@ -355,7 +474,7 @@ public fun neq(x: UD30x9, y: UD30x9): bool {
 /// #### Returns
 /// - The result of bitwise NOT operation.
 public fun not(x: UD30x9): UD30x9 {
-    wrap(x.unwrap() ^ U128_MAX_VALUE)
+    wrap(x.unwrap() ^ std::u128::max_value!())
 }
 
 /// Performs a bitwise OR between two `UD30x9` raw bit patterns.
@@ -371,7 +490,26 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 }
 
 /// Performs a logical right shift on the underlying 128-bit representation of a `UD30x9` value.
-/// Vacated high bits are filled with zeros.
+///
+/// #### Parameters
+/// - `x`: Input value.
+/// - `bits`: Number of bit positions to shift right.
+///
+/// #### Returns
+/// - The result of shifting the `x`'s raw bits right by `bits`.
+///
+/// #### Aborts
+/// - Aborts if `bits >= 128`.
+public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+    assert!(bits < 128, EInvalidShiftSize);
+    wrap(x.unwrap() >> bits)
+}
+
+/// Performs an unchecked right shift on the underlying 128-bit representation of a `UD30x9`
+/// value, filling vacated high bits with zeros and returning zero when `bits >= 128`.
+///
+/// A checked version of this function is available via `rshift`, which aborts on invalid
+/// shift sizes.
 ///
 /// #### Parameters
 /// - `x`: Input value.
@@ -380,9 +518,9 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 /// #### Returns
 /// - Zero if `bits >= 128`.
 /// - Otherwise, the result of shifting the `x`'s raw bits right by `bits`.
-public fun rshift(x: UD30x9, bits: u8): UD30x9 {
+public fun unchecked_rshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return wrap(0)
+        return ud30x9::zero()
     };
     wrap(x.unwrap() >> bits)
 }
@@ -400,7 +538,7 @@ public fun rshift(x: UD30x9, bits: u8): UD30x9 {
 /// - Aborts if `y > x`.
 public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap(), y.unwrap());
-    assert!(x >= y, EOverflow);
+    assert!(x >= y, EUnderflow);
     wrap(x - y)
 }
 
@@ -415,7 +553,7 @@ public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
 public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     let sum = x + y;
-    let u128_max = U128_MAX_VALUE as u256;
+    let u128_max = std::u128::max_value!() as u256;
 
     // Keep only the low 128 bits, safe to cast down to u128.
     let wrapped = (sum & u128_max) as u128;
@@ -432,7 +570,7 @@ public fun unchecked_add(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The wrapping difference `x - y` modulo `2^128`.
 public fun unchecked_sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
-    let u128_max = U128_MAX_VALUE as u256;
+    let u128_max = std::u128::max_value!() as u256;
 
     // Effectively wraps subtraction like in modular arithmetic.
     // The result is (a + (2^128) - b).
@@ -455,9 +593,9 @@ public fun xor(x: UD30x9, y: UD30x9): UD30x9 {
     wrap(x.unwrap() ^ y.unwrap())
 }
 
-// === Internal Functions ===
+// === Private Functions ===
 
 fun wrap_u256(value: u256): UD30x9 {
-    assert!(value <= U128_MAX_VALUE as u256, EOverflow);
+    assert!(value <= std::u128::max_value!() as u256, EOverflow);
     wrap(value as u128)
 }

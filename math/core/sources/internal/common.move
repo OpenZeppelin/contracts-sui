@@ -2,6 +2,8 @@
 ///
 module openzeppelin_math::common;
 
+// === Package Functions ===
+
 /// Count the number of leading zeros for one of the package's supported unsigned widths.
 ///
 /// This helper is intended for the power-of-two widths used throughout the package: `8`, `16`, `32`,
