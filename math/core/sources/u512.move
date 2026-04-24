@@ -186,8 +186,8 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     // numerator is not zero, so we can safely call msb
     let mut idx = numerator.msb();
     loop {
-        remainder = shift_left1(&remainder);
-        let bit = get_bit(&numerator, idx);
+        remainder = remainder.shift_left1();
+        let bit = numerator.get_bit(idx);
         if (bit == 1) {
             remainder.lo = remainder.lo | 1;
         };
