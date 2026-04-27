@@ -8,7 +8,11 @@ module openzeppelin_math::u64;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
+// === Constants ===
+
 const BIT_WIDTH: u8 = 64;
+
+// === Public Functions ===
 
 /// Compute the arithmetic mean of two `u64` values with configurable rounding.
 ///

@@ -6,14 +6,7 @@ module openzeppelin_math::u512;
 
 use openzeppelin_math::common;
 
-/// Represents a 512-bit unsigned integer as two 256-bit words.
-public struct U512 has copy, drop, store {
-    hi: u256,
-    lo: u256,
-}
-
-const HALF_BITS: u8 = 128;
-const HALF_MASK: u256 = (1u256 << HALF_BITS) - 1;
+// === Errors ===
 
 #[error(code = 0)]
 const ECarryOverflow: vector<u8> = "Cross-limb addition overflowed";
@@ -23,6 +16,21 @@ const EUnderflow: vector<u8> = "Borrow underflowed high limb";
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 #[error(code = 3)]
 const EInvalidRemainder: vector<u8> = "High remainder bits must be zero";
+
+// === Constants ===
+
+const HALF_BITS: u8 = 128;
+const HALF_MASK: u256 = (1u256 << HALF_BITS) - 1;
+
+// === Structs ===
+
+/// Represents a 512-bit unsigned integer as two 256-bit words.
+public struct U512 has copy, drop, store {
+    hi: u256,
+    lo: u256,
+}
+
+// === Public Functions ===
 
 /// Construct a `U512` from its high and low 256-bit components.
 ///
@@ -167,8 +175,8 @@ public fun mul_u256(a: u256, b: u256): U512 {
 public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     assert!(divisor != 0, EDivideByZero);
 
-    if (numerator.hi == 0 && numerator.lo == 0) {
-        return (false, 0, 0)
+    if (numerator.hi == 0) {
+        return (false, numerator.lo / divisor, numerator.lo % divisor)
     };
 
     let mut quotient = 0u256;
@@ -178,8 +186,8 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     // numerator is not zero, so we can safely call msb
     let mut idx = numerator.msb();
     loop {
-        remainder = shift_left1(&remainder);
-        let bit = get_bit(&numerator, idx);
+        remainder = remainder.shift_left1();
+        let bit = numerator.get_bit(idx);
         if (bit == 1) {
             remainder.lo = remainder.lo | 1;
         };
@@ -205,7 +213,7 @@ public fun div_rem_u256(numerator: U512, divisor: u256): (bool, u256, u256) {
     if (overflow) (true, 0, remainder.lo) else (false, quotient, remainder.lo)
 }
 
-/// === Internal helpers ===
+// === Private Functions ===
 
 /// Check whether `value` is greater than or equal to a `u256` scalar.
 ///
@@ -327,6 +335,8 @@ fun msb(value: &U512): u16 {
         common::msb(value.lo, 256) as u16
     }
 }
+
+// === Test-Only Helpers ===
 
 #[test_only]
 public fun sub_u256_for_testing(value: U512, other: u256): U512 {

@@ -1,13 +1,16 @@
 module openzeppelin_math::vector;
 
+// === Public Functions ===
+
 /// Sort an unsigned integer vector in-place using the quicksort algorithm.
 ///
 /// NOTE: This is an unstable in-place sort.
 ///
-/// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
-/// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
-/// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
-/// selected as the pivot.
+/// This macro implements the iterative quicksort algorithm with three-way partitioning
+/// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
+/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
+/// pivot selection makes it much less likely for common inputs, while three-way partitioning
+/// improves practical performance when duplicate elements are present.
 ///
 /// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
 /// it suitable for arbitrarily large vectors.
@@ -21,7 +24,7 @@ module openzeppelin_math::vector;
 /// #### Example
 /// ```move
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
-/// macros::quick_sort!(&mut vec);
+/// vector::quick_sort!(&mut vec);
 /// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
 /// ```
 public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
@@ -32,22 +35,27 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 ///
 /// NOTE: This is an unstable in-place sort.
 ///
-/// This macro implements the iterative quicksort algorithm with the Lomuto partition scheme,
-/// which efficiently sorts vectors in-place with `O(n log n)` average-case time complexity and
-/// `O(n²)` worst-case complexity, when the smallest or largest element is consistently
-/// selected as the pivot.
+/// This macro implements the iterative quicksort algorithm with three-way partitioning
+/// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
+/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
+/// pivot selection makes it much less likely for common inputs, while three-way partitioning
+/// improves practical performance when duplicate elements are present. Using an incorrect
+/// comparator (see `$le` below) can also degrade performance.
 ///
 /// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
 /// it suitable for arbitrarily large vectors.
 ///
 /// #### Generics
-/// - `$Int`: Any type that can be compared using the provided comparison function.
+/// - `$T`: Any type that can be compared using the provided comparison function.
 ///
 /// #### Parameters
 /// - `$vec`: A mutable reference to the vector to be sorted in-place.
 /// - `$le`: A comparison function that takes two references and returns `true` if the first
-///   element should be ordered before or equal to the second element. For ascending order,
-///   this should implement "less than or equal to" semantics.
+///   element should be ordered before or equal to the second element. **Must implement
+///   non-strict ordering** (i.e., `<=` for ascending, `>=` for descending). Using a strict
+///   comparator (e.g., `<` instead of `<=`) defeats three-way partitioning, which can degrade
+///   performance to `O(n²)` when duplicate elements are present. Always use non-strict
+///   operators to ensure optimal behavior.
 ///
 /// #### Example
 /// ```move
@@ -73,8 +81,31 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         let start = stack_start.pop_back();
         let end = stack_end.pop_back();
 
-        // Ensure we have at least two elements in vector.
-        if (start + 1 >= end) {
+        // Empty range: nothing to sort.
+        if (start == end) {
+            continue
+        };
+        // Single-element range: already sorted.
+        if (start + 1 == end) {
+            continue
+        };
+
+        // Use insertion sort for small sub-partitions.
+        if (end - start <= 10) {
+            // Inline insertion sort for the sub-range [start, end).
+            let mut i = start + 1;
+            while (i < end) {
+                let mut j = i;
+                while (
+                    j != start
+                        && $le(&vec[j], &vec[j - 1])
+                        && !$le(&vec[j - 1], &vec[j])
+                ) {
+                    vec.swap(j, j - 1);
+                    j = j - 1;
+                };
+                i = i + 1;
+            };
             continue
         };
 
@@ -94,44 +125,72 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             vec.swap(mid, pivot_index);
         };
 
-        // Partition vector around pivot_index.
+        // Three-way partition (Dutch National Flag) around the pivot.
+        // Regions: [start, lt) ordered before pivot, [lt, i) equal to pivot, [i, gt) unprocessed,
+        // [gt, pivot_index) ordered after pivot.
+        // The pivot value is at `pivot_index` (end - 1) and will be moved into the equal region after partitioning.
+        let mut lt = start;
         let mut i = start;
-        let mut j = start;
-        while (j < pivot_index) {
-            // If second index `j` is smaller (or equal) than pivot,
-            if ($le(&vec[j], &vec[pivot_index])) {
-                // swap it with element from the first partition.
-                vec.swap(i, j);
-                i = i + 1;
+        let mut gt = pivot_index; // gt points to pivot_index initially; pivot is excluded from scan.
+
+        while (i < gt) {
+            if ($le(&vec[i], &vec[pivot_index])) {
+                if ($le(&vec[pivot_index], &vec[i])) {
+                    // vec[i] equal to pivot: element belongs in the equal region, just advance `i`.
+                    i = i + 1;
+                } else {
+                    // vec[i] ordered before pivot: swap to the before-pivot region.
+                    vec.swap(lt, i);
+                    lt = lt + 1;
+                    i = i + 1;
+                }
+            } else {
+                // vec[i] ordered after pivot: swap to the after-pivot region.
+                gt = gt - 1;
+                vec.swap(i, gt);
+                // Don't advance `i`; the swapped-in element needs to be examined.
             };
-            j = j + 1;
         };
 
-        // Swap pivot to the partition index. Swapped element will be greater,
-        // than a pivot since it was already processed.
-        // Index `i` is now partition index.
-        vec.swap(i, pivot_index);
+        // Move the pivot from `pivot_index` into the equal region.
+        // `gt` is now the start of the after-pivot region, and pivot is at `pivot_index` (== end - 1).
+        // Swap pivot with vec[gt] to place it adjacent to the equal region.
+        vec.swap(gt, pivot_index);
+        // After swap: [start, lt) before pivot, [lt, eq_end) equal to pivot, [eq_end, end) after pivot.
+        let eq_end = gt + 1;
 
         // Push partitions: larger first, smaller second.
         // Since we use pop_back, smaller will be processed first.
         // Stack size will be no longer than O(log(n)).
-        let left_size = i - start;
-        let right_size = end - (i + 1);
+        let left_size = lt - start;
+        let right_size = end - eq_end;
 
         if (left_size <= right_size) {
             // Left ≤ right: push right (larger) first, left (smaller) second.
-            stack_start.push_back(i + 1);
-            stack_end.push_back(end);
+            // Skip empty and single-element right partitions.
+            if (right_size > 1) {
+                stack_start.push_back(eq_end);
+                stack_end.push_back(end);
+            };
 
-            stack_start.push_back(start);
-            stack_end.push_back(i);
+            // Skip empty and single-element left partitions.
+            if (left_size > 1) {
+                stack_start.push_back(start);
+                stack_end.push_back(lt);
+            };
         } else {
             // Left > right: push left (larger) first, right (smaller) second.
-            stack_start.push_back(start);
-            stack_end.push_back(i);
+            // Skip empty and single-element left partitions.
+            if (left_size > 1) {
+                stack_start.push_back(start);
+                stack_end.push_back(lt);
+            };
 
-            stack_start.push_back(i + 1);
-            stack_end.push_back(end);
+            // Skip empty and single-element right partitions.
+            if (right_size > 1) {
+                stack_start.push_back(eq_end);
+                stack_end.push_back(end);
+            };
         };
     };
 }

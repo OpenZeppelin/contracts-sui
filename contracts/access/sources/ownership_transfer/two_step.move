@@ -45,8 +45,7 @@ use sui::dynamic_object_field as dof;
 use sui::event;
 use sui::transfer::Receiving;
 
-/// Dynamic field key for a wrapped object.
-public struct WrappedKey() has copy, drop, store;
+// === Errors ===
 
 /// Transfer request does not correspond to the provided wrapper
 #[error(code = 0)]
@@ -63,6 +62,11 @@ const ENotOwner: vector<u8> = "Caller is not the current owner";
 /// Caller is not the prospective owner.
 #[error(code = 4)]
 const ENotNewOwner: vector<u8> = "Caller is not the prospective owner";
+
+// === Structs ===
+
+/// Dynamic field key for a wrapped object.
+public struct WrappedKey() has copy, drop, store;
 
 /// Wrapper that owns the underlying object, stored as a dynamic object field.
 ///
@@ -123,6 +127,8 @@ public struct TransferCancelled<phantom T> has copy, drop {
     current_owner: address,
     new_owner: address,
 }
+
+// === Public Functions ===
 
 // === Wrap / unwrap / borrow ===
 
@@ -262,7 +268,7 @@ public fun initiate_transfer<T: key + store>(
     event::emit(TransferInitiated<T> {
         wrapper_id,
         current_owner: from,
-        new_owner: new_owner,
+        new_owner,
     });
     transfer::share_object(request);
     transfer::transfer(self, request_address);
@@ -383,6 +389,8 @@ public fun request_return_val<T: key + store>(
 
     transfer::transfer(wrapper, object::id_address(request));
 }
+
+// === Test-Only Helpers ===
 
 #[test_only]
 public fun test_new_request<T: key + store>(

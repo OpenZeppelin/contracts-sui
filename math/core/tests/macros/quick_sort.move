@@ -258,14 +258,6 @@ fun quick_sort_u256_values() {
 }
 
 #[test]
-fun quick_sort_partition_edge_case_pivot() {
-    // Test a case where pivot selection matters
-    let mut vec = vector[1u64, 2, 3, 4, 5];
-    vector::quick_sort!(&mut vec);
-    assert_eq!(vec, vector[1u64, 2, 3, 4, 5]);
-}
-
-#[test]
 fun quick_sort_alternating_values() {
     // Alternating high and low values
     let mut vec = vector[1u64, 100, 2, 99, 3, 98, 4, 97, 5, 96];
@@ -335,22 +327,6 @@ fun quick_sort_pyramid_pattern() {
     let mut vec = vector[1u32, 5, 3, 2, 4, 5, 1];
     vector::quick_sort!(&mut vec);
     assert_eq!(vec, vector[1u32, 1, 2, 3, 4, 5, 5]);
-}
-
-#[test]
-fun quick_sort_single_large_value_at_start() {
-    // Single large value at the start
-    let mut vec = vector[1000u64, 1, 2, 3, 4, 5];
-    vector::quick_sort!(&mut vec);
-    assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 1000]);
-}
-
-#[test]
-fun quick_sort_single_small_value_at_end() {
-    // Single small value at the end
-    let mut vec = vector[5u64, 4, 3, 2, 1, 0];
-    vector::quick_sort!(&mut vec);
-    assert_eq!(vec, vector[0u64, 1, 2, 3, 4, 5]);
 }
 
 #[test]
@@ -652,4 +628,198 @@ fun quick_sort_by_struct_member_large_vector() {
     assert_eq!(vec[5].value, 5600);
     assert_eq!(vec[6].value, 6700);
     assert_eq!(vec[7].value, 8900);
+}
+
+#[test]
+fun quick_sort_by_descending_large_vector() {
+    // >10 elements forces at least one quicksort partition step before any small-partition
+    // insertion sorting
+    let mut vec = vector[15u64, 3, 12, 7, 1, 9, 14, 5, 11, 2, 8, 13, 6, 10, 4];
+    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x >= *y);
+    assert_eq!(vec, vector[15u64, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+}
+
+#[test]
+fun quick_sort_by_large_all_same() {
+    // >10 identical elements: all comparisons hit the equal branch in three-way partition
+    let mut vec = vector[5u64, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];
+    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec, vector[5u64, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]);
+}
+
+#[test]
+fun quick_sort_by_large_two_distinct_values() {
+    // >10 elements with only two values: exercises equal and less-than partition branches
+    let mut vec = vector[2u64, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1];
+    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec, vector[1u64, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2]);
+}
+
+#[test]
+fun quick_sort_by_large_reverse_sorted() {
+    // >10 elements in reverse order: pivot (last=smallest) < start (largest),
+    // exercises median-of-three swap
+    let mut vec = vector[20u64, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(
+        vec,
+        vector[1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    );
+}
+
+#[test]
+fun quick_sort_by_large_with_many_duplicates() {
+    // >10 elements with heavy duplicates: stresses three-way partitioning equal branch
+    let mut vec = vector[3u64, 1, 3, 2, 3, 1, 3, 2, 3, 1, 3, 2, 3, 1, 3];
+    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec, vector[1u64, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3]);
+}
+
+#[test]
+fun quick_sort_by_large_skewed_left_partition() {
+    // Crafted so left partition > right partition
+    // Most values are small (go to left partition), few are large
+    let mut vec = vector[2u64, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 100];
+    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec, vector[1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 100]);
+}
+
+#[test]
+fun quick_sort_by_large_skewed_right_partition() {
+    // Crafted so right partition > left partition
+    // Most values are large (go to right partition), few are small
+    let mut vec = vector[100u64, 90, 80, 70, 60, 50, 40, 30, 20, 10, 1, 2];
+    vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec, vector[1u64, 2, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+}
+
+#[test]
+fun quick_sort_by_large_struct_ascending() {
+    // >10 struct elements to exercise quicksort path with struct comparator
+    let mut vec = vector[
+        Transfer { id: 1, value: 9000 },
+        Transfer { id: 2, value: 2500 },
+        Transfer { id: 3, value: 7500 },
+        Transfer { id: 4, value: 1200 },
+        Transfer { id: 5, value: 8400 },
+        Transfer { id: 6, value: 3100 },
+        Transfer { id: 7, value: 6200 },
+        Transfer { id: 8, value: 4800 },
+        Transfer { id: 9, value: 5500 },
+        Transfer { id: 10, value: 1800 },
+        Transfer { id: 11, value: 9900 },
+    ];
+
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value <= y.value);
+
+    assert_eq!(vec[0].value, 1200);
+    assert_eq!(vec[1].value, 1800);
+    assert_eq!(vec[2].value, 2500);
+    assert_eq!(vec[3].value, 3100);
+    assert_eq!(vec[4].value, 4800);
+    assert_eq!(vec[5].value, 5500);
+    assert_eq!(vec[6].value, 6200);
+    assert_eq!(vec[7].value, 7500);
+    assert_eq!(vec[8].value, 8400);
+    assert_eq!(vec[9].value, 9000);
+    assert_eq!(vec[10].value, 9900);
+}
+
+#[test]
+fun quick_sort_by_large_struct_with_duplicate_values() {
+    // >10 struct elements with duplicate values: exercises equal partition branch
+    let mut vec = vector[
+        Transfer { id: 1, value: 5000 },
+        Transfer { id: 2, value: 3000 },
+        Transfer { id: 3, value: 5000 },
+        Transfer { id: 4, value: 1000 },
+        Transfer { id: 5, value: 3000 },
+        Transfer { id: 6, value: 5000 },
+        Transfer { id: 7, value: 2000 },
+        Transfer { id: 8, value: 3000 },
+        Transfer { id: 9, value: 5000 },
+        Transfer { id: 10, value: 1000 },
+        Transfer { id: 11, value: 2000 },
+    ];
+
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.value <= y.value);
+
+    assert_eq!(vec[0].value, 1000);
+    assert_eq!(vec[1].value, 1000);
+    assert_eq!(vec[2].value, 2000);
+    assert_eq!(vec[3].value, 2000);
+    assert_eq!(vec[4].value, 3000);
+    assert_eq!(vec[5].value, 3000);
+    assert_eq!(vec[6].value, 3000);
+    assert_eq!(vec[7].value, 5000);
+    assert_eq!(vec[8].value, 5000);
+    assert_eq!(vec[9].value, 5000);
+    assert_eq!(vec[10].value, 5000);
+}
+
+#[test]
+fun quick_sort_by_id_ascending() {
+    // Sort structs by id field instead of value, >10 elements
+    let mut vec = vector[
+        Transfer { id: 11, value: 100 },
+        Transfer { id: 3, value: 200 },
+        Transfer { id: 7, value: 300 },
+        Transfer { id: 1, value: 400 },
+        Transfer { id: 9, value: 500 },
+        Transfer { id: 5, value: 600 },
+        Transfer { id: 10, value: 700 },
+        Transfer { id: 2, value: 800 },
+        Transfer { id: 8, value: 900 },
+        Transfer { id: 4, value: 1000 },
+        Transfer { id: 6, value: 1100 },
+    ];
+
+    vector::quick_sort_by!(&mut vec, |x: &Transfer, y: &Transfer| x.id <= y.id);
+
+    assert_eq!(vec[0].id, 1);
+    assert_eq!(vec[1].id, 2);
+    assert_eq!(vec[2].id, 3);
+    assert_eq!(vec[3].id, 4);
+    assert_eq!(vec[4].id, 5);
+    assert_eq!(vec[5].id, 6);
+    assert_eq!(vec[6].id, 7);
+    assert_eq!(vec[7].id, 8);
+    assert_eq!(vec[8].id, 9);
+    assert_eq!(vec[9].id, 10);
+    assert_eq!(vec[10].id, 11);
+}
+
+#[test]
+fun quick_sort_by_median_of_three_crafted_inputs() {
+    // Exercises all three median-of-three conditional branches across separate inputs.
+    // For 15 elements the first partition uses start=0, mid=7, pivot_index=14.
+    // All three swaps cannot fire in a single call (branch 1+2 imply branch 3 is a no-op),
+    // so we use three vectors that each target a different branch.
+
+    // Vector 1: triggers branch 1 (swap start,mid) and branch 2 (swap start,pivot_index).
+    // Initial: vec[0]=50 > vec[7]=40 > vec[14]=30.
+    // Branch 1: 40 <= 50 → swap(0,7) → vec[0]=40, vec[7]=50.
+    // Branch 2: 30 <= 40 → swap(0,14) → vec[0]=30, vec[14]=40.
+    // Branch 3: 50 <= 40 → false, no swap.
+    let mut vec1 = vector[50u64, 2, 3, 4, 5, 6, 7, 40, 9, 10, 11, 12, 13, 14, 30];
+    vector::quick_sort_by!(&mut vec1, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec1, vector[2u64, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 30, 40, 50]);
+
+    // Vector 2: triggers branch 1 (swap start,mid) and branch 3 (swap mid,pivot_index).
+    // Initial: vec[0]=30 > vec[7]=20, vec[14]=40.
+    // Branch 1: 20 <= 30 → swap(0,7) → vec[0]=20, vec[7]=30.
+    // Branch 2: 40 <= 20 → false, no swap.
+    // Branch 3: 30 <= 40 → swap(7,14) → vec[7]=40, vec[14]=30.
+    let mut vec2 = vector[30u64, 2, 3, 4, 5, 6, 7, 20, 9, 10, 11, 12, 13, 14, 40];
+    vector::quick_sort_by!(&mut vec2, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec2, vector[2u64, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 20, 30, 40]);
+
+    // Vector 3: triggers branch 2 (swap start,pivot_index) only.
+    // Initial: vec[0]=50, vec[7]=60, vec[14]=30.
+    // Branch 1: 60 <= 50 → false, no swap.
+    // Branch 2: 30 <= 50 → swap(0,14) → vec[0]=30, vec[14]=50.
+    // Branch 3: 60 <= 50 → false, no swap.
+    let mut vec3 = vector[50u64, 2, 3, 4, 5, 6, 7, 60, 9, 10, 11, 12, 13, 14, 30];
+    vector::quick_sort_by!(&mut vec3, |x: &u64, y: &u64| *x <= *y);
+    assert_eq!(vec3, vector[2u64, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 30, 50, 60]);
 }
