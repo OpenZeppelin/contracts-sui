@@ -4,8 +4,10 @@ module openzeppelin_fp_math::sd29x9_sqrt_tests;
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
 use openzeppelin_fp_math::sd29x9_test_helpers::{pos, neg, expect};
+use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
+const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 
 // ==== Tests ====
 
@@ -16,7 +18,7 @@ fun sqrt_of_zero_is_zero() {
 
 #[test]
 fun sqrt_of_positive_one() {
-    expect(pos(SCALE).sqrt(), pos(SCALE));
+    expect(sd29x9::one().sqrt(), sd29x9::one());
 }
 
 #[test]
@@ -54,17 +56,6 @@ fun sqrt_truncates_irrational_results() {
 }
 
 #[test]
-fun sqrt_floor_property_for_non_perfect_squares() {
-    let values = vector[pos(2 * SCALE), pos(3 * SCALE), pos(7 * SCALE), pos(SCALE + 1)];
-    values.destroy!(|x| {
-        let r = x.sqrt().unwrap() as u256;
-        let scaled = (x.unwrap() as u256) * (SCALE as u256);
-        assert!(r * r <= scaled);
-        assert!((r + 1) * (r + 1) > scaled);
-    });
-}
-
-#[test]
 fun sqrt_of_max_positive() {
     // sqrt(sd29x9::max()) should not abort and satisfy the floor property
     let result = sd29x9::max().sqrt();
@@ -74,20 +65,18 @@ fun sqrt_of_max_positive() {
     assert!((r + 1) * (r + 1) > max_scaled);
 }
 
-#[test]
-fun sqrt_result_is_always_non_negative() {
-    let values = vector[
-        sd29x9::zero(),
-        pos(SCALE),
-        pos(2 * SCALE),
-        pos(100 * SCALE),
-        sd29x9::max(),
-    ];
-    values.destroy!(|x| {
-        let result = x.sqrt();
-        // Result is non-negative: raw bits should not have sign bit set
-        assert!(result.unwrap() <= 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF);
-    });
+#[random_test]
+fun sqrt_result_is_always_non_negative(raw: u128) {
+    let raw = raw % (MAX_POSITIVE_VALUE + 1);
+    let x = sd29x9::wrap(raw, false);
+    let result = x.sqrt();
+    // Result is non-negative: raw bits should not have sign bit set
+    assert!(result.unwrap() <= MAX_POSITIVE_VALUE);
+    // Floor property: r^2 <= x * SCALE < (r + 1)^2
+    let r = result.unwrap() as u256;
+    let scaled = (raw as u256) * (SCALE as u256);
+    assert!(r * r <= scaled);
+    assert!((r + 1) * (r + 1) > scaled);
 }
 
 #[test]
@@ -100,7 +89,7 @@ fun sqrt_squared_roundtrip_for_perfect_squares() {
     ];
     values.destroy!(|x| {
         let root = x.sqrt();
-        expect(root.mul(root), x);
+        assert_eq!(root.mul(root), x);
     });
 }
 

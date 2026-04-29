@@ -2,7 +2,7 @@
 module openzeppelin_fp_math::ud30x9_sqrt_tests;
 
 use openzeppelin_fp_math::ud30x9;
-use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, expect, pair, unpack};
+use openzeppelin_fp_math::ud30x9_test_helpers::{fixed, expect};
 
 const SCALE: u128 = 1_000_000_000;
 
@@ -10,12 +10,12 @@ const SCALE: u128 = 1_000_000_000;
 
 #[test]
 fun sqrt_of_zero_is_zero() {
-    expect(fixed(0).sqrt(), fixed(0));
+    expect(ud30x9::zero().sqrt(), ud30x9::zero());
 }
 
 #[test]
 fun sqrt_of_one_is_one() {
-    expect(fixed(SCALE).sqrt(), fixed(SCALE));
+    expect(ud30x9::one().sqrt(), ud30x9::one());
 }
 
 #[test]
@@ -92,26 +92,14 @@ fun sqrt_squared_roundtrip_for_perfect_squares() {
     });
 }
 
-#[test]
-fun sqrt_floor_property_for_non_perfect_squares() {
-    // For non-perfect squares: sqrt(x)^2 <= x < (sqrt(x) + smallest_step)^2
-    // We verify using raw u256 arithmetic to avoid fixed-point overflow concerns
-    let values = vector[
-        fixed(2 * SCALE),
-        fixed(3 * SCALE),
-        fixed(5 * SCALE),
-        fixed(7 * SCALE),
-        fixed(SCALE + 1), // 1.000000001
-        fixed(123_456_789), // 0.123456789
-    ];
-    values.destroy!(|x| {
-        let r = x.sqrt().unwrap() as u256;
-        let scaled = (x.unwrap() as u256) * (SCALE as u256);
-        // r^2 <= x * SCALE
-        assert!(r * r <= scaled);
-        // (r+1)^2 > x * SCALE
-        assert!((r + 1) * (r + 1) > scaled);
-    });
+#[random_test]
+fun sqrt_floor_property(raw: u128) {
+    // For all values: sqrt(x)^2 <= x * SCALE < (sqrt(x) + 1)^2
+    let x = ud30x9::wrap(raw);
+    let r = x.sqrt().unwrap() as u256;
+    let scaled = (raw as u256) * (SCALE as u256);
+    assert!(r * r <= scaled);
+    assert!((r + 1) * (r + 1) > scaled);
 }
 
 #[test]
@@ -139,18 +127,9 @@ fun sqrt_of_large_values() {
     );
 }
 
-#[test]
-fun sqrt_monotonicity() {
-    // For x < y, sqrt(x) <= sqrt(y)
-    let pairs = vector[
-        pair(fixed(SCALE), fixed(2 * SCALE)),
-        pair(fixed(2 * SCALE), fixed(3 * SCALE)),
-        pair(fixed(100_000_000), fixed(SCALE)),
-        pair(fixed(SCALE), fixed(100 * SCALE)),
-        pair(fixed(1), fixed(SCALE)),
-    ];
-    pairs.destroy!(|p| {
-        let (x, y) = p.unpack();
-        assert!(x.sqrt().unwrap() <= y.sqrt().unwrap());
-    });
+#[random_test]
+fun sqrt_monotonicity(x: u128, y: u128) {
+    // For x <= y, sqrt(x) <= sqrt(y)
+    let (x, y) = if (x <= y) { (x, y) } else { (y, x) };
+    assert!(ud30x9::wrap(x).sqrt().unwrap() <= ud30x9::wrap(y).sqrt().unwrap());
 }

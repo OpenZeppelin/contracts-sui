@@ -3,7 +3,7 @@ module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::fp_helpers;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
-use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, one};
+use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
 
 // === Constants ===
 
@@ -349,8 +349,10 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
 public fun sqrt(x: UD30x9): UD30x9 {
     let raw = x.unwrap() as u256;
     if (raw == 0) {
-        return wrap(0)
+        return zero()
     };
+    // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
+    // sqrt(raw / SCALE) = sqrt(raw * SCALE) / SCALE
     let result = fp_helpers::sqrt_floor(raw * SCALE_U256);
     wrap(result as u128)
 }

@@ -387,9 +387,8 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
 public fun sqrt(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     assert!(!neg, ENegativeSqrt);
-    if (mag == 0) {
-        return zero()
-    };
+    // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
+    // sqrt(mag / SCALE) = sqrt(mag * SCALE) / SCALE
     let result = fp_helpers::sqrt_floor(mag * SCALE);
     wrap_components(Components { neg: false, mag: result })
 }
