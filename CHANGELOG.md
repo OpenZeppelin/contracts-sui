@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_access`
+
+#### Added
+
+- `access_control` module for role-based access control with typed `Auth<R>` capabilities and timelocked root transfer.
+
 ## 1.1.0 (21-04-2026)
 
 ### `openzeppelin_fp_math`
