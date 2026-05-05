@@ -134,9 +134,16 @@ fun test_new_accepts_zero_delay() {
 
 #[test]
 fun test_max_default_admin_delay_constant() {
-    // 30 days expressed in milliseconds.
-    let expected: u64 = 30 * 24 * 60 * 60 * 1_000;
+    // 60 days (~ 2 calendar months) expressed in milliseconds.
+    let expected: u64 = 60 * 24 * 60 * 60 * 1_000;
     assert_eq!(access_control::max_default_admin_delay_ms(), expected);
+}
+
+#[test]
+fun test_max_delay_increase_wait_constant() {
+    // 48 hours expressed in milliseconds.
+    let expected: u64 = 48 * 60 * 60 * 1_000;
+    assert_eq!(access_control::max_delay_increase_wait_ms(), expected);
 }
 
 // === grant_role ===
@@ -344,19 +351,18 @@ fun test_renounce_role_happy_path() {
     scenario.end();
 }
 
-#[test]
-fun test_renounce_role_root_allowed() {
+// Direct `renounce_role` on the root role is blocked — the only way to
+// relinquish the root role is the timelocked `begin_default_admin_renounce`
+// + `accept_default_admin_renounce` flow. Without this block, a stray
+// renounce call could leave the registry permanently unmanaged with no
+// cancel window.
+#[test, expected_failure(abort_code = access_control::ECannotManageRootRole)]
+fun test_renounce_role_rejects_root() {
     let deployer = @0xA;
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
-
-    // Renouncing the root role IS allowed (with the documented permanent-
-    // lockout warning). The library does not block this path.
     ac.renounce_role<_, ACCESS_CONTROL_TESTS>(deployer, scenario.ctx());
-    assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
-
-    test_scenario::return_shared(ac);
-    scenario.end();
+    abort 0
 }
 
 #[test]
@@ -947,6 +953,7 @@ fun test_pending_getters_when_no_pending() {
     let scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
     assert!(!ac.has_pending_default_admin_transfer());
+    assert!(!ac.is_pending_default_admin_renounce());
     assert!(ac.pending_default_admin_new_admin().is_none());
     assert!(ac.pending_default_admin_execute_after_ms().is_none());
     test_scenario::return_shared(ac);
@@ -986,44 +993,634 @@ fun test_role_hierarchy_chain() {
     scenario.end();
 }
 
-// === Edge: pending transfer survives root renounce ===
-//
-// A root holder schedules a transfer, then renounces their own root. The
-// pending transfer is independent of who currently holds root, so the
-// scheduled new admin can still accept and become root. This is what makes
-// "two-step transfer + renounce" a viable hand-off pattern even when the
-// original admin wants to be off-chain immediately after scheduling.
+// === begin_default_admin_renounce ===
 
 #[test]
-fun test_pending_transfer_survives_root_renounce() {
+fun test_begin_admin_renounce_happy_path() {
     let deployer = @0xA;
-    let new_admin = @0xB;
-    let mut scenario = setup(deployer, 0);
+    let delay = 1000;
+    let mut scenario = setup(deployer, delay);
     let mut ac = take_ac(&scenario);
 
     let mut clk = clock::create_for_testing(scenario.ctx());
     clk.set_for_testing(0);
-    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
-    ac.renounce_role<_, ACCESS_CONTROL_TESTS>(deployer, scenario.ctx());
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
 
-    // Pending state intact even though no one currently holds root.
     assert!(ac.has_pending_default_admin_transfer());
-    assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
+    assert!(ac.is_pending_default_admin_renounce());
+    // Renounce has no incoming admin — `pending_default_admin_new_admin`
+    // returns `none` for both "no pending" and "pending renounce". Use
+    // `is_pending_default_admin_renounce` to disambiguate (above).
+    assert!(ac.pending_default_admin_new_admin().is_none());
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(delay));
+
+    let scheduled = event::events_by_type<access_control::DefaultAdminRenounceScheduled>();
+    assert_eq!(scheduled.length(), 1);
+    let expected = access_control::test_new_default_admin_renounce_scheduled(delay);
+    assert_eq!(scheduled[0], expected);
+
+    clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
+    scenario.end();
+}
 
-    // new_admin accepts; protocol recovers from the temporary unmanaged state.
-    scenario.next_tx(new_admin);
+#[test, expected_failure(abort_code = access_control::EUnauthorized)]
+fun test_begin_admin_renounce_rejects_non_root() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    scenario.next_tx(@0xB);
     let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+    abort 0
+}
 
-    // Snapshot event counts in this tx and verify the "no old admin" branch
-    // only emits RoleGranted (RoleRevoked is skipped because the root role
-    // had zero holders after the renounce).
+// Scheduling a renounce overwrites an existing pending transfer (and vice
+// versa). The two are mutually exclusive — they share `pending_default_admin`.
+#[test]
+fun test_begin_admin_renounce_overwrites_pending_transfer() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    ac.begin_default_admin_transfer(@0xB, &clk, scenario.ctx());
+    assert!(!ac.is_pending_default_admin_renounce());
+
+    clk.set_for_testing(50);
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+    assert!(ac.is_pending_default_admin_renounce());
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(50));
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun test_begin_admin_transfer_overwrites_pending_renounce() {
+    let deployer = @0xA;
+    let new_admin = @0xB;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+    assert!(ac.is_pending_default_admin_renounce());
+
+    clk.set_for_testing(50);
+    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
+    assert!(!ac.is_pending_default_admin_renounce());
+    assert_eq!(ac.pending_default_admin_new_admin(), option::some(new_admin));
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+// Symmetric to the transfer-overwrites-transfer and the cross-kind tests
+// above: a second `begin_default_admin_renounce` overwrites the first,
+// re-anchoring `execute_after_ms` to the new clock.
+#[test]
+fun test_begin_admin_renounce_overwrites_pending_renounce() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+    assert!(ac.is_pending_default_admin_renounce());
+
+    clk.set_for_testing(50);
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+
+    assert!(ac.is_pending_default_admin_renounce());
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(50));
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+// === accept_default_admin_renounce ===
+
+#[test]
+fun test_accept_admin_renounce_happy_path() {
+    let deployer = @0xA;
+    let delay = 100;
+    let mut scenario = setup(deployer, delay);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+
+    clk.set_for_testing(delay);
     let revoked_before = event::events_by_type<access_control::RoleRevoked>().length();
     let granted_before = event::events_by_type<access_control::RoleGranted>().length();
+    ac.accept_default_admin_renounce(&clk, scenario.ctx());
+
+    // Caller (current root) is removed from the root role; pending cleared.
+    assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
+    assert!(!ac.has_pending_default_admin_transfer());
+    assert!(!ac.is_pending_default_admin_renounce());
+
+    // Exactly one RoleRevoked and zero RoleGranted (no incoming admin).
+    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), revoked_before + 1);
+    assert_eq!(event::events_by_type<access_control::RoleGranted>().length(), granted_before);
+
+    let revoked = event::events_by_type<access_control::RoleRevoked>();
+    let last = revoked[revoked.length() - 1];
+    assert_eq!(
+        last,
+        access_control::test_new_role_revoked(
+            with_original_ids<ACCESS_CONTROL_TESTS>(),
+            deployer,
+            deployer,
+        ),
+    );
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = access_control::ENoPendingAdminTransfer)]
+fun test_accept_admin_renounce_rejects_no_pending() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.accept_default_admin_renounce(&clk, scenario.ctx());
+    abort 0
+}
+
+// `accept_default_admin_renounce` rejects when the pending action is a
+// transfer (not a renounce) — the caller must use the matching accept path.
+#[test, expected_failure(abort_code = access_control::ENotPendingRenounce)]
+fun test_accept_admin_renounce_rejects_pending_transfer() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_transfer(@0xB, &clk, scenario.ctx());
+    ac.accept_default_admin_renounce(&clk, scenario.ctx());
+    abort 0
+}
+
+// `accept_default_admin_transfer` rejects when the pending action is a
+// renounce (not a transfer) — symmetric with the above.
+#[test, expected_failure(abort_code = access_control::ENotPendingTransfer)]
+fun test_accept_admin_transfer_rejects_pending_renounce() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
     ac.accept_default_admin_transfer(&clk, scenario.ctx());
-    assert!(ac.has_role<_, ACCESS_CONTROL_TESTS>(new_admin));
-    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), revoked_before);
-    assert_eq!(event::events_by_type<access_control::RoleGranted>().length(), granted_before + 1);
+    abort 0
+}
+
+#[test, expected_failure(abort_code = access_control::EUnauthorized)]
+fun test_accept_admin_renounce_rejects_non_root() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+    test_scenario::return_shared(ac);
+
+    // A non-root caller cannot complete the renounce.
+    scenario.next_tx(@0xB);
+    let mut ac = take_ac(&scenario);
+    ac.accept_default_admin_renounce(&clk, scenario.ctx());
+    abort 0
+}
+
+#[test, expected_failure(abort_code = access_control::EDelayNotElapsed)]
+fun test_accept_admin_renounce_rejects_too_early() {
+    let deployer = @0xA;
+    let delay = 100;
+    let mut scenario = setup(deployer, delay);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+    clk.set_for_testing(delay - 1);
+    ac.accept_default_admin_renounce(&clk, scenario.ctx());
+    abort 0
+}
+
+#[test]
+fun test_accept_admin_renounce_at_exact_delay() {
+    let deployer = @0xA;
+    let delay = 50;
+    let mut scenario = setup(deployer, delay);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+    clk.set_for_testing(delay);
+    ac.accept_default_admin_renounce(&clk, scenario.ctx());
+    assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+// === cancel_default_admin_transfer (covers either pending kind) ===
+
+#[test]
+fun test_cancel_admin_transfer_clears_pending_renounce() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+
+    ac.cancel_default_admin_transfer(scenario.ctx());
+
+    assert!(!ac.has_pending_default_admin_transfer());
+    assert!(!ac.is_pending_default_admin_renounce());
+    // Same cancel event regardless of which kind was pending — indexers
+    // correlate with the prior schedule event.
+    let cancelled = event::events_by_type<access_control::DefaultAdminTransferCancelled>();
+    assert_eq!(cancelled.length(), 1);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+// === begin_default_admin_delay_change ===
+
+#[test]
+fun test_begin_delay_change_increase_below_cap() {
+    // current = 1 hour, new = 2 hours. New is below the 48h cap, so wait
+    // formula yields min(2h, 48h) = 2h.
+    let deployer = @0xA;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let two_hours: u64 = 2 * one_hour;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
+
+    assert!(ac.has_pending_default_admin_delay_change());
+    assert_eq!(ac.pending_default_admin_delay_change_new_delay_ms(), option::some(two_hours));
+    assert_eq!(ac.pending_default_admin_delay_change_schedule_after_ms(), option::some(two_hours));
+
+    let scheduled = event::events_by_type<access_control::DefaultAdminDelayChangeScheduled>();
+    assert_eq!(scheduled.length(), 1);
+    let expected = access_control::test_new_default_admin_delay_change_scheduled(
+        two_hours,
+        two_hours,
+    );
+    assert_eq!(scheduled[0], expected);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun test_begin_delay_change_increase_above_cap() {
+    // current = 1 hour, new = 30 days. New is well above the 48h cap, so
+    // wait = min(30d, 48h) = 48h. The cap protects against having to wait
+    // an unreasonably long time before a large increase takes effect.
+    let deployer = @0xA;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let thirty_days: u64 = 30 * 24 * one_hour;
+    let cap: u64 = access_control::max_delay_increase_wait_ms();
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(thirty_days, &clk, scenario.ctx());
+
+    assert_eq!(ac.pending_default_admin_delay_change_new_delay_ms(), option::some(thirty_days));
+    assert_eq!(ac.pending_default_admin_delay_change_schedule_after_ms(), option::some(cap));
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun test_begin_delay_change_increase_at_cap_boundary() {
+    // current = 1ms, new = exactly the cap. Boundary: new_delay_ms is *not*
+    // strictly less than the cap, so the formula picks the cap branch.
+    // Both branches yield the same value at the boundary, but exercising it
+    // pins the comparison's strictness.
+    let deployer = @0xA;
+    let cap: u64 = access_control::max_delay_increase_wait_ms();
+    let mut scenario = setup(deployer, 1);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(cap, &clk, scenario.ctx());
+    assert_eq!(ac.pending_default_admin_delay_change_schedule_after_ms(), option::some(cap));
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun test_begin_delay_change_decrease() {
+    // current = 7 days, new = 1 day. Wait = freed time = 7d - 1d = 6 days.
+    // The freed-time formula keeps the security promise of the current delay:
+    // the admin commits to the change for 6 days before they can schedule
+    // new transfers under the shorter delay.
+    let deployer = @0xA;
+    let one_day: u64 = 24 * 60 * 60 * 1_000;
+    let seven_days: u64 = 7 * one_day;
+    let mut scenario = setup(deployer, seven_days);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(one_day, &clk, scenario.ctx());
+
+    assert_eq!(
+        ac.pending_default_admin_delay_change_schedule_after_ms(),
+        option::some(seven_days - one_day),
+    );
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun test_begin_delay_change_no_change() {
+    // current == new: wait = 0. Schedule applies immediately.
+    let deployer = @0xA;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(123);
+    ac.begin_default_admin_delay_change(one_hour, &clk, scenario.ctx());
+    assert_eq!(ac.pending_default_admin_delay_change_schedule_after_ms(), option::some(123));
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = access_control::EUnauthorized)]
+fun test_begin_delay_change_rejects_non_root() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    scenario.next_tx(@0xB);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_delay_change(100, &clk, scenario.ctx());
+    abort 0
+}
+
+#[test, expected_failure(abort_code = access_control::EDelayTooLarge)]
+fun test_begin_delay_change_rejects_above_max() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_delay_change(
+        access_control::max_default_admin_delay_ms() + 1,
+        &clk,
+        scenario.ctx(),
+    );
+    abort 0
+}
+
+#[test]
+fun test_begin_delay_change_at_max_boundary() {
+    let deployer = @0xA;
+    let max = access_control::max_default_admin_delay_ms();
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(max, &clk, scenario.ctx());
+    assert_eq!(ac.pending_default_admin_delay_change_new_delay_ms(), option::some(max));
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun test_begin_delay_change_overwrites_pending() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(100, &clk, scenario.ctx());
+
+    clk.set_for_testing(50);
+    ac.begin_default_admin_delay_change(200, &clk, scenario.ctx());
+
+    assert_eq!(ac.pending_default_admin_delay_change_new_delay_ms(), option::some(200));
+    assert_eq!(ac.pending_default_admin_delay_change_schedule_after_ms(), option::some(50 + 200));
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+// === accept_default_admin_delay_change ===
+
+#[test]
+fun test_accept_delay_change_happy_path() {
+    let deployer = @0xA;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let two_hours: u64 = 2 * one_hour;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
+
+    clk.set_for_testing(two_hours);
+    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
+
+    assert_eq!(ac.default_admin_delay_ms(), two_hours);
+    assert!(!ac.has_pending_default_admin_delay_change());
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+// `accept` requires no permission — the schedule was committed at `begin`,
+// so any caller can trigger the state transition once the schedule passes.
+#[test]
+fun test_accept_delay_change_callable_by_anyone() {
+    let deployer = @0xA;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let two_hours: u64 = 2 * one_hour;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
+    test_scenario::return_shared(ac);
+
+    scenario.next_tx(@0xB);
+    let mut ac = take_ac(&scenario);
+    clk.set_for_testing(two_hours);
+    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
+    assert_eq!(ac.default_admin_delay_ms(), two_hours);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = access_control::ENoPendingDelayChange)]
+fun test_accept_delay_change_rejects_no_pending() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
+    abort 0
+}
+
+#[test, expected_failure(abort_code = access_control::EDelayNotElapsed)]
+fun test_accept_delay_change_rejects_too_early() {
+    let deployer = @0xA;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let two_hours: u64 = 2 * one_hour;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
+    clk.set_for_testing(two_hours - 1);
+    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
+    abort 0
+}
+
+// === cancel_default_admin_delay_change ===
+
+#[test]
+fun test_cancel_delay_change_happy_path() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_delay_change(100, &clk, scenario.ctx());
+
+    ac.cancel_default_admin_delay_change(scenario.ctx());
+
+    assert!(!ac.has_pending_default_admin_delay_change());
+    let cancelled = event::events_by_type<access_control::DefaultAdminDelayChangeCancelled>();
+    assert_eq!(cancelled.length(), 1);
+    let expected = access_control::test_new_default_admin_delay_change_cancelled();
+    assert_eq!(cancelled[0], expected);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = access_control::ENoPendingDelayChange)]
+fun test_cancel_delay_change_rejects_no_pending() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    ac.cancel_default_admin_delay_change(scenario.ctx());
+    abort 0
+}
+
+#[test, expected_failure(abort_code = access_control::EUnauthorized)]
+fun test_cancel_delay_change_rejects_non_root() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_delay_change(100, &clk, scenario.ctx());
+    test_scenario::return_shared(ac);
+
+    scenario.next_tx(@0xB);
+    let mut ac = take_ac(&scenario);
+    ac.cancel_default_admin_delay_change(scenario.ctx());
+    clock::destroy_for_testing(clk);
+    abort 0
+}
+
+// === Pending getters: delay change ===
+
+#[test]
+fun test_delay_change_getters_when_no_pending() {
+    let deployer = @0xA;
+    let scenario = setup(deployer, 0);
+    let ac = take_ac(&scenario);
+    assert!(!ac.has_pending_default_admin_delay_change());
+    assert!(ac.pending_default_admin_delay_change_new_delay_ms().is_none());
+    assert!(ac.pending_default_admin_delay_change_schedule_after_ms().is_none());
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+// === In-flight noninterference ===
+
+// A pending admin transfer was scheduled under the OLD delay. A delay change
+// is then scheduled and accepted. The pending transfer's `execute_after_ms`
+// must not change — in-flight transfers honor the delay they were scheduled
+// under, regardless of subsequent delay changes.
+#[test]
+fun test_delay_change_does_not_affect_pending_transfer() {
+    let deployer = @0xA;
+    let new_admin = @0xB;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    // Schedule a transfer at delay = 1h. execute_after_ms = 0 + 1h.
+    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
+    let pending_execute_at = ac.pending_default_admin_execute_after_ms();
+    assert_eq!(pending_execute_at, option::some(one_hour));
+
+    // Schedule + accept a delay decrease to a much smaller value.
+    ac.begin_default_admin_delay_change(1, &clk, scenario.ctx());
+    clk.set_for_testing(one_hour); // past the freed-time wait
+    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
+
+    // Configured delay updated...
+    assert_eq!(ac.default_admin_delay_ms(), 1);
+    // ...but the in-flight transfer's execute_after_ms is unchanged.
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), pending_execute_at);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+// After the delay change applies, a NEW transfer uses the new delay.
+#[test]
+fun test_new_transfer_uses_new_delay() {
+    let deployer = @0xA;
+    let new_admin = @0xB;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let two_hours: u64 = 2 * one_hour;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
+    clk.set_for_testing(two_hours);
+    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
+
+    // Schedule a transfer; it should use the new (2h) delay.
+    let now = two_hours;
+    clk.set_for_testing(now);
+    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(now + two_hours));
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
