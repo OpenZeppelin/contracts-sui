@@ -945,6 +945,31 @@ fun test_cancel_admin_transfer_rejects_non_root() {
     abort 0
 }
 
+// `cancel_default_admin_transfer` clears either kind of pending action —
+// the same function and same `DefaultAdminTransferCancelled` event are
+// reused for both transfer and renounce cancels.
+#[test]
+fun test_cancel_admin_transfer_clears_pending_renounce() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+
+    ac.cancel_default_admin_transfer(scenario.ctx());
+
+    assert!(!ac.has_pending_default_admin_transfer());
+    assert!(!ac.is_pending_default_admin_renounce());
+    // Indexers correlate the cancel event with the prior schedule event to
+    // know which kind was cleared.
+    let cancelled = event::events_by_type<access_control::DefaultAdminTransferCancelled>();
+    assert_eq!(cancelled.length(), 1);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
 // === Pending-transfer getters with no pending ===
 
 #[test]
@@ -1225,30 +1250,6 @@ fun test_accept_admin_renounce_at_exact_delay() {
     clk.set_for_testing(delay);
     ac.accept_default_admin_renounce(&clk, scenario.ctx());
     assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
-    clock::destroy_for_testing(clk);
-    test_scenario::return_shared(ac);
-    scenario.end();
-}
-
-// === cancel_default_admin_transfer (covers either pending kind) ===
-
-#[test]
-fun test_cancel_admin_transfer_clears_pending_renounce() {
-    let deployer = @0xA;
-    let mut scenario = setup(deployer, 0);
-    let mut ac = take_ac(&scenario);
-    let clk = clock::create_for_testing(scenario.ctx());
-    ac.begin_default_admin_renounce(&clk, scenario.ctx());
-
-    ac.cancel_default_admin_transfer(scenario.ctx());
-
-    assert!(!ac.has_pending_default_admin_transfer());
-    assert!(!ac.is_pending_default_admin_renounce());
-    // Same cancel event regardless of which kind was pending — indexers
-    // correlate with the prior schedule event.
-    let cancelled = event::events_by_type<access_control::DefaultAdminTransferCancelled>();
-    assert_eq!(cancelled.length(), 1);
-
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
