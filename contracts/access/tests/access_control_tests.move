@@ -197,6 +197,27 @@ fun test_grant_role_idempotent() {
     scenario.end();
 }
 
+// Non-root roles have no membership cap (unlike root, which is capped at one
+// holder by `accept_default_admin_transfer`'s revoke-then-grant logic). Pin
+// that two distinct accounts can simultaneously hold the same non-root role.
+#[test]
+fun test_grant_role_multiple_holders() {
+    let deployer = @0xA;
+    let alice = @0xB;
+    let bob = @0xC;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+
+    ac.grant_role<_, AdminA>(alice, scenario.ctx());
+    ac.grant_role<_, AdminA>(bob, scenario.ctx());
+
+    assert!(ac.has_role<_, AdminA>(alice));
+    assert!(ac.has_role<_, AdminA>(bob));
+
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
 #[test, expected_failure(abort_code = access_control::ECannotManageRootRole)]
 fun test_grant_role_rejects_root() {
     let deployer = @0xA;
@@ -224,6 +245,15 @@ fun test_grant_role_rejects_foreign() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.grant_role<_, ForeignRole>(@0xB, scenario.ctx());
+    abort 0
+}
+
+#[test, expected_failure(abort_code = access_control::EZeroAddress)]
+fun test_grant_role_rejects_zero_address() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    ac.grant_role<_, AdminA>(@0x0, scenario.ctx());
     abort 0
 }
 
@@ -535,6 +565,28 @@ fun test_set_role_admin_rejects_non_admin() {
     abort 0
 }
 
+// Companion to `test_set_role_admin_rejects_non_admin`. The original test
+// covers the lazy-create branch where `previous_admin_role` defaults to root.
+// This one covers the update-existing branch: after the first call records
+// AdminA as RoleX's admin, the deployer (who holds root but not AdminA) must
+// be rejected on the *second* call. Required coverage after the two branches
+// of `set_role_admin` were inverted.
+#[test, expected_failure(abort_code = access_control::EUnauthorized)]
+fun test_set_role_admin_rejects_non_admin_existing_entry() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+
+    // First call lazily creates RoleX with admin = AdminA. Deployer holds root
+    // (the default admin during lazy-create), so this succeeds.
+    ac.set_role_admin<_, RoleX, AdminA>(scenario.ctx());
+
+    // Second call hits the update-existing branch. `previous_admin_role` is
+    // now AdminA — deployer holds root but NOT AdminA, so this must abort.
+    ac.set_role_admin<_, RoleX, AdminB>(scenario.ctx());
+    abort 0
+}
+
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
 fun test_set_role_admin_rejects_foreign_role() {
     let deployer = @0xA;
@@ -740,6 +792,16 @@ fun test_begin_admin_transfer_rejects_non_root() {
     abort 0
 }
 
+#[test, expected_failure(abort_code = access_control::EZeroAddress)]
+fun test_begin_admin_transfer_rejects_zero_address() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_transfer(@0x0, &clk, scenario.ctx());
+    abort 0
+}
+
 #[test]
 fun test_begin_admin_transfer_overwrites_pending() {
     let deployer = @0xA;
@@ -896,6 +958,66 @@ fun test_accept_admin_transfer_at_exact_delay() {
     scenario.end();
 }
 
+// Self-transfer edge case: `old_admin == new_admin`. The function does NOT
+// short-circuit — it emits the full revoke-old + grant-new pair even though
+// they reference the same address, and the registry ends with the original
+// holder still holding root. This pins the no-special-case decision so a future
+// "optimization" to skip the events when `new_admin == sender` can't be made
+// silently.
+#[test]
+fun test_accept_admin_transfer_to_self() {
+    let deployer = @0xA;
+    let delay = 100;
+    let mut scenario = setup(deployer, delay);
+    let mut ac = take_ac(&scenario);
+
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_transfer(deployer, &clk, scenario.ctx());
+    test_scenario::return_shared(ac);
+
+    scenario.next_tx(deployer);
+    let mut ac = take_ac(&scenario);
+    clk.set_for_testing(delay);
+    let granted_before = event::events_by_type<access_control::RoleGranted>().length();
+    let revoked_before = event::events_by_type<access_control::RoleRevoked>().length();
+    ac.accept_default_admin_transfer(&clk, scenario.ctx());
+
+    // Deployer still holds root after rotating to self; pending state cleared.
+    assert!(ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
+    assert!(!ac.has_pending_default_admin_transfer());
+    assert!(ac.pending_default_admin_new_admin().is_none());
+
+    // Both events fire — function does not short-circuit transfer-to-self.
+    assert_eq!(event::events_by_type<access_control::RoleGranted>().length(), granted_before + 1);
+    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), revoked_before + 1);
+
+    let granted = event::events_by_type<access_control::RoleGranted>();
+    let last_granted = granted[granted.length() - 1];
+    assert_eq!(
+        last_granted,
+        access_control::test_new_role_granted(
+            with_original_ids<ACCESS_CONTROL_TESTS>(),
+            deployer,
+            deployer,
+        ),
+    );
+    let revoked = event::events_by_type<access_control::RoleRevoked>();
+    let last_revoked = revoked[revoked.length() - 1];
+    assert_eq!(
+        last_revoked,
+        access_control::test_new_role_revoked(
+            with_original_ids<ACCESS_CONTROL_TESTS>(),
+            deployer,
+            deployer,
+        ),
+    );
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
 // === cancel_default_admin_transfer ===
 
 #[test]
@@ -970,6 +1092,39 @@ fun test_cancel_admin_transfer_clears_pending_renounce() {
     scenario.end();
 }
 
+// State-consistency follow-up to `test_cancel_admin_transfer_happy_path`. After
+// cancel, the pending slot must be fully cleared (not in any half-state) such
+// that a subsequent `begin_default_admin_transfer` succeeds and produces the
+// expected pending state. Without this test, a future regression where cancel
+// leaves residual state would only surface much later via the accept path.
+#[test]
+fun test_cancel_admin_transfer_allows_fresh_begin() {
+    let deployer = @0xA;
+    let new_admin = @0xB;
+    let other_admin = @0xC;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    // Begin then cancel.
+    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
+    ac.cancel_default_admin_transfer(scenario.ctx());
+
+    // After cancel, a fresh begin works. Advancing the clock differentiates
+    // execute_after_ms so we can assert the new pending value end-to-end.
+    clk.set_for_testing(50);
+    ac.begin_default_admin_transfer(other_admin, &clk, scenario.ctx());
+
+    assert!(ac.has_pending_default_admin_transfer());
+    assert_eq!(ac.pending_default_admin_new_admin(), option::some(other_admin));
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(50));
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
 // === Pending-transfer getters with no pending ===
 
 #[test]
@@ -1016,6 +1171,29 @@ fun test_role_hierarchy_chain() {
 
     test_scenario::return_shared(ac);
     scenario.end();
+}
+
+// Companion to `test_role_hierarchy_chain`: pins that `set_role_admin`
+// *transfers* grant authority rather than duplicating it. After RoleX's admin
+// is shifted to AdminA, the deployer — who still holds root but not AdminA —
+// must no longer be able to grant RoleX. Without this negative assertion, a
+// regression where the previous admin retained grant power would slip past the
+// happy-path test.
+#[test, expected_failure(abort_code = access_control::EUnauthorized)]
+fun test_role_hierarchy_chain_root_loses_grant_authority() {
+    let deployer = @0xA;
+    let admin_a = @0xB;
+    let user = @0xC;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+
+    // Same setup as the happy path: route RoleX's admin to AdminA.
+    ac.grant_role<_, AdminA>(admin_a, scenario.ctx());
+    ac.set_role_admin<_, RoleX, AdminA>(scenario.ctx());
+
+    // Deployer still has root, but root is not RoleX's admin anymore.
+    ac.grant_role<_, RoleX>(user, scenario.ctx());
+    abort 0
 }
 
 // === begin_default_admin_renounce ===

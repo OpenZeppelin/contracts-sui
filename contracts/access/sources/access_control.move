@@ -18,10 +18,10 @@
 ///    rule restricts roles to the same package, not to the same package
 ///    version.
 ///
-/// Together these guarantees make `Auth<R>` a self-validating capability.
-/// `R` can only live in the registry of its home module, that registry is
-/// unique per publish, and the only path to mint `Auth<R>` is `new_auth`
-/// against that registry. Action functions can take `&Auth<R>` directly with
+/// Together these guarantees make `Auth<Role>` a self-validating capability.
+/// `Role` can only live in the registry of its home module, that registry is
+/// unique per publish, and the only path to mint `Auth<Role>` is `new_auth`
+/// against that registry. Action functions can take `&Auth<Role>` directly with
 /// no body checks.
 ///
 /// ### Idiomatic usage
@@ -35,12 +35,8 @@
 ///
 /// fun init(otw: MY_PROTOCOL, ctx: &mut TxContext) {
 ///     let mut registry = access_control::new(otw, 86_400_000, ctx);
-///     access_control::grant_role<_, AdminRole>(
-///         &mut registry, ctx.sender(), ctx,
-///     );
-///     access_control::set_role_admin<_, OperatorRole, AdminRole>(
-///         &mut registry, ctx,
-///     );
+///     registry.grant_role<_, AdminRole>(ctx.sender(), ctx);
+///     registry.set_role_admin<_, OperatorRole, AdminRole>(ctx);
 ///     transfer::public_share_object(registry);
 /// }
 /// ```
@@ -65,26 +61,29 @@ const EUnauthorized: vector<u8> = "Caller does not have the required role";
 const ECannotManageRootRole: vector<u8> =
     "Root role can only be changed via the delayed transfer or renounce flow";
 
-/// `accept_default_admin_transfer` or `cancel_default_admin_transfer` called
-/// with no pending transfer.
+/// `accept_default_admin_transfer`, `accept_default_admin_renounce`, or
+/// `cancel_default_admin_transfer` called with no pending action in the
+/// shared transfer-or-renounce slot.
 #[error(code = 2)]
-const ENoPendingAdminTransfer: vector<u8> = "No pending default admin transfer";
+const ENoPendingAdminTransfer: vector<u8> = "No pending default admin transfer or renounce";
 
 /// `accept_default_admin_transfer` called by an address other than the pending
 /// new admin.
 #[error(code = 3)]
 const ENotPendingAdmin: vector<u8> = "Caller is not the pending admin";
 
-/// `accept_default_admin_transfer` called before the configured delay has
-/// elapsed.
+/// `accept_default_admin_transfer`, `accept_default_admin_renounce`, or
+/// `accept_default_admin_delay_change` called before the timelock for the
+/// pending action has elapsed.
 #[error(code = 4)]
-const EDelayNotElapsed: vector<u8> = "Admin transfer delay has not elapsed";
+const EDelayNotElapsed: vector<u8> = "Pending action's timelock has not elapsed";
 
 /// `renounce_role` called with `account != ctx.sender()`.
 #[error(code = 5)]
 const ECannotRenounceForOtherAccount: vector<u8> = "Can only renounce role for own account";
 
-/// `new` called with `default_admin_delay_ms` above `MAX_DEFAULT_ADMIN_DELAY_MS`.
+/// `new` or `begin_default_admin_delay_change` called with a delay value that
+/// exceeds `MAX_DEFAULT_ADMIN_DELAY_MS`.
 #[error(code = 6)]
 const EDelayTooLarge: vector<u8> = "Admin delay exceeds the maximum allowed value";
 
@@ -103,7 +102,8 @@ const EForeignRole: vector<u8> = "Role type must be defined in the same module a
 const ENotPendingTransfer: vector<u8> = "Pending action is a renounce, not a transfer";
 
 /// `accept_default_admin_renounce` called while the pending action is a
-/// transfer (or there is no pending action).
+/// transfer, not a renounce. The "no pending action" case is rejected
+/// earlier by `ENoPendingAdminTransfer`.
 #[error(code = 10)]
 const ENotPendingRenounce: vector<u8> = "Pending action is not a renounce";
 
@@ -111,6 +111,13 @@ const ENotPendingRenounce: vector<u8> = "Pending action is not a renounce";
 /// called with no pending delay change.
 #[error(code = 11)]
 const ENoPendingDelayChange: vector<u8> = "No pending default admin delay change";
+
+/// `grant_role` or `begin_default_admin_transfer` called with `@0x0` as the
+/// target address. The zero address has no signing key, so a role granted to
+/// it can never be exercised and a transfer scheduled to it can never be
+/// accepted.
+#[error(code = 12)]
+const EZeroAddress: vector<u8> = "Cannot use the zero address as a role holder or transfer target";
 
 // === Constants ===
 
@@ -139,13 +146,13 @@ const MAX_DELAY_INCREASE_WAIT_MS: u64 = 48 * 60 * 60 * 1_000;
 
 /// Self-validating typed proof of role membership.
 ///
-/// `Auth<R>` is minted exclusively by `new_auth` against the unique
-/// `AccessControl<RootRole>` whose home module matches `R`'s. Because that
+/// `Auth<Role>` is minted exclusively by `new_auth` against the unique
+/// `AccessControl<RootRole>` whose home module matches `Role`'s. Because that
 /// registry is singleton-per-publish (Invariant 1) and only home-module roles
-/// can ever be registered in it (Invariant 2), every `Auth<R>` that exists was
-/// produced by that one registry, against a sender that genuinely held `R`.
-/// Consumers can take `&Auth<R>` as authorization without any body checks.
-public struct Auth<phantom R> has drop {
+/// can ever be registered in it (Invariant 2), every `Auth<Role>` that exists was
+/// produced by that one registry, against a sender that genuinely held `Role`.
+/// Consumers can take `&Auth<Role>` as authorization without any body checks.
+public struct Auth<phantom Role> has drop {
     addr: address,
 }
 
@@ -206,38 +213,76 @@ public struct PendingDelayChange has drop, store {
 }
 
 // === Events ===
-//
-// The `role` field on every event is a `TypeName` — it embeds the defining
-// package address and module name of the role struct, so events from
-// independently-published consumer protocols are distinguishable off-chain.
 
+/// Emitted when a role is granted to an account. Fired by `grant_role` (when
+/// `account` was not already a member), by `new` for the initial root role
+/// holder, and by `accept_default_admin_transfer` for the incoming new admin.
+///
+/// The `role` field is a `TypeName` — it embeds the defining package address
+/// and module name of the role struct, so events from independently-published
+/// consumer protocols are distinguishable off-chain.
 public struct RoleGranted has copy, drop {
+    /// The role granted.
     role: TypeName,
+    /// The address that received the role.
     account: address,
+    /// The address that authorized the grant. Equals the transaction sender
+    /// — the role's admin for `grant_role`, the constructing account for
+    /// `new`, and the incoming admin for `accept_default_admin_transfer`.
     sender: address,
 }
 
+/// Emitted when a role is removed from an account. Fired by `revoke_role`
+/// (when `account` held the role), by `renounce_role` (self-revoke), by
+/// `accept_default_admin_transfer` for the previous root holder, and by
+/// `accept_default_admin_renounce` for the renouncing root holder.
+///
+/// The `role` field is a `TypeName` — it embeds the defining package address
+/// and module name of the role struct, so events from independently-published
+/// consumer protocols are distinguishable off-chain.
 public struct RoleRevoked has copy, drop {
+    /// The role revoked.
     role: TypeName,
+    /// The address that lost the role.
     account: address,
+    /// The address that authorized the revoke. Equals the transaction sender.
     sender: address,
 }
 
+/// Emitted when a role's admin role is reconfigured by `set_role_admin`.
+///
+/// The `role`, `previous_admin_role`, and `new_admin_role` fields are
+/// `TypeName`s — they embed the defining package address and module name of
+/// each role struct, so events from independently-published consumer
+/// protocols are distinguishable off-chain.
 public struct RoleAdminChanged has copy, drop {
+    /// The role whose administering role changed.
     role: TypeName,
+    /// The admin role in effect before the call.
     previous_admin_role: TypeName,
+    /// The admin role in effect after the call.
     new_admin_role: TypeName,
 }
 
+/// Emitted when a transfer of the root role is scheduled by
+/// `begin_default_admin_transfer`. Distinct from `DefaultAdminRenounceScheduled`
+/// so off-chain consumers can tell the two kinds of pending state apart
+/// without inspecting payload.
 public struct DefaultAdminTransferScheduled has copy, drop {
+    /// The address proposed to take over the root role.
     new_admin: address,
+    /// The earliest timestamp (ms) at which `accept_default_admin_transfer`
+    /// can be called.
     execute_after_ms: u64,
 }
 
-/// Emitted when a renounce of the root role is scheduled. Distinct from
-/// `DefaultAdminTransferScheduled` so off-chain consumers can tell the two
-/// kinds of pending state apart without inspecting payload.
+/// Emitted when a renounce of the root role is scheduled by
+/// `begin_default_admin_renounce`. Distinct from `DefaultAdminTransferScheduled`
+/// so off-chain consumers can tell the two kinds of pending state apart
+/// without inspecting payload.
 public struct DefaultAdminRenounceScheduled has copy, drop {
+    /// The earliest timestamp (ms) at which `accept_default_admin_renounce`
+    /// can be called.
     execute_after_ms: u64,
 }
 
@@ -247,9 +292,14 @@ public struct DefaultAdminRenounceScheduled has copy, drop {
 /// `DefaultAdminRenounceScheduled` event to know which kind was cancelled.
 public struct DefaultAdminTransferCancelled has copy, drop {}
 
-/// Emitted when a change to `default_admin_delay_ms` is scheduled.
+/// Emitted when a change to `default_admin_delay_ms` is scheduled by
+/// `begin_default_admin_delay_change`.
 public struct DefaultAdminDelayChangeScheduled has copy, drop {
+    /// The proposed new value of `default_admin_delay_ms`. Takes effect only
+    /// after `accept_default_admin_delay_change` is called.
     new_delay_ms: u64,
+    /// The earliest timestamp (ms) at which `accept_default_admin_delay_change`
+    /// can apply the change.
     schedule_after_ms: u64,
 }
 
@@ -267,6 +317,16 @@ public struct DefaultAdminDelayChangeCancelled has copy, drop {}
 ///
 /// The expected call site is the consumer module's `init` function, where
 /// the VM has already produced exactly one OTW value.
+///
+/// #### Parameters
+/// - `RootRole` (type): the module's OTW type; becomes the root role of the registry.
+/// - `otw`: a VM-issued One-Time Witness of type `RootRole`. Consumed by the call.
+/// - `default_admin_delay_ms`: timelock (ms) that applies to root role transfer and renounce. Mutable post-creation via `begin_default_admin_delay_change`.
+/// - `ctx`: transaction context. The sender becomes the initial root role holder.
+///
+/// #### Returns
+/// The freshly-minted singleton `AccessControl<RootRole>` registry. The caller
+/// is responsible for sharing, embedding, or otherwise positioning it.
 ///
 /// #### Aborts
 /// - `ENotOneTimeWitness` if `otw` is not a true One-Time Witness.
@@ -307,79 +367,72 @@ public fun new<RootRole: drop>(
     ac
 }
 
-// === Internal Helpers ===
-
-/// Membership check by `TypeName` — used internally when the admin role is
-/// known only as a `TypeName` value, not as a type parameter.
-fun has_role_by_name<RootRole>(
-    ac: &AccessControl<RootRole>,
-    role: TypeName,
-    account: address,
-): bool {
-    if (!ac.roles.contains(role)) return false;
-    ac.roles.borrow<_, RoleData>(role).members.contains(&account)
-}
-
-/// Returns the admin role `TypeName` of `role`. Defaults to the root role for
-/// roles that have no entry yet.
-fun get_role_admin_name<RootRole>(ac: &AccessControl<RootRole>, role: TypeName): TypeName {
-    if (!ac.roles.contains(role)) return ac.protected_root;
-    ac.roles.borrow<_, RoleData>(role).admin_role
-}
-
-/// Asserts `R` and `RootRole` come from the same package + module.
-///
-/// Uses `with_original_ids` so role types introduced in later package
-/// upgrades still match — the address compared is the package's original
-/// publish ID, which is stable across upgrades. This is the runtime arm
-/// of Invariant 2.
-fun assert_home_module<RootRole, R>() {
-    let root = with_original_ids<RootRole>();
-    let role = with_original_ids<R>();
-    assert!(
-        root.address_string() == role.address_string()
-            && root.module_string() == role.module_string(),
-        EForeignRole,
-    );
-}
-
 // === Role Queries ===
 
-/// Returns `true` if `account` is a member of role `R`.
-public fun has_role<RootRole, R>(ac: &AccessControl<RootRole>, account: address): bool {
-    has_role_by_name(ac, with_original_ids<R>(), account)
+/// Whether `account` is a member of role `Role`.
+///
+/// #### Parameters
+/// - `Role` (type): the role to check membership of.
+/// - `ac`: the registry to query.
+/// - `account`: the address being checked.
+///
+/// #### Returns
+/// `true` if `account` currently holds `Role`, `false` otherwise. Returns
+/// `false` for roles that have never been registered.
+public fun has_role<RootRole, Role>(ac: &AccessControl<RootRole>, account: address): bool {
+    ac.has_role_by_name(with_original_ids<Role>(), account)
 }
 
-/// Returns the `TypeName` of the admin role of `R`. Defaults to the root role
-/// for roles that have no entry yet.
-public fun get_role_admin<RootRole, R>(ac: &AccessControl<RootRole>): TypeName {
-    get_role_admin_name(ac, with_original_ids<R>())
+/// The `TypeName` of the admin role of `Role`.
+///
+/// #### Parameters
+/// - `Role` (type): the role whose admin role is being looked up.
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// The `TypeName` of `Role`'s admin role. Defaults to the root role's
+/// `TypeName` for roles that have no entry yet.
+public fun get_role_admin<RootRole, Role>(ac: &AccessControl<RootRole>): TypeName {
+    ac.get_role_admin_name(with_original_ids<Role>())
 }
 
-/// Aborts with `EUnauthorized` if `account` does not hold role `R`.
-public fun assert_role<RootRole, R>(ac: &AccessControl<RootRole>, account: address) {
-    assert!(has_role<RootRole, R>(ac, account), EUnauthorized);
+/// Aborts with `EUnauthorized` if `account` does not hold role `Role`.
+///
+/// #### Parameters
+/// - `Role` (type): the role to assert membership of.
+/// - `ac`: the registry to query.
+/// - `account`: the address being checked.
+public fun assert_role<RootRole, Role>(ac: &AccessControl<RootRole>, account: address) {
+    assert!(ac.has_role<_, Role>(account), EUnauthorized);
 }
 
 // === Role Management ===
 
-/// Grant role `R` to `account`. Caller must hold the admin role of `R`.
-/// `R` must be defined in the same module as `RootRole` (Invariant 2).
-/// Blocked on the root role. No-op if `account` already holds `R`.
+/// Grant role `Role` to `account`. Caller must hold the admin role of `Role`.
+/// `Role` must be defined in the same module as `RootRole` (Invariant 2).
+/// No-op if `account` already holds `Role`.
+///
+/// #### Parameters
+/// - `Role` (type): the role to grant. Must be a home-module role.
+/// - `ac`: the registry to mutate.
+/// - `account`: the address being granted `Role`.
+/// - `ctx`: transaction context. The sender must hold the admin role of `Role`.
 ///
 /// #### Aborts
-/// - `EForeignRole` if `R`'s home module differs from `RootRole`'s.
-/// - `ECannotManageRootRole` if `R` is the root role.
-/// - `EUnauthorized` if the caller does not hold the admin role of `R`.
-public fun grant_role<RootRole, R>(
+/// - `EForeignRole` if `Role`'s home module differs from `RootRole`'s.
+/// - `ECannotManageRootRole` if `Role` is the root role.
+/// - `EUnauthorized` if the caller does not hold the admin role of `Role`.
+/// - `EZeroAddress` if `account` is `@0x0`.
+public fun grant_role<RootRole, Role>(
     ac: &mut AccessControl<RootRole>,
     account: address,
     ctx: &mut TxContext,
 ) {
-    assert_home_module<RootRole, R>();
-    let role_name = with_original_ids<R>();
+    assert_home_module<RootRole, Role>();
+    assert!(account != @0x0, EZeroAddress);
+    let role_name = with_original_ids<Role>();
     assert!(role_name != ac.protected_root, ECannotManageRootRole);
-    assert!(has_role_by_name(ac, get_role_admin_name(ac, role_name), ctx.sender()), EUnauthorized);
+    assert!(ac.has_role_by_name(ac.get_role_admin_name(role_name), ctx.sender()), EUnauthorized);
 
     if (!ac.roles.contains(role_name)) {
         ac
@@ -397,22 +450,28 @@ public fun grant_role<RootRole, R>(
     event::emit(RoleGranted { role: role_name, account, sender: ctx.sender() });
 }
 
-/// Revoke role `R` from `account`. Caller must hold the admin role of `R`.
-/// Blocked on the root role. No-op if `account` does not hold `R`.
+/// Revoke role `Role` from `account`. Caller must hold the admin role of `Role`.
+/// No-op if `account` does not hold `Role`.
+///
+/// #### Parameters
+/// - `Role` (type): the role to revoke. Must be a home-module role.
+/// - `ac`: the registry to mutate.
+/// - `account`: the address losing `Role`.
+/// - `ctx`: transaction context. The sender must hold the admin role of `Role`.
 ///
 /// #### Aborts
-/// - `EForeignRole` if `R`'s home module differs from `RootRole`'s.
-/// - `ECannotManageRootRole` if `R` is the root role.
-/// - `EUnauthorized` if the caller does not hold the admin role of `R`.
-public fun revoke_role<RootRole, R>(
+/// - `EForeignRole` if `Role`'s home module differs from `RootRole`'s.
+/// - `ECannotManageRootRole` if `Role` is the root role.
+/// - `EUnauthorized` if the caller does not hold the admin role of `Role`.
+public fun revoke_role<RootRole, Role>(
     ac: &mut AccessControl<RootRole>,
     account: address,
     ctx: &mut TxContext,
 ) {
-    assert_home_module<RootRole, R>();
-    let role_name = with_original_ids<R>();
+    assert_home_module<RootRole, Role>();
+    let role_name = with_original_ids<Role>();
     assert!(role_name != ac.protected_root, ECannotManageRootRole);
-    assert!(has_role_by_name(ac, get_role_admin_name(ac, role_name), ctx.sender()), EUnauthorized);
+    assert!(ac.has_role_by_name(ac.get_role_admin_name(role_name), ctx.sender()), EUnauthorized);
 
     if (!ac.roles.contains(role_name)) return;
 
@@ -423,25 +482,31 @@ public fun revoke_role<RootRole, R>(
     event::emit(RoleRevoked { role: role_name, account, sender: ctx.sender() });
 }
 
-/// Voluntarily relinquish role `R`. `account` must equal `ctx.sender()`.
-/// No-op if the caller does not hold `R`. **Blocked on the root role** —
+/// Voluntarily relinquish role `Role`. `account` must equal `ctx.sender()`.
+/// No-op if the caller does not hold `Role`. **Blocked on the root role** —
 /// use `begin_default_admin_renounce` + `accept_default_admin_renounce`
 /// instead, so the protocol gets the configured timelock and a cancel window
 /// before the registry becomes unmanaged.
 ///
+/// #### Parameters
+/// - `Role` (type): the role to relinquish. Must be a home-module role and not the root role.
+/// - `ac`: the registry to mutate.
+/// - `account`: the address relinquishing `Role`. Must equal `ctx.sender()`; the explicit parameter exists so the call signature documents the self-only constraint at the type-checker level.
+/// - `ctx`: transaction context. Sender is the only party that can renounce on its own behalf.
+///
 /// #### Aborts
 /// - `ECannotRenounceForOtherAccount` if `account != ctx.sender()`.
-/// - `EForeignRole` if `R`'s home module differs from `RootRole`'s.
-/// - `ECannotManageRootRole` if `R` is the root role.
-public fun renounce_role<RootRole, R>(
+/// - `EForeignRole` if `Role`'s home module differs from `RootRole`'s.
+/// - `ECannotManageRootRole` if `Role` is the root role.
+public fun renounce_role<RootRole, Role>(
     ac: &mut AccessControl<RootRole>,
     account: address,
     ctx: &mut TxContext,
 ) {
     assert!(account == ctx.sender(), ECannotRenounceForOtherAccount);
-    assert_home_module<RootRole, R>();
+    assert_home_module<RootRole, Role>();
 
-    let role_name = with_original_ids<R>();
+    let role_name = with_original_ids<Role>();
     assert!(role_name != ac.protected_root, ECannotManageRootRole);
 
     if (!ac.roles.contains(role_name)) return;
@@ -454,8 +519,13 @@ public fun renounce_role<RootRole, R>(
 }
 
 /// Set the admin role of `Role` to `AdminRole`. Both must be home-module
-/// roles. Caller must hold the current admin role of `Role`. Blocked on the
-/// root role as the subject.
+/// roles. Caller must hold the current admin role of `Role`.
+///
+/// #### Parameters
+/// - `Role` (type): the role whose admin is being changed. Must be a home-module role and not the root role.
+/// - `AdminRole` (type): the role granted authority over `Role` going forward. Must be a home-module role.
+/// - `ac`: the registry to mutate.
+/// - `ctx`: transaction context. The sender must hold the *current* admin role of `Role` (not necessarily `AdminRole`).
 ///
 /// #### Aborts
 /// - `EForeignRole` if either `Role` or `AdminRole` is foreign.
@@ -471,20 +541,20 @@ public fun set_role_admin<RootRole, Role, AdminRole>(
     let role_name = with_original_ids<Role>();
     assert!(role_name != ac.protected_root, ECannotManageRootRole);
 
-    let previous_admin_role = get_role_admin_name(ac, role_name);
-    assert!(has_role_by_name(ac, previous_admin_role, ctx.sender()), EUnauthorized);
+    let previous_admin_role = ac.get_role_admin_name(role_name);
+    assert!(ac.has_role_by_name(previous_admin_role, ctx.sender()), EUnauthorized);
 
     let new_admin_name = with_original_ids<AdminRole>();
 
-    if (!ac.roles.contains(role_name)) {
+    if (ac.roles.contains(role_name)) {
+        ac.roles.borrow_mut<_, RoleData>(role_name).admin_role = new_admin_name;
+    } else {
         ac
             .roles
             .add(
                 role_name,
                 RoleData { members: vec_set::empty(), admin_role: new_admin_name },
             );
-    } else {
-        ac.roles.borrow_mut<_, RoleData>(role_name).admin_role = new_admin_name;
     };
 
     event::emit(RoleAdminChanged {
@@ -502,13 +572,24 @@ public fun set_role_admin<RootRole, Role, AdminRole>(
 /// `default_admin_delay_ms` has elapsed. An existing pending transfer or
 /// renounce is overwritten — the caller can correct a wrong target (or
 /// switch between transfer and renounce) without cancelling first.
+///
+/// #### Parameters
+/// - `ac`: the registry to mutate.
+/// - `new_admin`: the address proposed to take over the root role. Will receive the role only after `accept_default_admin_transfer` is called past the timelock.
+/// - `clock`: current clock; used to compute `execute_after_ms`.
+/// - `ctx`: transaction context. The sender must hold the root role.
+///
+/// #### Aborts
+/// - `EUnauthorized` if the caller does not hold the root role.
+/// - `EZeroAddress` if `new_admin` is `@0x0`. Use `begin_default_admin_renounce` to lock the registry permanently.
 public fun begin_default_admin_transfer<RootRole>(
     ac: &mut AccessControl<RootRole>,
     new_admin: address,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(has_role_by_name(ac, ac.protected_root, ctx.sender()), EUnauthorized);
+    assert!(ac.has_role_by_name(ac.protected_root, ctx.sender()), EUnauthorized);
+    assert!(new_admin != @0x0, EZeroAddress);
 
     let execute_after_ms = clock.timestamp_ms() + ac.default_admin_delay_ms;
     ac.pending_default_admin =
@@ -529,6 +610,11 @@ public fun begin_default_admin_transfer<RootRole>(
 /// - `ENotPendingTransfer` if the pending action is a renounce, not a transfer.
 /// - `ENotPendingAdmin` if the caller is not the scheduled new admin.
 /// - `EDelayNotElapsed` if the timelock has not elapsed.
+///
+/// #### Parameters
+/// - `ac`: the registry to mutate.
+/// - `clock`: current clock; used to verify the timelock has elapsed.
+/// - `ctx`: transaction context. The sender must be the scheduled new admin.
 public fun accept_default_admin_transfer<RootRole>(
     ac: &mut AccessControl<RootRole>,
     clock: &Clock,
@@ -552,13 +638,9 @@ public fun accept_default_admin_transfer<RootRole>(
     let root_type = ac.protected_root;
 
     // Root role has at most one holder; find and revoke atomically.
-    let maybe_old_admin = {
-        let keys = ac.roles.borrow<_, RoleData>(root_type).members.keys();
-        if (keys.is_empty()) option::none() else option::some(keys[0])
-    };
-
-    if (maybe_old_admin.is_some()) {
-        let old_admin = *maybe_old_admin.borrow();
+    let keys = ac.roles.borrow<_, RoleData>(root_type).members.keys();
+    if (!keys.is_empty()) {
+        let old_admin = keys[0];
         ac.roles.borrow_mut<_, RoleData>(root_type).members.remove(&old_admin);
         event::emit(RoleRevoked { role: root_type, account: old_admin, sender });
     };
@@ -577,12 +659,20 @@ public fun accept_default_admin_transfer<RootRole>(
 /// **Warning:** Once finalized via `accept_default_admin_renounce`, no one
 /// holds the root role and the registry can no longer be governed via the
 /// transfer flow. Use this only for an intentional, permanent lock-in.
+///
+/// #### Parameters
+/// - `ac`: the registry to mutate.
+/// - `clock`: current clock; used to compute `execute_after_ms`.
+/// - `ctx`: transaction context. The sender must hold the root role.
+///
+/// #### Aborts
+/// - `EUnauthorized` if the caller does not hold the root role.
 public fun begin_default_admin_renounce<RootRole>(
     ac: &mut AccessControl<RootRole>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(has_role_by_name(ac, ac.protected_root, ctx.sender()), EUnauthorized);
+    assert!(ac.has_role_by_name(ac.protected_root, ctx.sender()), EUnauthorized);
 
     let execute_after_ms = clock.timestamp_ms() + ac.default_admin_delay_ms;
     ac.pending_default_admin =
@@ -603,6 +693,11 @@ public fun begin_default_admin_renounce<RootRole>(
 /// - `ENotPendingRenounce` if the pending action is a transfer, not a renounce.
 /// - `EUnauthorized` if the caller does not hold the root role.
 /// - `EDelayNotElapsed` if the timelock has not elapsed.
+///
+/// #### Parameters
+/// - `ac`: the registry to mutate.
+/// - `clock`: current clock; used to verify the timelock has elapsed.
+/// - `ctx`: transaction context. The sender must currently hold the root role.
 public fun accept_default_admin_renounce<RootRole>(
     ac: &mut AccessControl<RootRole>,
     clock: &Clock,
@@ -615,7 +710,7 @@ public fun accept_default_admin_renounce<RootRole>(
         assert!(pending.new_admin.is_none(), ENotPendingRenounce);
         pending.execute_after_ms
     };
-    assert!(has_role_by_name(ac, ac.protected_root, ctx.sender()), EUnauthorized);
+    assert!(ac.has_role_by_name(ac.protected_root, ctx.sender()), EUnauthorized);
     assert!(clock.timestamp_ms() >= execute_after_ms, EDelayNotElapsed);
 
     let _ = ac.pending_default_admin.extract();
@@ -630,12 +725,20 @@ public fun accept_default_admin_renounce<RootRole>(
 /// Cancel a pending root role transfer or renounce. Caller must hold the
 /// root role. The same function clears either kind; off-chain consumers
 /// correlate with the prior schedule event.
+///
+/// #### Parameters
+/// - `ac`: the registry to mutate.
+/// - `ctx`: transaction context. The sender must hold the root role.
+///
+/// #### Aborts
+/// - `ENoPendingAdminTransfer` if no pending action exists.
+/// - `EUnauthorized` if the caller does not hold the root role.
 public fun cancel_default_admin_transfer<RootRole>(
     ac: &mut AccessControl<RootRole>,
     ctx: &mut TxContext,
 ) {
     assert!(ac.pending_default_admin.is_some(), ENoPendingAdminTransfer);
-    assert!(has_role_by_name(ac, ac.protected_root, ctx.sender()), EUnauthorized);
+    assert!(ac.has_role_by_name(ac.protected_root, ctx.sender()), EUnauthorized);
 
     let _ = ac.pending_default_admin.extract();
 
@@ -664,6 +767,12 @@ public fun cancel_default_admin_transfer<RootRole>(
 /// Caller must hold the root role. An existing pending delay change is
 /// overwritten.
 ///
+/// #### Parameters
+/// - `ac`: the registry to mutate.
+/// - `new_delay_ms`: the proposed new value of `default_admin_delay_ms`. Bounded by `MAX_DEFAULT_ADMIN_DELAY_MS`.
+/// - `clock`: current clock; used to compute the schedule timestamp.
+/// - `ctx`: transaction context. The sender must hold the root role.
+///
 /// #### Aborts
 /// - `EUnauthorized` if the caller does not hold the root role.
 /// - `EDelayTooLarge` if `new_delay_ms` exceeds `MAX_DEFAULT_ADMIN_DELAY_MS`.
@@ -673,7 +782,7 @@ public fun begin_default_admin_delay_change<RootRole>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(has_role_by_name(ac, ac.protected_root, ctx.sender()), EUnauthorized);
+    assert!(ac.has_role_by_name(ac.protected_root, ctx.sender()), EUnauthorized);
     assert!(new_delay_ms <= MAX_DEFAULT_ADMIN_DELAY_MS, EDelayTooLarge);
 
     let current = ac.default_admin_delay_ms;
@@ -707,6 +816,11 @@ public fun begin_default_admin_delay_change<RootRole>(
 /// #### Aborts
 /// - `ENoPendingDelayChange` if no pending change exists.
 /// - `EDelayNotElapsed` if `schedule_after_ms` has not been reached.
+///
+/// #### Parameters
+/// - `ac`: the registry to mutate.
+/// - `clock`: current clock; used to verify the schedule has passed.
+/// - `_ctx`: transaction context. Not used (no authorization required) — kept for API uniformity with other accept functions.
 public fun accept_default_admin_delay_change<RootRole>(
     ac: &mut AccessControl<RootRole>,
     clock: &Clock,
@@ -725,12 +839,20 @@ public fun accept_default_admin_delay_change<RootRole>(
 }
 
 /// Cancel a pending delay change. Caller must hold the root role.
+///
+/// #### Parameters
+/// - `ac`: the registry to mutate.
+/// - `ctx`: transaction context. The sender must hold the root role.
+///
+/// #### Aborts
+/// - `ENoPendingDelayChange` if no pending change exists.
+/// - `EUnauthorized` if the caller does not hold the root role.
 public fun cancel_default_admin_delay_change<RootRole>(
     ac: &mut AccessControl<RootRole>,
     ctx: &mut TxContext,
 ) {
     assert!(ac.pending_default_admin_delay_change.is_some(), ENoPendingDelayChange);
-    assert!(has_role_by_name(ac, ac.protected_root, ctx.sender()), EUnauthorized);
+    assert!(ac.has_role_by_name(ac.protected_root, ctx.sender()), EUnauthorized);
 
     let _ = ac.pending_default_admin_delay_change.extract();
 
@@ -739,59 +861,109 @@ public fun cancel_default_admin_delay_change<RootRole>(
 
 // === Auth Issuance ===
 
-/// Mint an `Auth<R>` for the transaction sender.
+/// Mint an `Auth<Role>` for the transaction sender.
 ///
-/// `R` must be a home-module role and the sender must currently hold it.
+/// `Role` must be a home-module role and the sender must currently hold it.
 /// Combined with the singleton-registry invariant, this guarantees every
-/// `Auth<R>` produced is unforgeable in context: the only registry that can
-/// mint it is the unique one rooted at R's module.
+/// `Auth<Role>` produced is unforgeable in context: the only registry that can
+/// mint it is the unique one rooted at `Role`'s module.
+///
+/// #### Parameters
+/// - `Role` (type): the role for which to mint an auth witness. Must be a home-module role.
+/// - `ac`: the registry to query.
+/// - `ctx`: transaction context. The sender must currently hold `Role`.
+///
+/// #### Returns
+/// An `Auth<Role>` capability bound to `ctx.sender()`. Pass it by reference
+/// to gated functions in the same PTB.
 ///
 /// #### Aborts
-/// - `EForeignRole` if `R`'s home module differs from `RootRole`'s.
-/// - `EUnauthorized` if the sender does not hold `R`.
-public fun new_auth<RootRole, R>(ac: &AccessControl<RootRole>, ctx: &mut TxContext): Auth<R> {
-    assert_home_module<RootRole, R>();
-    assert_role<RootRole, R>(ac, ctx.sender());
-    Auth<R> { addr: ctx.sender() }
+/// - `EForeignRole` if `Role`'s home module differs from `RootRole`'s.
+/// - `EUnauthorized` if the sender does not hold `Role`.
+public fun new_auth<RootRole, Role>(ac: &AccessControl<RootRole>, ctx: &mut TxContext): Auth<Role> {
+    assert_home_module<RootRole, Role>();
+    assert_role<RootRole, Role>(ac, ctx.sender());
+    Auth<Role> { addr: ctx.sender() }
 }
 
-/// The address that was authorized when the `Auth<R>` was issued.
-public fun auth_addr<R>(auth: &Auth<R>): address {
+/// The address that was authorized when the `Auth<Role>` was issued.
+///
+/// #### Parameters
+/// - `auth`: the auth witness to read.
+///
+/// #### Returns
+/// The address that held `Role` at the time `new_auth` minted this witness.
+public fun auth_addr<Role>(auth: &Auth<Role>): address {
     auth.addr
 }
 
 // === Getters ===
 
 /// `TypeName` of the protected root role.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// The `TypeName` of the registry's root role, captured at construction
+/// time and immutable thereafter.
 public fun protected_root<RootRole>(ac: &AccessControl<RootRole>): TypeName {
     ac.protected_root
 }
 
+/// Upper bound on `default_admin_delay_ms`. See `MAX_DEFAULT_ADMIN_DELAY_MS`.
+///
+/// #### Returns
+/// The compile-time constant `MAX_DEFAULT_ADMIN_DELAY_MS` (in ms).
 public fun max_default_admin_delay_ms(): u64 { MAX_DEFAULT_ADMIN_DELAY_MS }
 
+/// Currently-configured timelock (ms) for root role transfer / renounce.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// The active default admin delay in milliseconds.
 public fun default_admin_delay_ms<RootRole>(ac: &AccessControl<RootRole>): u64 {
     ac.default_admin_delay_ms
 }
 
-/// Returns `true` if there is any pending action on the root role — either a
+/// Whether there is any pending action on the root role — either a
 /// transfer or a renounce.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// `true` if a transfer or renounce is currently pending, `false` otherwise.
 public fun has_pending_default_admin_transfer<RootRole>(ac: &AccessControl<RootRole>): bool {
     ac.pending_default_admin.is_some()
 }
 
-/// Returns `true` if the pending action is specifically a renounce. False
-/// when no pending action exists OR when the pending action is a transfer.
+/// Whether the pending action is specifically a renounce.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// `true` only when a renounce is pending. `false` when no pending action
+/// exists OR when the pending action is a transfer.
 public fun is_pending_default_admin_renounce<RootRole>(ac: &AccessControl<RootRole>): bool {
     if (ac.pending_default_admin.is_none()) return false;
     ac.pending_default_admin.borrow().new_admin.is_none()
 }
 
-/// Returns the pending new admin address.
-/// - `none` if there is no pending action OR if the pending action is a renounce.
-/// - `some(addr)` if the pending action is a transfer to `addr`.
+/// The pending new admin address.
 ///
 /// Use `is_pending_default_admin_renounce` to disambiguate "no pending" from
 /// "pending renounce".
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// - `some(addr)` if the pending action is a transfer to `addr`.
+/// - `none` if there is no pending action OR if the pending action is a renounce.
 public fun pending_default_admin_new_admin<RootRole>(
     ac: &AccessControl<RootRole>,
 ): Option<address> {
@@ -801,6 +973,14 @@ public fun pending_default_admin_new_admin<RootRole>(
     option::some(*pending.new_admin.borrow())
 }
 
+/// The timestamp at which the pending action becomes acceptable.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// - `some(ts)` with the millisecond timestamp the pending action unlocks at.
+/// - `none` if there is no pending action.
 public fun pending_default_admin_execute_after_ms<RootRole>(
     ac: &AccessControl<RootRole>,
 ): Option<u64> {
@@ -812,14 +992,32 @@ public fun pending_default_admin_execute_after_ms<RootRole>(
 
 /// Maximum wait before a scheduled delay *increase* takes effect.
 /// See `MAX_DELAY_INCREASE_WAIT_MS` for the full rationale.
+///
+/// #### Returns
+/// The compile-time constant `MAX_DELAY_INCREASE_WAIT_MS` (in ms).
 public fun max_delay_increase_wait_ms(): u64 {
     MAX_DELAY_INCREASE_WAIT_MS
 }
 
+/// Whether a delay change is pending.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// `true` if a delay change is currently scheduled, `false` otherwise.
 public fun has_pending_default_admin_delay_change<RootRole>(ac: &AccessControl<RootRole>): bool {
     ac.pending_default_admin_delay_change.is_some()
 }
 
+/// The proposed new delay value of the pending change.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// - `some(new_delay_ms)` with the proposed delay if a change is pending.
+/// - `none` if there is no pending change.
 public fun pending_default_admin_delay_change_new_delay_ms<RootRole>(
     ac: &AccessControl<RootRole>,
 ): Option<u64> {
@@ -827,11 +1025,55 @@ public fun pending_default_admin_delay_change_new_delay_ms<RootRole>(
     option::some(ac.pending_default_admin_delay_change.borrow().new_delay_ms)
 }
 
+/// The timestamp at which the pending delay change becomes acceptable.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+///
+/// #### Returns
+/// - `some(ts)` with the millisecond timestamp the pending change unlocks at.
+/// - `none` if there is no pending change.
 public fun pending_default_admin_delay_change_schedule_after_ms<RootRole>(
     ac: &AccessControl<RootRole>,
 ): Option<u64> {
     if (ac.pending_default_admin_delay_change.is_none()) return option::none();
     option::some(ac.pending_default_admin_delay_change.borrow().schedule_after_ms)
+}
+
+// === Internal Helpers ===
+
+/// Membership check by `TypeName` — used internally when the admin role is
+/// known only as a `TypeName` value, not as a type parameter.
+fun has_role_by_name<RootRole>(
+    ac: &AccessControl<RootRole>,
+    role: TypeName,
+    account: address,
+): bool {
+    if (!ac.roles.contains(role)) return false;
+    ac.roles.borrow<_, RoleData>(role).members.contains(&account)
+}
+
+/// Returns the admin role `TypeName` of `role`. Defaults to the root role for
+/// roles that have no entry yet.
+fun get_role_admin_name<RootRole>(ac: &AccessControl<RootRole>, role: TypeName): TypeName {
+    if (!ac.roles.contains(role)) return ac.protected_root;
+    ac.roles.borrow<_, RoleData>(role).admin_role
+}
+
+/// Asserts `Role` and `RootRole` come from the same package + module.
+///
+/// Uses `with_original_ids` so role types introduced in later package
+/// upgrades still match — the address compared is the package's original
+/// publish ID, which is stable across upgrades. This is the runtime arm
+/// of Invariant 2.
+fun assert_home_module<RootRole, Role>() {
+    let root = with_original_ids<RootRole>();
+    let role = with_original_ids<Role>();
+    assert!(
+        root.address_string() == role.address_string()
+            && root.module_string() == role.module_string(),
+        EForeignRole,
+    );
 }
 
 // === Test-Only Helpers ===
