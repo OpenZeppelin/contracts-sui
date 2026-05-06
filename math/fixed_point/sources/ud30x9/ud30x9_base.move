@@ -297,7 +297,7 @@ public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
 /// #### Aborts
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
-    mul_trunc(x, y)
+    x.mul_trunc(y)
 }
 
 /// Multiplies two `UD30x9` values with fixed-point scaling and truncation toward zero.
@@ -353,7 +353,7 @@ public fun mul_away(x: UD30x9, y: UD30x9): UD30x9 {
 /// - `EDivideByZero` if `y` is zero.
 /// - Aborts if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
-    div_trunc(x, y)
+    x.div_trunc(y)
 }
 
 /// Divides `x` by `y` with fixed-point scaling and truncation toward zero.

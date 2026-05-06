@@ -77,7 +77,7 @@ public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
 public fun abs(x: SD29x9): SD29x9 {
     let mut components = decompose(x.unwrap());
     components.neg = false;
-    wrap_components(components)
+    components.wrap_components()
 }
 
 /// Adds two `SD29x9` values.
@@ -92,8 +92,8 @@ public fun abs(x: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun add(x: SD29x9, y: SD29x9): SD29x9 {
-    let result = add_components(decompose(x.unwrap()), decompose(y.unwrap()));
-    wrap_components(result)
+    let result = decompose(x.unwrap()).add_components(decompose(y.unwrap()));
+    result.wrap_components()
 }
 
 /// Rounds toward positive infinity to the nearest integer multiple of `1e9`.
@@ -119,7 +119,7 @@ public fun ceil(x: SD29x9): SD29x9 {
     } else {
         Components { mag: int_part * scale, neg: true }
     };
-    wrap_components(result)
+    result.wrap_components()
 }
 
 /// Checks whether two `SD29x9` values are bitwise equal.
@@ -157,7 +157,7 @@ public fun floor(x: SD29x9): SD29x9 {
     } else {
         Components { mag: (int_part + 1) * scale, neg: true }
     };
-    wrap_components(result)
+    result.wrap_components()
 }
 
 /// Compares whether `x` is greater than `y`.
@@ -181,7 +181,7 @@ public fun gt(x: SD29x9, y: SD29x9): bool {
 /// #### Returns
 /// - `true` if `x >= y`, otherwise `false`.
 public fun gte(x: SD29x9, y: SD29x9): bool {
-    !lt(x, y)
+    !x.lt(y)
 }
 
 /// Checks whether a value is exactly zero.
@@ -216,7 +216,7 @@ public fun lt(x: SD29x9, y: SD29x9): bool {
 /// #### Returns
 /// - `true` if `x <= y`, otherwise `false`.
 public fun lte(x: SD29x9, y: SD29x9): bool {
-    !gt(x, y)
+    !x.gt(y)
 }
 
 /// Computes the truncating remainder of dividing one `SD29x9` value by another.
@@ -289,7 +289,7 @@ public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
-    mul_trunc(x, y)
+    x.mul_trunc(y)
 }
 
 /// Multiplies two `SD29x9` values with fixed-point scaling and truncation toward zero.
@@ -356,7 +356,7 @@ public fun mul_away(x: SD29x9, y: SD29x9): SD29x9 {
 /// - `EDivideByZero` if `y` is zero.
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div(x: SD29x9, y: SD29x9): SD29x9 {
-    div_trunc(x, y)
+    x.div_trunc(y)
 }
 
 /// Divides `x` by `y` with fixed-point scaling and truncation toward zero.
@@ -466,7 +466,7 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
     };
 
     let result = Components { neg: res_neg, mag: res_mag };
-    wrap_components(result)
+    result.wrap_components()
 }
 
 /// Returns the arithmetic negation of `x`.
@@ -481,7 +481,7 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
 /// - Aborts if `x` is the minimum representable value (`-2^127`), because `+2^127` is not representable.
 public fun negate(x: SD29x9): SD29x9 {
     let value = decompose(x.unwrap());
-    wrap_components(negate_components(value))
+    value.negate_components().wrap_components()
 }
 
 /// Checks whether two `SD29x9` values are not equal.
@@ -493,7 +493,7 @@ public fun negate(x: SD29x9): SD29x9 {
 /// #### Returns
 /// - `true` if `x != y`, otherwise `false`.
 public fun neq(x: SD29x9, y: SD29x9): bool {
-    !eq(x, y)
+    !x.eq(y)
 }
 
 /// Subtracts `y` from `x`.
@@ -508,9 +508,9 @@ public fun neq(x: SD29x9, y: SD29x9): bool {
 /// #### Aborts
 /// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun sub(x: SD29x9, y: SD29x9): SD29x9 {
-    let negated_y = negate_components(decompose(y.unwrap()));
-    let result = add_components(decompose(x.unwrap()), negated_y);
-    wrap_components(result)
+    let negated_y = decompose(y.unwrap()).negate_components();
+    let result = decompose(x.unwrap()).add_components(negated_y);
+    result.wrap_components()
 }
 
 /// Performs the unchecked addition of two `SD29x9` values.
