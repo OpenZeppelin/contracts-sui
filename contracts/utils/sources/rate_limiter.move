@@ -17,6 +17,17 @@
 /// 3. read paths call `available` for inspection,
 /// 4. when configuration changes, the integrator calls the matching `reconfigure_*` function
 ///    on its own object's limiter field.
+///
+/// # Operator responsibilities
+///
+/// Configs only need positivity (plus `capacity + refill_amount` not overflowing for
+/// `Bucket`); the implementation handles internal overflow safety without further upper
+/// bounds. One operator-side caveat: for `Cooldown`, the deadline is computed as
+/// `now + cooldown_ms`. The Sui `Clock` is monotonic and bounded well below `u64::MAX`,
+/// but `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick
+/// `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain
+/// timestamp during the limiter's lifetime — any policy-meaningful value (seconds to days
+/// to years in ms) satisfies this trivially.
 module openzeppelin_utils::rate_limiter;
 
 use sui::clock::Clock;
