@@ -877,10 +877,10 @@ fun is_power_of_ten_basic() {
     assert_eq!(u256::is_power_of_ten(1000000000000000000000000000000), true); // 10^30
     assert_eq!(
         u256::is_power_of_ten(
-            10000000000000000000000000000000000000000000000000000000000000000000000000000,
+            100000000000000000000000000000000000000000000000000000000000000000000000000000,
         ),
         true,
-    ); // 10^76 (max for u256)
+    ); // 10^77 (max for u256)
     assert_eq!(u256::is_power_of_ten(0), false);
     assert_eq!(u256::is_power_of_ten(2), false);
     assert_eq!(u256::is_power_of_ten(11), false);

@@ -15,7 +15,7 @@ fun into_ud30x9_converts_zero() {
     let zero = sd29x9::zero();
     let converted = zero.into_UD30x9();
     assert!(converted.is_zero());
-    assert!(converted.eq(ud30x9::zero()));
+    assert_eq!(converted, ud30x9::zero());
 }
 
 #[test]
@@ -142,6 +142,6 @@ fun try_into_ud30x9_matches_into_ud30x9_on_convertible_values() {
 
     samples.destroy!(|raw| {
         let x = pos(raw);
-        assert_eq!(sd29x9_base::try_into_UD30x9(x), option::some(x.into_UD30x9()));
+        assert_eq!(x.try_into_UD30x9(), option::some(x.into_UD30x9()));
     });
 }

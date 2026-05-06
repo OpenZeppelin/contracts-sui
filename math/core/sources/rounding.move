@@ -5,6 +5,8 @@
 /// integer modules.
 module openzeppelin_math::rounding;
 
+// === Structs ===
+
 /// Enumerates the supported rounding strategies shared by arithmetic helpers in this package.
 /// - Down: Always round the truncated result down towards zero.
 /// - Up: Always round the truncated result up (ceiling).
@@ -14,6 +16,8 @@ public enum RoundingMode has copy, drop {
     Up,
     Nearest,
 }
+
+// === Public Functions ===
 
 /// Helper returning the enum value for downward rounding.
 public fun down(): RoundingMode { RoundingMode::Down }

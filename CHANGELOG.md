@@ -8,6 +8,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+## 1.1.0 (21-04-2026)
+
+### `openzeppelin_fp_math`
+
+#### Added
+
+- `SD29x9::rem` function for truncated remainder semantics (sign follows the dividend) (#301)
+- Added `UD30x9::unchecked_lshift` and `UD30x9::unchecked_rshift` with truncating / zero-return behavior for shift operations. (#288)
+- Explicit `mul_trunc`, `mul_away`, `div_trunc`, and `div_away` helpers for `UD30x9` and `SD29x9`.
+- `ud30x9_convert` for scale-aware whole-number conversions to and from `UD30x9`. (#264)
+- `sd29x9_convert` for scale-aware whole-number conversions to and from `SD29x9`. (#264)
+- Cross-type casts between `UD30x9` and `SD29x9`, including checked `try_` variants. (#264)
+- Object-call syntax for whole-number conversion helpers on `UD30x9` and `SD29x9`. (#264)
+
+#### Changed (Breaking)
+
+- Removed bitwise operations from `SD29x9`.
+- Removed public module `casting_u128`; use `ud30x9::wrap` and `sd29x9::wrap` directly for raw casts. (#264)
+- `UD30x9::lshift` now aborts on overflow, and both `lshift` and `rshift` now abort on invalid shift sizes. (#288)
+- `SD29x9::mod` now uses Euclidean remainder semantics (result is always non-negative). The previous truncated remainder behavior is available via `SD29x9::rem` (#301)
+- `UD30x9::sub` now aborts with `EUnderflow` instead of `EOverflow` when the result would be negative (#297)
+- `ud30x9_base` abort codes renumbered: `EDivisionByZero` added at code `2`, `ECannotBeConvertedToSD29x9` moved from code `1` to code `3`. Code matching on numeric abort codes must be updated.
+
+#### Fixed
+
+- `SD29x9::pow` now properly handles overflow cases. (#280)
+
+### `openzeppelin_math`
+
+#### Changed
+
+- `vector::quick_sort_by` and `vector::quick_sort` now use the Dutch National Flag partition scheme. (#298)
+- `vector::quick_sort_by` and `vector::quick_sort` fall back to insertion sort for sub-partitions of size <= 10. (#298)
+
+#### Fixed
+
+- `u256::is_power_of_ten` helper now properly handles valid `10^77` value. (#291)
+
 ## 1.1.0-rc.0 (10-03-2026)
 
 ### `openzeppelin_fp_math`
