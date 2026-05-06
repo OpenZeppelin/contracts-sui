@@ -14,7 +14,7 @@ tags: [rate-limiter, utils, embeddable]
 
 ## Summary
 
-Embeddable rate-limiting primitive (`store + drop`) with three variants — `Bucket`, `FixedWindow`, `Cooldown` — sharing one API. Authorization is delegated entirely to whoever holds `&mut` to the embedded field. This artifact captures 4 type-level, 7 runtime, 13 state-transition, 4 economic, and 2 composability invariants extracted from the existing implementation, plus 14 gaps (3 critical: u64 overflow paths in `Bucket` accrual and `FixedWindow` consume).
+Embeddable rate-limiting primitive (`store + drop`) with three variants — `Bucket`, `FixedWindow`, `Cooldown` — sharing one API. Authorization is delegated entirely to whoever holds `&mut` to the embedded field. This artifact captures 4 type-level, 7 runtime, 13 state-transition, 4 economic, and 2 composability invariants enforced by the implementation. The earlier-flagged u64 overflow paths (MISS-1/2/3) and the `FixedWindow` reconfigure quirk (MISS-5) have been resolved in code; INV-S3 now describes anchor-based windows rather than wall-clock alignment.
 
 ## Type-Level Invariants
 
@@ -100,14 +100,14 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 
 **Statement:** On `new_bucket*` and `reconfigure_bucket`: `capacity > 0 ∧ refill_amount > 0 ∧ refill_interval_ms > 0`.
 
-**Applies to:** [`new_bucket`](contracts/utils/sources/rate_limiter.move#L72), [`new_bucket_with_tokens`](contracts/utils/sources/rate_limiter.move#L86), [`reconfigure_bucket`](contracts/utils/sources/rate_limiter.move#L222).
+**Applies to:** `new_bucket`, `new_bucket_with_tokens`, `reconfigure_bucket`.
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: [`assert_bucket_config!`](contracts/utils/sources/rate_limiter.move#L307-L311) → `EInvalidConfig`.
+- Runtime check: `assert_bucket_config!` → `EInvalidConfig`.
 - Test: implicit via successful constructions; no explicit negative tests.
 
-**Violation scenario:** `refill_interval_ms = 0` causes division by zero in `bucket_accrue`. `capacity = 0` makes the bucket permanently empty. `refill_amount = 0` makes refill a no-op forever.
+**Violation scenario:** `refill_interval_ms = 0` causes division by zero in `bucket_accrue`. `capacity = 0` makes the bucket permanently empty. `refill_amount = 0` makes refill a no-op forever (and would also divide by zero in `bucket_accrue`'s `headroom / refill_amount`).
 
 **Severity:** Critical
 
@@ -119,14 +119,14 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 
 **Statement:** On `new_fixed_window` and `reconfigure_fixed_window`: `capacity > 0 ∧ window_ms > 0`.
 
-**Applies to:** [`new_fixed_window`](contracts/utils/sources/rate_limiter.move#L105), [`reconfigure_fixed_window`](contracts/utils/sources/rate_limiter.move#L262).
+**Applies to:** `new_fixed_window`, `reconfigure_fixed_window`.
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: [`assert_fixed_window_config!`](contracts/utils/sources/rate_limiter.move#L313-L316) → `EInvalidConfig`.
+- Runtime check: `assert_fixed_window_config!` → `EInvalidConfig`.
 - Test: no explicit negative tests.
 
-**Violation scenario:** `window_ms = 0` causes modulo-by-zero in `align_window`. `capacity = 0` makes every consume fail.
+**Violation scenario:** `window_ms = 0` causes division-by-zero in `roll_window`. `capacity = 0` makes every consume fail.
 
 **Severity:** Critical
 
@@ -138,14 +138,14 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 
 **Statement:** On `new_cooldown` and `reconfigure_cooldown`: `cooldown_ms > 0`.
 
-**Applies to:** [`new_cooldown`](contracts/utils/sources/rate_limiter.move#L116), [`reconfigure_cooldown`](contracts/utils/sources/rate_limiter.move#L295).
+**Applies to:** `new_cooldown`, `reconfigure_cooldown`.
 
 **Enforcement mechanism:**
 - Type system: n/a.
 - Runtime check: `assert!(cooldown_ms > 0, EInvalidConfig)`.
 - Test: no explicit negative tests.
 
-**Violation scenario:** `cooldown_ms = 0` would make every consume succeed, defeating the purpose of the variant.
+**Violation scenario:** `cooldown_ms = 0` would make every consume succeed, defeating the purpose of the variant. The gate is formulated as `now < last || now - last < cooldown_ms` in code, so no upper bound is needed for arithmetic safety.
 
 **Severity:** High
 
@@ -193,14 +193,14 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 
 **Category:** Runtime
 
-**Statement:** `reconfigure_bucket` aborts on non-`Bucket`, `reconfigure_fixed_window` aborts on non-`FixedWindow`, `reconfigure_cooldown` aborts on non-`Cooldown`.
+**Statement:** `reconfigure_bucket` aborts on non-`Bucket`, `reconfigure_fixed_window` aborts on non-`FixedWindow`, `reconfigure_cooldown` aborts on non-`Cooldown`. Variant check has priority over config validation: a wrong-variant call always aborts with `EWrongVariant`, even when the supplied config would also be invalid.
 
 **Applies to:** all `reconfigure_*` functions.
 
 **Enforcement mechanism:**
 - Type system: n/a (could be enforced with separate types, but the enum design rejects that).
-- Runtime check: `_ => abort EWrongVariant` on non-matching arms.
-- Test: only [`reconfigure_bucket_on_non_bucket_aborts`](contracts/utils/tests/rate_limiter_tests.move#L203) exists; the other two paths are uncovered (MISS-10).
+- Runtime check: `assert_*_config!` is invoked *inside* the matching arm, so the wildcard `_ => abort EWrongVariant` arm fires first on wrong variant.
+- Test: only `reconfigure_bucket_on_non_bucket_aborts` exists; the other two paths are uncovered (MISS-10).
 
 **Violation scenario:** A `Cooldown` reconfigured via `reconfigure_bucket` would silently change variant — see INV-T2.
 
@@ -259,26 +259,28 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 - Runtime check: `used + amount > capacity` short-circuits before incrementing; window roll resets `used = 0`; `reconfigure_fixed_window` does `used.min(new_capacity)`.
 - Test: [`fixed_window_counts_per_window_and_resets_on_boundary`](contracts/utils/tests/rate_limiter_tests.move#L117).
 
-**Violation scenario:** Per-window cap is exceeded; INV-E2 fails. Note: `used + amount` itself can overflow (MISS-3).
+**Violation scenario:** Per-window cap is exceeded; INV-E2 fails.
 
 **Severity:** Critical
 
 ---
 
-### INV-S3: Window alignment
+### INV-S3: Anchor-based window grid
 
 **Category:** State transition
 
-**Statement:** `window_start_ms % window_ms == 0` after every operation.
+**Statement:** Windows are anchored at the limiter's creation time, not at wall-clock multiples of `window_ms`. After construction, `window_start_ms = creation_ms`; thereafter `window_start_ms` advances only by integer multiples of the *current* `window_ms` (via `roll_window`). Consequence: at any point, `window_start_ms = anchor + k * window_ms` for some `k ≥ 0`, where `anchor` is the creation timestamp under the original `window_ms` (or, after a `reconfigure_fixed_window`, the position rolled forward under the previous `window_ms`).
 
-**Applies to:** [`FixedWindow`](contracts/utils/sources/rate_limiter.move#L51).
+`reconfigure_fixed_window` first runs `roll_window` under the OLD `window_ms` (preserving INV-S13), then installs the new config; subsequent advances use the new `window_ms` from the rolled-forward anchor.
+
+**Applies to:** `FixedWindow`.
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: every assignment to `window_start_ms` flows through `align_window`. Construction calls `align_window(now, window_ms)`; `try_consume` uses `align_window(now, window_ms)`; `reconfigure_fixed_window` uses `align_window(*, window_ms)` in both branches.
+- Runtime check: construction sets `window_start_ms = clock.timestamp_ms()` (no wall-clock alignment). `try_consume` and `reconfigure_fixed_window` both delegate window advance to `roll_window(window_start_ms, used, window_ms, now)`, which advances by `steps * window_ms` and resets `used = 0` if `steps > 0`.
 - Test: not explicit; verified indirectly through window-rollover tests.
 
-**Violation scenario:** Misaligned `window_start_ms` would cause off-by-some windows, allowing more than `capacity` consumes per real-world aligned window.
+**Violation scenario:** A wall-clock-aligned design (the previous behavior) makes the first window arbitrarily short — if the limiter is created at `t = 99` with `window_ms = 100`, the first window is only 1 ms long. The anchored design guarantees every window has length exactly `window_ms`. Misaligning `window_start_ms` (e.g. by setting it to a value that isn't `anchor + k * window_ms`) would let an attacker reset `used` more frequently than once per `window_ms`, exceeding INV-E2.
 
 **Severity:** High
 
@@ -294,7 +296,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: `try_consume` only writes when `aligned > window_start_ms`. Note: `reconfigure_fixed_window` may move `window_start_ms` *backward* in the widening case (see MISS-5) — by design, but the monotonicity invariant only holds across `try_consume`, not across reconfigure.
+- Runtime check: `try_consume` delegates to `roll_window`, which advances `window_start_ms` by `steps * window_ms` (always ≥ 0) and only writes when `steps > 0`. `reconfigure_fixed_window` also uses `roll_window` (under the OLD `window_ms`) and never moves `window_start_ms` backward. Monotonicity holds across both `try_consume` and `reconfigure_fixed_window`.
 - Test: implicit in window-rollover test.
 
 **Violation scenario:** Going backward inside `try_consume` would re-enter a window where capacity has already been spent.
@@ -328,11 +330,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 
 **Statement:** After accrual, `last_refill_ms ≡ original_last_refill_ms (mod refill_interval_ms)`. Sub-interval time elapsed but not yet credited is never discarded — it accrues toward the next step.
 
-**Applies to:** [`bucket_accrue`](contracts/utils/sources/rate_limiter.move#L318).
+**Applies to:** `bucket_accrue`.
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: advance is `steps * refill_interval_ms`, not `now - last_refill_ms`.
+- Runtime check: advance is `steps * refill_interval_ms` where `steps` is an integer step count (either `elapsed_steps` in the under-fill branch, or `q`/`q+1` in the fill-to-capacity branch). In every case, `last_refill_ms ≡ original (mod refill_interval_ms)`.
 - Test: missing (MISS-7).
 
 **Violation scenario:** If implemented as `last_refill_ms = now`, a caller spamming consumes faster than `refill_interval_ms` would forfeit fractional time on every call, dramatically reducing the effective refill rate.
@@ -459,18 +461,18 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 
 **Category:** State transition
 
-**Statement:** `reconfigure_fixed_window` checks `align_window(now, old_window_ms)` against the existing `window_start_ms` and resets `used = 0` if a new window has begun under the old rules — *before* the new `window_ms` is installed.
+**Statement:** `reconfigure_fixed_window` advances `window_start_ms` and resets `used = 0` according to the *previous* `window_ms` (any number of full old-window steps that have elapsed) *before* the new `window_ms` is installed. The new window grid then anchors at the rolled-forward `window_start_ms`.
 
-**Applies to:** [`reconfigure_fixed_window`](contracts/utils/sources/rate_limiter.move#L262).
+**Applies to:** `reconfigure_fixed_window`.
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: [`if (aligned > *window_start_ms) { *window_start_ms = aligned; *used = 0; }`](contracts/utils/sources/rate_limiter.move#L277-L283) where `aligned = align_window(now, window_ms)` — note: this uses the *new* `window_ms`. **This is a deviation from the stated invariant** — see MISS-5.
+- Runtime check: `roll_window(window_start_ms, used, *window_field, now)` is called inside the match arm — `*window_field` is read *before* the new `window_ms` overwrites it, so the roll uses the old window length.
 - Test: missing (MISS-8).
 
-**Violation scenario:** See MISS-5 for the actual current behavior.
+**Violation scenario:** Using the new `window_ms` for the rollover decision (the previous bug) could move `window_start_ms` backward when widening, carrying old-window usage into a wider new window — letting a fresh wider window admit only `capacity - used_under_old_window` of its budget on the first turn after reconfigure, surprising integrators and potentially breaking INV-E2's spirit across the reconfigure boundary.
 
-**Severity:** High — implementation does not strictly match the stated invariant; behavior is defensible but worth explicit documentation or fix.
+**Severity:** High
 
 ## Economic / Protocol Invariants
 
@@ -487,7 +489,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 - Runtime check: implied by INV-S1 + accrual formula.
 - Test: covered partially by [`bucket_starts_full_and_refills_over_time`](contracts/utils/tests/rate_limiter_tests.move#L12). No long-run / fuzzed test exists.
 
-**Violation scenario:** Over-issuance — the central economic guarantee a rate limiter exists to provide. Reachable today through MISS-1/MISS-2 (overflow).
+**Violation scenario:** Over-issuance — the central economic guarantee a rate limiter exists to provide. The previously reachable overflow paths (MISS-1, MISS-2) are now closed.
 
 **Severity:** Critical
 
@@ -506,7 +508,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants — `Buc
 - Runtime check: implied by INV-S2 + INV-S3.
 - Test: [`fixed_window_counts_per_window_and_resets_on_boundary`](contracts/utils/tests/rate_limiter_tests.move#L117).
 
-**Violation scenario:** Per-window cap exceeded. Reachable today through MISS-3 (overflow).
+**Violation scenario:** Per-window cap exceeded. The previously reachable overflow path (MISS-3) is now closed.
 
 **Severity:** Critical
 
@@ -619,20 +621,20 @@ All invariants in this artifact.
 - **Global / cross-limiter rate guarantees.** Each limiter is independent; no cross-limiter aggregate cap. Out of scope by design (INV-C1).
 - **Authorization / access control inside the module.** Delegated to the parent object holding the field (INV-T4). The module makes no claim about who *should* be allowed to call `&mut` paths.
 - **Clock authenticity.** The module trusts `&Clock`; it does not defend against a malicious shared-clock substitute (Sui's `Clock` is a singleton shared object, so this is a Sui-platform property).
-- **Upper bounds on `capacity`, `refill_amount`, `refill_interval_ms`, `window_ms`, `cooldown_ms` beyond positivity.** No documented upper bounds — see MISS-1/2/3 for the practical consequences.
+- **Upper bounds on `capacity`, `refill_amount`, `refill_interval_ms`, `window_ms`, `cooldown_ms` beyond positivity.** None — overflow safety is handled in the implementation (two-branch `bucket_accrue`, subtraction-form comparisons), so any positive `u64` config is accepted. Operators are expected to pick policy-meaningful values.
 - **Persistence of `RateLimiter` across object lifecycles.** When the parent object is destroyed, the limiter is dropped (`has drop`). Out of scope: any "frozen state" or "transferable consumption history" use case.
 
 ## Dev Notes
 
 - **Authorization model is the central design decision.** The limiter delegates 100% of access control to the holder of `&mut` to the parent field. This is what makes the primitive embeddable, registry-less, and PTB-friendly. Any future "shared rate limiter" feature would require fundamentally different primitives.
 - **Clock is assumed non-decreasing across calls.** The module silently absorbs backward clock movement (Bucket: no accrual; FixedWindow: keeps existing window; Cooldown: extends gate). This is conservative — the limiter never grants extra capacity on backward time — but it's not an explicit invariant in the code. Sui's `Clock` is monotonic in practice.
-- **Integer overflow surfaces are real on adversarial config.** MISS-1/2/3 are reachable. The code currently relies on operators choosing reasonable parameters. Fixing with saturating arithmetic or explicit clamping is straightforward and recommended.
-- **`reconfigure_fixed_window` widening behavior (MISS-5).** When `new_window_ms > old_window_ms` and `align_window(now, new_window_ms) ≤ window_start_ms`, the existing usage carries into a wider window whose start may have moved backward. Defensible but surprising; should be documented as intended behavior or changed to "always reset on widening".
+- **Overflow surfaces closed by implementation, not config bounds.** `bucket_accrue`'s two-branch structure bounds every intermediate product and sum by `capacity` (no upper bound on `capacity` or `refill_amount` required). Hot-path comparisons (`amount > capacity - used`, `now - last < cooldown_ms`) use subtraction so no addition can overflow. Configs only need positivity (INV-R1/R2/R3).
+- **Anchor-based windows.** `FixedWindow` windows are `[creation + k * window_ms, creation + (k+1) * window_ms)`. The first window always has length exactly `window_ms` (in the previous wall-clock-aligned design it could be arbitrarily short). On `reconfigure_fixed_window`, the new window grid anchors at the rolled-forward `window_start_ms` under the OLD `window_ms`.
 
 ## Open Questions
 
-1. **Should the overflow paths (MISS-1/2/3) be fixed with saturating arithmetic, with explicit upper-bound asserts on config, or both?** Saturation is invisible to consumers; asserts surface bad config at construction time.
-2. **Is the FixedWindow "widening absorbs prior usage" behavior (MISS-5) intended?** If yes, document it. If no, the fix is to always reset `used = 0` and `window_start_ms = align_window(now, new_window_ms)` on widening — at the cost of slightly different reconfigure semantics across narrow vs wide changes.
+1. ~~**Should the overflow paths (MISS-1/2/3) be fixed with saturating arithmetic, with explicit upper-bound asserts on config, or both?**~~ **Resolved (2026-05-06):** neither — `bucket_accrue` was rewritten so all products and sums are bounded by `capacity`, and `try_consume` comparisons were reformulated as subtraction. Configs remain positivity-only; any positive `u64` is accepted.
+2. ~~**Is the FixedWindow "widening absorbs prior usage" behavior (MISS-5) intended?**~~ **Resolved (2026-05-06):** windows are now anchored at creation time (INV-S3 rewritten); `reconfigure_fixed_window` rolls forward under the OLD `window_ms` before installing the new config, never moves `window_start_ms` backward.
 3. **Should `available()` for `Cooldown` return `1` or something else when ready?** Today it returns `1`. This is a tiny API surface choice — meaningful only for the `INV-E4` consistency property.
 4. **Should the variant guard pattern (`reconfigure_bucket` aborts on non-Bucket) be replaced with a "reconfigure_or_replace" that always works by overwriting?** Probably no — the abort makes the integrator's intent explicit. But worth noting as an alternative.
 
@@ -640,27 +642,29 @@ All invariants in this artifact.
 
 | ID | Severity | Stage to fix | Description |
 |---|---|---|---|
-| MISS-1 | Critical | Code Draft | `steps * refill_amount` can overflow u64 in `bucket_accrue`. Adversarial config (small `refill_interval_ms`, large `refill_amount`, long idle) reaches it. Fix: clamp `steps` or use saturating mul. |
-| MISS-2 | Critical | Code Draft | `tokens + steps * refill_amount` can overflow before `.min(capacity)` clips. Same root cause as MISS-1. |
-| MISS-3 | Critical | Code Draft | `*used + amount > *capacity` in `try_consume` can wrap when `amount` is near `u64::MAX` and `used` is non-zero. Fix: `amount > capacity - used`. |
-| MISS-4 | Low | Code Draft (optional) | `*last_used_ms.borrow() + *cooldown_ms` in Cooldown can overflow. Practically unreachable on Sui. |
-| MISS-5 | High | Code Draft (decision) | `reconfigure_fixed_window` may move `window_start_ms` backward when widening, absorbing prior usage. Document or change. |
+| MISS-1 | Critical | Code Draft | ✅ **Resolved.** `bucket_accrue` rewritten with two branches: under-fill (`elapsed_steps ≤ q`) bounds `elapsed_steps * refill_amount ≤ headroom ≤ capacity`; fill (`elapsed_steps > q`) writes `capacity` directly. No intermediate sum can exceed `capacity`. |
+| MISS-2 | Critical | Code Draft | ✅ **Resolved.** Follows from MISS-1 fix: `tokens + credit ≤ capacity` in the under-fill branch; the fill branch never computes the sum. |
+| MISS-3 | Critical | Code Draft | ✅ **Resolved.** `try_consume` for `FixedWindow` now uses `amount > *capacity - *used` (safe by INV-S2). |
+| MISS-4 | Low | Code Draft | ✅ **Resolved.** Cooldown gate reformulated to `now < last \|\| now - last < cooldown_ms` — pure subtraction, no addition, no overflow. |
+| MISS-5 | High | Code Draft | ✅ **Resolved.** `reconfigure_fixed_window` now calls `roll_window(.., *window_field, now)` with the OLD `window_ms` *before* installing the new config. Window grid is anchored to creation time (INV-S3 rewritten). |
 | MISS-6 | Medium | Tests | No test confirms `try_consume` is non-mutating on failure (INV-S7). |
 | MISS-7 | Medium | Tests | No test for fractional time preservation (INV-S6). |
 | MISS-8 | Medium | Tests | No test for "reconfigure under old rules first" (INV-S12, INV-S13). |
 | MISS-9 | Medium | Tests | No test for cooldown reconfigure preserving `last_used_ms`. |
 | MISS-10 | Medium | Tests | `EWrongVariant` paths for `reconfigure_fixed_window` and `reconfigure_cooldown` are untested. |
-| MISS-11 | Critical | Tests | No test for Bucket overflow paths (MISS-1/2). |
-| MISS-12 | Critical | Tests | No test for FixedWindow overflow path (MISS-3). |
+| MISS-11 | Critical | Tests | No test for Bucket fill-branch (MISS-1/2 fix) — verify `bucket_accrue` produces `capacity` after a long idle with extreme config (e.g. `capacity = u64::MAX`, `refill_amount = 1`, `refill_interval_ms = 1`). |
+| MISS-12 | Critical | Tests | No test for FixedWindow `try_consume(u64::MAX, ..)` returning `false` cleanly. |
 | MISS-13 | Low | Docs | Clock-non-monotonicity assumption is implicit, not documented. |
 | MISS-14 | Low | Docs | "Authorization is delegated to parent `&mut`" is the central design decision but isn't called out as such. |
+| MISS-15 | Medium | Tests | Anchor-based window behavior (INV-S3) — verify that a limiter created at non-zero clock has its first window length exactly `window_ms` (not truncated by wall-clock alignment, the prior behavior). |
 
-## Step-Back Suggestion (Optional)
+## Revision Log
 
-**Target stage:** Code Draft
-**Severity:** Critical — blocks production
-**Issue:** MISS-1, MISS-2, MISS-3 are reachable u64 overflow paths in the current implementation that can violate INV-E1 and INV-E2 (the central economic guarantees of the module). MISS-5 is an undocumented reconfigure behavior that may or may not be intended.
-**Current workaround:** This invariants document records the issues and severity. The code itself is unmodified.
-**Why step-back would be better:** The fixes are small (saturating arithmetic, one comparison rewrite) and belong in the Code Draft stage. Doing them now keeps the module's invariants enforceable end-to-end before tests are written against it.
+**2026-05-06** — Code-stage fixes applied to resolve MISS-1, MISS-2, MISS-3, MISS-4, MISS-5. Summary:
 
-The dev decides whether to act on this. Fixing MISS-1/2/3 in the source is the recommended next move.
+- `bucket_accrue` rewritten as a two-branch function: under-fill (`elapsed_steps ≤ q = headroom / refill_amount`) credits exactly `elapsed_steps * refill_amount`, bounded by `headroom ≤ capacity`; fill (`elapsed_steps > q`) writes `capacity` directly. All intermediate u64 products and sums stay bounded without any upper bound on `capacity` or `refill_amount`. Resolves MISS-1, MISS-2; preserves INV-S5, INV-S6, INV-E1.
+- `FixedWindow::try_consume` uses `amount > capacity - used` instead of `used + amount > capacity` (resolves MISS-3; preserves INV-S2).
+- `Cooldown` gate reformulated as `now < last || now - last < cooldown_ms` (resolves MISS-4; preserves INV-E3). No upper bound on `cooldown_ms` is needed for arithmetic safety.
+- INV-S3 redefined: windows are anchored at the limiter's creation timestamp, not aligned to wall-clock multiples of `window_ms`. `align_window` removed; new private helper `roll_window` advances `window_start_ms` by integer multiples of the current `window_ms`.
+- `reconfigure_fixed_window` now calls `roll_window` under the OLD `window_ms` before installing the new config (resolves MISS-5; matches INV-S13 statement).
+- Variant guard now precedes config validation in all three `reconfigure_*` paths (config asserts moved inside the matching match arm). Updates INV-R6.

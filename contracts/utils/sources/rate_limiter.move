@@ -7,7 +7,7 @@
 ///
 /// Three strategies are provided in one enum, all sharing the same API:
 /// - `Bucket` — continuously refilling token bucket with a configurable refill schedule,
-/// - `FixedWindow` — up to `capacity` units per aligned time window that resets on boundaries,
+/// - `FixedWindow` — up to `capacity` units per fixed-length window anchored at creation,
 /// - `Cooldown` — minimum elapsed time between consumes (amount is ignored).
 ///
 /// Typical lifecycle:
@@ -46,8 +46,8 @@ public enum RateLimiter has drop, store {
         last_refill_ms: u64,
         tokens: u64,
     },
-    /// Up to `capacity` units per aligned window of length `window_ms`. The counter resets
-    /// when `now` crosses into a later window boundary.
+    /// Up to `capacity` units per window of length `window_ms`, anchored at the limiter's
+    /// creation time. The counter resets when `now` crosses into a later window boundary.
     FixedWindow {
         capacity: u64,
         window_ms: u64,
@@ -101,13 +101,14 @@ public fun new_bucket_with_tokens(
     }
 }
 
-/// Create a fixed window limiter with its first window aligned to `now`.
+/// Create a fixed window limiter with its first window anchored at `now`. Subsequent
+/// windows are exactly `[now + k * window_ms, now + (k+1) * window_ms)` for `k >= 0`.
 public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateLimiter {
     assert_fixed_window_config!(capacity, window_ms);
     RateLimiter::FixedWindow {
         capacity,
         window_ms,
-        window_start_ms: align_window(clock.timestamp_ms(), window_ms),
+        window_start_ms: clock.timestamp_ms(),
         used: 0,
     }
 }
@@ -158,19 +159,18 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             true
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, used } => {
-            let aligned = align_window(now, *window_ms);
-            if (aligned > *window_start_ms) {
-                *window_start_ms = aligned;
-                *used = 0;
-            };
-            if (*used + amount > *capacity) return false;
+            roll_window(window_start_ms, used, *window_ms, now);
+            // INV-S2 holds (`used <= capacity`), so `capacity - used` never underflows.
+            // Reformulating as subtraction avoids the `used + amount` overflow path.
+            if (amount > *capacity - *used) return false;
             *used = *used + amount;
             true
         },
         RateLimiter::Cooldown { cooldown_ms, last_used_ms } => {
             // `amount` is meaningless to a cooldown: any call is an attempt to "fire".
-            if (last_used_ms.is_some() && now < *last_used_ms.borrow() + *cooldown_ms) {
-                return false
+            if (last_used_ms.is_some()) {
+                let last = *last_used_ms.borrow();
+                if (now < last || now - last < *cooldown_ms) return false;
             };
             *last_used_ms = option::some(now);
             true
@@ -204,10 +204,16 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
             t
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, used } => {
-            if (align_window(now, *window_ms) > *window_start_ms) *capacity else *capacity - *used
+            // A new window has begun once `window_ms` has elapsed since the current anchor.
+            if (now >= *window_start_ms && now - *window_start_ms >= *window_ms) *capacity
+            else *capacity - *used
         },
         RateLimiter::Cooldown { cooldown_ms, last_used_ms } => {
-            if (last_used_ms.is_none() || now >= *last_used_ms.borrow() + *cooldown_ms) 1 else 0
+            if (last_used_ms.is_none()) 1
+            else {
+                let last = *last_used_ms.borrow();
+                if (now >= last && now - last >= *cooldown_ms) 1 else 0
+            }
         },
     }
 }
@@ -226,7 +232,6 @@ public fun reconfigure_bucket(
     refill_interval_ms: u64,
     clock: &Clock,
 ) {
-    assert_bucket_config!(capacity, refill_amount, refill_interval_ms);
     let now = clock.timestamp_ms();
     match (self) {
         RateLimiter::Bucket {
@@ -236,6 +241,7 @@ public fun reconfigure_bucket(
             last_refill_ms,
             tokens,
         } => {
+            assert_bucket_config!(capacity, refill_amount, refill_interval_ms);
             let (new_last, new_tokens) = bucket_accrue(
                 *last_refill_ms,
                 *tokens,
@@ -265,7 +271,6 @@ public fun reconfigure_fixed_window(
     window_ms: u64,
     clock: &Clock,
 ) {
-    assert_fixed_window_config!(capacity, window_ms);
     let now = clock.timestamp_ms();
     match (self) {
         RateLimiter::FixedWindow {
@@ -274,13 +279,10 @@ public fun reconfigure_fixed_window(
             window_start_ms,
             used,
         } => {
-            let aligned = align_window(now, window_ms);
-            if (aligned > *window_start_ms) {
-                *window_start_ms = aligned;
-                *used = 0;
-            } else {
-                *window_start_ms = align_window(*window_start_ms, window_ms);
-            };
+            assert_fixed_window_config!(capacity, window_ms);
+            // roll forward under the OLD `window_ms` first; the new config takes
+            // effect from the rolled-forward anchor going forward.
+            roll_window(window_start_ms, used, *window_field, now);
             *cap_field = capacity;
             *window_field = window_ms;
             *used = (*used).min(capacity);
@@ -293,9 +295,9 @@ public fun reconfigure_fixed_window(
 ///
 /// Aborts with `EWrongVariant` if the limiter is not currently a `Cooldown`.
 public fun reconfigure_cooldown(self: &mut RateLimiter, cooldown_ms: u64) {
-    assert!(cooldown_ms > 0, EInvalidConfig);
     match (self) {
         RateLimiter::Cooldown { cooldown_ms: cd_field, last_used_ms: _ } => {
+            assert!(cooldown_ms > 0, EInvalidConfig);
             *cd_field = cooldown_ms;
         },
         _ => abort EWrongVariant,
@@ -305,9 +307,11 @@ public fun reconfigure_cooldown(self: &mut RateLimiter, cooldown_ms: u64) {
 // === Private ===
 
 macro fun assert_bucket_config($capacity: u64, $refill_amount: u64, $refill_interval_ms: u64) {
-    assert!($capacity > 0, EInvalidConfig);
+    let capacity = $capacity;
+    assert!(capacity > 0, EInvalidConfig);
     assert!($refill_amount > 0, EInvalidConfig);
     assert!($refill_interval_ms > 0, EInvalidConfig);
+    assert!(capacity.checked_add($refill_amount).is_some(), EInvalidConfig);
 }
 
 macro fun assert_fixed_window_config($capacity: u64, $window_ms: u64) {
@@ -324,11 +328,38 @@ fun bucket_accrue(
     now: u64,
 ): (u64, u64) {
     if (now <= last_refill_ms) return (last_refill_ms, tokens);
-    let steps = (now - last_refill_ms) / refill_interval_ms;
-    if (steps == 0) return (last_refill_ms, tokens);
-    (last_refill_ms + steps * refill_interval_ms, capacity.min(tokens + steps * refill_amount))
+    let elapsed_steps = (now - last_refill_ms) / refill_interval_ms;
+    if (elapsed_steps == 0) return (last_refill_ms, tokens);
+    // Two branches keep all intermediate u64 products and sums bounded without relying on
+    // upper bounds on `capacity` or `refill_amount`:
+    //   * Under-fill: `elapsed_steps * refill_amount <= q * refill_amount <= headroom <= capacity`,
+    //     so `tokens + credit <= capacity`. No overflow.
+    //   * Fill: write `capacity` directly; advance `last_refill_ms` by `steps * refill_interval_ms`
+    //     where `steps <= elapsed_steps`, bounded by `now - last_refill_ms`.
+    // INV-S6 holds either way: `last_refill_ms` advances by an integer multiple of
+    // `refill_interval_ms`.
+    let headroom = capacity - tokens;
+    let q = headroom / refill_amount;
+    if (elapsed_steps <= q) {
+        let credit = elapsed_steps * refill_amount;
+        (last_refill_ms + elapsed_steps * refill_interval_ms, tokens + credit)
+    } else {
+        // Smallest step count that reaches capacity: `q` if exactly divisible, `q + 1`
+        // otherwise. `q + 1` cannot overflow: `q <= elapsed_steps - 1 < u64::MAX`.
+        let steps = if (headroom == q * refill_amount) q else q + 1;
+        (last_refill_ms + steps * refill_interval_ms, capacity)
+    }
 }
 
-fun align_window(now: u64, window_ms: u64): u64 {
-    now - (now % window_ms)
+/// Advance `window_start_ms` by integer multiples of `window_ms` until it sits within the
+/// current window, resetting `used` if any advance occurred. With the anchor-based design,
+/// this preserves `window_start_ms = creation_ms (mod window_ms)` (INV-S3) and monotonicity
+/// (INV-S4). `steps * window_ms <= now - *window_start_ms`, so the new value never exceeds
+/// `now` and can't overflow `u64`.
+fun roll_window(window_start_ms: &mut u64, used: &mut u64, window_ms: u64, now: u64) {
+    if (now <= *window_start_ms) return;
+    let steps = (now - *window_start_ms) / window_ms;
+    if (steps == 0) return;
+    *window_start_ms = *window_start_ms + steps * window_ms;
+    *used = 0;
 }
