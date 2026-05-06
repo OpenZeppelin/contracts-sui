@@ -819,6 +819,39 @@ fun cooldown_reconfigure_clamps_available_to_new_capacity() {
     test.end();
 }
 
+#[test]
+fun cooldown_reconfigure_rearms_when_drained_and_deadline_elapsed() {
+    // When `available == 0` and the prior `cooldown_end_ms` has already elapsed,
+    // `reconfigure_cooldown` arms a fresh deadline at `now + cooldown_ms` instead of
+    // letting the next `try_consume` reset to capacity for free.
+    let mut test = test_scenario::begin(@0x1);
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(0);
+
+    let mut rl = rate_limiter::new_cooldown(1, 50);
+    assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 50, available = 0
+
+    // Let the original cooldown elapse naturally without consuming.
+    clk.set_for_testing(60);
+    assert_eq!(rl.available(&clk), 1); // gate has released
+
+    // Reconfigure now: available is still 0 in storage, deadline (50) has passed.
+    // The re-arm path should set a fresh cooldown_end_ms = 60 + 100 = 160.
+    rl.reconfigure_cooldown(1, 100, &clk);
+    assert_eq!(rl.available(&clk), 0);
+
+    // Just before the new deadline: still gated.
+    clk.set_for_testing(159);
+    assert!(!rl.try_consume(1, &clk));
+
+    // At the new deadline: gate releases.
+    clk.set_for_testing(160);
+    assert!(rl.try_consume(1, &clk));
+
+    clk.destroy_for_testing();
+    test.end();
+}
+
 // === FixedWindow reconfigure clamps `used` (INV-S11) ===
 
 #[test]
