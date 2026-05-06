@@ -112,6 +112,8 @@ public enum RateLimiter has drop, store {
     },
 }
 
+// === Public Functions ===
+
 // === Constructors ===
 
 /// Create a token bucket with an explicit initial token balance.
@@ -210,7 +212,7 @@ public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
 /// - `EInvalidAmount` if `amount == 0`.
 /// - `ERateLimited` if the limiter cannot satisfy the request.
 public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) {
-    assert!(try_consume(self, amount, clock), ERateLimited);
+    assert!(self.try_consume(amount, clock), ERateLimited);
 }
 
 /// Apply accrual, then consume `amount` if the limiter allows it.
@@ -467,7 +469,7 @@ public fun reconfigure_cooldown(
     }
 }
 
-// === Private ===
+// === Private Functions ===
 
 macro fun assert_bucket_config($capacity: u64, $refill_amount: u64, $refill_interval_ms: u64) {
     assert!($capacity > 0, EZeroCapacity);
