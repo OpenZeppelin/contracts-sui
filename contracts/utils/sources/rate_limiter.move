@@ -34,12 +34,21 @@ use sui::clock::Clock;
 
 // === Errors ===
 
+/// The limiter cannot satisfy the requested consume against its current state.
 #[error(code = 0)]
 const ERateLimited: vector<u8> = "Rate limited";
+
+/// Configuration is invalid: a required field is zero, or `initial_available` exceeds
+/// `capacity`.
 #[error(code = 1)]
 const EInvalidConfig: vector<u8> = "Invalid config";
+
+/// Reconfigure target does not match the limiter's current variant.
 #[error(code = 2)]
 const EWrongVariant: vector<u8> = "Wrong rate limiter variant";
+
+/// Consume amount must be greater than zero; a zero-unit consume is a programmer error,
+/// not a rate-limit decision.
 #[error(code = 3)]
 const EInvalidAmount: vector<u8> = "Amount must be greater than zero";
 
