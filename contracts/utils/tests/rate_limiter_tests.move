@@ -15,7 +15,7 @@ fun bucket_starts_full_and_refills_over_time() {
     clk.set_for_testing(0);
 
     // Create a bucket with capacity 30, refilling 5 every 10 ms.
-    let mut rl = rate_limiter::new_bucket(30, 5, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(30, 5, 10, 30, &clk);
     assert_eq!(rl.available(&clk), 30);
 
     // Consuming 20 leaves 10 tokens.
@@ -41,7 +41,7 @@ fun bucket_with_tokens_can_start_empty_and_accrue() {
     clk.set_for_testing(0);
 
     // Start empty: no headroom until the first refill interval elapses.
-    let mut rl = rate_limiter::new_bucket_with_tokens(10, 2, 5, 0, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 2, 5, 0, &clk);
     assert_eq!(rl.available(&clk), 0);
     assert!(!rl.try_consume(1, &clk));
 
@@ -59,7 +59,7 @@ fun bucket_with_tokens_rejects_initial_above_capacity() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    rate_limiter::new_bucket_with_tokens(10, 1, 10, 11, &clk);
+    rate_limiter::new_bucket(10, 1, 10, 11, &clk);
 
     clk.destroy_for_testing();
     test.end();
@@ -71,7 +71,7 @@ fun bucket_try_consume_returns_false_when_empty() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 100, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 100, 10, &clk);
     assert!(rl.try_consume(10, &clk));
     // No refill has happened yet, so the next consume fails without aborting.
     assert!(!rl.try_consume(1, &clk));
@@ -86,7 +86,7 @@ fun bucket_consume_or_abort_aborts_when_empty() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_bucket(5, 1, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(5, 1, 10, 5, &clk);
     rl.consume_or_abort(10, &clk);
 
     clk.destroy_for_testing();
@@ -100,7 +100,7 @@ fun bucket_reconfigure_clamps_tokens_to_new_capacity() {
     clk.set_for_testing(0);
 
     // Bucket at full capacity 100.
-    let mut rl = rate_limiter::new_bucket(100, 10, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(100, 10, 10, 100, &clk);
     assert_eq!(rl.available(&clk), 100);
 
     // Shrink capacity to 40; stored tokens must be clamped down.
@@ -218,7 +218,7 @@ fun try_consume_with_zero_amount_aborts() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.try_consume(0, &clk);
 
     clk.destroy_for_testing();
@@ -247,7 +247,7 @@ fun reconfigure_fixed_window_on_non_fixed_window_aborts() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.reconfigure_fixed_window(5, 100, &clk);
 
     clk.destroy_for_testing();
@@ -261,7 +261,7 @@ fun reconfigure_cooldown_on_non_cooldown_aborts() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.reconfigure_cooldown(1, 50, &clk);
 
     clk.destroy_for_testing();
@@ -305,7 +305,7 @@ fun reconfigure_cooldown_priority_variant_over_invalid_config() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.reconfigure_cooldown(0, 0, &clk);
 
     clk.destroy_for_testing();
@@ -321,7 +321,7 @@ fun new_bucket_rejects_zero_capacity() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    rate_limiter::new_bucket(0, 1, 1, &clk);
+    rate_limiter::new_bucket(0, 1, 1, 0, &clk);
 
     clk.destroy_for_testing();
     test.end();
@@ -334,7 +334,7 @@ fun new_bucket_rejects_zero_refill_amount() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    rate_limiter::new_bucket(10, 0, 1, &clk);
+    rate_limiter::new_bucket(10, 0, 1, 10, &clk);
 
     clk.destroy_for_testing();
     test.end();
@@ -347,7 +347,7 @@ fun new_bucket_rejects_zero_refill_interval_ms() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    rate_limiter::new_bucket(10, 1, 0, &clk);
+    rate_limiter::new_bucket(10, 1, 0, 10, &clk);
 
     clk.destroy_for_testing();
     test.end();
@@ -360,7 +360,7 @@ fun new_bucket_rejects_capacity_plus_refill_overflow() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    rate_limiter::new_bucket(18446744073709551615, 1, 1, &clk);
+    rate_limiter::new_bucket(18446744073709551615, 1, 1, 18446744073709551615, &clk);
 
     clk.destroy_for_testing();
     test.end();
@@ -412,7 +412,7 @@ fun reconfigure_bucket_rejects_zero_capacity() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.reconfigure_bucket(0, 1, 1, &clk);
 
     clk.destroy_for_testing();
@@ -456,7 +456,7 @@ fun bucket_failed_try_consume_does_not_drain_state() {
     clk.set_for_testing(0);
 
     // Long refill interval keeps accrual out of the picture.
-    let mut rl = rate_limiter::new_bucket(10, 1, 1_000_000, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 1_000_000, 10, &clk);
     rl.consume_or_abort(5, &clk);
     assert_eq!(rl.available(&clk), 5);
 
@@ -524,7 +524,7 @@ fun bucket_preserves_subinterval_time_across_consumes() {
     clk.set_for_testing(0);
 
     // Refill 1 token every 10 ms, starting empty.
-    let mut rl = rate_limiter::new_bucket_with_tokens(10, 1, 10, 0, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, &clk);
 
     // 15 ms elapsed → exactly 1 token credited; 5 ms of fractional time must carry over.
     clk.set_for_testing(15);
@@ -549,7 +549,7 @@ fun bucket_reconfigure_accrues_under_old_rate_first() {
     clk.set_for_testing(0);
 
     // Old rate: 10 tokens / 10 ms, starting empty.
-    let mut rl = rate_limiter::new_bucket_with_tokens(100, 10, 10, 0, &clk);
+    let mut rl = rate_limiter::new_bucket(100, 10, 10, 0, &clk);
 
     // 50 ms elapsed → under OLD rate, 5 steps × 10 = 50 tokens accrued.
     clk.set_for_testing(50);
@@ -627,7 +627,7 @@ fun bucket_no_overflow_with_huge_refill_amount() {
     // u64 at modest elapsed counts; the fill branch in `bucket_accrue` writes
     // `capacity` directly without computing the product.
     let huge_refill = 1_000_000_000_000_000_000;
-    let rl = rate_limiter::new_bucket_with_tokens(1_000_000, huge_refill, 1, 0, &clk);
+    let rl = rate_limiter::new_bucket(1_000_000, huge_refill, 1, 0, &clk);
 
     clk.set_for_testing(20);
     assert_eq!(rl.available(&clk), 1_000_000);
@@ -645,7 +645,7 @@ fun bucket_no_overflow_under_extreme_clock_advance() {
     // capacity = u64::MAX - 1 (the largest value passing `capacity + refill_amount`
     // overflow check with refill_amount = 1).
     let cap = 18446744073709551614;
-    let rl = rate_limiter::new_bucket_with_tokens(cap, 1, 1, 0, &clk);
+    let rl = rate_limiter::new_bucket(cap, 1, 1, 0, &clk);
 
     // elapsed_steps ≈ u64::MAX → fill branch must produce `capacity` without overflow.
     clk.set_for_testing(18446744073709551615);
@@ -712,7 +712,7 @@ fun bucket_available_predicts_try_consume() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(50);
 
-    let mut rl = rate_limiter::new_bucket(20, 5, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(20, 5, 10, 20, &clk);
     let avail = rl.available(&clk);
     assert_eq!(avail, 20);
     assert!(rl.try_consume(avail, &clk));
