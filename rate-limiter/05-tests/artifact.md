@@ -38,13 +38,12 @@ Extends the existing 11-test file at [contracts/utils/tests/rate_limiter_tests.m
 
 | Test Name | Invariant(s) | Type | What It Verifies |
 |---|---|---|---|
-| `new_bucket_rejects_zero_capacity` | INV-R1 | Failure | `capacity = 0` aborts `EInvalidConfig` |
-| `new_bucket_rejects_zero_refill_amount` | INV-R1 | Failure | `refill_amount = 0` aborts |
-| `new_bucket_rejects_zero_refill_interval_ms` | INV-R1 | Failure | `refill_interval_ms = 0` aborts |
-| `new_bucket_rejects_capacity_plus_refill_overflow` | INV-R1 | Boundary/Failure | `capacity + refill_amount` overflow aborts |
-| `new_fixed_window_rejects_zero_capacity` | INV-R2 | Failure | `capacity = 0` aborts |
-| `new_fixed_window_rejects_zero_window_ms` | INV-R2 | Failure | `window_ms = 0` aborts |
-| `new_cooldown_rejects_zero_cooldown_ms` | INV-R3 | Failure | `cooldown_ms = 0` aborts |
+| `new_bucket_rejects_zero_capacity` | INV-R1 | Failure | `capacity = 0` aborts `EZeroCapacity` |
+| `new_bucket_rejects_zero_refill_amount` | INV-R1 | Failure | `refill_amount = 0` aborts `EZeroRefillAmount` |
+| `new_bucket_rejects_zero_refill_interval_ms` | INV-R1 | Failure | `refill_interval_ms = 0` aborts `EZeroRefillInterval` |
+| `new_fixed_window_rejects_zero_capacity` | INV-R2 | Failure | `capacity = 0` aborts `EZeroCapacity` |
+| `new_fixed_window_rejects_zero_window_ms` | INV-R2 | Failure | `window_ms = 0` aborts `EZeroWindowMs` |
+| `new_cooldown_rejects_zero_cooldown_ms` | INV-R3 | Failure | `cooldown_ms = 0` aborts `EZeroCooldownMs` |
 | `reconfigure_fixed_window_on_non_fixed_window_aborts` | INV-R6, INV-T2, INV-S10, MISS-10 | Failure | Wrong-variant call → `EWrongVariant` |
 | `reconfigure_cooldown_on_non_cooldown_aborts` | INV-R6, INV-T2, INV-S10, MISS-10 | Failure | Wrong-variant call → `EWrongVariant` |
 | `reconfigure_bucket_priority_variant_over_invalid_config` | INV-R6 | Failure | Variant check precedes config check |
@@ -81,7 +80,7 @@ Legend: ✅ = covered (test name listed), — = enforced by type system / not di
 | **INV-T2** Variant exclusivity | — | ✅ `reconfigure_bucket_on_non_bucket_aborts`, `reconfigure_fixed_window_on_non_fixed_window_aborts`, `reconfigure_cooldown_on_non_cooldown_aborts` | — |
 | **INV-T3** Read-only `available()` | 🟡 `&RateLimiter` signature | — | — |
 | **INV-T4** Mutation requires `&mut` | 🟡 signatures | — | — |
-| **INV-R1** Bucket config positivity | ✅ `new_bucket_rejects_capacity_plus_refill_overflow` | ✅ `new_bucket_rejects_zero_{capacity,refill_amount,refill_interval_ms}`, `reconfigure_bucket_rejects_zero_capacity` | — |
+| **INV-R1** Bucket config positivity | — | ✅ `new_bucket_rejects_zero_{capacity,refill_amount,refill_interval_ms}`, `reconfigure_bucket_rejects_zero_capacity` | — |
 | **INV-R2** FixedWindow config positivity | — | ✅ `new_fixed_window_rejects_zero_capacity`, `new_fixed_window_rejects_zero_window_ms`, `reconfigure_fixed_window_rejects_zero_window_ms` | — |
 | **INV-R3** Cooldown config positivity | — | ✅ `new_cooldown_rejects_zero_cooldown_ms`, `reconfigure_cooldown_rejects_zero_cooldown_ms` | — |
 | **INV-R4** Initial tokens bounded | — | ✅ `bucket_with_tokens_rejects_initial_above_capacity` | — |
@@ -115,7 +114,7 @@ Legend: ✅ = covered (test name listed), — = enforced by type system / not di
 - **Failure-path verification.** For INV-S7, the cleanest pattern is "ask for more than allowed, then ask for exactly the allowed amount and confirm it succeeds." This proves the failure case didn't drain state without needing to reach into private fields.
 - **Reconfigure-under-old-rules tests** distinguish the correct behavior from the most plausible bug (using new config retroactively / new `window_ms` for rollover) by choosing config values where the expected and incorrect outcomes differ by a wide margin.
 - **Anchor-based window** test is constructed at `t = 99` with `window_ms = 100`. The previous wall-clock-aligned design would have rolled at `t = 100`; the anchored design holds the first window until `t = 199`. The test asserts the anchored behavior at four distinct timestamps to lock in the semantics.
-- **Variant-guard priority** is tested by combining a wrong variant with a config that would also trip `EInvalidConfig`. Whichever check fires first determines the abort code, and the test fixes that on `EWrongVariant`.
+- **Variant-guard priority** is tested by combining a wrong variant with a config that would also trip a config-validation error. Whichever check fires first determines the abort code, and the test fixes that on `EWrongVariant`.
 
 ## Out of Scope
 

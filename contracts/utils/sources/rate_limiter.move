@@ -38,10 +38,9 @@ use sui::clock::Clock;
 #[error(code = 0)]
 const ERateLimited: vector<u8> = "Rate limited";
 
-/// Configuration is invalid: a required field is zero, or `initial_available` exceeds
-/// `capacity`.
+/// `capacity` must be greater than zero.
 #[error(code = 1)]
-const EInvalidConfig: vector<u8> = "Invalid config";
+const EZeroCapacity: vector<u8> = "capacity must be greater than zero";
 
 /// Reconfigure target does not match the limiter's current variant.
 #[error(code = 2)]
@@ -51,6 +50,26 @@ const EWrongVariant: vector<u8> = "Wrong rate limiter variant";
 /// not a rate-limit decision.
 #[error(code = 3)]
 const EInvalidAmount: vector<u8> = "Amount must be greater than zero";
+
+/// `refill_amount` must be greater than zero.
+#[error(code = 4)]
+const EZeroRefillAmount: vector<u8> = "refill_amount must be greater than zero";
+
+/// `refill_interval_ms` must be greater than zero (zero would also divide by zero on accrual).
+#[error(code = 5)]
+const EZeroRefillInterval: vector<u8> = "refill_interval_ms must be greater than zero";
+
+/// `window_ms` must be greater than zero (zero would also divide by zero on rollover).
+#[error(code = 6)]
+const EZeroWindowMs: vector<u8> = "window_ms must be greater than zero";
+
+/// `cooldown_ms` must be greater than zero.
+#[error(code = 7)]
+const EZeroCooldownMs: vector<u8> = "cooldown_ms must be greater than zero";
+
+/// `initial_available` must not exceed `capacity`.
+#[error(code = 8)]
+const EInitialAboveCapacity: vector<u8> = "initial_available must not exceed capacity";
 
 // === Structs ===
 
@@ -109,7 +128,7 @@ public fun new_bucket(
     clock: &Clock,
 ): RateLimiter {
     assert_bucket_config!(capacity, refill_amount, refill_interval_ms);
-    assert!(initial_available <= capacity, EInvalidConfig);
+    assert!(initial_available <= capacity, EInitialAboveCapacity);
     RateLimiter::Bucket {
         capacity,
         refill_amount,
@@ -360,19 +379,19 @@ public fun reconfigure_cooldown(
 // === Private ===
 
 macro fun assert_bucket_config($capacity: u64, $refill_amount: u64, $refill_interval_ms: u64) {
-    assert!($capacity > 0, EInvalidConfig);
-    assert!($refill_amount > 0, EInvalidConfig);
-    assert!($refill_interval_ms > 0, EInvalidConfig);
+    assert!($capacity > 0, EZeroCapacity);
+    assert!($refill_amount > 0, EZeroRefillAmount);
+    assert!($refill_interval_ms > 0, EZeroRefillInterval);
 }
 
 macro fun assert_fixed_window_config($capacity: u64, $window_ms: u64) {
-    assert!($capacity > 0, EInvalidConfig);
-    assert!($window_ms > 0, EInvalidConfig);
+    assert!($capacity > 0, EZeroCapacity);
+    assert!($window_ms > 0, EZeroWindowMs);
 }
 
 macro fun assert_cooldown_config($capacity: u64, $cooldown_ms: u64) {
-    assert!($capacity > 0, EInvalidConfig);
-    assert!($cooldown_ms > 0, EInvalidConfig);
+    assert!($capacity > 0, EZeroCapacity);
+    assert!($cooldown_ms > 0, EZeroCooldownMs);
 }
 
 fun bucket_accrue(

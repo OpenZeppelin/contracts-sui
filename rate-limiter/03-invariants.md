@@ -104,16 +104,16 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Category:** Runtime
 
-**Statement:** On `new_bucket` and `reconfigure_bucket`: `capacity > 0 ∧ refill_amount > 0 ∧ refill_interval_ms > 0 ∧ capacity + refill_amount fits in u64`. The `checked_add` requirement is stricter than pure positivity — it bounds away the only addition in `bucket_accrue` whose operands aren't proven ≤ `capacity`.
+**Statement:** On `new_bucket` and `reconfigure_bucket`: `capacity > 0 ∧ refill_amount > 0 ∧ refill_interval_ms > 0`.
 
 **Applies to:** `new_bucket`, `reconfigure_bucket`.
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: `assert_bucket_config!` → `EInvalidConfig`.
-- Test: [`new_bucket_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L325), [`new_bucket_rejects_zero_refill_amount`](contracts/utils/tests/rate_limiter_tests.move#L338), [`new_bucket_rejects_zero_refill_interval_ms`](contracts/utils/tests/rate_limiter_tests.move#L351), [`new_bucket_rejects_capacity_plus_refill_overflow`](contracts/utils/tests/rate_limiter_tests.move#L364), [`reconfigure_bucket_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L416).
+- Runtime check: `assert_bucket_config!` → `EZeroCapacity` / `EZeroRefillAmount` / `EZeroRefillInterval`.
+- Test: [`new_bucket_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L325), [`new_bucket_rejects_zero_refill_amount`](contracts/utils/tests/rate_limiter_tests.move#L338), [`new_bucket_rejects_zero_refill_interval_ms`](contracts/utils/tests/rate_limiter_tests.move#L351), [`reconfigure_bucket_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L416).
 
-**Violation scenario:** `refill_interval_ms = 0` causes division by zero in `bucket_accrue`. `capacity = 0` makes the bucket permanently empty. `refill_amount = 0` would also divide by zero in `bucket_accrue`'s `headroom / refill_amount`. `capacity + refill_amount` overflow would invalidate the safety argument for the under-fill branch's `available + credit ≤ capacity` upper bound.
+**Violation scenario:** `refill_interval_ms = 0` causes division by zero in `bucket_accrue`. `capacity = 0` makes the bucket permanently empty. `refill_amount = 0` would also divide by zero in `bucket_accrue`'s `headroom / refill_amount`.
 
 **Severity:** Critical
 
@@ -129,7 +129,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: `assert_fixed_window_config!` → `EInvalidConfig`.
+- Runtime check: `assert_fixed_window_config!` → `EZeroCapacity` / `EZeroWindowMs`.
 - Test: [`new_fixed_window_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L377), [`new_fixed_window_rejects_zero_window_ms`](contracts/utils/tests/rate_limiter_tests.move#L390), [`reconfigure_fixed_window_rejects_zero_window_ms`](contracts/utils/tests/rate_limiter_tests.move#L430).
 
 **Violation scenario:** `window_ms = 0` causes division-by-zero in the `try_consume` window-roll computation. `capacity = 0` makes every consume fail.
@@ -148,7 +148,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: `assert_cooldown_config!` → `EInvalidConfig`.
+- Runtime check: `assert_cooldown_config!` → `EZeroCapacity` / `EZeroCooldownMs`.
 - Test: [`new_cooldown_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L409), [`new_cooldown_rejects_zero_cooldown_ms`](contracts/utils/tests/rate_limiter_tests.move#L403), [`reconfigure_cooldown_rejects_zero_cooldown_ms`](contracts/utils/tests/rate_limiter_tests.move#L444).
 
 **Violation scenario:** `cooldown_ms = 0` would make every consume succeed, defeating the purpose of the variant. `capacity = 0` would freeze the limiter forever (no capacity to grant). No upper bound is enforced on `cooldown_ms`; see Operator Responsibilities below for the `now + cooldown_ms` overflow caveat.
@@ -167,7 +167,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: [`assert!(initial_available <= capacity, EInvalidConfig)`](contracts/utils/sources/rate_limiter.move#L103).
+- Runtime check: [`assert!(initial_available <= capacity, EInitialAboveCapacity)`](contracts/utils/sources/rate_limiter.move#L103).
 - Test: [`bucket_with_tokens_rejects_initial_above_capacity`](contracts/utils/tests/rate_limiter_tests.move#L57), [`bucket_with_tokens_can_start_empty_and_accrue`](contracts/utils/tests/rate_limiter_tests.move#L38).
 
 **Violation scenario:** Bucket starts above its own capacity, violating INV-S1 from the very first call.

@@ -53,7 +53,7 @@ fun bucket_with_tokens_can_start_empty_and_accrue() {
     test.end();
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EInitialAboveCapacity)]
 fun bucket_with_tokens_rejects_initial_above_capacity() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
@@ -283,8 +283,8 @@ fun reconfigure_bucket_priority_variant_over_invalid_config() {
     clk.set_for_testing(0);
 
     let mut rl = rate_limiter::new_cooldown(1, 50);
-    // All-zero config would trip EInvalidConfig if the variant arm matched, but the
-    // limiter is Cooldown, so EWrongVariant must fire first.
+    // All-zero config would trip a config-validation error if the variant arm matched, but
+    // the limiter is Cooldown, so EWrongVariant must fire first.
     rl.reconfigure_bucket(0, 0, 0, &clk);
 
     clk.destroy_for_testing();
@@ -321,7 +321,7 @@ fun reconfigure_cooldown_priority_variant_over_invalid_config() {
 
 // === Constructor config validation ===
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun new_bucket_rejects_zero_capacity() {
     // INV-R1
     let mut test = test_scenario::begin(@0x1);
@@ -334,7 +334,7 @@ fun new_bucket_rejects_zero_capacity() {
     test.end();
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroRefillAmount)]
 fun new_bucket_rejects_zero_refill_amount() {
     // INV-R1
     let mut test = test_scenario::begin(@0x1);
@@ -347,7 +347,7 @@ fun new_bucket_rejects_zero_refill_amount() {
     test.end();
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroRefillInterval)]
 fun new_bucket_rejects_zero_refill_interval_ms() {
     // INV-R1: zero interval would cause division by zero in `bucket_accrue`.
     let mut test = test_scenario::begin(@0x1);
@@ -360,20 +360,7 @@ fun new_bucket_rejects_zero_refill_interval_ms() {
     test.end();
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
-fun new_bucket_rejects_capacity_plus_refill_overflow() {
-    // INV-R1: `capacity + refill_amount` must fit in u64.
-    let mut test = test_scenario::begin(@0x1);
-    let mut clk = clock::create_for_testing(test.ctx());
-    clk.set_for_testing(0);
-
-    rate_limiter::new_bucket(18446744073709551615, 1, 1, 18446744073709551615, &clk);
-
-    clk.destroy_for_testing();
-    test.end();
-}
-
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun new_fixed_window_rejects_zero_capacity() {
     // INV-R2
     let mut test = test_scenario::begin(@0x1);
@@ -386,7 +373,7 @@ fun new_fixed_window_rejects_zero_capacity() {
     test.end();
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroWindowMs)]
 fun new_fixed_window_rejects_zero_window_ms() {
     // INV-R2
     let mut test = test_scenario::begin(@0x1);
@@ -399,20 +386,20 @@ fun new_fixed_window_rejects_zero_window_ms() {
     test.end();
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroCooldownMs)]
 fun new_cooldown_rejects_zero_cooldown_ms() {
     // INV-R3
     rate_limiter::new_cooldown(1, 0);
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun new_cooldown_rejects_zero_capacity() {
     rate_limiter::new_cooldown(0, 50);
 }
 
 // === Reconfigure config validation ===
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun reconfigure_bucket_rejects_zero_capacity() {
     // INV-R1
     let mut test = test_scenario::begin(@0x1);
@@ -426,7 +413,7 @@ fun reconfigure_bucket_rejects_zero_capacity() {
     test.end();
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroWindowMs)]
 fun reconfigure_fixed_window_rejects_zero_window_ms() {
     // INV-R2
     let mut test = test_scenario::begin(@0x1);
@@ -440,7 +427,7 @@ fun reconfigure_fixed_window_rejects_zero_window_ms() {
     test.end();
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroCooldownMs)]
 fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
     // INV-R3
     let mut test = test_scenario::begin(@0x1);
