@@ -175,37 +175,44 @@ fun cooldown_accumulates_used_until_capacity_then_gates() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    // Capacity 5: consumes accumulate `used` until it hits 5, then the cooldown gates.
+    // Capacity 5: each attempt increments `used` by 1 regardless of `amount`,
+    // until `used == 5`, then the cooldown gates.
     let mut rl = rate_limiter::new_cooldown(5, 50);
     assert!(rl.try_consume(2, &clk));
-    assert_eq!(rl.available(&clk), 3);
+    assert_eq!(rl.available(&clk), 4);
     assert!(rl.try_consume(3, &clk));
-    // `used == capacity` — gate is now armed.
+    assert_eq!(rl.available(&clk), 3);
+    assert!(rl.try_consume(100, &clk));
+    assert!(rl.try_consume(1, &clk));
+    assert!(rl.try_consume(1, &clk));
+    // 5 attempts done — gate is now armed.
     assert_eq!(rl.available(&clk), 0);
     assert!(!rl.try_consume(1, &clk));
 
     // After cooldown elapses, the budget resets to full capacity.
     clk.set_for_testing(50);
     assert_eq!(rl.available(&clk), 5);
-    assert!(rl.try_consume(5, &clk));
-    assert_eq!(rl.available(&clk), 0);
+    assert!(rl.try_consume(1, &clk));
+    assert_eq!(rl.available(&clk), 4);
 
     clk.destroy_for_testing();
     test.end();
 }
 
 #[test]
-fun cooldown_rejects_amount_exceeding_remaining_capacity() {
+fun cooldown_amount_does_not_affect_used() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
+    // `used` tracks attempts, not `amount`. A try_consume with a huge amount still
+    // only increments `used` by 1.
     let mut rl = rate_limiter::new_cooldown(3, 50);
-    assert!(rl.try_consume(2, &clk));
-    // Only 1 unit of headroom; a request for 2 must be rejected without changing state.
-    assert!(!rl.try_consume(2, &clk));
-    assert_eq!(rl.available(&clk), 1);
+    assert!(rl.try_consume(18446744073709551615, &clk));
+    assert_eq!(rl.available(&clk), 2);
     assert!(rl.try_consume(1, &clk));
+    assert_eq!(rl.available(&clk), 1);
+    assert!(rl.try_consume(99, &clk));
     assert_eq!(rl.available(&clk), 0);
 
     clk.destroy_for_testing();
@@ -752,10 +759,10 @@ fun cooldown_available_predicts_try_consume() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    // available == capacity ⇒ a try_consume up to that amount succeeds.
+    // available == N ⇒ exactly N consecutive try_consume calls succeed before the gate arms.
     let mut rl = rate_limiter::new_cooldown(7, 50);
     assert_eq!(rl.available(&clk), 7);
-    assert!(rl.try_consume(7, &clk));
+    7u64.do!(|_| assert!(rl.try_consume(1, &clk)));
     assert_eq!(rl.available(&clk), 0);
 
     clk.destroy_for_testing();
@@ -801,7 +808,7 @@ fun cooldown_reconfigure_clamps_used_to_new_capacity() {
     clk.set_for_testing(0);
 
     let mut rl = rate_limiter::new_cooldown(10, 100);
-    assert!(rl.try_consume(7, &clk));
+    7u64.do!(|_| assert!(rl.try_consume(1, &clk)));
     assert_eq!(rl.available(&clk), 3);
 
     // Shrink capacity below current `used`; clamp keeps the invariant `used <= capacity`.

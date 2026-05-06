@@ -170,9 +170,7 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
                 if (now < *cooldown_end_ms) return false;
                 *used = 0;
             };
-            // INV-S2 holds (`used <= capacity`), so `capacity - used` never underflows.
-            if (amount > *capacity - *used) return false;
-            *used = *used + amount;
+            *used = *used + 1;
             if (*used == *capacity) {
                 *cooldown_end_ms = now + *cooldown_ms;
             };
