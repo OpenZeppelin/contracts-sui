@@ -249,7 +249,6 @@ fun reconfigure_bucket_on_non_bucket_aborts() {
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun reconfigure_fixed_window_on_non_fixed_window_aborts() {
-    // INV-R6, INV-T2, MISS-10
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -263,7 +262,6 @@ fun reconfigure_fixed_window_on_non_fixed_window_aborts() {
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun reconfigure_cooldown_on_non_cooldown_aborts() {
-    // INV-R6, INV-T2, MISS-10
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -277,7 +275,6 @@ fun reconfigure_cooldown_on_non_cooldown_aborts() {
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun reconfigure_bucket_priority_variant_over_invalid_config() {
-    // INV-R6: variant check precedes config validation.
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -293,7 +290,6 @@ fun reconfigure_bucket_priority_variant_over_invalid_config() {
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun reconfigure_fixed_window_priority_variant_over_invalid_config() {
-    // INV-R6
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -307,7 +303,6 @@ fun reconfigure_fixed_window_priority_variant_over_invalid_config() {
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun reconfigure_cooldown_priority_variant_over_invalid_config() {
-    // INV-R6
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -323,7 +318,6 @@ fun reconfigure_cooldown_priority_variant_over_invalid_config() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun new_bucket_rejects_zero_capacity() {
-    // INV-R1
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -336,7 +330,6 @@ fun new_bucket_rejects_zero_capacity() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroRefillAmount)]
 fun new_bucket_rejects_zero_refill_amount() {
-    // INV-R1
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -349,7 +342,6 @@ fun new_bucket_rejects_zero_refill_amount() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroRefillInterval)]
 fun new_bucket_rejects_zero_refill_interval_ms() {
-    // INV-R1: zero interval would cause division by zero in `bucket_accrue`.
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -362,7 +354,6 @@ fun new_bucket_rejects_zero_refill_interval_ms() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun new_fixed_window_rejects_zero_capacity() {
-    // INV-R2
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -375,7 +366,6 @@ fun new_fixed_window_rejects_zero_capacity() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroWindowMs)]
 fun new_fixed_window_rejects_zero_window_ms() {
-    // INV-R2
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -388,7 +378,6 @@ fun new_fixed_window_rejects_zero_window_ms() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCooldownMs)]
 fun new_cooldown_rejects_zero_cooldown_ms() {
-    // INV-R3
     rate_limiter::new_cooldown(1, 0);
 }
 
@@ -401,7 +390,6 @@ fun new_cooldown_rejects_zero_capacity() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun reconfigure_bucket_rejects_zero_capacity() {
-    // INV-R1
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -415,7 +403,6 @@ fun reconfigure_bucket_rejects_zero_capacity() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroWindowMs)]
 fun reconfigure_fixed_window_rejects_zero_window_ms() {
-    // INV-R2
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -429,7 +416,6 @@ fun reconfigure_fixed_window_rejects_zero_window_ms() {
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCooldownMs)]
 fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
-    // INV-R3
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
@@ -441,7 +427,7 @@ fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
     test.end();
 }
 
-// === All-or-nothing failure semantics (INV-S7, MISS-6) ===
+// === All-or-nothing failure semantics ===
 
 #[test]
 fun bucket_failed_try_consume_does_not_drain_state() {
@@ -509,7 +495,7 @@ fun cooldown_failed_try_consume_does_not_reset_anchor() {
     test.end();
 }
 
-// === Fractional time preservation (INV-S6, MISS-7) ===
+// === Fractional time preservation ===
 
 #[test]
 fun bucket_preserves_subinterval_time_across_consumes() {
@@ -534,7 +520,7 @@ fun bucket_preserves_subinterval_time_across_consumes() {
     test.end();
 }
 
-// === Reconfigure under old rules first (INV-S12, INV-S13, MISS-8) ===
+// === Reconfigure under old rules first ===
 
 #[test]
 fun bucket_reconfigure_accrues_under_old_rate_first() {
@@ -581,7 +567,7 @@ fun fixed_window_reconfigure_rolls_under_old_window_first() {
     test.end();
 }
 
-// === Cooldown reconfigure preserves in-flight deadline (MISS-9) ===
+// === Cooldown reconfigure preserves in-flight deadline ===
 
 #[test]
 fun cooldown_reconfigure_preserves_in_flight_deadline() {
@@ -617,7 +603,7 @@ fun cooldown_reconfigure_preserves_in_flight_deadline() {
     test.end();
 }
 
-// === Overflow safety (MISS-11, MISS-12) ===
+// === Overflow safety ===
 
 #[test]
 fun bucket_no_overflow_with_huge_refill_amount() {
@@ -667,14 +653,14 @@ fun fixed_window_try_consume_max_amount_returns_false() {
     // u64::MAX is rejected without overflowing.
     let mut rl = rate_limiter::new_fixed_window(10, 100, &clk);
     assert!(!rl.try_consume(18446744073709551615, &clk));
-    // INV-S7 corollary: state unchanged on rejection.
+    // State unchanged on rejection.
     assert_eq!(rl.available(&clk), 10);
 
     clk.destroy_for_testing();
     test.end();
 }
 
-// === Anchor-based window grid (INV-S3, MISS-15) ===
+// === Anchor-based window grid ===
 
 #[test]
 fun fixed_window_first_window_has_full_length_at_nonzero_creation() {
@@ -706,7 +692,7 @@ fun fixed_window_first_window_has_full_length_at_nonzero_creation() {
     test.end();
 }
 
-// === available() consistency (INV-E4) ===
+// === available() consistency ===
 
 #[test]
 fun bucket_available_predicts_try_consume() {
@@ -756,7 +742,7 @@ fun cooldown_available_predicts_try_consume() {
     test.end();
 }
 
-// === consume_or_abort across variants (INV-R7) ===
+// === consume_or_abort across variants ===
 
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
 fun fixed_window_consume_or_abort_aborts_when_full() {
@@ -839,7 +825,7 @@ fun cooldown_reconfigure_rearms_when_drained_and_deadline_elapsed() {
     test.end();
 }
 
-// === FixedWindow reconfigure clamps `used` (INV-S11) ===
+// === FixedWindow reconfigure clamps `used` ===
 
 #[test]
 fun fixed_window_reconfigure_clamps_available_to_new_capacity() {
