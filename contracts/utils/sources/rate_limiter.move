@@ -163,7 +163,11 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             true
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, available } => {
-            roll_window(window_start_ms, available, *window_ms, *capacity, now);
+            let steps = (now - *window_start_ms) / *window_ms;
+            if (steps != 0) {
+                *window_start_ms = *window_start_ms + steps * *window_ms;
+                *available = *capacity;
+            };
             if (amount > *available) return false;
             *available = *available - amount;
             true
@@ -382,22 +386,4 @@ fun bucket_accrue(
         let steps = if (headroom == q * refill_amount) q else q + 1;
         (last_refill_ms + steps * refill_interval_ms, capacity)
     }
-}
-
-/// Advance `window_start_ms` by integer multiples of `window_ms` until it sits within the
-/// current window, resetting `available` to `capacity` if any advance occurred. With the
-/// anchor-based design, this preserves `window_start_ms = creation_ms (mod window_ms)`
-/// (INV-S3) and monotonicity (INV-S4). `steps * window_ms <= now - *window_start_ms`, so
-/// the new value never exceeds `now` and can't overflow `u64`.
-fun roll_window(
-    window_start_ms: &mut u64,
-    available: &mut u64,
-    window_ms: u64,
-    capacity: u64,
-    now: u64,
-) {
-    let steps = (now - *window_start_ms) / window_ms;
-    if (steps == 0) return;
-    *window_start_ms = *window_start_ms + steps * window_ms;
-    *available = capacity;
 }
