@@ -351,11 +351,9 @@ public fun reconfigure_cooldown(
 // === Private ===
 
 macro fun assert_bucket_config($capacity: u64, $refill_amount: u64, $refill_interval_ms: u64) {
-    let capacity = $capacity;
-    assert!(capacity > 0, EInvalidConfig);
+    assert!($capacity > 0, EInvalidConfig);
     assert!($refill_amount > 0, EInvalidConfig);
     assert!($refill_interval_ms > 0, EInvalidConfig);
-    assert!(capacity.checked_add($refill_amount).is_some(), EInvalidConfig);
 }
 
 macro fun assert_fixed_window_config($capacity: u64, $window_ms: u64) {
