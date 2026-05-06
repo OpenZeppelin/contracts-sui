@@ -116,16 +116,10 @@ fun sqrt_of_max_value() {
 #[test]
 fun sqrt_of_large_values() {
     // sqrt(10000000000.0) = 100000.0 (1e10 is a perfect square of 1e5)
-    assert_eq!(
-        fixed(10_000_000_000 * SCALE).sqrt(),
-        fixed(100_000 * SCALE),
-    );
+    assert_eq!(fixed(10_000_000_000 * SCALE).sqrt(), fixed(100_000 * SCALE));
 
     // sqrt(1000000000000.0) = 1000000.0 (1e12 is a perfect square of 1e6)
-    assert_eq!(
-        fixed(1_000_000_000_000 * SCALE).sqrt(),
-        fixed(1_000_000 * SCALE),
-    );
+    assert_eq!(fixed(1_000_000_000_000 * SCALE).sqrt(), fixed(1_000_000 * SCALE));
 }
 
 #[random_test]
