@@ -380,21 +380,22 @@ fun bucket_accrue(
     if (elapsed_steps == 0) return (last_refill_ms, available);
     // Two branches keep all intermediate u64 products and sums bounded without relying on
     // upper bounds on `capacity` or `refill_amount`:
-    //   * Under-fill: `elapsed_steps * refill_amount <= q * refill_amount <= headroom <= capacity`,
+    //   * Under-fill: `elapsed_steps * refill_amount <= steps_to_full * refill_amount <= headroom <= capacity`,
     //     so `available + credit <= capacity`. No overflow.
     //   * Fill: write `capacity` directly; advance `last_refill_ms` by `steps * refill_interval_ms`
     //     where `steps <= elapsed_steps`, bounded by `now - last_refill_ms`.
     // INV-S6 holds either way: `last_refill_ms` advances by an integer multiple of
     // `refill_interval_ms`.
     let headroom = capacity - available;
-    let q = headroom / refill_amount;
-    if (elapsed_steps <= q) {
+    let steps_to_full = headroom / refill_amount;
+    if (elapsed_steps <= steps_to_full) {
         let credit = elapsed_steps * refill_amount;
         (last_refill_ms + elapsed_steps * refill_interval_ms, available + credit)
     } else {
-        // Smallest step count that reaches capacity: `q` if exactly divisible, `q + 1`
-        // otherwise. `q + 1` cannot overflow: `q <= elapsed_steps - 1 < u64::MAX`.
-        let steps = if (headroom == q * refill_amount) q else q + 1;
+        // Smallest step count that reaches capacity: `steps_to_full` if exactly divisible, `steps_to_full + 1`
+        // otherwise. `steps_to_full + 1` cannot overflow: `steps_to_full <= elapsed_steps - 1 < u64::MAX`.
+        let steps = if (headroom == steps_to_full * refill_amount) steps_to_full
+        else steps_to_full + 1;
         (last_refill_ms + steps * refill_interval_ms, capacity)
     }
 }
