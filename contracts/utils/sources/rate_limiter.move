@@ -183,7 +183,7 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
                 // gate as elapsed; otherwise enforce `cooldown_ms` since the anchor.
                 if (last_used_ms.is_some()) {
                     let last = *last_used_ms.borrow();
-                    if (now < last || now - last < *cooldown_ms) return false;
+                    if (now - last < *cooldown_ms) return false;
                 };
                 *used = 0;
                 *last_used_ms = option::none();
@@ -226,15 +226,14 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, used } => {
             // A new window has begun once `window_ms` has elapsed since the current anchor.
-            if (now >= *window_start_ms && now - *window_start_ms >= *window_ms) *capacity
-            else *capacity - *used
+            if (now - *window_start_ms >= *window_ms) *capacity else *capacity - *used
         },
         RateLimiter::Cooldown { cooldown_ms, capacity, used, last_used_ms } => {
             if (*used < *capacity) *capacity - *used
             else if (last_used_ms.is_none()) *capacity
             else {
                 let last = *last_used_ms.borrow();
-                if (now >= last && now - last >= *cooldown_ms) *capacity else 0
+                if (now - last >= *cooldown_ms) *capacity else 0
             }
         },
     }
@@ -373,7 +372,6 @@ fun bucket_accrue(
     refill_interval_ms: u64,
     now: u64,
 ): (u64, u64) {
-    if (now <= last_refill_ms) return (last_refill_ms, tokens);
     let elapsed_steps = (now - last_refill_ms) / refill_interval_ms;
     if (elapsed_steps == 0) return (last_refill_ms, tokens);
     // Two branches keep all intermediate u64 products and sums bounded without relying on
@@ -403,7 +401,6 @@ fun bucket_accrue(
 /// (INV-S4). `steps * window_ms <= now - *window_start_ms`, so the new value never exceeds
 /// `now` and can't overflow `u64`.
 fun roll_window(window_start_ms: &mut u64, used: &mut u64, window_ms: u64, now: u64) {
-    if (now <= *window_start_ms) return;
     let steps = (now - *window_start_ms) / window_ms;
     if (steps == 0) return;
     *window_start_ms = *window_start_ms + steps * window_ms;
