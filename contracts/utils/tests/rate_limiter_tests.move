@@ -802,18 +802,18 @@ fun cooldown_consume_or_abort_aborts_when_in_cooldown() {
 // === Cooldown reconfigure clamps `used` ===
 
 #[test]
-fun cooldown_reconfigure_clamps_used_to_new_capacity() {
+fun cooldown_reconfigure_clamps_available_to_new_capacity() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
     let mut rl = rate_limiter::new_cooldown(10, 100);
-    7u64.do!(|_| assert!(rl.try_consume(1, &clk)));
-    assert_eq!(rl.available(&clk), 3);
+    rl.consume_or_abort(1, &clk);
+    assert_eq!(rl.available(&clk), 9);
 
-    // Shrink capacity below current `used`; clamp keeps the invariant `used <= capacity`.
+    // Shrink capacity below current `available`; clamp keeps `available <= capacity`.
     rl.reconfigure_cooldown(5, 100, &clk);
-    assert_eq!(rl.available(&clk), 0);
+    assert_eq!(rl.available(&clk), 5);
 
     clk.destroy_for_testing();
     test.end();
@@ -822,18 +822,18 @@ fun cooldown_reconfigure_clamps_used_to_new_capacity() {
 // === FixedWindow reconfigure clamps `used` (INV-S11) ===
 
 #[test]
-fun fixed_window_reconfigure_clamps_used_to_new_capacity() {
+fun fixed_window_reconfigure_clamps_available_to_new_capacity() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
     let mut rl = rate_limiter::new_fixed_window(10, 100, &clk);
-    rl.consume_or_abort(8, &clk);
-    assert_eq!(rl.available(&clk), 2);
+    rl.consume_or_abort(2, &clk);
+    assert_eq!(rl.available(&clk), 8);
 
-    // Shrinking capacity below current `used` must clamp `used` down so INV-S2 holds.
+    // Shrinking capacity below current `available` must clamp `available` down.
     rl.reconfigure_fixed_window(5, 100, &clk);
-    assert_eq!(rl.available(&clk), 0);
+    assert_eq!(rl.available(&clk), 5);
 
     clk.destroy_for_testing();
     test.end();
