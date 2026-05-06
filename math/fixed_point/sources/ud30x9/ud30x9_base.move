@@ -466,9 +466,6 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
 /// - The square root of `x`, rounded down to the nearest representable `UD30x9` value.
 public fun sqrt(x: UD30x9): UD30x9 {
     let raw = x.unwrap() as u256;
-    if (raw == 0) {
-        return zero()
-    };
     // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
     // sqrt(raw / SCALE) = sqrt(raw * SCALE) / SCALE
     let result = common::sqrt_floor(raw * common::scale_u256!());
