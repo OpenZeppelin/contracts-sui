@@ -56,15 +56,16 @@ public enum RateLimiter has drop, store {
     },
     /// Up to `capacity` units may be consumed before the limiter gates on `cooldown_ms`.
     /// `used` accumulates with each successful consume. Once `used == capacity`,
-    /// `last_used_ms` is set, and no further consume succeeds until `cooldown_ms` has
-    /// elapsed since that anchor — at which point `used` resets to 0 and the next batch
-    /// becomes available. `last_used_ms` is `None` until the limiter first reaches
-    /// capacity, so the initial batch can be consumed at any clock value, including zero.
+    /// `cooldown_end_ms` is set to `now + cooldown_ms` — the absolute deadline at which
+    /// the gate releases. No further consume succeeds until `now >= cooldown_end_ms`,
+    /// at which point `used` resets to 0 and the next batch becomes available.
+    /// `cooldown_end_ms` is a don't-care field while `used < capacity`; it is only read
+    /// once the limiter has reached capacity and the gate is armed.
     Cooldown {
         cooldown_ms: u64,
         capacity: u64,
         used: u64,
-        last_used_ms: Option<u64>,
+        cooldown_end_ms: u64,
     },
 }
 
@@ -113,7 +114,7 @@ public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
         cooldown_ms,
         capacity,
         used: 0,
-        last_used_ms: option::none(),
+        cooldown_end_ms: 0,
     }
 }
 
@@ -164,22 +165,16 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             *used = *used + amount;
             true
         },
-        RateLimiter::Cooldown { cooldown_ms, capacity, used, last_used_ms } => {
+        RateLimiter::Cooldown { cooldown_ms, capacity, used, cooldown_end_ms } => {
             if (*used == *capacity) {
-                // At capacity: if no anchor (e.g. shrunk via reconfigure), treat the
-                // gate as elapsed; otherwise enforce `cooldown_ms` since the anchor.
-                if (last_used_ms.is_some()) {
-                    let last = *last_used_ms.borrow();
-                    if (now - last < *cooldown_ms) return false;
-                };
+                if (now < *cooldown_end_ms) return false;
                 *used = 0;
-                *last_used_ms = option::none();
             };
             // INV-S2 holds (`used <= capacity`), so `capacity - used` never underflows.
             if (amount > *capacity - *used) return false;
             *used = *used + amount;
             if (*used == *capacity) {
-                *last_used_ms = option::some(now);
+                *cooldown_end_ms = now + *cooldown_ms;
             };
             true
         },
@@ -215,13 +210,10 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
             // A new window has begun once `window_ms` has elapsed since the current anchor.
             if (now - *window_start_ms >= *window_ms) *capacity else *capacity - *used
         },
-        RateLimiter::Cooldown { cooldown_ms, capacity, used, last_used_ms } => {
+        RateLimiter::Cooldown { cooldown_ms: _, capacity, used, cooldown_end_ms } => {
             if (*used < *capacity) *capacity - *used
-            else if (last_used_ms.is_none()) *capacity
-            else {
-                let last = *last_used_ms.borrow();
-                if (now - last >= *cooldown_ms) *capacity else 0
-            }
+            else if (now >= *cooldown_end_ms) *capacity
+            else 0
         },
     }
 }
@@ -299,10 +291,12 @@ public fun reconfigure_fixed_window(
     }
 }
 
-/// Rewrite a `Cooldown` limiter's configuration in place. `last_used_ms` is preserved and
-/// `used` is clamped to the new capacity (mirroring `reconfigure_fixed_window`). If the
-/// clamp pushes `used` up to the new capacity without a pre-existing anchor, the cooldown
-/// is anchored at `now` so the gate engages instead of granting a free reset.
+/// Rewrite a `Cooldown` limiter's configuration in place. An in-flight cooldown deadline
+/// is preserved as-is — the new `cooldown_ms` does NOT retroactively shift a gate that is
+/// already armed. `used` is clamped to the new capacity. If after the clamp `used ==
+/// capacity` and no in-flight gate exists (deadline already elapsed, or never set), a
+/// fresh deadline is armed at `now + cooldown_ms` so the gate engages instead of granting
+/// a free reset.
 ///
 /// Aborts with `EWrongVariant` if the limiter is not currently a `Cooldown`.
 public fun reconfigure_cooldown(
@@ -311,20 +305,21 @@ public fun reconfigure_cooldown(
     cooldown_ms: u64,
     clock: &Clock,
 ) {
-    let now = clock.timestamp_ms();
     match (self) {
         RateLimiter::Cooldown {
             cooldown_ms: cd_field,
             capacity: cap_field,
             used,
-            last_used_ms,
+            cooldown_end_ms,
         } => {
             assert_cooldown_config!(capacity, cooldown_ms);
             *cd_field = cooldown_ms;
             *cap_field = capacity;
             *used = (*used).min(capacity);
-            if (*used == capacity && last_used_ms.is_none()) {
-                *last_used_ms = option::some(now);
+
+            let now = clock.timestamp_ms();
+            if (*used == capacity && now >= *cooldown_end_ms) {
+                *cooldown_end_ms = now + cooldown_ms;
             };
         },
         _ => abort EWrongVariant,

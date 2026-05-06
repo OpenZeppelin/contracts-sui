@@ -500,14 +500,14 @@ fun cooldown_failed_try_consume_does_not_reset_anchor() {
     clk.set_for_testing(0);
 
     let mut rl = rate_limiter::new_cooldown(1, 100);
-    assert!(rl.try_consume(1, &clk)); // last_used_ms = Some(0)
+    assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 100
 
-    // Failed call mid-cooldown must NOT advance `last_used_ms` to 50.
+    // Failed call mid-cooldown must NOT push the deadline forward.
     clk.set_for_testing(50);
     assert!(!rl.try_consume(1, &clk));
 
-    // If `last_used_ms` had been pushed to 50, this would still fail at t=100.
-    // Because it stayed at 0, the cooldown elapses exactly at t=100.
+    // If the failed call had re-anchored, the deadline would now be 150.
+    // It stayed at 100, so the cooldown elapses exactly at t=100.
     clk.set_for_testing(100);
     assert!(rl.try_consume(1, &clk));
 
@@ -587,29 +587,37 @@ fun fixed_window_reconfigure_rolls_under_old_window_first() {
     test.end();
 }
 
-// === Cooldown reconfigure preserves last_used_ms (MISS-9) ===
+// === Cooldown reconfigure preserves in-flight deadline (MISS-9) ===
 
 #[test]
-fun cooldown_reconfigure_preserves_last_used_ms() {
+fun cooldown_reconfigure_preserves_in_flight_deadline() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
     let mut rl = rate_limiter::new_cooldown(1, 50);
-    assert!(rl.try_consume(1, &clk)); // last_used_ms = Some(0)
+    assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 50
 
-    // Tighten the cooldown. `last_used_ms` must be preserved across reconfigure —
-    // the new cooldown is measured from the original consume at t=0.
+    // Reconfigure with a longer cooldown while the gate is in-flight. The deadline
+    // is preserved at its original value (50) — the new `cooldown_ms` does NOT
+    // retroactively shift the in-flight gate. The new value applies to the *next*
+    // gate armed after this one releases.
     rl.reconfigure_cooldown(1, 100, &clk);
 
-    // If reconfigure had reset `last_used_ms` to None, available would be 1 here.
-    clk.set_for_testing(50);
+    // Just before the original deadline: still gated.
+    clk.set_for_testing(49);
     assert_eq!(rl.available(&clk), 0);
 
-    // Exactly 100 ms after the original consume, the gate releases.
-    clk.set_for_testing(100);
+    // At the original deadline: gate releases under the OLD cooldown.
+    clk.set_for_testing(50);
     assert_eq!(rl.available(&clk), 1);
-    assert!(rl.try_consume(1, &clk));
+    assert!(rl.try_consume(1, &clk)); // arms a fresh gate with NEW cooldown_ms=100
+
+    // The fresh gate uses the new cooldown: 50 + 100 = 150.
+    clk.set_for_testing(149);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(150);
+    assert_eq!(rl.available(&clk), 1);
 
     clk.destroy_for_testing();
     test.end();
