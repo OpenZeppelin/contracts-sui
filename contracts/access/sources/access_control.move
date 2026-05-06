@@ -8,15 +8,16 @@
 ///    module's `init`), so a module can stand up at most one registry of its
 ///    own type, ever.
 ///
-/// 2. **Only home-module roles.** Every write path (`grant_role`, `revoke_role`,
-///    `renounce_role`, `set_role_admin`, `new_auth`) checks that the role
-///    type's home module matches the root role's home module. Foreign role
-///    types are rejected at the boundary; they cannot be introduced into the
-///    bag. The check uses `type_name::with_original_ids`, which compares the
-///    package's *original* publish address — so role types introduced in
-///    later upgrades of the same package pass the check too. The home-module
-///    rule restricts roles to the same package, not to the same package
-///    version.
+/// 2. **Only home-module roles.** Every role-typed entry point — the four
+///    mutating functions (`grant_role`, `revoke_role`, `renounce_role`,
+///    `set_role_admin`) plus the auth-mint path (`new_auth`) — checks that
+///    the role type's home module matches the root role's home module.
+///    Foreign role types are rejected at the boundary; they cannot be
+///    introduced into the bag. The check uses `type_name::with_original_ids`,
+///    which compares the package's *original* publish address — so role
+///    types introduced in later upgrades of the same package pass the check
+///    too. The home-module rule restricts roles to the same package, not to
+///    the same package version.
 ///
 /// Together these guarantees make `Auth<Role>` a self-validating capability.
 /// `Role` can only live in the registry of its home module, that registry is
@@ -167,8 +168,10 @@ public struct AccessControl<phantom RootRole> has key, store {
     /// Per-role membership and admin mapping. Keyed by `TypeName`.
     /// Entries are created lazily on first grant or `set_role_admin`.
     roles: Bag,
-    /// `TypeName` of the root role (= `RootRole`'s OTW). Direct grant/revoke
-    /// on this role is blocked; use the timelocked transfer or renounce flow.
+    /// `TypeName` of the root role (= `RootRole`'s OTW). Direct
+    /// `grant_role` / `revoke_role` / `renounce_role` / `set_role_admin` on
+    /// this role is blocked (`ECannotManageRootRole`); use the timelocked
+    /// transfer or renounce flow.
     protected_root: TypeName,
     /// Pending change to the root role holder — either a transfer to a
     /// specific new admin or a renounce. See `PendingAdminTransfer`.
@@ -491,7 +494,8 @@ public fun revoke_role<RootRole, Role>(
 /// #### Parameters
 /// - `Role` (type): the role to relinquish. Must be a home-module role and not the root role.
 /// - `ac`: the registry to mutate.
-/// - `account`: the address relinquishing `Role`. Must equal `ctx.sender()`; the explicit parameter exists so the call signature documents the self-only constraint at the type-checker level.
+/// - `account`: the address relinquishing `Role`. Must equal `ctx.sender()`. The explicit parameter mirrors `grant_role` / `revoke_role`
+/// for API symmetry with OZ AccessControl conventions; the self-only constraint is enforced at runtime via `ECannotRenounceForOtherAccount`.
 /// - `ctx`: transaction context. Sender is the only party that can renounce on its own behalf.
 ///
 /// #### Aborts
@@ -603,7 +607,7 @@ public fun begin_default_admin_transfer<RootRole>(
 
 /// Accept a pending root role transfer. Caller must be the pending new admin
 /// and the configured delay must have elapsed. Atomically revokes from the
-/// previous holder and grants to the caller.
+/// previous holder (if one exists) and grants to the caller.
 ///
 /// #### Aborts
 /// - `ENoPendingAdminTransfer` if no pending action exists.

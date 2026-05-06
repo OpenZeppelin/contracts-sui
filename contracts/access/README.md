@@ -1,67 +1,83 @@
-# Access Package
+# OpenZeppelin Access for Sui
 
-Authorization primitives for Sui Move libraries, standards, and protocols: role-based access control plus transfer policies for safely handing objects to new owners.
+Role-based authorization and controlled ownership-transfer primitives for Sui Move protocols.
 
-Transfer-policy modules accept any `T: key + store` object, but the primary use case is wrapping **capabilities** — admin caps, treasury caps, and similar authority tokens — where a misdirected transfer could be irreversible. The access-control module gates protocol functions by typed role witnesses without per-call ID pinning.
+The `openzeppelin_access` package helps protocols protect privileged functions, shared state, admin capabilities, treasury capabilities, and governance-controlled operations.
 
----
+## Install
 
-## Module Snapshot
+```toml
+[dependencies]
+openzeppelin_access = { r.mvr = "@openzeppelin-move/access" }
+```
 
-| Module | Summary |
-|--------|---------|
-| `access_control` | Role-based access control with self-validating `Auth<R>` capabilities, OTW-pinned singleton registry, and timelocked root role transfer. |
-| `two_step_transfer` | Wraps an object behind an initiate_transfer/accept_transfer flow to avoid accidental handoffs. |
-| `delayed_transfer` | Enforces a minimum delay between scheduling and executing transfers or unwrapping. |
+## Modules
 
----
+| Module | Use it when |
+| --- | --- |
+| [`access_control`](https://docs.openzeppelin.com/contracts-sui/1.x/access-control) | Authority is spread across multiple roles or actors, especially for shared protocol state and privileged functions. |
+| [`two_step_transfer`](https://docs.openzeppelin.com/contracts-sui/1.x/two-step-transfer) | A single-owned privileged object can transfer immediately, but the recipient should explicitly accept first. |
+| [`delayed_transfer`](https://docs.openzeppelin.com/contracts-sui/1.x/delayed-transfer) | A single-owned privileged object should not transfer or unwrap until a visible delay has elapsed. |
 
-## `access_control` at a Glance
+## Role-Based Access Control
 
-The library guarantees two structural invariants: (1) **one registry per module per publish** (enforced by requiring a One-Time Witness in `new<RootRole>`); (2) **only home-module roles** (every write path checks that the role type's defining module matches the root role's, using `with_original_ids` so role types added in package upgrades are accepted). Together these make `Auth<R>` a self-validating capability — action functions take `&Auth<R>` directly with no body checks.
+Use `access_control` when your package needs operational roles such as admins, treasurers, guardians, pausers, keepers, or governance executors.
 
-1. **Deploy**
-   - In your module's `init`, call `access_control::new<MY_OTW>(otw, default_admin_delay_ms, ctx)` to mint the singleton `AccessControl<MY_OTW>`. The publishing transaction's sender automatically becomes the root role holder. Share or embed the registry as your protocol requires.
-2. **Wire roles**
-   - Define phantom marker types in the same module as your OTW (e.g. `public struct AdminRole {}`, `public struct OperatorRole {}`).
-   - Build the admin hierarchy with `set_role_admin<RootRole, Role, AdminRole>` — every fresh role's admin defaults to the root role; rewire as needed.
-   - Use `grant_role<RootRole, R>`, `revoke_role<RootRole, R>`, and `renounce_role<RootRole, R>` to manage membership. Granting / revoking is gated by holding `R`'s admin role; renounce is self-only.
-3. **Issue capabilities**
-   - `new_auth<RootRole, R>(&registry, ctx)` mints `Auth<R>` for `ctx.sender()` if they currently hold `R`.
-   - Pass `&Auth<R>` to gated business actions in the same PTB. Because the registry is singleton-per-publish and only home-module roles can ever be registered in it, any `Auth<R>` in scope is unforgeable in context — no body checks needed.
-4. **Rotate or relinquish root**
-   - `begin_default_admin_transfer(&mut registry, new_admin, &clock, ctx)` schedules a transfer from the current root holder.
-   - After `default_admin_delay_ms` elapses, the pending admin calls `accept_default_admin_transfer(&mut registry, &clock, ctx)`. The rotation is atomic: the old admin is revoked and the new admin is granted in one transaction.
-   - The current root holder can call `cancel_default_admin_transfer(&mut registry, ctx)` to back out at any time before acceptance.
-   - Renouncing the root role when you are the last holder makes the registry permanently unmanageable — used deliberately as a final lock-in step.
+The registry is rooted in your module's One-Time Witness (OTW). Roles must be defined in the same module as that OTW, and `Auth<Role>` values can be minted in PTBs as typed authorization proofs.
 
----
+```move
+use openzeppelin_access::access_control::{Self, AccessControl, Auth};
+```
 
-## `two_step_transfer` at a Glance
+Start with the [Role Based Access Control guide](https://docs.openzeppelin.com/contracts-sui/1.x/guides/access-control) for a full implementation walkthrough with publishing, upgrades, and PTBs.
 
-1. **Wrap**
-   - Call `wrap<T>` to place an object under a `TwoStepTransferWrapper<T>`. The wrapper owns the object via a dynamic object field.
-2. **Borrow**
-   - Use `borrow`, `borrow_mut`, or `borrow_val`/`return_val` to read or temporarily mutate the wrapped object without changing ownership.
-   - While a transfer is pending, the current owner can use `request_borrow_val`/`request_return_val` to temporarily access the wrapper and its inner object through the shared request.
-3. **Transfer**
-   - The current owner calls `initiate_transfer` to emit `TransferInitiated`, create a shared `PendingOwnershipTransfer`, and TTO the wrapper to it.
-   - The prospective owner calls `accept_transfer` with the request + receiving ticket to accept, or the current owner calls `cancel_transfer` to reclaim the wrapper.
-4. **Unwrap**
-   - Owners can reclaim the underlying object immediately via `unwrap`, destroying the wrapper.
+Relevant docs:
 
----
+- [RBAC package page](https://docs.openzeppelin.com/contracts-sui/1.x/access-control)
+- [Implement a module with RBAC](https://docs.openzeppelin.com/contracts-sui/1.x/guides/access-control#implementing-a-new-module)
+- [Upgrade an existing package](https://docs.openzeppelin.com/contracts-sui/1.x/guides/access-control#upgrading-an-existing-package)
+- [Root role operations](https://docs.openzeppelin.com/contracts-sui/1.x/guides/access-control#root-role-operations)
+- [`access_control` API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/access#access_control)
 
-## `delayed_transfer` at a Glance
+## Controlled Object Transfers
 
-1. **Wrap**
-   - `wrap<T>(obj, min_delay_ms, recipient, ctx)` creates a `DelayedTransferWrapper<T>`, stores the object under it, and transfers the wrapper to `recipient`.
-2. **Borrow**
-   - Access the wrapped object through `borrow`, `borrow_mut`, or the `borrow_val` / `return_val` pair for temporary moves.
-3. **Schedule**
-   - Call `schedule_transfer` with a recipient and clock to emit `TransferScheduled`. The wrapper records the current owner from `ctx.sender()`.
-   - Call `schedule_unwrap` to plan a delayed unwrap; the wrapper emits `UnwrapScheduled`.
-4. **Execute or Cancel**
-   - After `clock.timestamp_ms() >= execute_after_ms`, call `execute_transfer` to emit `OwnershipTransferred` and move the wrapper to the scheduled recipient.
-   - For scheduled unwraps, call `unwrap` to emit `UnwrapExecuted`, delete the wrapper, and recover the underlying object.
-   - Use `cancel_schedule` to cancel a pending transfer or unwrap before execution.
+Use the transfer modules for single-owned privileged objects, especially capability objects.
+
+### Two-step transfer
+
+`two_step_transfer` wraps an object and requires the intended recipient to accept before ownership moves.
+
+```move
+use openzeppelin_access::two_step_transfer;
+```
+
+Docs:
+
+- [Two-Step Transfer guide](https://docs.openzeppelin.com/contracts-sui/1.x/two-step-transfer)
+- [`two_step_transfer` API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/access#two_step_transfer)
+
+### Delayed transfer
+
+`delayed_transfer` wraps an object and enforces a minimum delay before transfer or unwrap execution.
+
+```move
+use openzeppelin_access::delayed_transfer;
+```
+
+Docs:
+
+- [Delayed Transfer guide](https://docs.openzeppelin.com/contracts-sui/1.x/delayed-transfer)
+- [`delayed_transfer` API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/access#delayed_transfer)
+
+## Security Notes
+
+- `access_control` root-role changes use delayed flows. Do not try to grant, revoke, or renounce the root role with ordinary role-management calls.
+- Role grants and root transfers reject `@0x0`. Use the delayed root-renounce flow when the goal is to intentionally lock a registry.
+- `two_step_transfer` records `ctx.sender()` as cancel authority. Avoid using it directly in shared-object executor flows unless signer identity is intentionally the cancel authority.
+- `delayed_transfer` recipients should be wallet addresses, not object IDs, unless your protocol explicitly supports recovery from transfer-to-object custody.
+
+## Learn More
+
+- [Access package overview](https://docs.openzeppelin.com/contracts-sui/1.x/access)
+- [Access API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/access)
+- [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)
