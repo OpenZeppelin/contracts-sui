@@ -644,8 +644,8 @@ fun bucket_no_overflow_under_extreme_clock_advance() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    // capacity = u64::MAX - 1 (the largest value passing `capacity + refill_amount`
-    // overflow check with refill_amount = 1).
+    // capacity = u64::MAX - 1 with refill_amount = 1 — exercises the fill branch under the
+    // largest plausible elapsed-step count without any product overflow.
     let cap = 18446744073709551614;
     let rl = rate_limiter::new_bucket(cap, 1, 1, 0, &clk);
 

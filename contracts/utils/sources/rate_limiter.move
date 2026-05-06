@@ -20,14 +20,13 @@
 ///
 /// # Operator responsibilities
 ///
-/// Configs only need positivity (plus `capacity + refill_amount` not overflowing for
-/// `Bucket`); the implementation handles internal overflow safety without further upper
-/// bounds. One operator-side caveat: for `Cooldown`, the deadline is computed as
-/// `now + cooldown_ms`. The Sui `Clock` is monotonic and bounded well below `u64::MAX`,
-/// but `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick
-/// `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain
-/// timestamp during the limiter's lifetime — any policy-meaningful value (seconds to days
-/// to years in ms) satisfies this trivially.
+/// Configs only need positivity; the implementation handles internal overflow safety
+/// without further upper bounds. One operator-side caveat: for `Cooldown`, the deadline
+/// is computed as `now + cooldown_ms`. The Sui `Clock` is monotonic and bounded well
+/// below `u64::MAX`, but `cooldown_ms` near `u64::MAX` would overflow this addition.
+/// Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at
+/// any plausible chain timestamp during the limiter's lifetime — any policy-meaningful
+/// value (seconds to days to years in ms) satisfies this trivially.
 module openzeppelin_utils::rate_limiter;
 
 use sui::clock::Clock;
@@ -117,9 +116,22 @@ public enum RateLimiter has drop, store {
 
 /// Create a token bucket with an explicit initial token balance.
 ///
-/// `initial_available` must be `<= capacity`. This is the knob to use when "start full" is the
-/// wrong default — for example, starting at `0` forces the caller to wait for the first
-/// refill interval before any consume can succeed.
+/// #### Parameters
+/// - `capacity`: Maximum token balance the bucket can hold.
+/// - `refill_amount`: Tokens credited per refill interval.
+/// - `refill_interval_ms`: Length of one refill interval, in milliseconds.
+/// - `initial_available`: Starting token balance. Must be `<= capacity`. Setting this to
+///   `0` forces the caller to wait for the first refill interval before any consume succeeds.
+/// - `clock`: Reference to the Sui `Clock`, used to anchor the first refill timestamp.
+///
+/// #### Returns
+/// - A new `Bucket` `RateLimiter` ready to be embedded in the caller's object.
+///
+/// #### Aborts
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroRefillAmount` if `refill_amount == 0`.
+/// - `EZeroRefillInterval` if `refill_interval_ms == 0`.
+/// - `EInitialAboveCapacity` if `initial_available > capacity`.
 public fun new_bucket(
     capacity: u64,
     refill_amount: u64,
@@ -140,6 +152,18 @@ public fun new_bucket(
 
 /// Create a fixed window limiter with its first window anchored at `now`. Subsequent
 /// windows are exactly `[now + k * window_ms, now + (k+1) * window_ms)` for `k >= 0`.
+///
+/// #### Parameters
+/// - `capacity`: Maximum units consumable per window.
+/// - `window_ms`: Length of one window, in milliseconds.
+/// - `clock`: Reference to the Sui `Clock`, used to anchor the first window.
+///
+/// #### Returns
+/// - A new `FixedWindow` `RateLimiter` ready to be embedded in the caller's object.
+///
+/// #### Aborts
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroWindowMs` if `window_ms == 0`.
 public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateLimiter {
     assert_fixed_window_config!(capacity, window_ms);
     RateLimiter::FixedWindow {
@@ -152,6 +176,17 @@ public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateL
 
 /// Create a cooldown limiter that is ready to be used immediately. Up to `capacity` units
 /// may be consumed before the limiter requires `cooldown_ms` to elapse before the next batch.
+///
+/// #### Parameters
+/// - `capacity`: Maximum units consumable per batch.
+/// - `cooldown_ms`: Wait, in milliseconds, between exhausting the batch and the next reset.
+///
+/// #### Returns
+/// - A new `Cooldown` `RateLimiter` starting fully available.
+///
+/// #### Aborts
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroCooldownMs` if `cooldown_ms == 0`.
 public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
     assert_cooldown_config!(capacity, cooldown_ms);
     RateLimiter::Cooldown {
@@ -166,17 +201,33 @@ public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
 
 /// Apply accrual, then consume `amount` or abort with `ERateLimited`.
 ///
-/// This is the normal hot-path entry point. Integrators call it from real actions such as
-/// withdrawing from a vault or casting a spell. The policy check is implicit: the caller
-/// already has `&mut` access to the limiter field, so they own the scope by construction.
+/// #### Parameters
+/// - `self`: Limiter being charged.
+/// - `amount`: Units to consume. Must be greater than zero.
+/// - `clock`: Reference to the Sui `Clock`, used to apply accrual / window rollover / cooldown release.
+///
+/// #### Aborts
+/// - `EInvalidAmount` if `amount == 0`.
+/// - `ERateLimited` if the limiter cannot satisfy the request.
 public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) {
     assert!(try_consume(self, amount, clock), ERateLimited);
 }
 
-/// Apply accrual, then consume `amount` if the limiter allows it. Returns `true` on success.
+/// Apply accrual, then consume `amount` if the limiter allows it.
 ///
-/// Aborts with `EInvalidAmount` if `amount == 0`. A zero-unit consume is treated as a
-/// programmer error, not a rate-limit condition, so behavior stays uniform across variants.
+/// A zero-unit consume is treated as a programmer error, not a rate-limit condition, so
+/// behavior stays uniform across variants.
+///
+/// #### Parameters
+/// - `self`: Limiter being charged.
+/// - `amount`: Units to consume. Must be greater than zero.
+/// - `clock`: Reference to the Sui `Clock`, used to apply accrual / window rollover / cooldown release.
+///
+/// #### Returns
+/// - `true` if the consume succeeded, `false` if the limiter refused.
+///
+/// #### Aborts
+/// - `EInvalidAmount` if `amount == 0`.
 public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool {
     assert!(amount > 0, EInvalidAmount);
     let now = clock.timestamp_ms();
@@ -230,6 +281,13 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
 /// For `Bucket` this is the number of tokens that could be consumed right now; for
 /// `FixedWindow` it is the remaining headroom after any window rollover; for `Cooldown` it
 /// is `capacity` if the cooldown has elapsed and the stored `available` otherwise.
+///
+/// #### Parameters
+/// - `self`: Limiter to inspect.
+/// - `clock`: Reference to the Sui `Clock`, used to project pending accrual / rollover / release.
+///
+/// #### Returns
+/// - The number of units that a `try_consume` call would currently accept.
 public fun available(self: &RateLimiter, clock: &Clock): u64 {
     let now = clock.timestamp_ms();
     match (self) {
@@ -267,8 +325,20 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
 /// Rewrite a `Bucket` limiter's configuration in place.
 ///
 /// Accrues any tokens earned under the old rules first, then updates the configuration and
-/// clamps the stored token balance to the new capacity. Aborts with `EWrongVariant` if the
-/// limiter is not currently a `Bucket`.
+/// clamps the stored token balance to the new capacity.
+///
+/// #### Parameters
+/// - `self`: Limiter to reconfigure. Must currently be a `Bucket`.
+/// - `capacity`: New maximum token balance.
+/// - `refill_amount`: New tokens credited per refill interval.
+/// - `refill_interval_ms`: New refill interval, in milliseconds.
+/// - `clock`: Reference to the Sui `Clock`, used to apply accrual under the old config.
+///
+/// #### Aborts
+/// - `EWrongVariant` if the limiter is not currently a `Bucket`.
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroRefillAmount` if `refill_amount == 0`.
+/// - `EZeroRefillInterval` if `refill_interval_ms == 0`.
 public fun reconfigure_bucket(
     self: &mut RateLimiter,
     capacity: u64,
@@ -307,8 +377,19 @@ public fun reconfigure_bucket(
 /// Rewrite a `FixedWindow` limiter's configuration in place.
 ///
 /// Rolls the window forward if `now` has crossed into a later window, then updates the
-/// configuration and clamps `available` to the new capacity. Aborts with `EWrongVariant`
-/// if the limiter is not currently a `FixedWindow`.
+/// configuration and clamps `available` to the new capacity. If a rollover occurred,
+/// the fresh window starts fully available under the new `capacity`.
+///
+/// #### Parameters
+/// - `self`: Limiter to reconfigure. Must currently be a `FixedWindow`.
+/// - `capacity`: New maximum units consumable per window.
+/// - `window_ms`: New window length, in milliseconds.
+/// - `clock`: Reference to the Sui `Clock`, used to roll the anchor forward under the old config.
+///
+/// #### Aborts
+/// - `EWrongVariant` if the limiter is not currently a `FixedWindow`.
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroWindowMs` if `window_ms == 0`.
 public fun reconfigure_fixed_window(
     self: &mut RateLimiter,
     capacity: u64,
@@ -341,14 +422,24 @@ public fun reconfigure_fixed_window(
     }
 }
 
-/// Rewrite a `Cooldown` limiter's configuration in place. An in-flight cooldown deadline
-/// is preserved as-is — the new `cooldown_ms` does NOT retroactively shift a gate that is
-/// already armed. `available` is clamped to the new capacity. If after the clamp
-/// `available == 0` and no in-flight gate exists (deadline already elapsed, or never set),
-/// a fresh deadline is armed at `now + cooldown_ms` so the gate engages instead of granting
-/// a free reset.
+/// Rewrite a `Cooldown` limiter's configuration in place.
 ///
-/// Aborts with `EWrongVariant` if the limiter is not currently a `Cooldown`.
+/// An in-flight cooldown deadline is preserved as-is — the new `cooldown_ms` does NOT
+/// retroactively shift a gate that is already armed. `available` is clamped to the new
+/// capacity. If after the clamp `available == 0` and no in-flight gate exists (deadline
+/// already elapsed, or never set), a fresh deadline is armed at `now + cooldown_ms` so
+/// the gate engages instead of granting a free reset.
+///
+/// #### Parameters
+/// - `self`: Limiter to reconfigure. Must currently be a `Cooldown`.
+/// - `capacity`: New maximum units consumable per batch.
+/// - `cooldown_ms`: New wait between batches, in milliseconds.
+/// - `clock`: Reference to the Sui `Clock`, used to arm a fresh deadline if needed.
+///
+/// #### Aborts
+/// - `EWrongVariant` if the limiter is not currently a `Cooldown`.
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroCooldownMs` if `cooldown_ms == 0`.
 public fun reconfigure_cooldown(
     self: &mut RateLimiter,
     capacity: u64,
@@ -410,8 +501,6 @@ fun bucket_accrue(
     //     so `available + credit <= capacity`. No overflow.
     //   * Fill: write `capacity` directly; advance `last_refill_ms` by `steps * refill_interval_ms`
     //     where `steps <= elapsed_steps`, bounded by `now - last_refill_ms`.
-    // INV-S6 holds either way: `last_refill_ms` advances by an integer multiple of
-    // `refill_interval_ms`.
     let headroom = capacity - available;
     let steps_to_full = headroom / refill_amount;
     if (elapsed_steps <= steps_to_full) {
