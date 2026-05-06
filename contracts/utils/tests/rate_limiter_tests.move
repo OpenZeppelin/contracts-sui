@@ -148,8 +148,8 @@ fun cooldown_requires_elapsed_time_between_consumes() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(100);
 
-    // 50 ms cooldown between single-unit consumes.
-    let mut rl = rate_limiter::new_cooldown(50);
+    // 50 ms cooldown between single-unit consumes (capacity 1 => cooldown after each).
+    let mut rl = rate_limiter::new_cooldown(1, 50);
     assert_eq!(rl.available(&clk), 1);
 
     // First consume succeeds.
@@ -170,16 +170,43 @@ fun cooldown_requires_elapsed_time_between_consumes() {
 }
 
 #[test]
-fun cooldown_ignores_amount_value() {
+fun cooldown_accumulates_used_until_capacity_then_gates() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_cooldown(50);
-    // Cooldown does not count units — any positive amount is treated as one attempt.
-    assert!(rl.try_consume(5, &clk));
-    // Immediate retry is blocked by the cooldown, regardless of amount.
+    // Capacity 5: consumes accumulate `used` until it hits 5, then the cooldown gates.
+    let mut rl = rate_limiter::new_cooldown(5, 50);
+    assert!(rl.try_consume(2, &clk));
+    assert_eq!(rl.available(&clk), 3);
+    assert!(rl.try_consume(3, &clk));
+    // `used == capacity` — gate is now armed.
+    assert_eq!(rl.available(&clk), 0);
     assert!(!rl.try_consume(1, &clk));
+
+    // After cooldown elapses, the budget resets to full capacity.
+    clk.set_for_testing(50);
+    assert_eq!(rl.available(&clk), 5);
+    assert!(rl.try_consume(5, &clk));
+    assert_eq!(rl.available(&clk), 0);
+
+    clk.destroy_for_testing();
+    test.end();
+}
+
+#[test]
+fun cooldown_rejects_amount_exceeding_remaining_capacity() {
+    let mut test = test_scenario::begin(@0x1);
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(0);
+
+    let mut rl = rate_limiter::new_cooldown(3, 50);
+    assert!(rl.try_consume(2, &clk));
+    // Only 1 unit of headroom; a request for 2 must be rejected without changing state.
+    assert!(!rl.try_consume(2, &clk));
+    assert_eq!(rl.available(&clk), 1);
+    assert!(rl.try_consume(1, &clk));
+    assert_eq!(rl.available(&clk), 0);
 
     clk.destroy_for_testing();
     test.end();
@@ -206,7 +233,7 @@ fun reconfigure_bucket_on_non_bucket_aborts() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_cooldown(50);
+    let mut rl = rate_limiter::new_cooldown(1, 50);
     rl.reconfigure_bucket(10, 1, 10, &clk);
 
     clk.destroy_for_testing();
@@ -235,7 +262,7 @@ fun reconfigure_cooldown_on_non_cooldown_aborts() {
     clk.set_for_testing(0);
 
     let mut rl = rate_limiter::new_bucket(10, 1, 10, &clk);
-    rl.reconfigure_cooldown(50);
+    rl.reconfigure_cooldown(1, 50, &clk);
 
     clk.destroy_for_testing();
     test.end();
@@ -248,7 +275,7 @@ fun reconfigure_bucket_priority_variant_over_invalid_config() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_cooldown(50);
+    let mut rl = rate_limiter::new_cooldown(1, 50);
     // All-zero config would trip EInvalidConfig if the variant arm matched, but the
     // limiter is Cooldown, so EWrongVariant must fire first.
     rl.reconfigure_bucket(0, 0, 0, &clk);
@@ -264,7 +291,7 @@ fun reconfigure_fixed_window_priority_variant_over_invalid_config() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_cooldown(50);
+    let mut rl = rate_limiter::new_cooldown(1, 50);
     rl.reconfigure_fixed_window(0, 0, &clk);
 
     clk.destroy_for_testing();
@@ -279,7 +306,7 @@ fun reconfigure_cooldown_priority_variant_over_invalid_config() {
     clk.set_for_testing(0);
 
     let mut rl = rate_limiter::new_bucket(10, 1, 10, &clk);
-    rl.reconfigure_cooldown(0);
+    rl.reconfigure_cooldown(0, 0, &clk);
 
     clk.destroy_for_testing();
     test.end();
@@ -368,7 +395,12 @@ fun new_fixed_window_rejects_zero_window_ms() {
 #[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
 fun new_cooldown_rejects_zero_cooldown_ms() {
     // INV-R3
-    rate_limiter::new_cooldown(0);
+    rate_limiter::new_cooldown(1, 0);
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
+fun new_cooldown_rejects_zero_capacity() {
+    rate_limiter::new_cooldown(0, 50);
 }
 
 // === Reconfigure config validation ===
@@ -404,8 +436,15 @@ fun reconfigure_fixed_window_rejects_zero_window_ms() {
 #[test, expected_failure(abort_code = rate_limiter::EInvalidConfig)]
 fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
     // INV-R3
-    let mut rl = rate_limiter::new_cooldown(50);
-    rl.reconfigure_cooldown(0);
+    let mut test = test_scenario::begin(@0x1);
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(0);
+
+    let mut rl = rate_limiter::new_cooldown(1, 50);
+    rl.reconfigure_cooldown(1, 0, &clk);
+
+    clk.destroy_for_testing();
+    test.end();
 }
 
 // === All-or-nothing failure semantics (INV-S7, MISS-6) ===
@@ -460,7 +499,7 @@ fun cooldown_failed_try_consume_does_not_reset_anchor() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_cooldown(100);
+    let mut rl = rate_limiter::new_cooldown(1, 100);
     assert!(rl.try_consume(1, &clk)); // last_used_ms = Some(0)
 
     // Failed call mid-cooldown must NOT advance `last_used_ms` to 50.
@@ -556,12 +595,12 @@ fun cooldown_reconfigure_preserves_last_used_ms() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_cooldown(50);
+    let mut rl = rate_limiter::new_cooldown(1, 50);
     assert!(rl.try_consume(1, &clk)); // last_used_ms = Some(0)
 
     // Tighten the cooldown. `last_used_ms` must be preserved across reconfigure —
     // the new cooldown is measured from the original consume at t=0.
-    rl.reconfigure_cooldown(100);
+    rl.reconfigure_cooldown(1, 100, &clk);
 
     // If reconfigure had reset `last_used_ms` to None, available would be 1 here.
     clk.set_for_testing(50);
@@ -705,9 +744,9 @@ fun cooldown_available_predicts_try_consume() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    // available == 1 ⇒ any positive-amount try_consume succeeds.
-    let mut rl = rate_limiter::new_cooldown(50);
-    assert_eq!(rl.available(&clk), 1);
+    // available == capacity ⇒ a try_consume up to that amount succeeds.
+    let mut rl = rate_limiter::new_cooldown(7, 50);
+    assert_eq!(rl.available(&clk), 7);
     assert!(rl.try_consume(7, &clk));
     assert_eq!(rl.available(&clk), 0);
 
@@ -737,9 +776,29 @@ fun cooldown_consume_or_abort_aborts_when_in_cooldown() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    let mut rl = rate_limiter::new_cooldown(100);
+    let mut rl = rate_limiter::new_cooldown(1, 100);
     rl.consume_or_abort(1, &clk);
     rl.consume_or_abort(1, &clk);
+
+    clk.destroy_for_testing();
+    test.end();
+}
+
+// === Cooldown reconfigure clamps `used` ===
+
+#[test]
+fun cooldown_reconfigure_clamps_used_to_new_capacity() {
+    let mut test = test_scenario::begin(@0x1);
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(0);
+
+    let mut rl = rate_limiter::new_cooldown(10, 100);
+    assert!(rl.try_consume(7, &clk));
+    assert_eq!(rl.available(&clk), 3);
+
+    // Shrink capacity below current `used`; clamp keeps the invariant `used <= capacity`.
+    rl.reconfigure_cooldown(5, 100, &clk);
+    assert_eq!(rl.available(&clk), 0);
 
     clk.destroy_for_testing();
     test.end();

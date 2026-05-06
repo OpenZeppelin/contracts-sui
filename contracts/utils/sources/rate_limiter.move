@@ -8,7 +8,7 @@
 /// Three strategies are provided in one enum, all sharing the same API:
 /// - `Bucket` — continuously refilling token bucket with a configurable refill schedule,
 /// - `FixedWindow` — up to `capacity` units per fixed-length window anchored at creation,
-/// - `Cooldown` — minimum elapsed time between consumes (amount is ignored).
+/// - `Cooldown` — up to `capacity` units before requiring a `cooldown_ms` wait.
 ///
 /// Typical lifecycle:
 /// 1. the integrator creates a limiter with one of the `new_*` constructors and stores it in
@@ -54,11 +54,16 @@ public enum RateLimiter has drop, store {
         window_start_ms: u64,
         used: u64,
     },
-    /// Minimum `cooldown_ms` between consumes. Any positive amount is a single "attempt".
-    /// `last_used_ms` is `None` until the first successful consume, so the first consume
-    /// succeeds at any clock value, including zero.
+    /// Up to `capacity` units may be consumed before the limiter gates on `cooldown_ms`.
+    /// `used` accumulates with each successful consume. Once `used == capacity`,
+    /// `last_used_ms` is set, and no further consume succeeds until `cooldown_ms` has
+    /// elapsed since that anchor — at which point `used` resets to 0 and the next batch
+    /// becomes available. `last_used_ms` is `None` until the limiter first reaches
+    /// capacity, so the initial batch can be consumed at any clock value, including zero.
     Cooldown {
         cooldown_ms: u64,
+        capacity: u64,
+        used: u64,
         last_used_ms: Option<u64>,
     },
 }
@@ -113,10 +118,16 @@ public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateL
     }
 }
 
-/// Create a cooldown limiter that is ready to be used immediately.
-public fun new_cooldown(cooldown_ms: u64): RateLimiter {
-    assert!(cooldown_ms > 0, EInvalidConfig);
-    RateLimiter::Cooldown { cooldown_ms, last_used_ms: option::none() }
+/// Create a cooldown limiter that is ready to be used immediately. Up to `capacity` units
+/// may be consumed before the limiter requires `cooldown_ms` to elapse before the next batch.
+public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
+    assert_cooldown_config!(capacity, cooldown_ms);
+    RateLimiter::Cooldown {
+        cooldown_ms,
+        capacity,
+        used: 0,
+        last_used_ms: option::none(),
+    }
 }
 
 // === Hot Path ===
@@ -166,13 +177,23 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             *used = *used + amount;
             true
         },
-        RateLimiter::Cooldown { cooldown_ms, last_used_ms } => {
-            // `amount` is meaningless to a cooldown: any call is an attempt to "fire".
-            if (last_used_ms.is_some()) {
-                let last = *last_used_ms.borrow();
-                if (now < last || now - last < *cooldown_ms) return false;
+        RateLimiter::Cooldown { cooldown_ms, capacity, used, last_used_ms } => {
+            if (*used == *capacity) {
+                // At capacity: if no anchor (e.g. shrunk via reconfigure), treat the
+                // gate as elapsed; otherwise enforce `cooldown_ms` since the anchor.
+                if (last_used_ms.is_some()) {
+                    let last = *last_used_ms.borrow();
+                    if (now < last || now - last < *cooldown_ms) return false;
+                };
+                *used = 0;
+                *last_used_ms = option::none();
             };
-            *last_used_ms = option::some(now);
+            // INV-S2 holds (`used <= capacity`), so `capacity - used` never underflows.
+            if (amount > *capacity - *used) return false;
+            *used = *used + amount;
+            if (*used == *capacity) {
+                *last_used_ms = option::some(now);
+            };
             true
         },
     }
@@ -208,11 +229,12 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
             if (now >= *window_start_ms && now - *window_start_ms >= *window_ms) *capacity
             else *capacity - *used
         },
-        RateLimiter::Cooldown { cooldown_ms, last_used_ms } => {
-            if (last_used_ms.is_none()) 1
+        RateLimiter::Cooldown { cooldown_ms, capacity, used, last_used_ms } => {
+            if (*used < *capacity) *capacity - *used
+            else if (last_used_ms.is_none()) *capacity
             else {
                 let last = *last_used_ms.borrow();
-                if (now >= last && now - last >= *cooldown_ms) 1 else 0
+                if (now >= last && now - last >= *cooldown_ms) *capacity else 0
             }
         },
     }
@@ -291,14 +313,33 @@ public fun reconfigure_fixed_window(
     }
 }
 
-/// Rewrite a `Cooldown` limiter's `cooldown_ms` in place. `last_used_ms` is preserved.
+/// Rewrite a `Cooldown` limiter's configuration in place. `last_used_ms` is preserved and
+/// `used` is clamped to the new capacity (mirroring `reconfigure_fixed_window`). If the
+/// clamp pushes `used` up to the new capacity without a pre-existing anchor, the cooldown
+/// is anchored at `now` so the gate engages instead of granting a free reset.
 ///
 /// Aborts with `EWrongVariant` if the limiter is not currently a `Cooldown`.
-public fun reconfigure_cooldown(self: &mut RateLimiter, cooldown_ms: u64) {
+public fun reconfigure_cooldown(
+    self: &mut RateLimiter,
+    capacity: u64,
+    cooldown_ms: u64,
+    clock: &Clock,
+) {
+    let now = clock.timestamp_ms();
     match (self) {
-        RateLimiter::Cooldown { cooldown_ms: cd_field, last_used_ms: _ } => {
-            assert!(cooldown_ms > 0, EInvalidConfig);
+        RateLimiter::Cooldown {
+            cooldown_ms: cd_field,
+            capacity: cap_field,
+            used,
+            last_used_ms,
+        } => {
+            assert_cooldown_config!(capacity, cooldown_ms);
             *cd_field = cooldown_ms;
+            *cap_field = capacity;
+            *used = (*used).min(capacity);
+            if (*used == capacity && last_used_ms.is_none()) {
+                *last_used_ms = option::some(now);
+            };
         },
         _ => abort EWrongVariant,
     }
@@ -317,6 +358,11 @@ macro fun assert_bucket_config($capacity: u64, $refill_amount: u64, $refill_inte
 macro fun assert_fixed_window_config($capacity: u64, $window_ms: u64) {
     assert!($capacity > 0, EInvalidConfig);
     assert!($window_ms > 0, EInvalidConfig);
+}
+
+macro fun assert_cooldown_config($capacity: u64, $cooldown_ms: u64) {
+    assert!($capacity > 0, EInvalidConfig);
+    assert!($cooldown_ms > 0, EInvalidConfig);
 }
 
 fun bucket_accrue(
