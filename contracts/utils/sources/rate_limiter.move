@@ -25,7 +25,7 @@
 /// is computed as `now + cooldown_ms`. The Sui `Clock` is monotonic and bounded well
 /// below `u64::MAX`, but `cooldown_ms` near `u64::MAX` would overflow this addition.
 /// Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at
-/// any plausible chain timestamp during the limiter's lifetime — any policy-meaningful
+/// any plausible chain timestamp during the limiter's lifetime - any policy-meaningful
 /// value (seconds to days to years in ms) satisfies this trivially.
 module openzeppelin_utils::rate_limiter;
 
@@ -68,11 +68,11 @@ const EInitialAboveCapacity: vector<u8> = "Initial available amount must not exc
 /// only be swapped by building a fresh `RateLimiter` and overwriting the field.
 ///
 /// All variants store an `available` counter that starts equal to `capacity` and is
-/// decremented by `consume`. Refill (Bucket), window rollover (FixedWindow), and cooldown
+/// decremented by `try_consume`. Refill (Bucket), window rollover (FixedWindow), and cooldown
 /// release (Cooldown) all reset `available` back toward `capacity`.
 public enum RateLimiter has drop, store {
     /// Continuously refilling bucket. `available` accrues `refill_amount` every
-    /// `refill_interval_ms`, capped at `capacity`. Each `consume` draws `available` down.
+    /// `refill_interval_ms`, capped at `capacity`. Each `try_consume` draws `available` down.
     Bucket {
         capacity: u64,
         refill_amount: u64,
@@ -81,8 +81,8 @@ public enum RateLimiter has drop, store {
         available: u64,
     },
     /// Up to `capacity` units per window of length `window_ms`, anchored at the limiter's
-    /// creation time. `available` resets to `capacity` when `now` crosses into a later
-    /// window boundary.
+    /// creation time. `available` resets to `capacity` when current time crosses into a
+    /// later window boundary.
     FixedWindow {
         capacity: u64,
         window_ms: u64,
@@ -119,7 +119,7 @@ public enum RateLimiter has drop, store {
 /// - `clock`: Reference to the Sui `Clock`, used to anchor the first refill timestamp.
 ///
 /// #### Returns
-/// - A new `Bucket` `RateLimiter` ready to be embedded in the caller's object.
+/// - A new bucket `RateLimiter` ready to be embedded in the caller's object.
 ///
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
@@ -153,7 +153,7 @@ public fun new_bucket(
 /// - `clock`: Reference to the Sui `Clock`, used to anchor the first window.
 ///
 /// #### Returns
-/// - A new `FixedWindow` `RateLimiter` ready to be embedded in the caller's object.
+/// - A new fixed window `RateLimiter` ready to be embedded in the caller's object.
 ///
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
@@ -176,7 +176,7 @@ public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateL
 /// - `cooldown_ms`: Wait, in milliseconds, between exhausting the batch and the next reset.
 ///
 /// #### Returns
-/// - A new `Cooldown` `RateLimiter` starting fully available.
+/// - A new cooldown `RateLimiter` starting fully available.
 ///
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
@@ -197,7 +197,7 @@ public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
 ///
 /// #### Parameters
 /// - `self`: Limiter being charged.
-/// - `amount`: Units to consume. Must be greater than zero.
+/// - `amount`: Units to consume.
 /// - `clock`: Reference to the Sui `Clock`, used to apply accrual / window rollover / cooldown release.
 ///
 /// #### Aborts
@@ -214,7 +214,7 @@ public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) 
 ///
 /// #### Parameters
 /// - `self`: Limiter being charged.
-/// - `amount`: Units to consume. Must be greater than zero.
+/// - `amount`: Units to consume.
 /// - `clock`: Reference to the Sui `Clock`, used to apply accrual / window rollover / cooldown release.
 ///
 /// #### Returns
@@ -281,7 +281,7 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
 /// - `clock`: Reference to the Sui `Clock`, used to project pending accrual / rollover / release.
 ///
 /// #### Returns
-/// - The number of units that a `try_consume` call would currently accept.
+/// - The number of units that can currently be consumed.
 public fun available(self: &RateLimiter, clock: &Clock): u64 {
     let now = clock.timestamp_ms();
     match (self) {
@@ -322,7 +322,7 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
 /// clamps the stored token balance to the new capacity.
 ///
 /// #### Parameters
-/// - `self`: Limiter to reconfigure. Must currently be a `Bucket`.
+/// - `self`: Limiter to reconfigure.
 /// - `capacity`: New maximum token balance.
 /// - `refill_amount`: New tokens credited per refill interval.
 /// - `refill_interval_ms`: New refill interval, in milliseconds.
@@ -370,12 +370,12 @@ public fun reconfigure_bucket(
 
 /// Rewrite a `FixedWindow` limiter's configuration in place.
 ///
-/// Rolls the window forward if `now` has crossed into a later window, then updates the
-/// configuration and clamps `available` to the new capacity. If a rollover occurred,
+/// Rolls the window forward if current time has crossed into a later window, then updates
+/// the configuration and clamps `available` to the new capacity. If a rollover occurred,
 /// the fresh window starts fully available under the new `capacity`.
 ///
 /// #### Parameters
-/// - `self`: Limiter to reconfigure. Must currently be a `FixedWindow`.
+/// - `self`: Limiter to reconfigure.
 /// - `capacity`: New maximum units consumable per window.
 /// - `window_ms`: New window length, in milliseconds.
 /// - `clock`: Reference to the Sui `Clock`, used to roll the anchor forward under the old config.
@@ -425,7 +425,7 @@ public fun reconfigure_fixed_window(
 /// the gate engages instead of granting a free reset.
 ///
 /// #### Parameters
-/// - `self`: Limiter to reconfigure. Must currently be a `Cooldown`.
+/// - `self`: Limiter to reconfigure.
 /// - `capacity`: New maximum units consumable per batch.
 /// - `cooldown_ms`: New wait between batches, in milliseconds.
 /// - `clock`: Reference to the Sui `Clock`, used to arm a fresh deadline if needed.
