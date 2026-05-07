@@ -6,9 +6,9 @@
 /// lives inside.
 ///
 /// Three strategies are provided in one enum, all sharing the same API:
-/// - `Bucket` — continuously refilling token bucket with a configurable refill schedule,
-/// - `FixedWindow` — up to `capacity` units per fixed-length window anchored at creation,
-/// - `Cooldown` — up to `capacity` units before requiring a `cooldown_ms` wait.
+/// - `Bucket` - continuously refilling token bucket with a configurable refill schedule,
+/// - `FixedWindow` - up to `capacity` units per fixed-length window anchored at creation,
+/// - `Cooldown` - up to `capacity` units before requiring a `cooldown_ms` wait.
 ///
 /// Typical lifecycle:
 /// 1. the integrator creates a limiter with one of the `new_*` constructors and stores it in
@@ -91,7 +91,7 @@ public enum RateLimiter has drop, store {
     },
     /// Up to `capacity` units may be consumed before the limiter gates on `cooldown_ms`.
     /// `available` decrements with each successful consume. Once `available == 0`,
-    /// `cooldown_end_ms` is set to `now + cooldown_ms` — the absolute deadline at which
+    /// `cooldown_end_ms` is set to `now + cooldown_ms` - the absolute deadline at which
     /// the gate releases. No further consume succeeds until `now >= cooldown_end_ms`,
     /// at which point `available` resets to `capacity` and the next batch is granted.
     /// `cooldown_end_ms` is a don't-care field while `available > 0`; it is only read
@@ -418,7 +418,7 @@ public fun reconfigure_fixed_window(
 
 /// Rewrite a `Cooldown` limiter's configuration in place.
 ///
-/// An in-flight cooldown deadline is preserved as-is — the new `cooldown_ms` does NOT
+/// An in-flight cooldown deadline is preserved as-is - the new `cooldown_ms` does NOT
 /// retroactively shift a gate that is already armed. `available` is clamped to the new
 /// capacity. If after the clamp `available == 0` and no in-flight gate exists (deadline
 /// already elapsed, or never set), a fresh deadline is armed at `now + cooldown_ms` so
