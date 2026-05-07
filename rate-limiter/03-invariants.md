@@ -1,26 +1,8 @@
----
-stage: invariants
-project: rate-limiter
-mode: extension
-extends: contracts/utils/sources/rate_limiter.move
-status: draft
-timestamp: 2026-05-06
-author: nenad
-previous_stage: null
-tags: [rate-limiter, utils, embeddable]
----
-
-# Rate Limiter — Invariants
+# Rate Limiter - Invariants
 
 ## Summary
 
-Embeddable rate-limiting primitive (`store + drop`) with three variants — `Bucket`, `FixedWindow`, `Cooldown` — sharing one API. Authorization is delegated entirely to whoever holds `&mut` to the embedded field. This artifact captures 4 type-level, 7 runtime, 13 state-transition, 4 economic, and 2 composability invariants enforced by the implementation. Earlier-flagged u64 overflow paths (MISS-1/2/3) and the `FixedWindow` reconfigure quirk (MISS-5) are resolved in code.
-
-This is a **post-refactor revision** (2026-05-06) reconciling the document with several code refactors:
-- `new_bucket_with_tokens` was folded into `new_bucket`, which now takes an `initial_available` argument.
-- The `Cooldown` variant tracks `cooldown_end_ms` (the absolute release deadline) instead of `last_used_ms` (the last consume timestamp). `available` (a "remaining" counter) replaces the old `used` (a "consumed" counter) across all variants.
-- `roll_window` was inlined into `try_consume` and `reconfigure_fixed_window`.
-- The variant-guard precedence in all three `reconfigure_*` paths was made explicit (config asserts run inside the matching arm; the wildcard arm aborts first on wrong variant).
+Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucket`, `FixedWindow`, `Cooldown` - sharing one API. Authorization is delegated entirely to whoever holds `&mut` to the embedded field. This document captures 4 type-level, 7 runtime, 13 state-transition, 4 economic, and 2 composability invariants enforced by the implementation.
 
 ## Type-Level Invariants
 
@@ -33,11 +15,10 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 **Applies to:** the `RateLimiter` enum.
 
 **Enforcement mechanism:**
-- Type system: `has drop, store` — explicitly no `key`, no `copy`.
+- Type system: `has drop, store` - explicitly no `key`, no `copy`.
 - Runtime check: n/a.
-- Test: not directly testable; encoded by abilities.
 
-**Violation scenario:** Two distinct objects share the same limiter state, allowing each to consume the full capacity independently — silent over-issuance.
+**Violation scenario:** If the limiter could be copied or shared as a top-level object, two parent objects could each hold a "copy" with its own counter. Each copy would refill and drain independently, so the same logical limiter would grant 2× (or N×) its configured capacity - silent over-issuance.
 
 **Severity:** Critical
 
@@ -54,7 +35,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 **Enforcement mechanism:**
 - Type system: enum `match` is exhaustive.
 - Runtime check: `EWrongVariant` aborts in `reconfigure_*` when the variant is wrong (INV-R6).
-- Test: [`reconfigure_bucket_on_non_bucket_aborts`](contracts/utils/tests/rate_limiter_tests.move#L238), [`reconfigure_fixed_window_on_non_fixed_window_aborts`](contracts/utils/tests/rate_limiter_tests.move#L251), [`reconfigure_cooldown_on_non_cooldown_aborts`](contracts/utils/tests/rate_limiter_tests.move#L265).
+- Test: `reconfigure_*` unit tests.
 
 **Violation scenario:** A limiter built as `Cooldown` is reconfigured into a `Bucket`, silently changing the rate-limiting policy without consumer awareness.
 
@@ -68,7 +49,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Statement:** `available(&RateLimiter, &Clock)` cannot mutate limiter state.
 
-**Applies to:** [`available`](contracts/utils/sources/rate_limiter.move#L205).
+**Applies to:** `available`.
 
 **Enforcement mechanism:**
 - Type system: `&RateLimiter` immutable borrow.
@@ -76,25 +57,6 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Test: not directly testable; encoded by borrow.
 
 **Violation scenario:** A read path "consumes" capacity, draining the limiter through inspection.
-
-**Severity:** Critical
-
----
-
-### INV-T4: Mutation requires `&mut`
-
-**Category:** Type-level
-
-**Statement:** All state-changing functions (`try_consume`, `consume_or_abort`, `reconfigure_*`) require `&mut RateLimiter`. Authorization is delegated entirely to the holder of the parent object's `&mut`.
-
-**Applies to:** all hot-path and reconfigure functions.
-
-**Enforcement mechanism:**
-- Type system: `&mut` borrow.
-- Runtime check: n/a.
-- Test: encoded by signatures.
-
-**Violation scenario:** Anyone with a read borrow could consume capacity — would defeat the entire delegation model.
 
 **Severity:** Critical
 
@@ -180,7 +142,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Category:** Runtime
 
-**Statement:** `try_consume(amount, ..)` requires `amount > 0`. Zero is treated as a programmer error, not a rate-limit condition. (For `Cooldown`, `available` decrements by exactly 1 per call regardless of `amount` — see INV-S8 — so zero would be especially confusing if it were silently accepted.)
+**Statement:** `try_consume(amount, ..)` requires `amount > 0`. Zero is treated as a programmer error, not a rate-limit condition. (For `Cooldown`, `available` decrements by exactly 1 per call regardless of `amount` - see INV-S8 - so zero would be especially confusing if it were silently accepted.)
 
 **Applies to:** [`try_consume`](contracts/utils/sources/rate_limiter.move#L152), [`consume_or_abort`](contracts/utils/sources/rate_limiter.move#L144).
 
@@ -208,7 +170,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Runtime check: `assert_*_config!` is invoked *inside* the matching arm, so the wildcard `_ => abort EWrongVariant` arm fires first on wrong variant.
 - Test: [`reconfigure_bucket_on_non_bucket_aborts`](contracts/utils/tests/rate_limiter_tests.move#L238), [`reconfigure_fixed_window_on_non_fixed_window_aborts`](contracts/utils/tests/rate_limiter_tests.move#L251), [`reconfigure_cooldown_on_non_cooldown_aborts`](contracts/utils/tests/rate_limiter_tests.move#L265), plus three priority tests at L279/L295/L309.
 
-**Violation scenario:** A `Cooldown` reconfigured via `reconfigure_bucket` would silently change variant — see INV-T2.
+**Violation scenario:** A `Cooldown` reconfigured via `reconfigure_bucket` would silently change variant - see INV-T2.
 
 **Severity:** High
 
@@ -227,7 +189,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Runtime check: implementation literally calls `try_consume` and asserts.
 - Test: [`bucket_consume_or_abort_aborts_when_empty`](contracts/utils/tests/rate_limiter_tests.move#L84), [`fixed_window_consume_or_abort_aborts_when_full`](contracts/utils/tests/rate_limiter_tests.move#L775), [`cooldown_consume_or_abort_aborts_when_in_cooldown`](contracts/utils/tests/rate_limiter_tests.move#L789).
 
-**Violation scenario:** Consumers couldn't predict whether to use `try_consume` or `consume_or_abort` — the latter would diverge from the former.
+**Violation scenario:** Consumers couldn't predict whether to use `try_consume` or `consume_or_abort` - the latter would diverge from the former.
 
 **Severity:** Medium
 
@@ -286,7 +248,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Runtime check: construction sets `window_start_ms = clock.timestamp_ms()` (no wall-clock alignment). The advance computation `let steps = (now - window_start_ms) / window_ms; if steps != 0 { window_start_ms += steps * window_ms; available = capacity }` is inlined identically in `try_consume` and `reconfigure_fixed_window` (with the latter using the current `window_ms` *before* it is overwritten).
 - Test: [`fixed_window_first_window_has_full_length_at_nonzero_creation`](contracts/utils/tests/rate_limiter_tests.move#L693).
 
-**Violation scenario:** A wall-clock-aligned design (the previous behavior) makes the first window arbitrarily short — if the limiter is created at `t = 99` with `window_ms = 100`, the first window is only 1 ms long. The anchored design guarantees every window has length exactly `window_ms`. Misaligning `window_start_ms` (e.g. by setting it to a value that isn't `anchor + k * window_ms`) would let an attacker reset `available` more frequently than once per `window_ms`, exceeding INV-E2.
+**Violation scenario:** A wall-clock-aligned design makes the first window arbitrarily short - if the limiter is created at `t = 99` with `window_ms = 100`, the first window is only 1 ms long. The anchored design guarantees every window has length exactly `window_ms`. Misaligning `window_start_ms` (e.g. by setting it to a value that isn't `anchor + k * window_ms`) would let an attacker reset `available` more frequently than once per `window_ms`, exceeding INV-E2.
 
 **Severity:** High
 
@@ -334,7 +296,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Category:** State transition
 
-**Statement:** After accrual, `last_refill_ms ≡ original_last_refill_ms (mod refill_interval_ms)`. Sub-interval time elapsed but not yet credited is never discarded — it accrues toward the next step.
+**Statement:** After accrual, `last_refill_ms ≡ original_last_refill_ms (mod refill_interval_ms)`. Sub-interval time elapsed but not yet credited is never discarded - it accrues toward the next step.
 
 **Applies to:** `bucket_accrue`.
 
@@ -373,16 +335,16 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 **Category:** State transition
 
 **Statement:** A `Cooldown` is in one of two logical states:
-- **Granted:** `available > 0` — the next `try_consume(amount > 0, _)` succeeds and decrements `available` by exactly 1 (the `amount` value is irrelevant beyond the `> 0` check). At construction `available = capacity`, so the limiter starts in this state.
-- **Gated:** `available == 0` — `try_consume` returns `false` until `now ≥ cooldown_end_ms`, at which point a single call resets `available = capacity` and consumes (transitioning back to Granted, with `available = capacity - 1`).
+- **Granted:** `available > 0` - the next `try_consume(amount > 0, _)` succeeds and decrements `available` by exactly 1 (the `amount` value is irrelevant beyond the `> 0` check). At construction `available = capacity`, so the limiter starts in this state.
+- **Gated:** `available == 0` - `try_consume` returns `false` until `now ≥ cooldown_end_ms`, at which point a single call resets `available = capacity` and consumes (transitioning back to Granted, with `available = capacity - 1`).
 
-`cooldown_end_ms` is a don't-care field while `available > 0`; it is only read in the Gated state. Initial value `0` is therefore safe — it is never observed before being written.
+`cooldown_end_ms` is a don't-care field while `available > 0`; it is only read in the Gated state. Initial value `0` is therefore safe - it is never observed before being written.
 
 **Applies to:** [`Cooldown`](contracts/utils/sources/rate_limiter.move#L80).
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: `try_consume` Cooldown arm in [rate_limiter.move:186-197](contracts/utils/sources/rate_limiter.move#L186-L197) — `if (*available == 0) { if (now < *cooldown_end_ms) return false; *available = *capacity }`, then unconditional `*available = *available - 1`, then arm `*cooldown_end_ms = now + *cooldown_ms` only when the decrement reaches 0.
+- Runtime check: `try_consume` Cooldown arm in [rate_limiter.move:186-197](contracts/utils/sources/rate_limiter.move#L186-L197) - `if (*available == 0) { if (now < *cooldown_end_ms) return false; *available = *capacity }`, then unconditional `*available = *available - 1`, then arm `*cooldown_end_ms = now + *cooldown_ms` only when the decrement reaches 0.
 - Test: [`cooldown_accumulates_used_until_capacity_then_gates`](contracts/utils/tests/rate_limiter_tests.move#L173), [`cooldown_amount_does_not_affect_used`](contracts/utils/tests/rate_limiter_tests.move#L203), [`cooldown_available_predicts_try_consume`](contracts/utils/tests/rate_limiter_tests.move#L757).
 
 **Violation scenario:** Reading `cooldown_end_ms` while in the Granted state would gate spuriously on a fresh limiter (since `cooldown_end_ms = 0` initially). The current code only reads it inside the `available == 0` branch, so this is structurally avoided.
@@ -423,7 +385,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Runtime check: `EWrongVariant` (INV-R6).
 - Test: covered by all three `reconfigure_*_on_non_*_aborts` tests at L238/L251/L265.
 
-**Violation scenario:** Silent variant change — a `Bucket` becomes a `Cooldown` mid-flight, completely changing the semantics of `consume`.
+**Violation scenario:** Silent variant change - a `Bucket` becomes a `Cooldown` mid-flight, completely changing the semantics of `consume`.
 
 **Severity:** Critical
 
@@ -477,10 +439,10 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Enforcement mechanism:**
 - Type system: n/a.
-- Runtime check: the inline window-roll computation reads `*window_field` (the OLD `window_ms`) for `steps = (now - *window_start_ms) / *window_field`, then writes `*window_start_ms += steps * *window_field` — both *before* the new `window_ms` overwrites `*window_field`.
+- Runtime check: the inline window-roll computation reads `*window_field` (the OLD `window_ms`) for `steps = (now - *window_start_ms) / *window_field`, then writes `*window_start_ms += steps * *window_field` - both *before* the new `window_ms` overwrites `*window_field`.
 - Test: [`fixed_window_reconfigure_rolls_under_old_window_first`](contracts/utils/tests/rate_limiter_tests.move#L575).
 
-**Violation scenario:** Using the new `window_ms` for the rollover decision (the previous bug) could move `window_start_ms` backward when widening, carrying old-window usage into a wider new window — letting a fresh wider window admit only `new_capacity - used_under_old_window` of its budget on the first turn after reconfigure, surprising integrators and potentially breaking INV-E2's spirit across the reconfigure boundary.
+**Violation scenario:** Using the new `window_ms` for the rollover decision could move `window_start_ms` backward when widening, carrying old-window usage into a wider new window - letting a fresh wider window admit only `new_capacity - used_under_old_window` of its budget on the first turn after reconfigure, surprising integrators and potentially breaking INV-E2's spirit across the reconfigure boundary.
 
 **Severity:** High
 
@@ -499,7 +461,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Runtime check: implied by INV-S1 + accrual formula.
 - Test: covered partially by [`bucket_starts_full_and_refills_over_time`](contracts/utils/tests/rate_limiter_tests.move#L12), [`bucket_no_overflow_with_huge_refill_amount`](contracts/utils/tests/rate_limiter_tests.move#L636), [`bucket_no_overflow_under_extreme_clock_advance`](contracts/utils/tests/rate_limiter_tests.move#L655). No long-run / fuzzed test exists.
 
-**Violation scenario:** Over-issuance — the central economic guarantee a rate limiter exists to provide. The previously reachable overflow paths (MISS-1, MISS-2) are now closed.
+**Violation scenario:** Over-issuance - the central economic guarantee a rate limiter exists to provide.
 
 **Severity:** Critical
 
@@ -518,7 +480,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Runtime check: implied by INV-S2 + INV-S3 + INV-S4.
 - Test: [`fixed_window_counts_per_window_and_resets_on_boundary`](contracts/utils/tests/rate_limiter_tests.move#L117), [`fixed_window_first_window_has_full_length_at_nonzero_creation`](contracts/utils/tests/rate_limiter_tests.move#L693).
 
-**Violation scenario:** Per-window cap exceeded. The previously reachable overflow path (MISS-3) is now closed.
+**Violation scenario:** Per-window cap exceeded.
 
 **Severity:** Critical
 
@@ -547,7 +509,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 
 **Category:** Economic
 
-**Statement:** If `available(&clk) ≥ amount` and no clock change or other call intervenes, then `try_consume(amount, &clk)` returns `true`. For `Cooldown`, `available` is "number of consecutive `try_consume` calls that will succeed before the gate arms" — so `available == N` ⇒ exactly `N` successive `try_consume(_, &clk)` calls succeed before the gate engages, regardless of `amount`.
+**Statement:** If `available(&clk) ≥ amount` and no clock change or other call intervenes, then `try_consume(amount, &clk)` returns `true`. For `Cooldown`, `available` is "number of consecutive `try_consume` calls that will succeed before the gate arms" - so `available == N` ⇒ exactly `N` successive `try_consume(_, &clk)` calls succeed before the gate engages, regardless of `amount`.
 
 **Applies to:** [`available`](contracts/utils/sources/rate_limiter.move#L205), [`try_consume`](contracts/utils/sources/rate_limiter.move#L152).
 
@@ -575,7 +537,7 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Runtime check: n/a.
 - Test: not directly testable; encoded by absence of global API.
 
-**Violation scenario:** Coupling between integrators using the limiter — one consumer's actions affecting another's quota.
+**Violation scenario:** Coupling between integrators using the limiter - one consumer's actions affecting another's quota.
 
 **Severity:** Critical (for the design's central premise)
 
@@ -594,22 +556,9 @@ This is a **post-refactor revision** (2026-05-06) reconciling the document with 
 - Runtime check: every call uses `clock.timestamp_ms()` afresh; state is only the embedded fields.
 - Test: PTB-level testing not in scope of this module's unit tests.
 
-**Violation scenario:** Bundling two consumes in a single PTB would behave differently from the same calls split across two PTBs — surprising and integration-hostile.
+**Violation scenario:** Bundling two consumes in a single PTB would behave differently from the same calls split across two PTBs - surprising and integration-hostile.
 
 **Severity:** High
-
-## Existing Invariants (Extension Mode)
-
-This is an extension-mode artifact — invariants were extracted from the merged implementation on branch `rate-limiter`. There are no pre-existing invariants to preserve or modify.
-
-### Preserved
-None — first invariants pass on this module.
-
-### Modified
-None.
-
-### New
-All invariants in this artifact.
 
 ## Invariant Coverage Matrix
 
@@ -618,18 +567,18 @@ All invariants in this artifact.
 | `new_bucket` | INV-T1, INV-T2, INV-R1, INV-R4, INV-S1, INV-S5 | Type + Runtime |
 | `new_fixed_window` | INV-T1, INV-T2, INV-R2, INV-S2, INV-S3 | Type + Runtime |
 | `new_cooldown` | INV-T1, INV-T2, INV-R3, INV-S8 | Type + Runtime |
-| `try_consume` | INV-T4, INV-R5, INV-S1, INV-S2, INV-S3, INV-S4, INV-S5, INV-S6, INV-S7, INV-S8, INV-S9, INV-E1, INV-E2, INV-E3, INV-C2 | Type + Runtime |
-| `consume_or_abort` | INV-T4, INV-R5, INV-R7 + all of `try_consume` | Type + Runtime |
+| `try_consume` | INV-R5, INV-S1, INV-S2, INV-S3, INV-S4, INV-S5, INV-S6, INV-S7, INV-S8, INV-S9, INV-E1, INV-E2, INV-E3, INV-C2 | Type + Runtime |
+| `consume_or_abort` | INV-R5, INV-R7 + all of `try_consume` | Type + Runtime |
 | `available` | INV-T3, INV-E4 | Type only |
-| `reconfigure_bucket` | INV-T4, INV-R1, INV-R6, INV-S5, INV-S10, INV-S11, INV-S12 | Type + Runtime |
-| `reconfigure_fixed_window` | INV-T4, INV-R2, INV-R6, INV-S2, INV-S3, INV-S4, INV-S10, INV-S11, INV-S13 | Type + Runtime |
-| `reconfigure_cooldown` | INV-T4, INV-R3, INV-R6, INV-S8, INV-S10, INV-S11 | Type + Runtime |
+| `reconfigure_bucket` | INV-R1, INV-R6, INV-S5, INV-S10, INV-S11, INV-S12 | Type + Runtime |
+| `reconfigure_fixed_window` | INV-R2, INV-R6, INV-S2, INV-S3, INV-S4, INV-S10, INV-S11, INV-S13 | Type + Runtime |
+| `reconfigure_cooldown` | INV-R3, INV-R6, INV-S8, INV-S10, INV-S11 | Type + Runtime |
 
 ## Operator Responsibilities (Out of Scope for the module)
 
-- **Cooldown deadline overflow.** `try_consume` for `Cooldown` computes `cooldown_end_ms = now + cooldown_ms`. Sui's `Clock` is monotonic and bounded well below `u64::MAX`, but `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain timestamp during the limiter's lifetime — any policy-meaningful value (seconds to days to years in ms) satisfies this trivially. The module enforces only positivity (INV-R3); no upper-bound assert is added because there is no useful `u64` ceiling that captures "policy-reasonable."
+- **Cooldown deadline overflow.** `try_consume` for `Cooldown` computes `cooldown_end_ms = now + cooldown_ms`. Sui's `Clock` is monotonic and bounded well below `u64::MAX`, but `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain timestamp during the limiter's lifetime - any policy-meaningful value (seconds to days to years in ms) satisfies this trivially. The module enforces only positivity (INV-R3); no upper-bound assert is added because there is no useful `u64` ceiling that captures "policy-reasonable."
 - **Clock authenticity.** The module trusts `&Clock`; it does not defend against a malicious shared-clock substitute (Sui's `Clock` is a singleton shared object, so this is a Sui-platform property).
-- **Authorization / access control inside the module.** Delegated to the parent object holding the field (INV-T4). The module makes no claim about who *should* be allowed to call `&mut` paths.
+- **Authorization / access control inside the module.** Delegated to the parent object holding the field. The module makes no claim about who *should* be allowed to call `&mut` paths.
 
 ## Out of Scope
 
@@ -639,50 +588,13 @@ All invariants in this artifact.
 ## Dev Notes
 
 - **Authorization model is the central design decision.** The limiter delegates 100% of access control to the holder of `&mut` to the parent field. This is what makes the primitive embeddable, registry-less, and PTB-friendly. Any future "shared rate limiter" feature would require fundamentally different primitives.
-- **Clock is assumed monotonic.** Sui's `Clock` is monotonic in practice; the module relies on this and uses `now - last_*` directly. If `now < last_*` ever held, the subtraction would underflow and abort — this is a fail-closed posture rather than a silent absorption.
+- **Clock is assumed monotonic.** Sui's `Clock` is monotonic in practice; the module relies on this and uses `now - last_*` directly. If `now < last_*` ever held, the subtraction would underflow and abort - this is a fail-closed posture rather than a silent absorption.
 - **Overflow surfaces closed by implementation, not config bounds.** `bucket_accrue`'s two-branch structure bounds every intermediate product and sum by `capacity` (no upper bound on `capacity` or `refill_amount` required beyond `checked_add`). FixedWindow's hot-path comparison (`amount > capacity - available`) uses subtraction so no addition can overflow. Cooldown is the one exception (`now + cooldown_ms`); operators handle it (see Operator Responsibilities).
-- **Anchor-based windows.** `FixedWindow` windows are `[creation + k * window_ms, creation + (k+1) * window_ms)`. The first window always has length exactly `window_ms` (in the previous wall-clock-aligned design it could be arbitrarily short). On `reconfigure_fixed_window`, the new window grid anchors at the rolled-forward `window_start_ms` under the OLD `window_ms`.
-- **Cooldown stores `available` and `cooldown_end_ms`, not `used` and `last_used_ms`.** The current design tracks remaining capacity directly and stores the absolute release deadline; the gate predicate is `now < cooldown_end_ms`. This is symmetric with the other variants' `available` field.
+- **Anchor-based windows.** `FixedWindow` windows are `[creation + k * window_ms, creation + (k+1) * window_ms)`. The first window always has length exactly `window_ms`. On `reconfigure_fixed_window`, the new window grid anchors at the rolled-forward `window_start_ms` under the OLD `window_ms`.
+- **Cooldown stores `available` and `cooldown_end_ms`.** The design tracks remaining capacity directly and stores the absolute release deadline; the gate predicate is `now < cooldown_end_ms`. This is symmetric with the other variants' `available` field.
 
 ## Open Questions
 
-1. ~~**Should the overflow paths (MISS-1/2/3) be fixed with saturating arithmetic, with explicit upper-bound asserts on config, or both?**~~ **Resolved (2026-05-06):** neither — `bucket_accrue` was rewritten so all products and sums are bounded by `capacity`, and `try_consume` comparisons were reformulated as subtraction. Configs need positivity plus the `capacity + refill_amount` no-overflow check (Bucket).
-2. ~~**Is the FixedWindow "widening absorbs prior usage" behavior (MISS-5) intended?**~~ **Resolved (2026-05-06):** windows are now anchored at creation time (INV-S3); `reconfigure_fixed_window` rolls forward under the OLD `window_ms` before installing the new config, never moves `window_start_ms` backward.
-3. **Should `available()` for `Cooldown` while in the Gated state but post-deadline return `capacity` or something else?** Today it returns `capacity` (the full grant the next consume will receive). This matches the INV-E4 statement.
-4. **Should the variant guard pattern (`reconfigure_bucket` aborts on non-Bucket) be replaced with a "reconfigure_or_replace" that always works by overwriting?** Probably no — the abort makes the integrator's intent explicit. But worth noting as an alternative.
+1. **Should `available()` for `Cooldown` while in the Gated state but post-deadline return `capacity` or something else?** Today it returns `capacity` (the full grant the next consume will receive). This matches the INV-E4 statement.
+2. **Should the variant guard pattern (`reconfigure_bucket` aborts on non-Bucket) be replaced with a "reconfigure_or_replace" that always works by overwriting?** Probably no - the abort makes the integrator's intent explicit. But worth noting as an alternative.
 
-## Gaps List (referenced by Dev Notes and Open Questions)
-
-| ID | Severity | Stage to fix | Description |
-|---|---|---|---|
-| MISS-1 | Critical | Code Draft | ✅ **Resolved.** `bucket_accrue` rewritten with two branches: under-fill (`elapsed_steps ≤ q`) bounds `elapsed_steps * refill_amount ≤ headroom ≤ capacity`; fill (`elapsed_steps > q`) writes `capacity` directly. No intermediate sum can exceed `capacity`. |
-| MISS-2 | Critical | Code Draft | ✅ **Resolved.** Follows from MISS-1 fix: `available + credit ≤ capacity` in the under-fill branch; the fill branch never computes the sum. |
-| MISS-3 | Critical | Code Draft | ✅ **Resolved.** `try_consume` for `FixedWindow` now uses `amount > *available` directly (and the prior-formulation overflow risk no longer exists since `available` already encodes "remaining"). |
-| MISS-4 | Low | Code Draft | ✅ **Resolved (and reframed).** Cooldown gate is now `now < cooldown_end_ms` (`cooldown_end_ms` set as `now + cooldown_ms`). The prior `now - last < cooldown_ms` subtraction-form is no longer applicable. Operators handle the `now + cooldown_ms` overflow (see Operator Responsibilities). |
-| MISS-5 | High | Code Draft | ✅ **Resolved.** `reconfigure_fixed_window` now uses the inline window-roll under the OLD `window_ms` *before* installing the new config. Window grid is anchored to creation time (INV-S3). |
-| MISS-6 | Medium | Tests | ✅ **Resolved.** [`bucket_failed_try_consume_does_not_drain_state`](contracts/utils/tests/rate_limiter_tests.move#L460), [`fixed_window_failed_try_consume_does_not_advance_used`](contracts/utils/tests/rate_limiter_tests.move#L483), [`cooldown_failed_try_consume_does_not_reset_anchor`](contracts/utils/tests/rate_limiter_tests.move#L504). |
-| MISS-7 | Medium | Tests | ✅ **Resolved.** [`bucket_preserves_subinterval_time_across_consumes`](contracts/utils/tests/rate_limiter_tests.move#L528). |
-| MISS-8 | Medium | Tests | ✅ **Resolved.** [`bucket_reconfigure_accrues_under_old_rate_first`](contracts/utils/tests/rate_limiter_tests.move#L553), [`fixed_window_reconfigure_rolls_under_old_window_first`](contracts/utils/tests/rate_limiter_tests.move#L575). |
-| MISS-9 | Medium | Tests | ✅ **Resolved.** [`cooldown_reconfigure_preserves_in_flight_deadline`](contracts/utils/tests/rate_limiter_tests.move#L600), [`cooldown_reconfigure_rearms_when_drained_and_deadline_elapsed`](contracts/utils/tests/rate_limiter_tests.move#L823). |
-| MISS-10 | Medium | Tests | ✅ **Resolved.** All three `reconfigure_*_on_non_*_aborts` tests at L238/L251/L265, plus the variant-priority tests at L279/L295/L309. |
-| MISS-11 | Critical | Tests | ✅ **Resolved.** [`bucket_no_overflow_with_huge_refill_amount`](contracts/utils/tests/rate_limiter_tests.move#L636), [`bucket_no_overflow_under_extreme_clock_advance`](contracts/utils/tests/rate_limiter_tests.move#L655). |
-| MISS-12 | Critical | Tests | ✅ **Resolved.** [`fixed_window_try_consume_max_amount_returns_false`](contracts/utils/tests/rate_limiter_tests.move#L674). |
-| MISS-13 | Low | Docs | ✅ **Resolved.** Module-level doc comment now states the operator's `cooldown_ms` overflow responsibility; clock-monotonic assumption documented in Dev Notes. |
-| MISS-14 | Low | Docs | ✅ **Resolved.** Module-level doc and INV-T4 / INV-C1 call out the delegated authorization model. |
-| MISS-15 | Medium | Tests | ✅ **Resolved.** [`fixed_window_first_window_has_full_length_at_nonzero_creation`](contracts/utils/tests/rate_limiter_tests.move#L693). |
-
-## Revision Log
-
-**2026-05-06 (post-refactor reconciliation)** — Document re-aligned with the merged implementation after a series of code refactors. Key reconciliations:
-
-- `new_bucket_with_tokens` removed; `new_bucket` now takes an `initial_available` argument. INV-R4 rewritten accordingly.
-- `Cooldown` field renames: `last_used_ms` → `cooldown_end_ms` (with inverted semantics — absolute deadline rather than last-consume timestamp); `used` → `available` (a remaining counter). INV-S8 / INV-S9 / INV-E3 rewritten; INV-S11 extended to cover the Cooldown clamp; INV-S8 now describes the two-state (Granted / Gated) machine.
-- `roll_window` helper inlined into `try_consume` and `reconfigure_fixed_window`. INV-S3 / INV-S4 / INV-S13 enforcement language updated.
-- `assert_cooldown_config!` requires `capacity > 0` in addition to `cooldown_ms > 0`. INV-R3 statement extended.
-- INV-R1 statement now includes the `checked_add` overflow guard alongside positivity.
-- INV-S7 now documents the `FixedWindow` window-roll persistence on the failure path explicitly (the roll is observable, but does not violate INV-E2 because the new window legitimately starts with full capacity).
-- Test names and line numbers updated throughout the coverage matrix to match [`rate_limiter_tests.move`](contracts/utils/tests/rate_limiter_tests.move) as of 2026-05-06.
-- New section **Operator Responsibilities** captures the `cooldown_ms` overflow caveat that the module deliberately does not enforce.
-- All `MISS-N` entries from the Tests stage are now marked resolved with test references; `MISS-13` and `MISS-14` (docs) are resolved by the module-level doc comment update.
-
-**2026-05-06 (initial code-stage fixes)** — Code-stage fixes applied to resolve MISS-1, MISS-2, MISS-3, MISS-4, MISS-5. Summary preserved in Open Questions 1 and 2.
