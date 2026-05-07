@@ -60,7 +60,7 @@ fun bucket_with_tokens_rejects_initial_above_capacity() {
     clk.set_for_testing(0);
 
     rate_limiter::new_bucket(10, 1, 10, 11, &clk);
-    abort 0
+    abort 100
 }
 
 #[test]
@@ -86,7 +86,7 @@ fun bucket_consume_or_abort_aborts_when_empty() {
 
     let mut rl = rate_limiter::new_bucket(5, 1, 10, 5, &clk);
     rl.consume_or_abort(10, &clk);
-    abort 0
+    abort 100
 }
 
 #[test]
@@ -228,7 +228,7 @@ fun try_consume_with_zero_amount_aborts() {
 
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.try_consume(0, &clk);
-    abort 0
+    abort 100
 }
 
 // === Reconfigure variant guards ===
@@ -241,7 +241,7 @@ fun reconfigure_bucket_on_non_bucket_aborts() {
 
     let mut rl = rate_limiter::new_cooldown(1, 50);
     rl.reconfigure_bucket(10, 1, 10, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
@@ -252,7 +252,7 @@ fun reconfigure_fixed_window_on_non_fixed_window_aborts() {
 
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.reconfigure_fixed_window(5, 100, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
@@ -263,7 +263,7 @@ fun reconfigure_cooldown_on_non_cooldown_aborts() {
 
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.reconfigure_cooldown(1, 50, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
@@ -276,7 +276,7 @@ fun reconfigure_bucket_priority_variant_over_invalid_config() {
     // All-zero config would trip a config-validation error if the variant arm matched, but
     // the limiter is Cooldown, so EWrongVariant must fire first.
     rl.reconfigure_bucket(0, 0, 0, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
@@ -287,7 +287,7 @@ fun reconfigure_fixed_window_priority_variant_over_invalid_config() {
 
     let mut rl = rate_limiter::new_cooldown(1, 50);
     rl.reconfigure_fixed_window(0, 0, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
@@ -298,7 +298,7 @@ fun reconfigure_cooldown_priority_variant_over_invalid_config() {
 
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.reconfigure_cooldown(0, 0, &clk);
-    abort 0
+    abort 100
 }
 
 // === Constructor config validation ===
@@ -310,7 +310,7 @@ fun new_bucket_rejects_zero_capacity() {
     clk.set_for_testing(0);
 
     rate_limiter::new_bucket(0, 1, 1, 0, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroRefillAmount)]
@@ -320,7 +320,7 @@ fun new_bucket_rejects_zero_refill_amount() {
     clk.set_for_testing(0);
 
     rate_limiter::new_bucket(10, 0, 1, 10, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroRefillInterval)]
@@ -330,7 +330,7 @@ fun new_bucket_rejects_zero_refill_interval_ms() {
     clk.set_for_testing(0);
 
     rate_limiter::new_bucket(10, 1, 0, 10, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
@@ -340,7 +340,7 @@ fun new_fixed_window_rejects_zero_capacity() {
     clk.set_for_testing(0);
 
     rate_limiter::new_fixed_window(0, 100, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroWindow)]
@@ -350,7 +350,7 @@ fun new_fixed_window_rejects_zero_window_ms() {
     clk.set_for_testing(0);
 
     rate_limiter::new_fixed_window(10, 0, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCooldown)]
@@ -373,7 +373,7 @@ fun reconfigure_bucket_rejects_zero_capacity() {
 
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
     rl.reconfigure_bucket(0, 1, 1, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroWindow)]
@@ -384,7 +384,7 @@ fun reconfigure_fixed_window_rejects_zero_window_ms() {
 
     let mut rl = rate_limiter::new_fixed_window(10, 100, &clk);
     rl.reconfigure_fixed_window(10, 0, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCooldown)]
@@ -395,7 +395,7 @@ fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
 
     let mut rl = rate_limiter::new_cooldown(1, 50);
     rl.reconfigure_cooldown(1, 0, &clk);
-    abort 0
+    abort 100
 }
 
 // === All-or-nothing failure semantics ===
@@ -726,7 +726,7 @@ fun fixed_window_consume_or_abort_aborts_when_full() {
     let mut rl = rate_limiter::new_fixed_window(2, 100, &clk);
     rl.consume_or_abort(2, &clk);
     rl.consume_or_abort(1, &clk);
-    abort 0
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
@@ -738,7 +738,7 @@ fun cooldown_consume_or_abort_aborts_when_in_cooldown() {
     let mut rl = rate_limiter::new_cooldown(1, 100);
     rl.consume_or_abort(1, &clk);
     rl.consume_or_abort(1, &clk);
-    abort 0
+    abort 100
 }
 
 // === Cooldown reconfigure clamps `used` ===
