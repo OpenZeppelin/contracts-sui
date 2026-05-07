@@ -36,9 +36,9 @@ use sui::clock::Clock;
 /// The limiter cannot satisfy the requested consume against its current state.
 #[error(code = 0)]
 const ERateLimited: vector<u8> = "Rate limited";
-/// `capacity` must be greater than zero.
+/// Capacity must be greater than zero.
 #[error(code = 1)]
-const EZeroCapacity: vector<u8> = "capacity must be greater than zero";
+const EZeroCapacity: vector<u8> = "Capacity must be greater than zero";
 /// Reconfigure target does not match the limiter's current variant.
 #[error(code = 2)]
 const EWrongVariant: vector<u8> = "Wrong rate limiter variant";
@@ -46,21 +46,21 @@ const EWrongVariant: vector<u8> = "Wrong rate limiter variant";
 /// not a rate-limit decision.
 #[error(code = 3)]
 const EInvalidAmount: vector<u8> = "Amount must be greater than zero";
-/// `refill_amount` must be greater than zero.
+/// Refill amount must be greater than zero.
 #[error(code = 4)]
-const EZeroRefillAmount: vector<u8> = "refill_amount must be greater than zero";
-/// `refill_interval_ms` must be greater than zero.
+const EZeroRefillAmount: vector<u8> = "Refill amount must be greater than zero";
+/// Refill interval must be greater than zero.
 #[error(code = 5)]
-const EZeroRefillInterval: vector<u8> = "refill_interval_ms must be greater than zero";
-/// `window_ms` must be greater than zero.
+const EZeroRefillInterval: vector<u8> = "Refill interval must be greater than zero";
+/// Window must be greater than zero.
 #[error(code = 6)]
-const EZeroWindow: vector<u8> = "window_ms must be greater than zero";
-/// `cooldown_ms` must be greater than zero.
+const EZeroWindow: vector<u8> = "Window must be greater than zero";
+/// Cooldown must be greater than zero.
 #[error(code = 7)]
-const EZeroCooldown: vector<u8> = "cooldown_ms must be greater than zero";
-/// `initial_available` must not exceed `capacity`.
+const EZeroCooldown: vector<u8> = "Cooldown must be greater than zero";
+/// Initial available amount must not exceed capacity.
 #[error(code = 8)]
-const EInitialAboveCapacity: vector<u8> = "initial_available must not exceed capacity";
+const EInitialAboveCapacity: vector<u8> = "Initial available amount must not exceed capacity";
 
 // === Structs ===
 
