@@ -36,36 +36,28 @@ use sui::clock::Clock;
 /// The limiter cannot satisfy the requested consume against its current state.
 #[error(code = 0)]
 const ERateLimited: vector<u8> = "Rate limited";
-
 /// `capacity` must be greater than zero.
 #[error(code = 1)]
 const EZeroCapacity: vector<u8> = "capacity must be greater than zero";
-
 /// Reconfigure target does not match the limiter's current variant.
 #[error(code = 2)]
 const EWrongVariant: vector<u8> = "Wrong rate limiter variant";
-
 /// Consume amount must be greater than zero; a zero-unit consume is a programmer error,
 /// not a rate-limit decision.
 #[error(code = 3)]
 const EInvalidAmount: vector<u8> = "Amount must be greater than zero";
-
 /// `refill_amount` must be greater than zero.
 #[error(code = 4)]
 const EZeroRefillAmount: vector<u8> = "refill_amount must be greater than zero";
-
-/// `refill_interval_ms` must be greater than zero (zero would also divide by zero on accrual).
+/// `refill_interval_ms` must be greater than zero.
 #[error(code = 5)]
 const EZeroRefillInterval: vector<u8> = "refill_interval_ms must be greater than zero";
-
-/// `window_ms` must be greater than zero (zero would also divide by zero on rollover).
+/// `window_ms` must be greater than zero.
 #[error(code = 6)]
-const EZeroWindowMs: vector<u8> = "window_ms must be greater than zero";
-
+const EZeroWindow: vector<u8> = "window_ms must be greater than zero";
 /// `cooldown_ms` must be greater than zero.
 #[error(code = 7)]
-const EZeroCooldownMs: vector<u8> = "cooldown_ms must be greater than zero";
-
+const EZeroCooldown: vector<u8> = "cooldown_ms must be greater than zero";
 /// `initial_available` must not exceed `capacity`.
 #[error(code = 8)]
 const EInitialAboveCapacity: vector<u8> = "initial_available must not exceed capacity";
@@ -165,7 +157,7 @@ public fun new_bucket(
 ///
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroWindowMs` if `window_ms == 0`.
+/// - `EZeroWindow` if `window_ms == 0`.
 public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateLimiter {
     assert_fixed_window_config!(capacity, window_ms);
     RateLimiter::FixedWindow {
@@ -188,7 +180,7 @@ public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateL
 ///
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroCooldownMs` if `cooldown_ms == 0`.
+/// - `EZeroCooldown` if `cooldown_ms == 0`.
 public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
     assert_cooldown_config!(capacity, cooldown_ms);
     RateLimiter::Cooldown {
@@ -391,7 +383,7 @@ public fun reconfigure_bucket(
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not currently a `FixedWindow`.
 /// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroWindowMs` if `window_ms == 0`.
+/// - `EZeroWindow` if `window_ms == 0`.
 public fun reconfigure_fixed_window(
     self: &mut RateLimiter,
     capacity: u64,
@@ -441,7 +433,7 @@ public fun reconfigure_fixed_window(
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not currently a `Cooldown`.
 /// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroCooldownMs` if `cooldown_ms == 0`.
+/// - `EZeroCooldown` if `cooldown_ms == 0`.
 public fun reconfigure_cooldown(
     self: &mut RateLimiter,
     capacity: u64,
@@ -479,12 +471,12 @@ macro fun assert_bucket_config($capacity: u64, $refill_amount: u64, $refill_inte
 
 macro fun assert_fixed_window_config($capacity: u64, $window_ms: u64) {
     assert!($capacity > 0, EZeroCapacity);
-    assert!($window_ms > 0, EZeroWindowMs);
+    assert!($window_ms > 0, EZeroWindow);
 }
 
 macro fun assert_cooldown_config($capacity: u64, $cooldown_ms: u64) {
     assert!($capacity > 0, EZeroCapacity);
-    assert!($cooldown_ms > 0, EZeroCooldownMs);
+    assert!($cooldown_ms > 0, EZeroCooldown);
 }
 
 fun bucket_accrue(
