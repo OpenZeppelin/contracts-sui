@@ -1,8 +1,20 @@
-# Rate Limiter - Invariants
+---
+stage: invariants
+project: rate-limiter
+mode: extension
+extends: contracts/utils/sources/rate_limiter.move
+status: draft
+timestamp: 2026-05-07
+author: nenad
+previous_stage: null
+tags: [rate-limiter, utils, embeddable, invariants]
+---
+
+# Rate Limiter — Invariants
 
 ## Summary
 
-Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucket`, `FixedWindow`, `Cooldown` - sharing one API. Authorization is delegated entirely to whoever holds `&mut` to the embedded field.
+Embeddable rate-limiting primitive (`store + drop`) with three variants — `Bucket`, `FixedWindow`, `Cooldown` — sharing one API. Authorization is delegated entirely to whoever holds `&mut` to the embedded field.
 
 ## Document Conventions
 
@@ -20,7 +32,7 @@ Invariants describe the protocol's required guarantees. Enforcement notes descri
 
 **Statement:** A `RateLimiter` value cannot be a top-level Sui object and cannot be duplicated. It exists only as a field of some parent value.
 
-**Why it matters:** A duplicable or top-level limiter would let two parent objects each hold a "copy" with its own counter, multiplying the configured capacity by N - silent over-issuance of the central economic guarantee.
+**Why it matters:** A duplicable or top-level limiter would let two parent objects each hold a "copy" with its own counter, multiplying the configured capacity by N — silent over-issuance of the central economic guarantee.
 
 **Enforcement:** The type system denies the abilities required to live as a top-level Sui object or to be copied.
 
@@ -28,9 +40,9 @@ Invariants describe the protocol's required guarantees. Enforcement notes descri
 
 ### INV-T2: Variant identity is immutable
 
-**Statement:** A `RateLimiter` is exactly one of `Bucket | FixedWindow | Cooldown`. The variant is fixed at construction. No public path - including any `reconfigure_*` - can change it. To switch variant, the integrator must construct a fresh `RateLimiter` and overwrite the field.
+**Statement:** A `RateLimiter` is exactly one of `Bucket | FixedWindow | Cooldown`. The variant is fixed at construction. No public path — including any `reconfigure_*` — can change it. To switch variant, the integrator must construct a fresh `RateLimiter` and overwrite the field.
 
-**Why it matters:** A mid-flight variant swap would silently change the rate-limiting policy without consumer awareness - e.g., a `Cooldown` becoming a `Bucket` reinterprets every subsequent consume.
+**Why it matters:** A mid-flight variant swap would silently change the rate-limiting policy without consumer awareness — e.g., a `Cooldown` becoming a `Bucket` reinterprets every subsequent consume.
 
 **Enforcement:** Variant identity is preserved across every public operation; no public path produces a value of a different variant from its input.
 
@@ -90,7 +102,7 @@ Invariants describe the protocol's required guarantees. Enforcement notes descri
 
 **Statement:** Computations of the form `now - anchor` (Bucket refill anchor, FixedWindow window anchor, Cooldown deadline check) never underflow within the limiter's reachable state.
 
-**Why it matters:** A silent underflow would re-credit time, advance windows incorrectly, or release cooldown gates spuriously - all of which inflate the effective rate.
+**Why it matters:** A silent underflow would re-credit time, advance windows incorrectly, or release cooldown gates spuriously — all of which inflate the effective rate.
 
 **Enforcement:** Every anchor stored in the limiter is non-decreasing and is set from a reading of the same monotonic clock used at the subtraction site (see Assumed (External) Invariants on clock monotonicity). If clock monotonicity is ever violated, the subtraction aborts fail-closed rather than wrapping.
 
@@ -150,7 +162,7 @@ Invariants describe the protocol's required guarantees. Enforcement notes descri
 
 **Statement:** Across all time-based variants (`Bucket`, `FixedWindow`), any elapsed wall-clock interval contributes to refill or window advancement *exactly once*. Time-derived credit (refill tokens or fresh-window resets) cannot be minted twice for the same interval.
 
-**Why it matters:** Double-counting elapsed time is the central anti-inflation guarantee. If the same interval credited refill twice, or rolled the window twice, the effective rate would exceed the configured rate - violating INV-E1 and INV-E2.
+**Why it matters:** Double-counting elapsed time is the central anti-inflation guarantee. If the same interval credited refill twice, or rolled the window twice, the effective rate would exceed the configured rate — violating INV-E1 and INV-E2.
 
 **Enforcement:** Each variant's internal time anchor is non-decreasing and is updated atomically with the credit it grants. Once an interval has advanced the anchor, that interval is no longer reachable as elapsed time on any subsequent operation.
 
@@ -194,7 +206,7 @@ Invariants describe the protocol's required guarantees. Enforcement notes descri
 
 **Statement:** A consume operation that returns failure does not deduct from `available`. Failed consumes may, however, advance time-derived state transitions (Bucket refill, FixedWindow rollover, Cooldown gate release) that are due regardless of the consume's outcome.
 
-**Note:** For `FixedWindow` and `Cooldown`, a time-based reset (window roll / gate release) persists even if the subsequent `amount > available` check fails. This is deliberate: once time has crossed the window boundary or the cooldown deadline, the new window/batch has begun regardless of whether a consume succeeds inside it. The per-window or per-batch cap (INV-E2 / INV-E3) is unchanged - the fresh window/batch legitimately starts with `available = capacity`.
+**Note:** For `FixedWindow` and `Cooldown`, a time-based reset (window roll / gate release) persists even if the subsequent `amount > available` check fails. This is deliberate: once time has crossed the window boundary or the cooldown deadline, the new window/batch has begun regardless of whether a consume succeeds inside it. The per-window or per-batch cap (INV-E2 / INV-E3) is unchanged — the fresh window/batch legitimately starts with `available = capacity`.
 
 **Why it matters:** Conflating "denied" with "charged" would let a rejection still spend down capacity, doubly penalizing the consumer. Conversely, suppressing time-based transitions on failure would let a consumer indefinitely pin the limiter in a stale state by issuing failing requests.
 
@@ -206,8 +218,8 @@ Invariants describe the protocol's required guarantees. Enforcement notes descri
 
 **Statement:** A `Cooldown` is in one of two logical states:
 
-- **Granted:** `available > 0` - `try_consume(amount, _)` succeeds when `amount ≤ available`, and decrements `available` by `amount`. At construction `available = capacity`, so the limiter starts in this state.
-- **Gated:** `available == 0` - consume returns `false` until the cooldown deadline has elapsed, at which point the next call resets `available = capacity` and proceeds (succeeding when `amount ≤ capacity`, decrementing by `amount`).
+- **Granted:** `available > 0` — `try_consume(amount, _)` succeeds when `amount ≤ available`, and decrements `available` by `amount`. At construction `available = capacity`, so the limiter starts in this state.
+- **Gated:** `available == 0` — consume returns `false` until the cooldown deadline has elapsed, at which point the next call resets `available = capacity` and proceeds (succeeding when `amount ≤ capacity`, decrementing by `amount`).
 
 A consume that decrements `available` to exactly `0` arms the gate by setting the cooldown deadline. The deadline is meaningful only in the Gated state.
 
@@ -247,9 +259,7 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ## Economic / Protocol Invariants
 
-### Bounded Issuance
-
-#### INV-E1: Bucket long-run rate ceiling
+### INV-E1: Bucket long-run rate ceiling
 
 **Statement:** Over any interval `Δt`, the maximum number of tokens consumable from a `Bucket` is at most `capacity + ⌊Δt / refill_interval_ms⌋ · refill_amount`. The bucket cannot generate value out of thin air.
 
@@ -259,7 +269,7 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ---
 
-#### INV-E2: FixedWindow per-window cap
+### INV-E2: FixedWindow per-window cap
 
 **Statement:** No more than `capacity` units consumed within any window of length `window_ms`, where the window grid is anchored per INV-S6.
 
@@ -269,7 +279,7 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ---
 
-#### INV-E3: Cooldown minimum gap
+### INV-E3: Cooldown minimum gap
 
 **Statement:** When `Cooldown` transitions from Gated back to Granted, at least `cooldown_ms` (the value at the time the gate was armed) has elapsed since the consume that armed the gate.
 
@@ -277,9 +287,9 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 **Enforcement:** Implied by INV-S10 plus INV-S12 (which prevents reconfigure from retroactively shortening the gap).
 
-### Conservation Properties
+---
 
-#### INV-E4: No double-accrual of elapsed time
+### INV-E4: No double-accrual of elapsed time
 
 **Statement:** Elapsed time contributes refill credit (Bucket) or window advancement (FixedWindow) at most once. No elapsed interval can be reused to mint additional capacity or to roll an additional window.
 
@@ -289,11 +299,11 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ---
 
-#### INV-E5: No retroactive minting on reconfigure
+### INV-E5: No retroactive minting on reconfigure
 
 **Statement:** Reconfigure cannot grant capacity in the past under the new parameters. Capacity granted for any moment *t* is the capacity the parameters in effect at *t* would have granted.
 
-**Why it matters:** A reconfigure that retroactively widened the rate would let an operator backdate increased capacity - a bypass of the bounded-issuance guarantee for any consumer who held the limiter across the reconfigure boundary.
+**Why it matters:** A reconfigure that retroactively widened the rate would let an operator backdate increased capacity — a bypass of the bounded-issuance guarantee for any consumer who held the limiter across the reconfigure boundary.
 
 **Enforcement:** Implied by INV-S7. All elapsed time is settled under the previous parameters before the new parameters take effect.
 
@@ -333,7 +343,7 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 **Statement:** A `RateLimiter` requires no shared object, no registry, and no PTB ordering. Its scope is the parent value that owns it.
 
-**Why it matters:** Any global coupling would let one consumer's actions affect another's quota - the opposite of the primitive's design intent.
+**Why it matters:** Any global coupling would let one consumer's actions affect another's quota — the opposite of the primitive's design intent.
 
 **Enforcement:** The type abilities prevent the limiter from existing as a top-level Sui object, and the module exposes no global API.
 
@@ -343,7 +353,7 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 **Statement:** Multiple consume calls within a single PTB compose identically to the same calls split across separate PTBs, modulo the shared clock reading. There is no transaction-scoped accumulator and no PTB-local hidden accounting.
 
-**Why it matters:** If two consumes in one PTB behaved differently from the same calls split across two PTBs, integrators would need PTB-aware accounting - integration-hostile and surprising. (This is *not* EVM-style reentrancy; the property is about PTB-locality of state, not call-graph re-entry.)
+**Why it matters:** If two consumes in one PTB behaved differently from the same calls split across two PTBs, integrators would need PTB-aware accounting — integration-hostile and surprising. (This is *not* EVM-style reentrancy; the property is about PTB-locality of state, not call-graph re-entry.)
 
 **Enforcement:** No state is retained across calls beyond what is stored in the limiter's embedded fields; each call observes the clock independently.
 
@@ -362,13 +372,13 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ## Operator Responsibilities (Out of Scope for the module)
 
-- **Cooldown deadline overflow.** Cooldown computes `cooldown_end_ms = now + cooldown_ms`. Sui's `Clock` is monotonic and bounded well below `u64::MAX`, but a `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain timestamp during the limiter's lifetime - any policy-meaningful value (seconds to days to years in ms) satisfies this trivially. The module enforces only positivity (INV-R3); overflow is fail-closed (INV-A3).
+- **Cooldown deadline overflow.** Cooldown computes `cooldown_end_ms = now + cooldown_ms`. Sui's `Clock` is monotonic and bounded well below `u64::MAX`, but a `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain timestamp during the limiter's lifetime — any policy-meaningful value (seconds to days to years in ms) satisfies this trivially. The module enforces only positivity (INV-R3); overflow is fail-closed (INV-A3).
 - **Clock authenticity.** The module trusts `&Clock`; it does not defend against a malicious shared-clock substitute (Sui's `Clock` is a singleton shared object, so this is a Sui-platform property).
 - **Authorization / access control inside the module.** Delegated to the parent object holding the field. The module makes no claim about who *should* be allowed to call `&mut` paths.
 
 ## Assumed (External) Invariants
 
-- **Clock monotonicity.** Every elapsed-time computation in this module assumes `Clock::timestamp_ms()` is monotonically non-decreasing across calls. Sui's `Clock` provides this. If the assumption were ever violated, elapsed-time subtractions would underflow and abort - a fail-closed posture rather than silent corruption (INV-A1). INV-S4, INV-S6, INV-S10, and INV-E3 all rely on this.
+- **Clock monotonicity.** Every elapsed-time computation in this module assumes `Clock::timestamp_ms()` is monotonically non-decreasing across calls. Sui's `Clock` provides this. If the assumption were ever violated, elapsed-time subtractions would underflow and abort — a fail-closed posture rather than silent corruption (INV-A1). INV-S4, INV-S6, INV-S10, and INV-E3 all rely on this.
 
 ## Out of Scope
 
@@ -383,4 +393,4 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ## Open Questions
 
-1. **Should the variant guard pattern (`reconfigure_bucket` aborts on non-Bucket) be replaced with a "reconfigure_or_replace" that always works by overwriting?** Probably no - the abort makes the integrator's intent explicit. But worth noting as an alternative.
+1. **Should the variant guard pattern (`reconfigure_bucket` aborts on non-Bucket) be replaced with a "reconfigure_or_replace" that always works by overwriting?** Probably no — the abort makes the integrator's intent explicit. But worth noting as an alternative.
