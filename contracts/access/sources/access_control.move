@@ -283,7 +283,7 @@ public struct DefaultAdminDelayChangeCancelled has copy, drop {}
 /// #### Parameters
 /// - `otw`: a VM-issued One-Time Witness of type `RootRole`. Consumed by the call.
 /// - `default_admin_delay_ms`: timelock (ms) that applies to root role transfer and renounce. Mutable post-creation via `begin_default_admin_delay_change`.
-/// - `ctx`: transaction context. The sender becomes the initial root role holder.
+/// - `ctx`: transaction context.
 ///
 /// #### Returns
 /// - The freshly-minted singleton `AccessControl<RootRole>` registry. The caller
@@ -374,7 +374,7 @@ public fun assert_role<RootRole, Role>(ac: &AccessControl<RootRole>, account: ad
 /// No-op if `account` already holds `Role`.
 ///
 /// #### Parameters
-/// - `Role` (type): the role to grant. Must be a home-module role.
+/// - `Role` (type): the role to grant.
 /// - `ac`: the registry to mutate.
 /// - `account`: the address being granted `Role`.
 /// - `ctx`: transaction context.
@@ -415,7 +415,7 @@ public fun grant_role<RootRole, Role>(
 /// No-op if `account` does not hold `Role`.
 ///
 /// #### Parameters
-/// - `Role` (type): the role to revoke. Must be a home-module role.
+/// - `Role` (type): the role to revoke.
 /// - `ac`: the registry to mutate.
 /// - `account`: the address losing `Role`.
 /// - `ctx`: transaction context.
@@ -443,17 +443,16 @@ public fun revoke_role<RootRole, Role>(
     event::emit(RoleRevoked { role: role_name, account, sender: ctx.sender() });
 }
 
-/// Voluntarily relinquish role `Role`. `account` must equal `ctx.sender()`.
+/// Voluntarily relinquish role `Role`.
 /// No-op if the caller does not hold `Role`. **Blocked on the root role** —
 /// use `begin_default_admin_renounce` + `accept_default_admin_renounce`
 /// instead, so the protocol gets the configured timelock and a cancel window
 /// before the registry becomes unmanaged.
 ///
 /// #### Parameters
-/// - `Role` (type): the role to relinquish. Must be a home-module role.
+/// - `Role` (type): the role to relinquish.
 /// - `ac`: the registry to mutate.
-/// - `account`: the address relinquishing `Role`. Must equal `ctx.sender()`. The explicit parameter mirrors `grant_role` / `revoke_role`
-/// for API symmetry with OZ AccessControl conventions; the self-only constraint is enforced at runtime via `ECannotRenounceForOtherAccount`.
+/// - `account`: the address relinquishing `Role`.
 /// - `ctx`: transaction context.
 ///
 /// #### Aborts
@@ -480,12 +479,12 @@ public fun renounce_role<RootRole, Role>(
     event::emit(RoleRevoked { role: role_name, account, sender: ctx.sender() });
 }
 
-/// Set the admin role of `Role` to `AdminRole`. Both must be home-module
-/// roles. Caller must hold the current admin role of `Role`.
+/// Set the admin role of `Role` to `AdminRole`. Caller must hold the current
+/// admin role of `Role`.
 ///
 /// #### Parameters
-/// - `Role` (type): the role whose admin is being changed. Must be a home-module role and not the root role.
-/// - `AdminRole` (type): the role granted authority over `Role` going forward. Must be a home-module role.
+/// - `Role` (type): the role whose admin is being changed.
+/// - `AdminRole` (type): the role granted authority over `Role` going forward.
 /// - `ac`: the registry to mutate.
 /// - `ctx`: transaction context.
 ///
@@ -733,7 +732,7 @@ public fun cancel_default_admin_transfer<RootRole>(
 ///
 /// #### Parameters
 /// - `ac`: the registry to mutate.
-/// - `new_delay_ms`: the proposed new value of `default_admin_delay_ms`. Bounded by `MAX_DEFAULT_ADMIN_DELAY_MS`.
+/// - `new_delay_ms`: the proposed new value of `default_admin_delay_ms`.
 /// - `clock`: current clock; used to compute the schedule timestamp.
 /// - `ctx`: transaction context.
 ///
@@ -774,8 +773,7 @@ public fun begin_default_admin_delay_change<RootRole>(
 ///
 /// No authorization required — the schedule was committed by the root admin
 /// at `begin` time; `accept` is just the state transition. Anyone can call
-/// it (matches the OZ semantic where the new delay takes effect after the
-/// schedule passes regardless of caller).
+/// it.
 ///
 /// #### Parameters
 /// - `ac`: the registry to mutate.
@@ -833,7 +831,7 @@ public fun cancel_default_admin_delay_change<RootRole>(
 /// mint it is the unique one rooted at `Role`'s module.
 ///
 /// #### Parameters
-/// - `Role` (type): the role for which to mint an auth witness. Must be a home-module role.
+/// - `Role` (type): the role for which to mint an auth witness.
 /// - `ac`: the registry to query.
 /// - `ctx`: transaction context.
 ///
@@ -867,27 +865,17 @@ public fun auth_addr<Role>(auth: &Auth<Role>): address {
 ///
 /// #### Parameters
 /// - `ac`: the registry to query.
-///
-/// #### Returns
-/// - The `TypeName` of the registry's root role, captured at construction
-/// time and immutable thereafter.
 public fun protected_root<RootRole>(ac: &AccessControl<RootRole>): TypeName {
     ac.protected_root
 }
 
 /// Upper bound on `default_admin_delay_ms`.
-///
-/// #### Returns
-/// - Maximum delay for root role transfer / renounce (in ms).
 public fun max_default_admin_delay_ms(): u64 { MAX_DEFAULT_ADMIN_DELAY_MS }
 
 /// Currently-configured timelock (ms) for root role transfer / renounce.
 ///
 /// #### Parameters
 /// - `ac`: the registry to query.
-///
-/// #### Returns
-/// - The active default admin delay in milliseconds.
 public fun default_admin_delay_ms<RootRole>(ac: &AccessControl<RootRole>): u64 {
     ac.default_admin_delay_ms
 }
@@ -897,9 +885,6 @@ public fun default_admin_delay_ms<RootRole>(ac: &AccessControl<RootRole>): u64 {
 ///
 /// #### Parameters
 /// - `ac`: the registry to query.
-///
-/// #### Returns
-/// - `true` if a transfer or renounce is currently pending, `false` otherwise.
 public fun has_pending_default_admin_transfer<RootRole>(ac: &AccessControl<RootRole>): bool {
     ac.pending_default_admin.is_some()
 }
@@ -955,9 +940,6 @@ public fun pending_default_admin_execute_after_ms<RootRole>(
 // === Default Admin Delay Change Getters ===
 
 /// Maximum wait before a scheduled delay *increase* takes effect.
-///
-/// #### Returns
-/// - Maximum wait before a scheduled delay increase takes effect (in ms).
 public fun max_delay_increase_wait_ms(): u64 {
     MAX_DELAY_INCREASE_WAIT_MS
 }
@@ -966,9 +948,6 @@ public fun max_delay_increase_wait_ms(): u64 {
 ///
 /// #### Parameters
 /// - `ac`: the registry to query.
-///
-/// #### Returns
-/// - `true` if a delay change is currently scheduled, `false` otherwise.
 public fun has_pending_default_admin_delay_change<RootRole>(ac: &AccessControl<RootRole>): bool {
     ac.pending_default_admin_delay_change.is_some()
 }
