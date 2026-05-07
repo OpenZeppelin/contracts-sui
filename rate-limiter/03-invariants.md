@@ -2,7 +2,7 @@
 
 ## Summary
 
-Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucket`, `FixedWindow`, `Cooldown` - sharing one API. Authorization is delegated entirely to whoever holds `&mut` to the embedded field. This document captures 4 type-level, 7 runtime, 13 state-transition, 4 economic, and 2 composability invariants enforced by the implementation.
+Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucket`, `FixedWindow`, `Cooldown` - sharing one API. Authorization is delegated entirely to whoever holds `&mut` to the embedded field.
 
 ## Type-Level Invariants
 
@@ -24,27 +24,15 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Type-level
 
-**Statement:** A `RateLimiter` is exactly one of `Bucket | FixedWindow | Cooldown`. The variant is fixed at construction; only the matching `reconfigure_*` accepts it, and reconfigure cannot change the variant.
+**Statement:** A `RateLimiter` is exactly one of `Bucket | FixedWindow | Cooldown`. The variant is fixed at construction; no public path - including any `reconfigure_*` - can change it. To switch variant, the integrator must construct a fresh `RateLimiter` and overwrite the field.
 
-**Enforcement:** Type system - exhaustive enum `match`. Runtime - the variant guard in each `reconfigure_*` aborts on a mismatched variant (see INV-R6).
+**Enforcement:** Type system + Runtime - the reconfigure functions only mutate fields *inside* a matched arm via the inner `&mut` bindings; they never reassign `*self` to a different enum value, so the variant tag is preserved by construction. A wrong-variant `reconfigure_*` call hits the wildcard arm and aborts (see INV-R5).
 
 **Violation scenario:** A limiter built as `Cooldown` is reconfigured into a `Bucket`, silently changing the rate-limiting policy without consumer awareness.
 
-**Severity:** High
+**Severity:** Critical
 
 ---
-
-### INV-T3: Read-only `available()`
-
-**Category:** Type-level
-
-**Statement:** `available(&RateLimiter, &Clock)` cannot mutate limiter state.
-
-**Enforcement:** Type system - the function takes an immutable borrow `&RateLimiter`.
-
-**Violation scenario:** A read path "consumes" capacity, draining the limiter through inspection.
-
-**Severity:** Critical
 
 ## Runtime Invariants
 
@@ -104,21 +92,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 ---
 
-### INV-R5: Non-zero consume amount
-
-**Category:** Runtime
-
-**Statement:** Consume calls require `amount > 0`. Zero is treated as a programmer error, not a rate-limit condition.
-
-**Enforcement:** Runtime - consume entry points assert `amount > 0` and abort otherwise.
-
-**Violation scenario:** A zero-unit consume would succeed without drawing capacity down, violating the API's "consume `amount` units" contract and giving callers a no-op masquerading as a successful rate-limit decision.
-
-**Severity:** Medium
-
----
-
-### INV-R6: Variant guard on reconfigure
+### INV-R5: Variant guard on reconfigure
 
 **Category:** Runtime
 
@@ -130,20 +104,6 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Severity:** High
 
----
-
-### INV-R7: `consume_or_abort` failure semantics
-
-**Category:** Runtime
-
-**Statement:** `consume_or_abort(amount, clk)` aborts iff `try_consume(amount, clk)` would return `false` for the same arguments and state.
-
-**Enforcement:** Runtime - the implementation calls `try_consume` and asserts on its return value, so the two functions cannot diverge by construction.
-
-**Violation scenario:** Consumers couldn't predict whether to use `try_consume` or `consume_or_abort` - the latter would diverge from the former.
-
-**Severity:** Medium
-
 ## State Transition Invariants
 
 ### INV-S1: Bucket capacity bound
@@ -152,7 +112,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** For any `Bucket` reachable through the public API, `available ≤ capacity` after every operation.
 
-**Enforcement:** Runtime - accrual is split into an under-fill branch (where the credit is bounded by remaining headroom) and a fill branch (which writes `capacity` directly), so the post-accrual value never exceeds `capacity`. Consume only deducts after checking sufficient available capacity. Reconfigure clamps `available` down to the new `capacity`.
+**Enforcement:** Runtime - accrual is split into an under-fill branch (where the credit is bounded by remaining headroom) and a fill branch (which writes `capacity` directly), so the post-accrual value never exceeds `capacity`. Consume only deducts after checking sufficient available capacity. Reconfigure clamping is covered by INV-S8.
 
 **Violation scenario:** `available > capacity` would let a bucket burst past its configured maximum after a long idle period.
 
@@ -166,7 +126,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** For any `FixedWindow` reachable through the public API, `available ≤ capacity` after every operation.
 
-**Enforcement:** Runtime - the consume comparison is in subtraction form (overflow-safe) and short-circuits when `amount` exceeds `available`; window roll resets `available` to `capacity`; reconfigure clamps `available` down to the new `capacity`.
+**Enforcement:** Runtime - the consume comparison is in subtraction form (overflow-safe) and short-circuits when `amount` exceeds `available`; window roll resets `available` to `capacity`. Reconfigure clamping is covered by INV-S8.
 
 **Violation scenario:** Per-window cap is exceeded; INV-E2 fails.
 
@@ -174,65 +134,43 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 ---
 
-### INV-S3: Anchor-based window grid
+### INV-S3: Cooldown capacity bound
 
 **Category:** State transition
 
-**Statement:** Windows are anchored at the limiter's creation time. After construction, the window anchor equals the creation timestamp; thereafter it advances only by integer multiples of the *current* `window_ms`. Consequently, the anchor is always `creation + k · window_ms` for some `k ≥ 0` (or, after reconfigure, the anchor rolled forward under the previous `window_ms`).
+**Statement:** For any `Cooldown` reachable through the public API, `available ≤ capacity` after every operation.
 
-`reconfigure_fixed_window` first runs the window-roll under the OLD `window_ms` (preserving INV-S13), then installs the new config; subsequent advances use the new `window_ms` from the rolled-forward anchor.
+**Enforcement:** Runtime - construction sets `available = capacity`; consume only deducts after checking `amount ≤ available`; gate release rewrites `available = capacity`. Reconfigure clamping is covered by INV-S8.
 
-**Enforcement:** Runtime - construction sets the window anchor to the current chain timestamp (no wall-clock alignment). All subsequent advances move the anchor by an integer multiple of the *current* `window_ms`, and the same advance is used by both consume and reconfigure (with reconfigure running under the old `window_ms` before the new value is installed).
-
-**Violation scenario:** A wall-clock-aligned design makes the first window arbitrarily short - if the limiter is created near a window boundary, the first window can collapse to a few ms. Misaligning the anchor (e.g. by setting it to a value that isn't `creation + k · window_ms`) would let an attacker reset `available` more frequently than once per `window_ms`, exceeding INV-E2.
-
-**Severity:** High
-
----
-
-### INV-S4: Window monotonicity
-
-**Category:** State transition
-
-**Statement:** The window anchor is non-decreasing across consume and reconfigure calls.
-
-**Enforcement:** Runtime - the advance is always a non-negative multiple of `window_ms` (computed via integer division of elapsed time), and is only written when at least one full step has elapsed.
-
-**Violation scenario:** Going backward inside a consume would re-enter a window where capacity has already been spent.
-
-**Severity:** High
-
----
-
-### INV-S5: Bucket refill anchor monotonicity
-
-**Category:** State transition
-
-**Statement:** The bucket's refill anchor is non-decreasing across consume and reconfigure.
-
-**Enforcement:** Runtime - accrual leaves the anchor unchanged when no full step has elapsed; otherwise advances it by a non-negative multiple of `refill_interval_ms`. The chain clock is monotonic, so elapsed-time subtraction does not underflow.
-
-**Violation scenario:** A backward refill anchor would re-credit already-credited intervals.
+**Violation scenario:** Per-batch cap is exceeded; INV-E3 fails.
 
 **Severity:** Critical
 
 ---
 
-### INV-S6: Fractional time preservation (Bucket)
+### INV-S4: Temporal accounting
 
 **Category:** State transition
 
-**Statement:** After accrual, the refill anchor is congruent to its prior value mod `refill_interval_ms`. Sub-interval time elapsed but not yet credited is never discarded - it accrues toward the next step.
+**Statement:** Both time-based variants advance their internal time anchor in disciplined integer steps tied to the variant's interval, so elapsed time is neither double-counted nor discarded.
 
-**Enforcement:** Runtime - the anchor advance is always an integer multiple of `refill_interval_ms`, so the residue (`anchor mod refill_interval_ms`) is preserved across every accrual.
+- **Bucket refill anchor.** Non-decreasing across consume and reconfigure. Each accrual either leaves the anchor unchanged (no full step has elapsed) or advances it by a non-negative integer multiple of `refill_interval_ms`. The residue `anchor mod refill_interval_ms` is preserved across every accrual, so sub-interval time elapsed but not yet credited accrues toward the next step rather than being discarded.
+- **FixedWindow anchor.** Anchored at the limiter's creation timestamp (no wall-clock alignment) and non-decreasing across consume and reconfigure. Advances are non-negative integer multiples of the *current* `window_ms`. In the absence of any reconfigure that changed `window_ms`, the anchor is exactly `creation + k · window_ms` for some `k ≥ 0`; after such a reconfigure the anchor is the rolled-forward position computed under the previous `window_ms` (see INV-S10). `reconfigure_fixed_window` runs the window-roll under the OLD `window_ms` first; subsequent advances use the new `window_ms` from the rolled-forward anchor.
 
-**Violation scenario:** Snapping the anchor to "now" after every consume would forfeit the current sub-interval's accumulated time, dramatically reducing the effective refill rate under bursty load.
+**Enforcement:** Runtime - both anchors are advanced via integer division of elapsed time and only when at least one full step has elapsed, so every advance is a non-negative integer multiple of the active interval. The chain clock is monotonic, so elapsed-time subtraction does not underflow. The same advance routine is used by consume and reconfigure (with FixedWindow reconfigure running under the old `window_ms` before installing the new value).
 
-**Severity:** High
+**Violation scenarios:**
+- *Backward refill anchor* would re-credit already-credited intervals.
+- *Snapping the refill anchor to "now"* after every consume would forfeit the current sub-interval's accumulated time, dramatically reducing the effective refill rate under bursty load.
+- *Wall-clock-aligned window grid* makes the first window arbitrarily short - if the limiter is created near a boundary, the first window can collapse to a few ms.
+- *Misaligned window anchor* (set to a value that isn't a non-negative multiple advance under the active `window_ms`) would let an attacker reset `available` more frequently than once per `window_ms`, exceeding INV-E2.
+- *Backward window anchor* inside a consume would re-enter a window where capacity has already been spent.
+
+**Severity:** Critical
 
 ---
 
-### INV-S7: All-or-nothing consume
+### INV-S5: All-or-nothing consume
 
 **Category:** State transition
 
@@ -240,13 +178,13 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Enforcement:** Runtime - each variant's failure branch returns `false` before mutating `available`. Bucket and Cooldown also avoid writing their anchors on failure.
 
-**Note:** For `FixedWindow` and `Cooldown`, a time-based reset (window roll / cooldown release) persists even if the subsequent `amount > available` check fails. This is deliberate: once time has crossed the window boundary or the cooldown deadline, the new window/batch has begun regardless of whether a consume succeeds inside it. This does not violate INV-S7 because the per-window or per-batch cap (INV-E2 / INV-E3) is unchanged - the fresh window/batch legitimately starts with `available = capacity`.
+**Note:** For `FixedWindow` and `Cooldown`, a time-based reset (window roll / cooldown release) persists even if the subsequent `amount > available` check fails. This is deliberate: once time has crossed the window boundary or the cooldown deadline, the new window/batch has begun regardless of whether a consume succeeds inside it. This does not violate INV-S5 because the per-window or per-batch cap (INV-E2 / INV-E3) is unchanged - the fresh window/batch legitimately starts with `available = capacity`.
 
 **Severity:** High
 
 ---
 
-### INV-S8: Cooldown grant/gate state machine
+### INV-S6: Cooldown grant/gate state machine
 
 **Category:** State transition
 
@@ -264,7 +202,7 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ---
 
-### INV-S9: Cooldown deadline monotonicity
+### INV-S7: Cooldown deadline monotonicity
 
 **Category:** State transition
 
@@ -278,27 +216,13 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ---
 
-### INV-S10: Reconfigure preserves variant
+### INV-S8: Reconfigure clamps state to new bounds
 
 **Category:** State transition
 
-**Statement:** No reconfigure path changes which variant the limiter is. To switch variant, the integrator must construct a fresh `RateLimiter` and overwrite the field.
+**Statement:** When capacity shrinks, every `reconfigure_*` clamps `available` to the new `capacity`, so the per-variant `available ≤ capacity` discipline (INV-S1, INV-S2, INV-S3) holds post-reconfigure.
 
-**Enforcement:** Type system - each reconfigure path matches exactly one variant; the wildcard branch aborts. Runtime - see INV-R6.
-
-**Violation scenario:** Silent variant change - a `Bucket` becomes a `Cooldown` mid-flight, completely changing the semantics of `consume`.
-
-**Severity:** Critical
-
----
-
-### INV-S11: Reconfigure clamps state to new bounds
-
-**Category:** State transition
-
-**Statement:** When capacity shrinks, every `reconfigure_*` clamps `available` to the new `capacity`, so INV-S1, INV-S2, and INV-S8's `available ≤ capacity` discipline hold post-reconfigure.
-
-**Enforcement:** Runtime - each reconfigure path clamps `available` to the new `capacity` before installing the new config.
+**Enforcement:** Runtime - each reconfigure path clamps `available` to the new `capacity` before installing the new config (or, for FixedWindow when a window roll occurred, writes the fresh window's `available = new_capacity` directly).
 
 **Violation scenario:** `available > new_capacity` would let any variant burst above its new ceiling immediately after reconfigure.
 
@@ -306,7 +230,7 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ---
 
-### INV-S12: Reconfigure accrues under old rules first (Bucket)
+### INV-S9: Reconfigure accrues under old rules first (Bucket)
 
 **Category:** State transition
 
@@ -320,7 +244,7 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 ---
 
-### INV-S13: Reconfigure rolls forward under old window first (FixedWindow)
+### INV-S10: Reconfigure rolls forward under old window first (FixedWindow)
 
 **Category:** State transition
 
@@ -329,6 +253,20 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 **Enforcement:** Runtime - the window-roll computation reads the current `window_ms` for the rollover decision and rewrites the anchor before the new `window_ms` is installed.
 
 **Violation scenario:** Using the new `window_ms` for the rollover could move the anchor backward when widening, carrying old-window usage into a wider new window - letting the fresh wider window admit only a fraction of its budget on the first turn after reconfigure, breaking INV-E2's spirit across the reconfigure boundary.
+
+**Severity:** High
+
+---
+
+### INV-S11: Reconfigure preserves in-flight cooldown deadline
+
+**Category:** State transition
+
+**Statement:** `reconfigure_cooldown` does not retroactively shift an armed in-flight cooldown deadline. If the gate is currently armed (`available == 0 ∧ now < cooldown_end_ms`), `cooldown_end_ms` is preserved verbatim under the new `cooldown_ms`. A fresh deadline at `now + cooldown_ms` is armed only when post-clamp `available == 0` and no gate is currently in flight (`now ≥ cooldown_end_ms`). When `available > 0` post-clamp, the deadline is left untouched (it is unobservable in the Granted state per INV-S6).
+
+**Enforcement:** Runtime - the deadline rewrite branch is guarded by `*available == 0 && now >= *cooldown_end_ms`; the in-flight case (`available == 0 ∧ now < cooldown_end_ms`) takes neither branch and the existing deadline survives the reconfigure unchanged.
+
+**Violation scenario:** Lengthening `cooldown_ms` and overwriting an in-flight deadline would retroactively extend an already-engaged gate, penalizing the consumer past the originally promised release; shortening it would prematurely release a gate the consumer expected to remain armed, violating INV-E3 across the reconfigure boundary. Conversely, *not* arming a fresh deadline when post-clamp `available == 0` and no prior gate is in flight would grant an immediate free reset on the next consume, defeating the variant.
 
 **Severity:** High
 
@@ -352,9 +290,9 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 **Category:** Economic
 
-**Statement:** No more than `capacity` units consumed within any `[anchor + k · window_ms, anchor + (k+1) · window_ms)` window, where `anchor` is determined by INV-S3.
+**Statement:** No more than `capacity` units consumed within any `[anchor + k · window_ms, anchor + (k+1) · window_ms)` window, where `anchor` is determined by the FixedWindow clause of INV-S4.
 
-**Enforcement:** Implied by INV-S2 + INV-S3 + INV-S4.
+**Enforcement:** Implied by INV-S2 + INV-S4.
 
 **Violation scenario:** Per-window cap exceeded.
 
@@ -368,25 +306,13 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 **Statement:** When `Cooldown` transitions from Gated back to Granted, at least `cooldown_ms` (the value at the time the gate was armed) has elapsed since the consume that armed the gate.
 
-**Enforcement:** Runtime - the gate `now ≥ deadline` is equired for success, where the deadline was set as `arming_now + cooldown_ms_at_arming_time`.
+**Enforcement:** Runtime - the gate `now ≥ deadline` is required for success, where the deadline was set as `arming_now + cooldown_ms_at_arming_time`. INV-S11 ensures reconfigure does not retroactively shorten an in-flight deadline.
 
 **Violation scenario:** Cooldown can be bypassed, defeating throttling for the variant.
 
 **Severity:** Critical
 
 ---
-
-### INV-E4: `available()` consistency
-
-**Category:** Economic
-
-**Statement:** If `available(&clk) ≥ amount` and no clock change or other call intervenes, then `try_consume(amount, &clk)` returns `true`. This holds uniformly across all three variants.
-
-**Enforcement:** Runtime - `available()` and the consume path apply identical accrual / window-roll / gate logic, so the read predicts the next write.
-
-**Violation scenario:** Read-then-act consumers see ghost capacity that vanishes on the actual call.
-
-**Severity:** High
 
 ## Composability Invariants
 
@@ -420,21 +346,24 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 
 | Function | Invariants | Enforcement |
 |----------|-----------|-------------|
-| `new_bucket` | INV-T1, INV-T2, INV-R1, INV-R4, INV-S1, INV-S5 | Type + Runtime |
-| `new_fixed_window` | INV-T1, INV-T2, INV-R2, INV-S2, INV-S3 | Type + Runtime |
-| `new_cooldown` | INV-T1, INV-T2, INV-R3, INV-S8 | Type + Runtime |
-| `try_consume` | INV-R5, INV-S1, INV-S2, INV-S3, INV-S4, INV-S5, INV-S6, INV-S7, INV-S8, INV-S9, INV-E1, INV-E2, INV-E3, INV-C2 | Type + Runtime |
-| `consume_or_abort` | INV-R5, INV-R7 + all of `try_consume` | Type + Runtime |
-| `available` | INV-T3, INV-E4 | Type only |
-| `reconfigure_bucket` | INV-R1, INV-R6, INV-S5, INV-S10, INV-S11, INV-S12 | Type + Runtime |
-| `reconfigure_fixed_window` | INV-R2, INV-R6, INV-S2, INV-S3, INV-S4, INV-S10, INV-S11, INV-S13 | Type + Runtime |
-| `reconfigure_cooldown` | INV-R3, INV-R6, INV-S8, INV-S10, INV-S11 | Type + Runtime |
+| `new_bucket` | INV-T1, INV-T2, INV-R1, INV-R4, INV-S1, INV-S4 | Type + Runtime |
+| `new_fixed_window` | INV-T1, INV-T2, INV-R2, INV-S2, INV-S4 | Type + Runtime |
+| `new_cooldown` | INV-T1, INV-T2, INV-R3, INV-S3, INV-S6 | Type + Runtime |
+| `try_consume` | INV-S1, INV-S2, INV-S3, INV-S4, INV-S5, INV-S6, INV-S7, INV-E1, INV-E2, INV-E3, INV-C2 | Type + Runtime |
+| `consume_or_abort` | all of `try_consume` | Type + Runtime |
+| `reconfigure_bucket` | INV-T2, INV-R1, INV-R5, INV-S1, INV-S4, INV-S8, INV-S9 | Type + Runtime |
+| `reconfigure_fixed_window` | INV-T2, INV-R2, INV-R5, INV-S2, INV-S4, INV-S8, INV-S10 | Type + Runtime |
+| `reconfigure_cooldown` | INV-T2, INV-R3, INV-R5, INV-S3, INV-S6, INV-S8, INV-S11 | Type + Runtime |
 
 ## Operator Responsibilities (Out of Scope for the module)
 
 - **Cooldown deadline overflow.** Cooldown computes `cooldown_end_ms = now + cooldown_ms`. Sui's `Clock` is monotonic and bounded well below `u64::MAX`, but a `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain timestamp during the limiter's lifetime - any policy-meaningful value (seconds to days to years in ms) satisfies this trivially. The module enforces only positivity (INV-R3); no upper-bound assert is added because there is no useful `u64` ceiling that captures "policy-reasonable."
 - **Clock authenticity.** The module trusts `&Clock`; it does not defend against a malicious shared-clock substitute (Sui's `Clock` is a singleton shared object, so this is a Sui-platform property).
 - **Authorization / access control inside the module.** Delegated to the parent object holding the field. The module makes no claim about who *should* be allowed to call `&mut` paths.
+
+## Assumed (External) Invariants
+
+- **Clock monotonicity.** Every elapsed-time subtraction in this module (`now - last_refill_ms`, `now - window_start_ms`, the `now ≥ cooldown_end_ms` gate check) assumes `Clock::timestamp_ms()` is monotonically non-decreasing across calls. Sui's `Clock` provides this. If the assumption were ever violated, the subtractions would underflow and abort - a fail-closed posture rather than silent corruption. INV-S4, INV-S7, and INV-E3 all rely on this.
 
 ## Out of Scope
 
@@ -444,7 +373,6 @@ A consume that decrements `available` to exactly `0` arms the gate by setting th
 ## Dev Notes
 
 - **Authorization model is the central design decision.** The limiter delegates 100% of access control to the holder of `&mut` to the parent field. This is what makes the primitive embeddable, registry-less, and PTB-friendly. Any future "shared rate limiter" feature would require fundamentally different primitives.
-- **Clock is assumed monotonic.** Sui's `Clock` is monotonic in practice; the module relies on this and uses elapsed-time subtraction directly. If the clock ever ran backward, the subtraction would underflow and abort - a fail-closed posture rather than a silent absorption.
 - **Overflow surfaces closed by implementation, not config bounds.** Bucket accrual's two-branch structure bounds every intermediate product and sum by `capacity` (no upper bound on `capacity` or `refill_amount` required). `FixedWindow`'s hot-path comparison uses subtraction so no addition can overflow. `Cooldown` is the one exception (`now + cooldown_ms`); operators handle it (see Operator Responsibilities).
 - **Anchor-based windows.** `FixedWindow` windows are `[creation + k · window_ms, creation + (k+1) · window_ms)`. The first window always has length exactly `window_ms`. On reconfigure, the new window grid anchors at the rolled-forward position under the OLD `window_ms`.
 - **Cooldown stores `available` and `cooldown_end_ms`.** The design tracks remaining capacity directly and stores the absolute release deadline; the gate predicate is `now < cooldown_end_ms`. This is symmetric with the other variants' `available` field.
