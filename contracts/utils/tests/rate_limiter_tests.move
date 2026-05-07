@@ -30,8 +30,7 @@ fun bucket_starts_full_and_refills_over_time() {
     clk.set_for_testing(1000);
     assert_eq!(rl.available(&clk), 30);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -49,8 +48,7 @@ fun bucket_with_tokens_can_start_empty_and_accrue() {
     clk.set_for_testing(5);
     assert_eq!(rl.available(&clk), 2);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EInitialAboveCapacity)]
@@ -74,8 +72,7 @@ fun bucket_try_consume_returns_false_when_empty() {
     // No refill has happened yet, so the next consume fails without aborting.
     assert!(!rl.try_consume(1, &clk));
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
@@ -103,8 +100,7 @@ fun bucket_reconfigure_clamps_tokens_to_new_capacity() {
     rl.reconfigure_bucket(40, 10, 10, &clk);
     assert_eq!(rl.available(&clk), 40);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === Fixed Window ===
@@ -132,8 +128,7 @@ fun fixed_window_counts_per_window_and_resets_on_boundary() {
     rl.consume_or_abort(3, &clk);
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === Cooldown ===
@@ -161,8 +156,7 @@ fun cooldown_requires_elapsed_time_between_consumes() {
     assert_eq!(rl.available(&clk), 1);
     rl.consume_or_abort(1, &clk);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -188,8 +182,7 @@ fun cooldown_decrements_available_by_amount_until_drained_then_gates() {
     assert!(rl.try_consume(5, &clk));
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -216,8 +209,7 @@ fun cooldown_rejects_amount_exceeding_available() {
     assert!(rl.try_consume(2, &clk));
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
@@ -419,8 +411,7 @@ fun bucket_failed_try_consume_does_not_drain_state() {
     assert!(rl.try_consume(5, &clk));
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -440,8 +431,7 @@ fun fixed_window_failed_try_consume_does_not_advance_used() {
     assert!(rl.try_consume(2, &clk));
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -462,8 +452,7 @@ fun cooldown_failed_try_consume_does_not_reset_anchor() {
     clk.set_for_testing(100);
     assert!(rl.try_consume(1, &clk));
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === Fractional time preservation ===
@@ -487,8 +476,7 @@ fun bucket_preserves_subinterval_time_across_consumes() {
     clk.set_for_testing(20);
     assert_eq!(rl.available(&clk), 1);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === Reconfigure under old rules first ===
@@ -511,8 +499,7 @@ fun bucket_reconfigure_accrues_under_old_rate_first() {
     // retroactively.
     assert_eq!(rl.available(&clk), 50);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -534,8 +521,7 @@ fun fixed_window_reconfigure_rolls_under_old_window_first() {
     // making available = 13. With it, used = 0 and available = 20.
     assert_eq!(rl.available(&clk), 20);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === Cooldown reconfigure preserves in-flight deadline ===
@@ -570,8 +556,7 @@ fun cooldown_reconfigure_preserves_in_flight_deadline() {
     clk.set_for_testing(150);
     assert_eq!(rl.available(&clk), 1);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === Overflow safety ===
@@ -591,8 +576,7 @@ fun bucket_no_overflow_with_huge_refill_amount() {
     clk.set_for_testing(20);
     assert_eq!(rl.available(&clk), 1_000_000);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -610,8 +594,7 @@ fun bucket_no_overflow_under_extreme_clock_advance() {
     clk.set_for_testing(18446744073709551615);
     assert_eq!(rl.available(&clk), cap);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -627,8 +610,7 @@ fun fixed_window_try_consume_max_amount_returns_false() {
     // State unchanged on rejection.
     assert_eq!(rl.available(&clk), 10);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === Anchor-based window grid ===
@@ -659,8 +641,7 @@ fun fixed_window_first_window_has_full_length_at_nonzero_creation() {
     assert!(rl.try_consume(5, &clk));
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === available() consistency ===
@@ -677,8 +658,7 @@ fun bucket_available_predicts_try_consume() {
     assert!(rl.try_consume(avail, &clk));
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -693,8 +673,7 @@ fun fixed_window_available_predicts_try_consume() {
     assert!(rl.try_consume(avail, &clk));
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -711,8 +690,7 @@ fun cooldown_available_predicts_try_consume() {
     assert!(rl.try_consume(avail, &clk));
     assert_eq!(rl.available(&clk), 0);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === consume_or_abort across variants ===
@@ -757,8 +735,7 @@ fun cooldown_reconfigure_clamps_available_to_new_capacity() {
     rl.reconfigure_cooldown(5, 100, &clk);
     assert_eq!(rl.available(&clk), 5);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 #[test]
@@ -790,8 +767,7 @@ fun cooldown_reconfigure_rearms_when_drained_and_deadline_elapsed() {
     clk.set_for_testing(160);
     assert!(rl.try_consume(1, &clk));
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
 
 // === FixedWindow reconfigure clamps `used` ===
@@ -810,6 +786,5 @@ fun fixed_window_reconfigure_clamps_available_to_new_capacity() {
     rl.reconfigure_fixed_window(5, 100, &clk);
     assert_eq!(rl.available(&clk), 5);
 
-    clk.destroy_for_testing();
-    test.end();
+    abort 100
 }
