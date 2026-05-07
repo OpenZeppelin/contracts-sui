@@ -12,7 +12,7 @@ Embeddable primitives for Sui smart contract development.
 
 ## `rate_limiter` at a Glance
 
-`RateLimiter` is a `store + drop` value the integrator embeds as a field inside their own object. There is no registry, no separate ID, and no cross-module policy lookup — the limiter's scope is whatever object holds it, and `&mut` access to that field is the policy gate.
+`RateLimiter` is a `store + drop` value the integrator embeds as a field inside their own object.
 
 Three strategies share the same API:
 
@@ -20,14 +20,14 @@ Three strategies share the same API:
 |---------|-----------|-----------------|
 | `Bucket` | Tokens accrue continuously: `refill_amount` every `refill_interval_ms`, capped at `capacity`. | Smooth, sustained throughput with bursts up to `capacity`. |
 | `FixedWindow` | Up to `capacity` per `[k * window_ms, (k+1) * window_ms)` window anchored at creation. | Hard per-window quotas (e.g. "100 per hour"). |
-| `Cooldown` | Up to `capacity` consumes, then a `cooldown_ms` gate before the next batch. | Burst-then-pause patterns (e.g. "5 actions per minute"). |
+| `Cooldown` | Up to `capacity` consumes, then a `cooldown_ms` gate before the next batch. | Burst-then-pause patterns (e.g. "1 minute cooldown after each action"). |
 
 ### Lifecycle
 
-1. **Construct** — call `new_bucket`, `new_fixed_window`, or `new_cooldown` and store the result as a field on your object.
-2. **Consume** — on hot paths, call `consume_or_abort` (aborts with `ERateLimited` when refused) or `try_consume` (returns `bool`). Both apply accrual / window rollover / cooldown release before the consume.
-3. **Inspect** — `available` returns the consumable amount right now, after applying accrual.
-4. **Reconfigure** — call the variant-matching `reconfigure_*` to rewrite limits in place. Aborts with `EWrongVariant` if the limiter is a different variant. Switching strategies requires building a fresh limiter and overwriting the field.
+1. **Construct** - call `new_bucket`, `new_fixed_window`, or `new_cooldown` and store the result as a field on your object.
+2. **Consume** - on hot paths, call `consume_or_abort` or `try_consume`. Both apply accrual / window rollover / cooldown release before the consume.
+3. **Inspect** - `available` returns the consumable amount right now, after applying accrual.
+4. **Reconfigure** - call the variant-matching `reconfigure_*` to rewrite limits in place. Switching strategies requires building a fresh limiter and overwriting the field.
 
 ### Usage
 
@@ -57,7 +57,7 @@ public fun withdraw(self: &mut Vault, amount: u64, clock: &Clock) {
 
 ### Operator Notes
 
-- Configs require positivity. For `Bucket`, internal accrual stays overflow-safe regardless of `capacity` and `refill_amount` magnitudes — no upper bounds need to be enforced beyond standard `u64` arithmetic.
+- Configs require positive values. For `Bucket`, internal accrual stays overflow-safe regardless of `capacity` and `refill_amount` magnitudes - no upper bounds need to be enforced beyond standard `u64` arithmetic.
 - For `Cooldown`, the gate deadline is computed as `now + cooldown_ms`. Operators must pick `cooldown_ms` such that this addition cannot overflow over the limiter's lifetime; any policy-meaningful value (seconds to years, expressed in ms) satisfies this trivially.
-- `try_consume` and `consume_or_abort` abort with `EInvalidAmount` on `amount == 0`. A zero-unit consume is a programmer error, not a rate-limit decision — behavior is uniform across variants.
-- Reconfiguration applies pending accrual under the *old* config first, then installs the new one and clamps `available` down to the new capacity. For `Cooldown` specifically, an in-flight gate is preserved — the new `cooldown_ms` does not retroactively shift a deadline that is already armed.
+- `try_consume` and `consume_or_abort` abort on `amount == 0`. A zero-unit consume is a programmer error, not a rate-limit decision - behavior is uniform across variants.
+- Reconfiguration applies pending accrual under the *old* config first, then installs the new one and clamps `available` down to the new capacity. For `Cooldown` specifically, an in-flight gate is preserved - the new `cooldown_ms` does not retroactively shift a deadline that is already armed.

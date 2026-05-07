@@ -181,7 +181,7 @@ fun cooldown_accumulates_used_until_capacity_then_gates() {
     assert!(rl.try_consume(100, &clk));
     assert!(rl.try_consume(1, &clk));
     assert!(rl.try_consume(1, &clk));
-    // 5 attempts done — gate is now armed.
+    // 5 attempts done - gate is now armed.
     assert_eq!(rl.available(&clk), 0);
     assert!(!rl.try_consume(1, &clk));
 
@@ -501,7 +501,7 @@ fun bucket_reconfigure_accrues_under_old_rate_first() {
     clk.set_for_testing(50);
     rl.reconfigure_bucket(200, 100, 1, &clk);
 
-    // OLD rate must be applied to the prior 50 ms; 50 tokens — not the 200 we'd see
+    // OLD rate must be applied to the prior 50 ms; 50 tokens - not the 200 we'd see
     // if the new rate (50 ms × 100/1 ms = 5000, capped at new cap 200) were applied
     // retroactively.
     assert_eq!(rl.available(&clk), 50);
@@ -545,7 +545,7 @@ fun cooldown_reconfigure_preserves_in_flight_deadline() {
     assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 50
 
     // Reconfigure with a longer cooldown while the gate is in-flight. The deadline
-    // is preserved at its original value (50) — the new `cooldown_ms` does NOT
+    // is preserved at its original value (50) - the new `cooldown_ms` does NOT
     // retroactively shift the in-flight gate. The new value applies to the *next*
     // gate armed after this one releases.
     rl.reconfigure_cooldown(1, 100, &clk);
@@ -596,7 +596,7 @@ fun bucket_no_overflow_under_extreme_clock_advance() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    // capacity = u64::MAX - 1 with refill_amount = 1 — exercises the fill branch under the
+    // capacity = u64::MAX - 1 with refill_amount = 1 - exercises the fill branch under the
     // largest plausible elapsed-step count without any product overflow.
     let cap = 18446744073709551614;
     let rl = rate_limiter::new_bucket(cap, 1, 1, 0, &clk);
