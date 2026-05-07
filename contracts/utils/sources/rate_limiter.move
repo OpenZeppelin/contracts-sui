@@ -90,12 +90,12 @@ public enum RateLimiter has drop, store {
         available: u64,
     },
     /// Up to `capacity` units may be consumed before the limiter gates on `cooldown_ms`.
-    /// `available` decrements with each successful consume. Once `available == 0`,
-    /// `cooldown_end_ms` is set to `now + cooldown_ms` - the absolute deadline at which
-    /// the gate releases. No further consume succeeds until `now >= cooldown_end_ms`,
-    /// at which point `available` resets to `capacity` and the next batch is granted.
-    /// `cooldown_end_ms` is a don't-care field while `available > 0`; it is only read
-    /// once the limiter has been drained and the gate is armed.
+    /// Each successful `try_consume(amount, _)` decrements `available` by `amount` and
+    /// rejects when `amount > available`. Once `available` reaches `0`, `cooldown_end_ms`
+    /// is set to `now + cooldown_ms` - the absolute deadline at which the gate releases.
+    /// No further consume succeeds until `now >= cooldown_end_ms`, at which point
+    /// `available` resets to `capacity` and the next batch is granted. `cooldown_end_ms`
+    /// is taken into account only once the limiter has been drained and the gate is armed.
     Cooldown {
         cooldown_ms: u64,
         capacity: u64,
@@ -169,7 +169,8 @@ public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateL
 }
 
 /// Create a cooldown limiter that is ready to be used immediately. Up to `capacity` units
-/// may be consumed before the limiter requires `cooldown_ms` to elapse before the next batch.
+/// may be consumed (in any combination of per-call `amount`s) before the limiter requires
+/// `cooldown_ms` to elapse before the next batch.
 ///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per batch.
@@ -261,7 +262,8 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
                 if (now < *cooldown_end_ms) return false;
                 *available = *capacity;
             };
-            *available = *available - 1;
+            if (amount > *available) return false;
+            *available = *available - amount;
             if (*available == 0) {
                 *cooldown_end_ms = now + *cooldown_ms;
             };

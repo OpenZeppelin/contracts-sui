@@ -20,7 +20,7 @@ Three strategies share the same API:
 |---------|-----------|-----------------|
 | `Bucket` | Tokens accrue continuously: `refill_amount` every `refill_interval_ms`, capped at `capacity`. | Smooth, sustained throughput with bursts up to `capacity`. |
 | `FixedWindow` | Up to `capacity` per `[k * window_ms, (k+1) * window_ms)` window anchored at creation. | Hard per-window quotas (e.g. "100 per hour"). |
-| `Cooldown` | Up to `capacity` consumes, then a `cooldown_ms` gate before the next batch. | Burst-then-pause patterns (e.g. "1 minute cooldown after each action"). |
+| `Cooldown` | Up to `capacity` units (drawn down by per-call `amount`), then a `cooldown_ms` gate before the next batch. | Burst-then-pause patterns (e.g. "1 minute cooldown after each batch"). |
 
 ### Lifecycle
 

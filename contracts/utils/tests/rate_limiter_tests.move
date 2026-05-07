@@ -166,49 +166,54 @@ fun cooldown_requires_elapsed_time_between_consumes() {
 }
 
 #[test]
-fun cooldown_accumulates_used_until_capacity_then_gates() {
+fun cooldown_decrements_available_by_amount_until_drained_then_gates() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    // Capacity 5: each attempt increments `used` by 1 regardless of `amount`,
-    // until `used == 5`, then the cooldown gates.
+    // Capacity 5: try_consume(amount) decrements `available` by `amount`,
+    // until `available == 0`, then the cooldown gates.
     let mut rl = rate_limiter::new_cooldown(5, 50);
     assert!(rl.try_consume(2, &clk));
-    assert_eq!(rl.available(&clk), 4);
-    assert!(rl.try_consume(3, &clk));
     assert_eq!(rl.available(&clk), 3);
-    assert!(rl.try_consume(100, &clk));
     assert!(rl.try_consume(1, &clk));
-    assert!(rl.try_consume(1, &clk));
-    // 5 attempts done - gate is now armed.
+    assert_eq!(rl.available(&clk), 2);
+    assert!(rl.try_consume(2, &clk)); // drains to 0 - gate arms
     assert_eq!(rl.available(&clk), 0);
     assert!(!rl.try_consume(1, &clk));
 
     // After cooldown elapses, the budget resets to full capacity.
     clk.set_for_testing(50);
     assert_eq!(rl.available(&clk), 5);
-    assert!(rl.try_consume(1, &clk));
-    assert_eq!(rl.available(&clk), 4);
+    assert!(rl.try_consume(5, &clk));
+    assert_eq!(rl.available(&clk), 0);
 
     clk.destroy_for_testing();
     test.end();
 }
 
 #[test]
-fun cooldown_amount_does_not_affect_used() {
+fun cooldown_rejects_amount_exceeding_available() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    // `used` tracks attempts, not `amount`. A try_consume with a huge amount still
-    // only increments `used` by 1.
-    let mut rl = rate_limiter::new_cooldown(3, 50);
-    assert!(rl.try_consume(18446744073709551615, &clk));
+    // Picking an `amount` that fits is the caller's responsibility; oversized requests
+    // are rejected without changing state.
+    let mut rl = rate_limiter::new_cooldown(5, 50);
+    assert!(rl.try_consume(3, &clk));
     assert_eq!(rl.available(&clk), 2);
-    assert!(rl.try_consume(1, &clk));
-    assert_eq!(rl.available(&clk), 1);
-    assert!(rl.try_consume(99, &clk));
+
+    // Asking more than the remaining `available` fails.
+    assert!(!rl.try_consume(3, &clk));
+    assert_eq!(rl.available(&clk), 2);
+
+    // Asking more than the configured capacity also fails.
+    assert!(!rl.try_consume(99, &clk));
+    assert_eq!(rl.available(&clk), 2);
+
+    // The remaining headroom is still spendable.
+    assert!(rl.try_consume(2, &clk));
     assert_eq!(rl.available(&clk), 0);
 
     clk.destroy_for_testing();
@@ -338,7 +343,7 @@ fun new_fixed_window_rejects_zero_capacity() {
     abort 0
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EZeroWindowMs)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroWindow)]
 fun new_fixed_window_rejects_zero_window_ms() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
@@ -348,7 +353,7 @@ fun new_fixed_window_rejects_zero_window_ms() {
     abort 0
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EZeroCooldownMs)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroCooldown)]
 fun new_cooldown_rejects_zero_cooldown_ms() {
     rate_limiter::new_cooldown(1, 0);
 }
@@ -371,7 +376,7 @@ fun reconfigure_bucket_rejects_zero_capacity() {
     abort 0
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EZeroWindowMs)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroWindow)]
 fun reconfigure_fixed_window_rejects_zero_window_ms() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
@@ -382,7 +387,7 @@ fun reconfigure_fixed_window_rejects_zero_window_ms() {
     abort 0
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EZeroCooldownMs)]
+#[test, expected_failure(abort_code = rate_limiter::EZeroCooldown)]
 fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
@@ -698,10 +703,12 @@ fun cooldown_available_predicts_try_consume() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(0);
 
-    // available == N ⇒ exactly N consecutive try_consume calls succeed before the gate arms.
+    // available == N ⇒ try_consume(amount) succeeds whenever amount ≤ N
+    // (uniform with Bucket / FixedWindow).
     let mut rl = rate_limiter::new_cooldown(7, 50);
-    assert_eq!(rl.available(&clk), 7);
-    7u64.do!(|_| assert!(rl.try_consume(1, &clk)));
+    let avail = rl.available(&clk);
+    assert_eq!(avail, 7);
+    assert!(rl.try_consume(avail, &clk));
     assert_eq!(rl.available(&clk), 0);
 
     clk.destroy_for_testing();

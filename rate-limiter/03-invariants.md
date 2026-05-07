@@ -112,7 +112,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Enforcement:** Runtime - consume entry points assert `amount > 0` and abort otherwise.
 
-**Violation scenario:** Behavior on zero would diverge across variants (Bucket: trivially succeeds; FixedWindow: succeeds without changing `available`; Cooldown: still gates and decrements by 1), making the API non-uniform.
+**Violation scenario:** A zero-unit consume would succeed without drawing capacity down, violating the API's "consume `amount` units" contract and giving callers a no-op masquerading as a successful rate-limit decision.
 
 **Severity:** Medium
 
@@ -240,7 +240,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Enforcement:** Runtime - each variant's failure branch returns `false` before mutating `available`. Bucket and Cooldown also avoid writing their anchors on failure.
 
-**Note:** For `FixedWindow`, the inline window-roll *does* persist the new anchor and reset `available = capacity` even if the subsequent capacity check fails. This is deliberate: once time has crossed a window boundary, the new window has begun regardless of whether a consume succeeds inside it. This does not violate INV-S7 because the per-window cap (INV-E2) is unchanged - the new window legitimately starts with `available = capacity`.
+**Note:** For `FixedWindow` and `Cooldown`, a time-based reset (window roll / cooldown release) persists even if the subsequent `amount > available` check fails. This is deliberate: once time has crossed the window boundary or the cooldown deadline, the new window/batch has begun regardless of whether a consume succeeds inside it. This does not violate INV-S7 because the per-window or per-batch cap (INV-E2 / INV-E3) is unchanged - the fresh window/batch legitimately starts with `available = capacity`.
 
 **Severity:** High
 
@@ -251,12 +251,12 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 **Category:** State transition
 
 **Statement:** A `Cooldown` is in one of two logical states:
-- **Granted:** `available > 0` - the next consume succeeds and decrements `available` by exactly 1, regardless of `amount`. At construction `available = capacity`, so the limiter starts in this state.
-- **Gated:** `available == 0` - consume returns `false` until the cooldown deadline has elapsed, at which point a single call refills `available` to `capacity` and consumes (transitioning back to Granted).
+- **Granted:** `available > 0` - `try_consume(amount, _)` succeeds when `amount ≤ available`, and decrements `available` by `amount`. At construction `available = capacity`, so the limiter starts in this state. Picking an `amount` appropriate to the use case is the caller's responsibility.
+- **Gated:** `available == 0` - consume returns `false` until the cooldown deadline has elapsed, at which point the next call resets `available = capacity` and proceeds (succeeding when `amount ≤ capacity`, decrementing by `amount`).
 
-The cooldown deadline is a don't-care field while `available > 0`; it is only read in the Gated state. Initial value `0` is therefore safe - it is never observed before being written.
+A consume that decrements `available` to exactly `0` arms the gate by setting the cooldown deadline to `now + cooldown_ms`. The deadline is taken into account only in the Gated state. Initial value `0` is therefore safe - it is never observed before being written.
 
-**Enforcement:** Runtime - the deadline is only read inside the `available == 0` branch; a successful consume that drains `available` to zero arms the next deadline.
+**Enforcement:** Runtime - the deadline is only read inside the `available == 0` branch; a successful consume that drains `available` to zero arms the next deadline; the consume rejects when `amount > available` (after any pending gate release).
 
 **Violation scenario:** Reading the cooldown deadline while in the Granted state would gate spuriously on a fresh limiter (since the deadline is initially zero). The current code only reads it in the Gated branch, so this is structurally avoided.
 
@@ -368,7 +368,7 @@ The cooldown deadline is a don't-care field while `available > 0`; it is only re
 
 **Statement:** When `Cooldown` transitions from Gated back to Granted, at least `cooldown_ms` (the value at the time the gate was armed) has elapsed since the consume that armed the gate.
 
-**Enforcement:** Runtime - the gate `now ≥ deadline` is required for success, where the deadline was set as `arming_now + cooldown_ms_at_arming_time`.
+**Enforcement:** Runtime - the gate `now ≥ deadline` is equired for success, where the deadline was set as `arming_now + cooldown_ms_at_arming_time`.
 
 **Violation scenario:** Cooldown can be bypassed, defeating throttling for the variant.
 
@@ -380,7 +380,7 @@ The cooldown deadline is a don't-care field while `available > 0`; it is only re
 
 **Category:** Economic
 
-**Statement:** If `available(&clk) ≥ amount` and no clock change or other call intervenes, then `try_consume(amount, &clk)` returns `true`. For `Cooldown`, `available` is "number of consecutive consumes that will succeed before the gate arms" - so `available == N` ⇒ exactly `N` successive consumes succeed before the gate engages, regardless of `amount`.
+**Statement:** If `available(&clk) ≥ amount` and no clock change or other call intervenes, then `try_consume(amount, &clk)` returns `true`. This holds uniformly across all three variants.
 
 **Enforcement:** Runtime - `available()` and the consume path apply identical accrual / window-roll / gate logic, so the read predicts the next write.
 
