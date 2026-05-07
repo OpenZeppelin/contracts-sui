@@ -12,11 +12,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** A `RateLimiter` value cannot be a top-level Sui object and cannot be duplicated. It exists only as a field of some parent value.
 
-**Applies to:** the `RateLimiter` enum.
-
-**Enforcement mechanism:**
-- Type system: `has drop, store` - explicitly no `key`, no `copy`.
-- Runtime check: n/a.
+**Enforcement:** Type system - the value has `store + drop` only; no `key` (so it cannot become a top-level object) and no `copy` (so it cannot be duplicated).
 
 **Violation scenario:** If the limiter could be copied or shared as a top-level object, two parent objects could each hold a "copy" with its own counter. Each copy would refill and drain independently, so the same logical limiter would grant 2× (or N×) its configured capacity - silent over-issuance.
 
@@ -30,12 +26,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** A `RateLimiter` is exactly one of `Bucket | FixedWindow | Cooldown`. The variant is fixed at construction; only the matching `reconfigure_*` accepts it, and reconfigure cannot change the variant.
 
-**Applies to:** all of the public API.
-
-**Enforcement mechanism:**
-- Type system: enum `match` is exhaustive.
-- Runtime check: `EWrongVariant` aborts in `reconfigure_*` when the variant is wrong (INV-R6).
-- Test: `reconfigure_*` unit tests.
+**Enforcement:** Type system - exhaustive enum `match`. Runtime - the variant guard in each `reconfigure_*` aborts on a mismatched variant (see INV-R6).
 
 **Violation scenario:** A limiter built as `Cooldown` is reconfigured into a `Bucket`, silently changing the rate-limiting policy without consumer awareness.
 
@@ -49,12 +40,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** `available(&RateLimiter, &Clock)` cannot mutate limiter state.
 
-**Applies to:** `available`.
-
-**Enforcement mechanism:**
-- Type system: `&RateLimiter` immutable borrow.
-- Runtime check: n/a.
-- Test: not directly testable; encoded by borrow.
+**Enforcement:** Type system - the function takes an immutable borrow `&RateLimiter`.
 
 **Violation scenario:** A read path "consumes" capacity, draining the limiter through inspection.
 
@@ -62,20 +48,15 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 ## Runtime Invariants
 
-### INV-R1: Bucket config positivity and no-overflow
+### INV-R1: Bucket config positivity
 
 **Category:** Runtime
 
 **Statement:** On `new_bucket` and `reconfigure_bucket`: `capacity > 0 ∧ refill_amount > 0 ∧ refill_interval_ms > 0`.
 
-**Applies to:** `new_bucket`, `reconfigure_bucket`.
+**Enforcement:** Runtime - construction and reconfigure assert positivity of all three fields and abort otherwise.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: `assert_bucket_config!` → `EZeroCapacity` / `EZeroRefillAmount` / `EZeroRefillInterval`.
-- Test: [`new_bucket_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L325), [`new_bucket_rejects_zero_refill_amount`](contracts/utils/tests/rate_limiter_tests.move#L338), [`new_bucket_rejects_zero_refill_interval_ms`](contracts/utils/tests/rate_limiter_tests.move#L351), [`reconfigure_bucket_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L416).
-
-**Violation scenario:** `refill_interval_ms = 0` causes division by zero in `bucket_accrue`. `capacity = 0` makes the bucket permanently empty. `refill_amount = 0` would also divide by zero in `bucket_accrue`'s `headroom / refill_amount`.
+**Violation scenario:** A zero `refill_interval_ms` or `refill_amount` causes division-by-zero in the accrual computation; a zero `capacity` makes the bucket permanently empty.
 
 **Severity:** Critical
 
@@ -87,14 +68,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** On `new_fixed_window` and `reconfigure_fixed_window`: `capacity > 0 ∧ window_ms > 0`.
 
-**Applies to:** `new_fixed_window`, `reconfigure_fixed_window`.
+**Enforcement:** Runtime - construction and reconfigure assert positivity of both fields and abort otherwise.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: `assert_fixed_window_config!` → `EZeroCapacity` / `EZeroWindowMs`.
-- Test: [`new_fixed_window_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L377), [`new_fixed_window_rejects_zero_window_ms`](contracts/utils/tests/rate_limiter_tests.move#L390), [`reconfigure_fixed_window_rejects_zero_window_ms`](contracts/utils/tests/rate_limiter_tests.move#L430).
-
-**Violation scenario:** `window_ms = 0` causes division-by-zero in the `try_consume` window-roll computation. `capacity = 0` makes every consume fail.
+**Violation scenario:** A zero `window_ms` causes division-by-zero in the window-roll computation; a zero `capacity` makes every consume fail.
 
 **Severity:** Critical
 
@@ -106,14 +82,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** On `new_cooldown` and `reconfigure_cooldown`: `capacity > 0 ∧ cooldown_ms > 0`.
 
-**Applies to:** `new_cooldown`, `reconfigure_cooldown`.
+**Enforcement:** Runtime - construction and reconfigure assert positivity of both fields and abort otherwise.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: `assert_cooldown_config!` → `EZeroCapacity` / `EZeroCooldownMs`.
-- Test: [`new_cooldown_rejects_zero_capacity`](contracts/utils/tests/rate_limiter_tests.move#L409), [`new_cooldown_rejects_zero_cooldown_ms`](contracts/utils/tests/rate_limiter_tests.move#L403), [`reconfigure_cooldown_rejects_zero_cooldown_ms`](contracts/utils/tests/rate_limiter_tests.move#L444).
-
-**Violation scenario:** `cooldown_ms = 0` would make every consume succeed, defeating the purpose of the variant. `capacity = 0` would freeze the limiter forever (no capacity to grant). No upper bound is enforced on `cooldown_ms`; see Operator Responsibilities below for the `now + cooldown_ms` overflow caveat.
+**Violation scenario:** A zero `cooldown_ms` would make every consume succeed, defeating the variant; a zero `capacity` would freeze the limiter forever. No upper bound is enforced on `cooldown_ms`; see Operator Responsibilities below.
 
 **Severity:** High
 
@@ -125,12 +96,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** On `new_bucket`: `initial_available ≤ capacity`. This is the knob that lets integrators start a bucket empty (forces a pre-roll wait) or partly full.
 
-**Applies to:** [`new_bucket`](contracts/utils/sources/rate_limiter.move#L95).
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: [`assert!(initial_available <= capacity, EInitialAboveCapacity)`](contracts/utils/sources/rate_limiter.move#L103).
-- Test: [`bucket_with_tokens_rejects_initial_above_capacity`](contracts/utils/tests/rate_limiter_tests.move#L57), [`bucket_with_tokens_can_start_empty_and_accrue`](contracts/utils/tests/rate_limiter_tests.move#L38).
+**Enforcement:** Runtime - construction asserts `initial_available ≤ capacity` and aborts otherwise.
 
 **Violation scenario:** Bucket starts above its own capacity, violating INV-S1 from the very first call.
 
@@ -142,14 +108,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Runtime
 
-**Statement:** `try_consume(amount, ..)` requires `amount > 0`. Zero is treated as a programmer error, not a rate-limit condition. (For `Cooldown`, `available` decrements by exactly 1 per call regardless of `amount` - see INV-S8 - so zero would be especially confusing if it were silently accepted.)
+**Statement:** Consume calls require `amount > 0`. Zero is treated as a programmer error, not a rate-limit condition.
 
-**Applies to:** [`try_consume`](contracts/utils/sources/rate_limiter.move#L152), [`consume_or_abort`](contracts/utils/sources/rate_limiter.move#L144).
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: [`assert!(amount > 0, EInvalidAmount)`](contracts/utils/sources/rate_limiter.move#L153).
-- Test: [`try_consume_with_zero_amount_aborts`](contracts/utils/tests/rate_limiter_tests.move#L223).
+**Enforcement:** Runtime - consume entry points assert `amount > 0` and abort otherwise.
 
 **Violation scenario:** Behavior on zero would diverge across variants (Bucket: trivially succeeds; FixedWindow: succeeds without changing `available`; Cooldown: still gates and decrements by 1), making the API non-uniform.
 
@@ -161,14 +122,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Runtime
 
-**Statement:** `reconfigure_bucket` aborts on non-`Bucket`, `reconfigure_fixed_window` aborts on non-`FixedWindow`, `reconfigure_cooldown` aborts on non-`Cooldown`. Variant check has priority over config validation: a wrong-variant call always aborts with `EWrongVariant`, even when the supplied config would also be invalid.
+**Statement:** Each `reconfigure_*` aborts on the wrong variant. The variant check has priority over config validation: a wrong-variant call always aborts with the variant error, even when the supplied config would also be invalid.
 
-**Applies to:** all `reconfigure_*` functions.
-
-**Enforcement mechanism:**
-- Type system: n/a (could be enforced with separate types, but the enum design rejects that).
-- Runtime check: `assert_*_config!` is invoked *inside* the matching arm, so the wildcard `_ => abort EWrongVariant` arm fires first on wrong variant.
-- Test: [`reconfigure_bucket_on_non_bucket_aborts`](contracts/utils/tests/rate_limiter_tests.move#L238), [`reconfigure_fixed_window_on_non_fixed_window_aborts`](contracts/utils/tests/rate_limiter_tests.move#L251), [`reconfigure_cooldown_on_non_cooldown_aborts`](contracts/utils/tests/rate_limiter_tests.move#L265), plus three priority tests at L279/L295/L309.
+**Enforcement:** Runtime - the config validation is performed *inside* the matching variant's arm, so the wildcard "wrong variant" arm fires first whenever the variant does not match.
 
 **Violation scenario:** A `Cooldown` reconfigured via `reconfigure_bucket` would silently change variant - see INV-T2.
 
@@ -180,14 +136,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Runtime
 
-**Statement:** `consume_or_abort(amount, clk)` aborts with `ERateLimited` iff `try_consume(amount, clk)` would return `false` for the same arguments and state.
+**Statement:** `consume_or_abort(amount, clk)` aborts iff `try_consume(amount, clk)` would return `false` for the same arguments and state.
 
-**Applies to:** [`consume_or_abort`](contracts/utils/sources/rate_limiter.move#L144).
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: implementation literally calls `try_consume` and asserts.
-- Test: [`bucket_consume_or_abort_aborts_when_empty`](contracts/utils/tests/rate_limiter_tests.move#L84), [`fixed_window_consume_or_abort_aborts_when_full`](contracts/utils/tests/rate_limiter_tests.move#L775), [`cooldown_consume_or_abort_aborts_when_in_cooldown`](contracts/utils/tests/rate_limiter_tests.move#L789).
+**Enforcement:** Runtime - the implementation calls `try_consume` and asserts on its return value, so the two functions cannot diverge by construction.
 
 **Violation scenario:** Consumers couldn't predict whether to use `try_consume` or `consume_or_abort` - the latter would diverge from the former.
 
@@ -201,12 +152,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** For any `Bucket` reachable through the public API, `available ≤ capacity` after every operation.
 
-**Applies to:** all `Bucket` state mutations.
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: [`bucket_accrue`](contracts/utils/sources/rate_limiter.move#L371) returns `available + credit ≤ capacity` in the under-fill branch (proved via `credit ≤ headroom`) and writes `capacity` directly in the fill branch; `try_consume` only deducts after `new_available ≥ amount`; `reconfigure_bucket` clamps `new_available.min(capacity)`.
-- Test: [`bucket_starts_full_and_refills_over_time`](contracts/utils/tests/rate_limiter_tests.move#L12), [`bucket_reconfigure_clamps_tokens_to_new_capacity`](contracts/utils/tests/rate_limiter_tests.move#L97), [`bucket_no_overflow_with_huge_refill_amount`](contracts/utils/tests/rate_limiter_tests.move#L636), [`bucket_no_overflow_under_extreme_clock_advance`](contracts/utils/tests/rate_limiter_tests.move#L655).
+**Enforcement:** Runtime - accrual is split into an under-fill branch (where the credit is bounded by remaining headroom) and a fill branch (which writes `capacity` directly), so the post-accrual value never exceeds `capacity`. Consume only deducts after checking sufficient available capacity. Reconfigure clamps `available` down to the new `capacity`.
 
 **Violation scenario:** `available > capacity` would let a bucket burst past its configured maximum after a long idle period.
 
@@ -220,12 +166,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** For any `FixedWindow` reachable through the public API, `available ≤ capacity` after every operation.
 
-**Applies to:** all `FixedWindow` state mutations.
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: `amount > available` short-circuits before decrementing (subtraction-form, no overflow); window roll resets `available = capacity`; `reconfigure_fixed_window` does `available.min(new_capacity)`.
-- Test: [`fixed_window_counts_per_window_and_resets_on_boundary`](contracts/utils/tests/rate_limiter_tests.move#L117), [`fixed_window_reconfigure_clamps_available_to_new_capacity`](contracts/utils/tests/rate_limiter_tests.move#L858), [`fixed_window_try_consume_max_amount_returns_false`](contracts/utils/tests/rate_limiter_tests.move#L674).
+**Enforcement:** Runtime - the consume comparison is in subtraction form (overflow-safe) and short-circuits when `amount` exceeds `available`; window roll resets `available` to `capacity`; reconfigure clamps `available` down to the new `capacity`.
 
 **Violation scenario:** Per-window cap is exceeded; INV-E2 fails.
 
@@ -237,18 +178,13 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** Windows are anchored at the limiter's creation time, not at wall-clock multiples of `window_ms`. After construction, `window_start_ms = creation_ms`; thereafter `window_start_ms` advances only by integer multiples of the *current* `window_ms` (via the inline window-roll computation in `try_consume` and `reconfigure_fixed_window`). Consequence: at any point, `window_start_ms = anchor + k * window_ms` for some `k ≥ 0`, where `anchor` is the creation timestamp under the original `window_ms` (or, after a `reconfigure_fixed_window`, the position rolled forward under the previous `window_ms`).
+**Statement:** Windows are anchored at the limiter's creation time. After construction, the window anchor equals the creation timestamp; thereafter it advances only by integer multiples of the *current* `window_ms`. Consequently, the anchor is always `creation + k · window_ms` for some `k ≥ 0` (or, after reconfigure, the anchor rolled forward under the previous `window_ms`).
 
 `reconfigure_fixed_window` first runs the window-roll under the OLD `window_ms` (preserving INV-S13), then installs the new config; subsequent advances use the new `window_ms` from the rolled-forward anchor.
 
-**Applies to:** `FixedWindow`.
+**Enforcement:** Runtime - construction sets the window anchor to the current chain timestamp (no wall-clock alignment). All subsequent advances move the anchor by an integer multiple of the *current* `window_ms`, and the same advance is used by both consume and reconfigure (with reconfigure running under the old `window_ms` before the new value is installed).
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: construction sets `window_start_ms = clock.timestamp_ms()` (no wall-clock alignment). The advance computation `let steps = (now - window_start_ms) / window_ms; if steps != 0 { window_start_ms += steps * window_ms; available = capacity }` is inlined identically in `try_consume` and `reconfigure_fixed_window` (with the latter using the current `window_ms` *before* it is overwritten).
-- Test: [`fixed_window_first_window_has_full_length_at_nonzero_creation`](contracts/utils/tests/rate_limiter_tests.move#L693).
-
-**Violation scenario:** A wall-clock-aligned design makes the first window arbitrarily short - if the limiter is created at `t = 99` with `window_ms = 100`, the first window is only 1 ms long. The anchored design guarantees every window has length exactly `window_ms`. Misaligning `window_start_ms` (e.g. by setting it to a value that isn't `anchor + k * window_ms`) would let an attacker reset `available` more frequently than once per `window_ms`, exceeding INV-E2.
+**Violation scenario:** A wall-clock-aligned design makes the first window arbitrarily short - if the limiter is created near a window boundary, the first window can collapse to a few ms. Misaligning the anchor (e.g. by setting it to a value that isn't `creation + k · window_ms`) would let an attacker reset `available` more frequently than once per `window_ms`, exceeding INV-E2.
 
 **Severity:** High
 
@@ -258,16 +194,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** `window_start_ms` is non-decreasing across `try_consume` and `reconfigure_fixed_window` calls.
+**Statement:** The window anchor is non-decreasing across consume and reconfigure calls.
 
-**Applies to:** [`FixedWindow`](contracts/utils/sources/rate_limiter.move#L66).
+**Enforcement:** Runtime - the advance is always a non-negative multiple of `window_ms` (computed via integer division of elapsed time), and is only written when at least one full step has elapsed.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: the inline advance is `steps * window_ms` where `steps = (now - window_start_ms) / window_ms ≥ 0`, and it is only written when `steps > 0`. Both `try_consume` and `reconfigure_fixed_window` use this pattern; neither moves `window_start_ms` backward.
-- Test: implicit in [`fixed_window_counts_per_window_and_resets_on_boundary`](contracts/utils/tests/rate_limiter_tests.move#L117), [`fixed_window_reconfigure_rolls_under_old_window_first`](contracts/utils/tests/rate_limiter_tests.move#L575).
-
-**Violation scenario:** Going backward inside `try_consume` would re-enter a window where capacity has already been spent.
+**Violation scenario:** Going backward inside a consume would re-enter a window where capacity has already been spent.
 
 **Severity:** High
 
@@ -277,16 +208,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** `last_refill_ms` is non-decreasing across `try_consume` and `reconfigure_bucket`.
+**Statement:** The bucket's refill anchor is non-decreasing across consume and reconfigure.
 
-**Applies to:** [`Bucket`](contracts/utils/sources/rate_limiter.move#L57).
+**Enforcement:** Runtime - accrual leaves the anchor unchanged when no full step has elapsed; otherwise advances it by a non-negative multiple of `refill_interval_ms`. The chain clock is monotonic, so elapsed-time subtraction does not underflow.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: `bucket_accrue` returns the original `last_refill_ms` on `elapsed_steps == 0`; otherwise advances by `steps * refill_interval_ms ≥ 0`. The Sui `Clock` is monotonic, so `now - last_refill_ms` does not underflow.
-- Test: implicit in [`bucket_preserves_subinterval_time_across_consumes`](contracts/utils/tests/rate_limiter_tests.move#L528), [`bucket_with_tokens_can_start_empty_and_accrue`](contracts/utils/tests/rate_limiter_tests.move#L38).
-
-**Violation scenario:** A backward `last_refill_ms` would re-credit already-credited intervals.
+**Violation scenario:** A backward refill anchor would re-credit already-credited intervals.
 
 **Severity:** Critical
 
@@ -296,16 +222,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** After accrual, `last_refill_ms ≡ original_last_refill_ms (mod refill_interval_ms)`. Sub-interval time elapsed but not yet credited is never discarded - it accrues toward the next step.
+**Statement:** After accrual, the refill anchor is congruent to its prior value mod `refill_interval_ms`. Sub-interval time elapsed but not yet credited is never discarded - it accrues toward the next step.
 
-**Applies to:** `bucket_accrue`.
+**Enforcement:** Runtime - the anchor advance is always an integer multiple of `refill_interval_ms`, so the residue (`anchor mod refill_interval_ms`) is preserved across every accrual.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: advance is always `steps * refill_interval_ms` where `steps` is an integer step count (either `elapsed_steps` in the under-fill branch, or `q`/`q+1` in the fill-to-capacity branch). In every case, `last_refill_ms ≡ original (mod refill_interval_ms)`.
-- Test: [`bucket_preserves_subinterval_time_across_consumes`](contracts/utils/tests/rate_limiter_tests.move#L528).
-
-**Violation scenario:** If implemented as `last_refill_ms = now`, a caller spamming consumes faster than `refill_interval_ms` would forfeit fractional time on every call, dramatically reducing the effective refill rate.
+**Violation scenario:** Snapping the anchor to "now" after every consume would forfeit the current sub-interval's accumulated time, dramatically reducing the effective refill rate under bursty load.
 
 **Severity:** High
 
@@ -315,16 +236,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** When `try_consume` returns `false`, the limiter's logical state is unchanged from before the call. Internal accrual / window-roll computations may have run, but no capacity has been deducted and (in the failure path) no anchors have been written.
+**Statement:** When `try_consume` returns `false`, the limiter's logical state is unchanged from before the call. Internal accrual / window-roll computations may have run, but no capacity has been deducted.
 
-**Applies to:** [`try_consume`](contracts/utils/sources/rate_limiter.move#L152).
+**Enforcement:** Runtime - each variant's failure branch returns `false` before mutating `available`. Bucket and Cooldown also avoid writing their anchors on failure.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: each variant arm returns `false` *before* mutating state on the failure path. Bucket: `if (new_available < amount) return false` *before* writing `*last_refill_ms` or `*available`. FixedWindow: window-roll writes occur first (when applicable), but the failure branch `if (amount > *available) return false` doesn't decrement `available`. Cooldown: `if (now < *cooldown_end_ms) return false` *before* the `*available = *capacity` reset.
-- Test: [`bucket_failed_try_consume_does_not_drain_state`](contracts/utils/tests/rate_limiter_tests.move#L460), [`fixed_window_failed_try_consume_does_not_advance_used`](contracts/utils/tests/rate_limiter_tests.move#L483), [`cooldown_failed_try_consume_does_not_reset_anchor`](contracts/utils/tests/rate_limiter_tests.move#L504).
-
-**Note:** For `FixedWindow`, the inline window-roll *does* persist the new `window_start_ms` and reset `available = capacity` even if the subsequent `amount > available` check fails. This is deliberate and consistent with `available()`'s read-only semantics in spirit: once time has crossed a window boundary, the new window has begun, regardless of whether a consume succeeds inside it. It does not violate INV-S7 because the per-window cap (INV-E2) is unchanged: the new window legitimately starts with `available = capacity`.
+**Note:** For `FixedWindow`, the inline window-roll *does* persist the new anchor and reset `available = capacity` even if the subsequent capacity check fails. This is deliberate: once time has crossed a window boundary, the new window has begun regardless of whether a consume succeeds inside it. This does not violate INV-S7 because the per-window cap (INV-E2) is unchanged - the new window legitimately starts with `available = capacity`.
 
 **Severity:** High
 
@@ -335,19 +251,14 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 **Category:** State transition
 
 **Statement:** A `Cooldown` is in one of two logical states:
-- **Granted:** `available > 0` - the next `try_consume(amount > 0, _)` succeeds and decrements `available` by exactly 1 (the `amount` value is irrelevant beyond the `> 0` check). At construction `available = capacity`, so the limiter starts in this state.
-- **Gated:** `available == 0` - `try_consume` returns `false` until `now ≥ cooldown_end_ms`, at which point a single call resets `available = capacity` and consumes (transitioning back to Granted, with `available = capacity - 1`).
+- **Granted:** `available > 0` - the next consume succeeds and decrements `available` by exactly 1, regardless of `amount`. At construction `available = capacity`, so the limiter starts in this state.
+- **Gated:** `available == 0` - consume returns `false` until the cooldown deadline has elapsed, at which point a single call refills `available` to `capacity` and consumes (transitioning back to Granted).
 
-`cooldown_end_ms` is a don't-care field while `available > 0`; it is only read in the Gated state. Initial value `0` is therefore safe - it is never observed before being written.
+The cooldown deadline is a don't-care field while `available > 0`; it is only read in the Gated state. Initial value `0` is therefore safe - it is never observed before being written.
 
-**Applies to:** [`Cooldown`](contracts/utils/sources/rate_limiter.move#L80).
+**Enforcement:** Runtime - the deadline is only read inside the `available == 0` branch; a successful consume that drains `available` to zero arms the next deadline.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: `try_consume` Cooldown arm in [rate_limiter.move:186-197](contracts/utils/sources/rate_limiter.move#L186-L197) - `if (*available == 0) { if (now < *cooldown_end_ms) return false; *available = *capacity }`, then unconditional `*available = *available - 1`, then arm `*cooldown_end_ms = now + *cooldown_ms` only when the decrement reaches 0.
-- Test: [`cooldown_accumulates_used_until_capacity_then_gates`](contracts/utils/tests/rate_limiter_tests.move#L173), [`cooldown_amount_does_not_affect_used`](contracts/utils/tests/rate_limiter_tests.move#L203), [`cooldown_available_predicts_try_consume`](contracts/utils/tests/rate_limiter_tests.move#L757).
-
-**Violation scenario:** Reading `cooldown_end_ms` while in the Granted state would gate spuriously on a fresh limiter (since `cooldown_end_ms = 0` initially). The current code only reads it inside the `available == 0` branch, so this is structurally avoided.
+**Violation scenario:** Reading the cooldown deadline while in the Granted state would gate spuriously on a fresh limiter (since the deadline is initially zero). The current code only reads it in the Gated branch, so this is structurally avoided.
 
 **Severity:** High
 
@@ -357,16 +268,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** Once `cooldown_end_ms` is armed (set by a consume that drains `available` to 0), no subsequent `try_consume` succeeds until `now ≥ cooldown_end_ms`. After release, the next `cooldown_end_ms` (armed by the next drain to 0) is `≥ now ≥ previous cooldown_end_ms`. `cooldown_end_ms` therefore is non-decreasing across successful consumes that drain the limiter.
+**Statement:** Once the cooldown deadline is armed (set by a consume that drains `available` to 0), no subsequent consume succeeds until the deadline elapses. The deadline is non-decreasing across the consumes that arm it.
 
-**Applies to:** [`Cooldown`](contracts/utils/sources/rate_limiter.move#L80).
+**Enforcement:** Runtime - the gate `now ≥ deadline` is required for success while gated; each fresh deadline is computed as `now + cooldown_ms`, and the chain clock is monotonic.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: gate `now ≥ cooldown_end_ms` is required for success while `available == 0`. Each fresh `cooldown_end_ms` is set as `now + cooldown_ms`, where `now` is the current monotonic chain timestamp.
-- Test: [`cooldown_requires_elapsed_time_between_consumes`](contracts/utils/tests/rate_limiter_tests.move#L146), [`cooldown_failed_try_consume_does_not_reset_anchor`](contracts/utils/tests/rate_limiter_tests.move#L504).
-
-**Violation scenario:** Backward `cooldown_end_ms` would collapse the gate.
+**Violation scenario:** A backward deadline would collapse the gate.
 
 **Severity:** High
 
@@ -378,12 +284,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** No reconfigure path changes which variant the limiter is. To switch variant, the integrator must construct a fresh `RateLimiter` and overwrite the field.
 
-**Applies to:** all `reconfigure_*` functions.
-
-**Enforcement mechanism:**
-- Type system: every reconfigure arm matches exactly one variant; the wildcard branch aborts.
-- Runtime check: `EWrongVariant` (INV-R6).
-- Test: covered by all three `reconfigure_*_on_non_*_aborts` tests at L238/L251/L265.
+**Enforcement:** Type system - each reconfigure path matches exactly one variant; the wildcard branch aborts. Runtime - see INV-R6.
 
 **Violation scenario:** Silent variant change - a `Bucket` becomes a `Cooldown` mid-flight, completely changing the semantics of `consume`.
 
@@ -395,16 +296,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** When capacity shrinks: `reconfigure_bucket` clamps `available.min(new_capacity)`; `reconfigure_fixed_window` clamps `available.min(new_capacity)`; `reconfigure_cooldown` clamps `available.min(new_capacity)`. INV-S1, INV-S2, and INV-S8's `available ≤ capacity` discipline hold post-reconfigure.
+**Statement:** When capacity shrinks, every `reconfigure_*` clamps `available` to the new `capacity`, so INV-S1, INV-S2, and INV-S8's `available ≤ capacity` discipline hold post-reconfigure.
 
-**Applies to:** [`reconfigure_bucket`](contracts/utils/sources/rate_limiter.move#L244), [`reconfigure_fixed_window`](contracts/utils/sources/rate_limiter.move#L284), [`reconfigure_cooldown`](contracts/utils/sources/rate_limiter.move#L324).
+**Enforcement:** Runtime - each reconfigure path clamps `available` to the new `capacity` before installing the new config.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: `.min(capacity)` in all three reconfigure paths.
-- Test: [`bucket_reconfigure_clamps_tokens_to_new_capacity`](contracts/utils/tests/rate_limiter_tests.move#L97), [`fixed_window_reconfigure_clamps_available_to_new_capacity`](contracts/utils/tests/rate_limiter_tests.move#L858), [`cooldown_reconfigure_clamps_available_to_new_capacity`](contracts/utils/tests/rate_limiter_tests.move#L805).
-
-**Violation scenario:** `available > new_capacity` would let a Bucket / FixedWindow / Cooldown burst above its new ceiling immediately after reconfigure.
+**Violation scenario:** `available > new_capacity` would let any variant burst above its new ceiling immediately after reconfigure.
 
 **Severity:** Critical
 
@@ -414,14 +310,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** `reconfigure_bucket` applies the *previous* `refill_amount`/`refill_interval_ms` to all elapsed time before the new config takes effect. The new rate applies only to time after the reconfigure.
+**Statement:** `reconfigure_bucket` applies the *previous* `refill_amount` and `refill_interval_ms` to all elapsed time before the new config takes effect. The new rate applies only to time after the reconfigure.
 
-**Applies to:** [`reconfigure_bucket`](contracts/utils/sources/rate_limiter.move#L244).
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: `bucket_accrue` is called with the *current* config fields (`*cap_field`, `*refill_amount_field`, `*refill_interval_field`) *before* they are overwritten with the new config.
-- Test: [`bucket_reconfigure_accrues_under_old_rate_first`](contracts/utils/tests/rate_limiter_tests.move#L553).
+**Enforcement:** Runtime - accrual runs against the current (pre-reconfigure) config fields before they are overwritten with the new values.
 
 **Violation scenario:** Retroactively applying a new rate would let an operator backdate increased capacity, violating economic invariants for the past period.
 
@@ -433,16 +324,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** State transition
 
-**Statement:** `reconfigure_fixed_window` advances `window_start_ms` and resets `available = new_capacity` according to the *previous* `window_ms` (any number of full old-window steps that have elapsed) *before* the new `window_ms` is installed. The new window grid then anchors at the rolled-forward `window_start_ms`.
+**Statement:** `reconfigure_fixed_window` advances the window anchor and resets `available` to the new `capacity` according to the *previous* `window_ms` (any number of full old-window steps that have elapsed) *before* the new `window_ms` is installed. The new window grid then anchors at the rolled-forward position.
 
-**Applies to:** `reconfigure_fixed_window`.
+**Enforcement:** Runtime - the window-roll computation reads the current `window_ms` for the rollover decision and rewrites the anchor before the new `window_ms` is installed.
 
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: the inline window-roll computation reads `*window_field` (the OLD `window_ms`) for `steps = (now - *window_start_ms) / *window_field`, then writes `*window_start_ms += steps * *window_field` - both *before* the new `window_ms` overwrites `*window_field`.
-- Test: [`fixed_window_reconfigure_rolls_under_old_window_first`](contracts/utils/tests/rate_limiter_tests.move#L575).
-
-**Violation scenario:** Using the new `window_ms` for the rollover decision could move `window_start_ms` backward when widening, carrying old-window usage into a wider new window - letting a fresh wider window admit only `new_capacity - used_under_old_window` of its budget on the first turn after reconfigure, surprising integrators and potentially breaking INV-E2's spirit across the reconfigure boundary.
+**Violation scenario:** Using the new `window_ms` for the rollover could move the anchor backward when widening, carrying old-window usage into a wider new window - letting the fresh wider window admit only a fraction of its budget on the first turn after reconfigure, breaking INV-E2's spirit across the reconfigure boundary.
 
 **Severity:** High
 
@@ -452,14 +338,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Economic
 
-**Statement:** Over any interval `Δt`, the maximum number of tokens consumable from a `Bucket` is at most `capacity + ⌊Δt / refill_interval_ms⌋ * refill_amount`. The bucket cannot generate value out of thin air.
+**Statement:** Over any interval `Δt`, the maximum number of tokens consumable from a `Bucket` is at most `capacity + ⌊Δt / refill_interval_ms⌋ · refill_amount`. The bucket cannot generate value out of thin air.
 
-**Applies to:** `Bucket` lifecycle.
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: implied by INV-S1 + accrual formula.
-- Test: covered partially by [`bucket_starts_full_and_refills_over_time`](contracts/utils/tests/rate_limiter_tests.move#L12), [`bucket_no_overflow_with_huge_refill_amount`](contracts/utils/tests/rate_limiter_tests.move#L636), [`bucket_no_overflow_under_extreme_clock_advance`](contracts/utils/tests/rate_limiter_tests.move#L655). No long-run / fuzzed test exists.
+**Enforcement:** Implied by INV-S1 plus the integer-step accrual formula.
 
 **Violation scenario:** Over-issuance - the central economic guarantee a rate limiter exists to provide.
 
@@ -471,14 +352,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Economic
 
-**Statement:** No more than `capacity` units consumed within any `[anchor + k·window_ms, anchor + (k+1)·window_ms)` window, where `anchor` is determined by INV-S3.
+**Statement:** No more than `capacity` units consumed within any `[anchor + k · window_ms, anchor + (k+1) · window_ms)` window, where `anchor` is determined by INV-S3.
 
-**Applies to:** `FixedWindow` lifecycle.
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: implied by INV-S2 + INV-S3 + INV-S4.
-- Test: [`fixed_window_counts_per_window_and_resets_on_boundary`](contracts/utils/tests/rate_limiter_tests.move#L117), [`fixed_window_first_window_has_full_length_at_nonzero_creation`](contracts/utils/tests/rate_limiter_tests.move#L693).
+**Enforcement:** Implied by INV-S2 + INV-S3 + INV-S4.
 
 **Violation scenario:** Per-window cap exceeded.
 
@@ -490,14 +366,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Economic
 
-**Statement:** When `Cooldown` transitions from Gated back to Granted (i.e. a successful consume after the gate was armed), at least `cooldown_ms` (the value at the time the gate was armed) has elapsed since the consume that armed the gate.
+**Statement:** When `Cooldown` transitions from Gated back to Granted, at least `cooldown_ms` (the value at the time the gate was armed) has elapsed since the consume that armed the gate.
 
-**Applies to:** `Cooldown` lifecycle.
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: gate `now ≥ cooldown_end_ms` in `try_consume`, where `cooldown_end_ms = arming_now + cooldown_ms_at_arming_time`.
-- Test: [`cooldown_requires_elapsed_time_between_consumes`](contracts/utils/tests/rate_limiter_tests.move#L146), [`cooldown_reconfigure_preserves_in_flight_deadline`](contracts/utils/tests/rate_limiter_tests.move#L600).
+**Enforcement:** Runtime - the gate `now ≥ deadline` is required for success, where the deadline was set as `arming_now + cooldown_ms_at_arming_time`.
 
 **Violation scenario:** Cooldown can be bypassed, defeating throttling for the variant.
 
@@ -509,14 +380,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Economic
 
-**Statement:** If `available(&clk) ≥ amount` and no clock change or other call intervenes, then `try_consume(amount, &clk)` returns `true`. For `Cooldown`, `available` is "number of consecutive `try_consume` calls that will succeed before the gate arms" - so `available == N` ⇒ exactly `N` successive `try_consume(_, &clk)` calls succeed before the gate engages, regardless of `amount`.
+**Statement:** If `available(&clk) ≥ amount` and no clock change or other call intervenes, then `try_consume(amount, &clk)` returns `true`. For `Cooldown`, `available` is "number of consecutive consumes that will succeed before the gate arms" - so `available == N` ⇒ exactly `N` successive consumes succeed before the gate engages, regardless of `amount`.
 
-**Applies to:** [`available`](contracts/utils/sources/rate_limiter.move#L205), [`try_consume`](contracts/utils/sources/rate_limiter.move#L152).
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: same accrual / window-roll / gate logic in both functions.
-- Test: [`bucket_available_predicts_try_consume`](contracts/utils/tests/rate_limiter_tests.move#L725), [`fixed_window_available_predicts_try_consume`](contracts/utils/tests/rate_limiter_tests.move#L741), [`cooldown_available_predicts_try_consume`](contracts/utils/tests/rate_limiter_tests.move#L757).
+**Enforcement:** Runtime - `available()` and the consume path apply identical accrual / window-roll / gate logic, so the read predicts the next write.
 
 **Violation scenario:** Read-then-act consumers see ghost capacity that vanishes on the actual call.
 
@@ -530,12 +396,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Statement:** A `RateLimiter` requires no shared object, no registry, and no PTB ordering. Its scope is the parent value that owns it.
 
-**Applies to:** entire module.
-
-**Enforcement mechanism:**
-- Type system: `store + drop`, no `key`.
-- Runtime check: n/a.
-- Test: not directly testable; encoded by absence of global API.
+**Enforcement:** Type system - `store + drop` only, no `key`, so the limiter cannot exist as a top-level Sui object. The module exposes no global API.
 
 **Violation scenario:** Coupling between integrators using the limiter - one consumer's actions affecting another's quota.
 
@@ -547,14 +408,9 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 **Category:** Composability
 
-**Statement:** Multiple `consume_*` calls in a single PTB compose naturally. Each call independently re-reads the clock and updates state. There is no transaction-scoped accumulator.
+**Statement:** Multiple consume calls in a single PTB compose naturally. Each call independently re-reads the clock and updates state. There is no transaction-scoped accumulator.
 
-**Applies to:** [`try_consume`](contracts/utils/sources/rate_limiter.move#L152), [`consume_or_abort`](contracts/utils/sources/rate_limiter.move#L144).
-
-**Enforcement mechanism:**
-- Type system: n/a.
-- Runtime check: every call uses `clock.timestamp_ms()` afresh; state is only the embedded fields.
-- Test: PTB-level testing not in scope of this module's unit tests.
+**Enforcement:** Runtime - every call re-reads the chain clock; the only state is the embedded fields of the limiter.
 
 **Violation scenario:** Bundling two consumes in a single PTB would behave differently from the same calls split across two PTBs - surprising and integration-hostile.
 
@@ -576,7 +432,7 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 
 ## Operator Responsibilities (Out of Scope for the module)
 
-- **Cooldown deadline overflow.** `try_consume` for `Cooldown` computes `cooldown_end_ms = now + cooldown_ms`. Sui's `Clock` is monotonic and bounded well below `u64::MAX`, but `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain timestamp during the limiter's lifetime - any policy-meaningful value (seconds to days to years in ms) satisfies this trivially. The module enforces only positivity (INV-R3); no upper-bound assert is added because there is no useful `u64` ceiling that captures "policy-reasonable."
+- **Cooldown deadline overflow.** Cooldown computes `cooldown_end_ms = now + cooldown_ms`. Sui's `Clock` is monotonic and bounded well below `u64::MAX`, but a `cooldown_ms` near `u64::MAX` would overflow this addition. Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at any plausible chain timestamp during the limiter's lifetime - any policy-meaningful value (seconds to days to years in ms) satisfies this trivially. The module enforces only positivity (INV-R3); no upper-bound assert is added because there is no useful `u64` ceiling that captures "policy-reasonable."
 - **Clock authenticity.** The module trusts `&Clock`; it does not defend against a malicious shared-clock substitute (Sui's `Clock` is a singleton shared object, so this is a Sui-platform property).
 - **Authorization / access control inside the module.** Delegated to the parent object holding the field. The module makes no claim about who *should* be allowed to call `&mut` paths.
 
@@ -588,13 +444,11 @@ Embeddable rate-limiting primitive (`store + drop`) with three variants - `Bucke
 ## Dev Notes
 
 - **Authorization model is the central design decision.** The limiter delegates 100% of access control to the holder of `&mut` to the parent field. This is what makes the primitive embeddable, registry-less, and PTB-friendly. Any future "shared rate limiter" feature would require fundamentally different primitives.
-- **Clock is assumed monotonic.** Sui's `Clock` is monotonic in practice; the module relies on this and uses `now - last_*` directly. If `now < last_*` ever held, the subtraction would underflow and abort - this is a fail-closed posture rather than a silent absorption.
-- **Overflow surfaces closed by implementation, not config bounds.** `bucket_accrue`'s two-branch structure bounds every intermediate product and sum by `capacity` (no upper bound on `capacity` or `refill_amount` required beyond `checked_add`). FixedWindow's hot-path comparison (`amount > capacity - available`) uses subtraction so no addition can overflow. Cooldown is the one exception (`now + cooldown_ms`); operators handle it (see Operator Responsibilities).
-- **Anchor-based windows.** `FixedWindow` windows are `[creation + k * window_ms, creation + (k+1) * window_ms)`. The first window always has length exactly `window_ms`. On `reconfigure_fixed_window`, the new window grid anchors at the rolled-forward `window_start_ms` under the OLD `window_ms`.
+- **Clock is assumed monotonic.** Sui's `Clock` is monotonic in practice; the module relies on this and uses elapsed-time subtraction directly. If the clock ever ran backward, the subtraction would underflow and abort - a fail-closed posture rather than a silent absorption.
+- **Overflow surfaces closed by implementation, not config bounds.** Bucket accrual's two-branch structure bounds every intermediate product and sum by `capacity` (no upper bound on `capacity` or `refill_amount` required). `FixedWindow`'s hot-path comparison uses subtraction so no addition can overflow. `Cooldown` is the one exception (`now + cooldown_ms`); operators handle it (see Operator Responsibilities).
+- **Anchor-based windows.** `FixedWindow` windows are `[creation + k · window_ms, creation + (k+1) · window_ms)`. The first window always has length exactly `window_ms`. On reconfigure, the new window grid anchors at the rolled-forward position under the OLD `window_ms`.
 - **Cooldown stores `available` and `cooldown_end_ms`.** The design tracks remaining capacity directly and stores the absolute release deadline; the gate predicate is `now < cooldown_end_ms`. This is symmetric with the other variants' `available` field.
 
 ## Open Questions
 
-1. **Should `available()` for `Cooldown` while in the Gated state but post-deadline return `capacity` or something else?** Today it returns `capacity` (the full grant the next consume will receive). This matches the INV-E4 statement.
-2. **Should the variant guard pattern (`reconfigure_bucket` aborts on non-Bucket) be replaced with a "reconfigure_or_replace" that always works by overwriting?** Probably no - the abort makes the integrator's intent explicit. But worth noting as an alternative.
-
+1. **Should the variant guard pattern (`reconfigure_bucket` aborts on non-Bucket) be replaced with a "reconfigure_or_replace" that always works by overwriting?** Probably no - the abort makes the integrator's intent explicit. But worth noting as an alternative.
