@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- New `rate_limiter` module: an embeddable `store + drop` rate-limiting primitive with three strategies behind one enum (`Bucket`, `FixedWindow`, `Cooldown`), sharing a unified `consume_or_abort` / `try_consume` / `available` API and per-variant `reconfigure_*` helpers.
+- New `rate_limiter` module: an embeddable rate-limiting primitive with three strategies behind one enum. (#315)
 
 ## 1.1.0 (21-04-2026)
 
