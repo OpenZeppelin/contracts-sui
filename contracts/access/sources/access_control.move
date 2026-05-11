@@ -357,12 +357,15 @@ public fun get_role_admin<RootRole, Role>(ac: &AccessControl<RootRole>): TypeNam
     ac.get_role_admin_name(with_original_ids<Role>())
 }
 
-/// Aborts with `EUnauthorized` if `account` does not hold role `Role`.
+/// Assert that `account` holds role `Role`. Aborts otherwise.
 ///
 /// #### Parameters
 /// - `Role` (type): the role to assert membership of.
 /// - `ac`: the registry to query.
 /// - `account`: the address being checked.
+///
+/// #### Aborts
+/// - `EUnauthorized` if `account` does not hold role `Role`.
 public fun assert_role<RootRole, Role>(ac: &AccessControl<RootRole>, account: address) {
     assert!(ac.has_role<_, Role>(account), EUnauthorized);
 }
@@ -750,11 +753,7 @@ public fun begin_default_admin_delay_change<RootRole>(
 
     let current = ac.default_admin_delay_ms;
     let wait = if (new_delay_ms > current) {
-        if (new_delay_ms < MAX_DELAY_INCREASE_WAIT_MS) {
-            new_delay_ms
-        } else {
-            MAX_DELAY_INCREASE_WAIT_MS
-        }
+        new_delay_ms.min(MAX_DELAY_INCREASE_WAIT_MS)
     } else {
         current - new_delay_ms
     };
