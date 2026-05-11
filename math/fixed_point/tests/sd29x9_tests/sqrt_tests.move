@@ -68,10 +68,15 @@ fun sqrt_of_max_positive() {
 #[random_test]
 fun sqrt_result_is_always_non_negative(raw: u128) {
     let raw = raw % (MAX_POSITIVE_VALUE + 1);
-    let x = sd29x9::wrap(raw, false);
-    let result = x.sqrt();
+    let result = sd29x9::wrap(raw, false).sqrt();
     // Result is non-negative: raw bits should not have sign bit set
     assert!(result.unwrap() <= MAX_POSITIVE_VALUE);
+}
+
+#[random_test]
+fun sqrt_floor_invariant(raw: u128) {
+    let raw = raw % (MAX_POSITIVE_VALUE + 1);
+    let result = sd29x9::wrap(raw, false).sqrt();
     // Floor property: r^2 <= x * SCALE < (r + 1)^2
     let r = result.unwrap() as u256;
     let scaled = (raw as u256) * (SCALE as u256);

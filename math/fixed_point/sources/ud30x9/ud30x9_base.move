@@ -4,6 +4,8 @@ module openzeppelin_fp_math::ud30x9_base;
 use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u256;
 
 // === Errors ===
 
@@ -468,7 +470,7 @@ public fun sqrt(x: UD30x9): UD30x9 {
     let raw = x.unwrap() as u256;
     // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
     // sqrt(raw / SCALE) = sqrt(raw * SCALE) / SCALE
-    let result = common::sqrt_floor(raw * common::scale_u256!());
+    let result = u256::sqrt(raw * common::scale_u256!(), rounding::down());
     wrap(result as u128)
 }
 

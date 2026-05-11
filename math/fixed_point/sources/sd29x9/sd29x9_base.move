@@ -6,6 +6,8 @@ module openzeppelin_fp_math::sd29x9_base;
 use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u256;
 
 // === Errors ===
 
@@ -492,7 +494,7 @@ public fun sqrt(x: SD29x9): SD29x9 {
     assert!(!neg, ENegativeSqrt);
     // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
     // sqrt(mag / SCALE) = sqrt(mag * SCALE) / SCALE
-    let result = common::sqrt_floor(mag * common::scale_u256!());
+    let result = u256::sqrt(mag * common::scale_u256!(), rounding::down());
     wrap_components(Components { neg: false, mag: result })
 }
 

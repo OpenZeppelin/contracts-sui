@@ -125,6 +125,6 @@ fun sqrt_of_large_values() {
 #[random_test]
 fun sqrt_monotonicity(x: u128, y: u128) {
     // For x <= y, sqrt(x) <= sqrt(y)
-    let (x, y) = if (x <= y) { (x, y) } else { (y, x) };
+    let (x, y) = if (x <= y) (x, y) else (y, x);
     assert!(ud30x9::wrap(x).sqrt().unwrap() <= ud30x9::wrap(y).sqrt().unwrap());
 }
