@@ -37,6 +37,7 @@ public use fun openzeppelin_fp_math::ud30x9_base::mul as UD30x9.mul;
 public use fun openzeppelin_fp_math::ud30x9_base::mul_away as UD30x9.mul_away;
 public use fun openzeppelin_fp_math::ud30x9_base::mul_trunc as UD30x9.mul_trunc;
 public use fun openzeppelin_fp_math::ud30x9_base::pow as UD30x9.pow;
+public use fun openzeppelin_fp_math::ud30x9_base::sqrt as UD30x9.sqrt;
 public use fun openzeppelin_fp_math::ud30x9_base::sub as UD30x9.sub;
 public use fun openzeppelin_fp_math::ud30x9_base::unchecked_add as UD30x9.unchecked_add;
 public use fun openzeppelin_fp_math::ud30x9_base::unchecked_sub as UD30x9.unchecked_sub;

@@ -9,7 +9,7 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 ## Operations
 
-- Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
+- Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`, `sqrt`
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`, `unchecked_lshift`, `unchecked_rshift`
 
@@ -33,6 +33,12 @@ Rule of thumb:
 
 The core `wrap` / `unwrap` APIs are **raw casts**. They preserve the
 underlying fixed-point representation and do not multiply or divide by `10^9`.
+
+- `u128 -> UD30x9`: `into_UD30x9`
+- `UD30x9 -> SD29x9`: `into_SD29x9`, `try_into_SD29x9`
+- `SD29x9 -> UD30x9`: `into_UD30x9`, `try_into_UD30x9`
+- Constructors: `zero`, `one`, `max`, `wrap`
+- `SD29x9` only: `min`, `from_bits`
 
 ```rust
 use openzeppelin_fp_math::{sd29x9, ud30x9};
