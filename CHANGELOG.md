@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_fp_math`
+
+#### Added
+
+- `sqrt` for `UD30x9` and `SD29x9` with round-down semantics. (#286)
+- `log2`, `ln`, `log10` for `UD30x9` (rounds down) and `SD29x9` (rounds toward zero). (#320)
+
 ## 1.1.0 (21-04-2026)
 
 ### `openzeppelin_fp_math`
