@@ -29,6 +29,10 @@ const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD2
 #[error(code = 4)]
 const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
 
+/// Logarithm is undefined: input must be greater than or equal to one
+#[error(code = 5)]
+const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be greater than or equal to one";
+
 // === Public Functions ===
 
 // === Conversion ===
@@ -241,6 +245,86 @@ public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
         return zero()
     };
     wrap(x.unwrap() << bits)
+}
+
+/// Computes the natural logarithm of a `UD30x9` value.
+///
+/// Derived from `log2` via the identity `ln(x) = log2(x) * ln(2)`. Both factors
+/// round toward zero, so the result may sit up to one ulp below the true value.
+///
+/// #### Parameters
+/// - `x`: Input value. Must be greater than or equal to one.
+///
+/// #### Returns
+/// - `ln(x)`, rounded down to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is less than one.
+public fun ln(x: UD30x9): UD30x9 {
+    let raw = x.unwrap();
+    assert!(raw >= common::scale!(), ELogUndefined);
+    // The `raw >= scale` precondition guarantees `raw_log2` returns a
+    // non-negative sign, so the discarded sign flag is provably `false`.
+    let (_, mag) = common::raw_log2(raw);
+    let result = u256::mul_div(
+        mag,
+        common::ln2_e18!(),
+        common::internal_times_scale!(),
+        rounding::down(),
+    ).destroy_some();
+    wrap(result as u128)
+}
+
+/// Computes the base-10 logarithm of a `UD30x9` value.
+///
+/// Derived from `log2` via the identity `log10(x) = log2(x) * log10(2)`. Both
+/// factors round toward zero, so the result may sit up to one ulp below the
+/// true value. In particular, `log10(10) == one() - 1 ulp` under pure
+/// round-down arithmetic.
+///
+/// #### Parameters
+/// - `x`: Input value. Must be greater than or equal to one.
+///
+/// #### Returns
+/// - `log10(x)`, rounded down to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is less than one.
+public fun log10(x: UD30x9): UD30x9 {
+    let raw = x.unwrap();
+    assert!(raw >= common::scale!(), ELogUndefined);
+    // The `raw >= scale` precondition guarantees `raw_log2` returns a
+    // non-negative sign, so the discarded sign flag is provably `false`.
+    let (_, mag) = common::raw_log2(raw);
+    let result = u256::mul_div(
+        mag,
+        common::log10_2_e18!(),
+        common::internal_times_scale!(),
+        rounding::down(),
+    ).destroy_some();
+    wrap(result as u128)
+}
+
+/// Computes the base-2 logarithm of a `UD30x9` value.
+///
+/// The result is rounded down to the nearest representable `UD30x9` value:
+/// it is the largest `UD30x9` `r` such that `2^r <= x`.
+///
+/// #### Parameters
+/// - `x`: Input value. Must be greater than or equal to one.
+///
+/// #### Returns
+/// - `log2(x)`, rounded down to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is less than one (result would be negative or undefined).
+public fun log2(x: UD30x9): UD30x9 {
+    let raw = x.unwrap();
+    assert!(raw >= common::scale!(), ELogUndefined);
+    // The `raw >= scale` precondition guarantees `raw_log2` returns a
+    // non-negative sign, so the discarded sign flag is provably `false`.
+    let (_, mag) = common::raw_log2(raw);
+    wrap((mag / common::scale_u256!()) as u128)
 }
 
 /// Compares whether `x` is less than `y`.
