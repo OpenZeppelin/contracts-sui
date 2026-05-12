@@ -32,10 +32,8 @@ fun ln_of_positive_ten_matches_reference() {
 }
 
 #[test]
-fun ln_of_positive_e_is_one_within_one_ulp() {
-    let result = pos(E_RAW).ln();
-    let raw = result.unwrap();
-    assert!(raw == SCALE || raw == SCALE - 1);
+fun ln_of_positive_e_matches_reference() {
+    assert_eq!(pos(E_RAW).ln(), pos(SCALE - 1));
 }
 
 #[test]

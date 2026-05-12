@@ -8,7 +8,6 @@ module openzeppelin_fp_math::common;
 
 use openzeppelin_math::rounding;
 use openzeppelin_math::u128;
-use openzeppelin_math::u256;
 
 // === Errors ===
 
@@ -106,13 +105,8 @@ public(package) fun div_away_u256(numerator: u256, denominator: u256): u256 {
 /// only perturbs `frac` by `internal / 2^(i+1)` — exponentially decaying, so
 /// late-iteration errors contribute little. Empirically the total `frac`
 /// error stays under `~10^3` at scale `10^18` (verified by `raw_log2_tests`),
-/// well below one user-facing ulp (`10^9`).
-///
-/// A 9-decimal variant of the same algorithm fails this analysis for inputs
-/// near `1.0` where the true magnitude is just a few ulps: the early-iteration
-/// error budget swamps the answer. Empirically `raw_log2(SCALE - 1)` at
-/// 9-decimal returns magnitude `13` while the true magnitude is `~1.443`.
-/// 18-decimal preserves precision in that regime.
+/// well below one user-facing ulp (`10^9`). A 9-decimal variant would lack
+/// the headroom for inputs near `1.0`; 18-decimal preserves precision.
 ///
 /// #### Returns
 /// - `10^18` as `u128`.
@@ -124,16 +118,16 @@ public(package) macro fun internal_log_scale(): u128 {
 ///
 /// #### Returns
 /// - `floor(ln(2) * 10^18) = 693_147_180_559_945_309`.
-public(package) macro fun ln2_e18(): u256 {
-    693_147_180_559_945_309u256
+public(package) macro fun ln2_e18(): u128 {
+    693_147_180_559_945_309
 }
 
 /// `log10(2)` represented at scale `10^18`, rounded down.
 ///
 /// #### Returns
 /// - `floor(log10(2) * 10^18) = 301_029_995_663_981_195`.
-public(package) macro fun log10_2_e18(): u256 {
-    301_029_995_663_981_195u256
+public(package) macro fun log10_2_e18(): u128 {
+    301_029_995_663_981_195
 }
 
 /// Combines a `raw_log2` magnitude with a base-conversion factor and returns
@@ -149,12 +143,16 @@ public(package) macro fun log10_2_e18(): u256 {
 ///
 /// #### Returns
 /// - The magnitude at scale `10^9`, ready to wrap into `UD30x9` or `SD29x9`
-///   raw form. Always fits in `u128`.
-public(package) fun apply_log2_factor(log2_mag_e18: u256, factor_e18: u256): u256 {
+///   raw form.
+public(package) fun apply_log2_factor(log2_mag_e18: u128, factor_e18: u128): u128 {
     // Two scale-10^18 factors yield a scale-10^36 product; dividing by 10^27
-    // lands the result at scale 10^9 = UD30x9/SD29x9 raw.
-    let denom: u256 = 1_000_000_000_000_000_000_000_000_000; // 10^27
-    u256::mul_div(log2_mag_e18, factor_e18, denom, rounding::down()).destroy_some()
+    // lands the result at scale 10^9 = UD30x9/SD29x9 raw. `log2_mag_e18 < 2^67`
+    // and `factor_e18 < 2^60`, so the product reaches up to ~2^127 — right at
+    // the `u128` boundary. `u128::mul_div` widens the product to `u256`
+    // internally before dividing, so the intermediate value never overflows;
+    // the final quotient (after `/ 10^27`) safely fits back in `u128`.
+    let denom: u128 = 1_000_000_000_000_000_000_000_000_000; // 10^27
+    u128::mul_div(log2_mag_e18, factor_e18, denom, rounding::down()).destroy_some()
 }
 
 /// Computes the base-2 logarithm of `x_raw / 10^9` in high precision.
@@ -176,7 +174,7 @@ public(package) fun apply_log2_factor(log2_mag_e18: u256, factor_e18: u256): u25
 ///
 /// #### Aborts
 /// - `ELogOfZero` if `x_raw` is zero.
-public(package) fun raw_log2(x_raw: u128): (bool, u256) {
+public(package) fun raw_log2(x_raw: u128): (bool, u128) {
     assert!(x_raw > 0, ELogOfZero);
 
     let scale: u128 = scale!();
@@ -222,5 +220,5 @@ public(package) fun raw_log2(x_raw: u128): (bool, u256) {
     // magnitude rather than adding to it.
     let n_x_internal: u128 = (n_abs as u128) * internal;
     let magnitude: u128 = if (neg) n_x_internal - frac else n_x_internal + frac;
-    (neg, magnitude as u256)
+    (neg, magnitude)
 }

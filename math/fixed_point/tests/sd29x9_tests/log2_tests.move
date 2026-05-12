@@ -89,19 +89,16 @@ fun log2_of_max_sd29x9() {
 
 #[test]
 fun log2_just_below_one_pins_value() {
-    // x_raw = SCALE - 1 ⇒ true log2 ≈ -1.443e-9. At UD30x9 scale that's
-    // -0.00000000143... → magnitude rounds down (toward zero) to 0.
-    // raw_log2's small upward bias keeps the result deterministically pinned.
-    let result = pos(SCALE - 1).log2();
-    assert!(result.is_zero() || result == neg(1));
+    // x_raw = SCALE - 1 ⇒ true log2 ≈ -1.443e-9. raw_log2 produces magnitude
+    // ~1.443e9 at scale 10^18; flooring by 10^9 gives 1, signed -> neg(1).
+    assert_eq!(pos(SCALE - 1).log2(), neg(1));
 }
 
 #[test]
 fun log2_just_above_one_pins_value() {
-    // x_raw = SCALE + 1 ⇒ true log2 ≈ +1.443e-9 → raw magnitude 1. The kernel
-    // produces a positive magnitude of 1, so the signed result is pos(1).
-    let result = pos(SCALE + 1).log2();
-    assert!(result == pos(0) || result == pos(1));
+    // x_raw = SCALE + 1 ⇒ true log2 ≈ +1.443e-9. raw_log2 produces magnitude
+    // ~1.443e9 at scale 10^18; flooring by 10^9 gives 1, signed -> pos(1).
+    assert_eq!(pos(SCALE + 1).log2(), pos(1));
 }
 
 // ==== Random property tests ====

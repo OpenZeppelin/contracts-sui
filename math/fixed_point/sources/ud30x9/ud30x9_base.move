@@ -266,7 +266,7 @@ public fun ln(x: UD30x9): UD30x9 {
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);
-    wrap(common::apply_log2_factor(mag, common::ln2_e18!()) as u128)
+    wrap(common::apply_log2_factor(mag, common::ln2_e18!()))
 }
 
 /// Computes the base-10 logarithm of a `UD30x9` value.
@@ -290,7 +290,7 @@ public fun log10(x: UD30x9): UD30x9 {
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);
-    wrap(common::apply_log2_factor(mag, common::log10_2_e18!()) as u128)
+    wrap(common::apply_log2_factor(mag, common::log10_2_e18!()))
 }
 
 /// Computes the base-2 logarithm of a `UD30x9` value.
@@ -312,7 +312,7 @@ public fun log2(x: UD30x9): UD30x9 {
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);
-    wrap((mag / common::scale_u256!()) as u128)
+    wrap(mag / common::scale!())
 }
 
 /// Compares whether `x` is less than `y`.

@@ -37,10 +37,10 @@ fun ln_of_ten_matches_reference() {
 }
 
 #[test]
-fun ln_of_e_is_one_within_one_ulp() {
-    // ln(E_RAW / SCALE) is just below 1 because E_RAW itself is rounded down.
-    let result = fixed(E_RAW).ln().unwrap();
-    assert!(result == SCALE || result == SCALE - 1);
+fun ln_of_e_matches_reference() {
+    // ln(E_RAW / SCALE) is just below 1 because E_RAW itself is rounded down;
+    // the algorithm + round-down at user scale floors to SCALE - 1.
+    assert_eq!(fixed(E_RAW).ln(), fixed(SCALE - 1));
 }
 
 // ==== Aborts ====

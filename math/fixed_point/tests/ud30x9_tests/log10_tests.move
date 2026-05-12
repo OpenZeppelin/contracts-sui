@@ -15,16 +15,19 @@ fun log10_of_one_is_zero() {
     assert_eq!(ud30x9::one().log10(), ud30x9::zero());
 }
 
-// ==== Powers of 10 (within 1 ulp due to round-down compounding) ====
+// ==== Powers of 10 (algorithm floors at user scale, so k >= 1 lands 1 ulp below) ====
 
 #[test]
-fun log10_of_powers_of_ten_is_within_one_ulp() {
-    let mut k: u8 = 0;
+fun log10_of_powers_of_ten_pins_values() {
+    // log10(1) = 0 exactly.
+    assert_eq!(fixed(SCALE).log10(), fixed(0));
+    // For k >= 1, log10(10^k) = k exactly, but flooring the floored-constant
+    // product at user scale lands the result 1 ulp below k * SCALE.
+    let mut k: u8 = 1;
     while (k <= 11) {
         let x_raw = std::u128::pow(10, k) * SCALE;
-        let expected = (k as u128) * SCALE;
-        let result = fixed(x_raw).log10().unwrap();
-        assert!(result == expected || result == expected - 1);
+        let expected = (k as u128) * SCALE - 1;
+        assert_eq!(fixed(x_raw).log10(), fixed(expected));
         k = k + 1;
     };
 }

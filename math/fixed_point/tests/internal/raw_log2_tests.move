@@ -4,7 +4,7 @@ module openzeppelin_fp_math::raw_log2_tests;
 use openzeppelin_fp_math::common;
 
 const SCALE: u128 = 1_000_000_000;
-const INTERNAL: u256 = 1_000_000_000_000_000_000;
+const INTERNAL: u128 = 1_000_000_000_000_000_000;
 
 // ==== Boundary ====
 
@@ -24,7 +24,7 @@ fun raw_log2_of_positive_powers_of_two_is_exact() {
         let x_raw = SCALE << k;
         let (neg, mag) = common::raw_log2(x_raw);
         assert!(!neg);
-        assert!(mag == (k as u256) * INTERNAL);
+        assert!(mag == (k as u128) * INTERNAL);
         k = k + 1;
     };
 }
@@ -38,7 +38,7 @@ fun raw_log2_of_negative_powers_of_two_is_exact() {
         let x_raw = SCALE >> k;
         let (neg, mag) = common::raw_log2(x_raw);
         assert!(neg);
-        assert!(mag == (k as u256) * INTERNAL);
+        assert!(mag == (k as u128) * INTERNAL);
         k = k + 1;
     };
 }
@@ -51,7 +51,7 @@ fun raw_log2_of_three_matches_reference() {
     // floor(log2(3) * 10^18) = 1_584_962_500_721_156_181
     let (neg, mag) = common::raw_log2(3 * SCALE);
     assert!(!neg);
-    let reference: u256 = 1_584_962_500_721_156_181;
+    let reference: u128 = 1_584_962_500_721_156_181;
     let diff = if (mag >= reference) { mag - reference } else { reference - mag };
     // Allow ~1 ulp at user-facing 10^9 scale (= 10^9 ulps at 10^18). Empirically
     // the algorithm stays well under this; the bound asserts the error stays
@@ -66,7 +66,7 @@ fun raw_log2_of_one_third_matches_reference_with_negation() {
     // ≈ -1.5849625021638512. floor(|that| * 10^18) = 1_584_962_502_163_851_215.
     let (neg, mag) = common::raw_log2(333_333_333);
     assert!(neg);
-    let reference: u256 = 1_584_962_502_163_851_215;
+    let reference: u128 = 1_584_962_502_163_851_215;
     let diff = if (mag >= reference) { mag - reference } else { reference - mag };
     assert!(diff < 100_000);
 }
