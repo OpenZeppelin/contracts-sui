@@ -222,12 +222,7 @@ public fun ln(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     assert!(!neg && mag > 0, ELogUndefined);
     let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
-    let result_mag = u256::mul_div(
-        log_mag_internal,
-        common::ln2_e18!(),
-        common::internal_times_scale!(),
-        rounding::down(),
-    ).destroy_some();
+    let result_mag = common::apply_log2_factor(log_mag_internal, common::ln2_e18!());
     wrap_components(Components { neg: log_neg, mag: result_mag })
 }
 
@@ -248,12 +243,7 @@ public fun log10(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     assert!(!neg && mag > 0, ELogUndefined);
     let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
-    let result_mag = u256::mul_div(
-        log_mag_internal,
-        common::log10_2_e18!(),
-        common::internal_times_scale!(),
-        rounding::down(),
-    ).destroy_some();
+    let result_mag = common::apply_log2_factor(log_mag_internal, common::log10_2_e18!());
     wrap_components(Components { neg: log_neg, mag: result_mag })
 }
 
