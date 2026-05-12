@@ -31,7 +31,8 @@ const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less 
 
 /// Logarithm is undefined: input must be greater than or equal to one
 #[error(code = 5)]
-const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be greater than or equal to one";
+const ELogUndefined: vector<u8> =
+    "Logarithm is undefined: input must be greater than or equal to one";
 
 // === Public Functions ===
 
