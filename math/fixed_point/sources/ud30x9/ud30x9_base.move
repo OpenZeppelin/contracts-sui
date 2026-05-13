@@ -3,7 +3,9 @@ module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
-use openzeppelin_fp_math::ud30x9::{Self, UD30x9, wrap, one};
+use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u256;
 
 // === Errors ===
 
@@ -236,7 +238,7 @@ public fun lshift(x: UD30x9, bits: u8): UD30x9 {
 /// - Otherwise, the result of shifting the `x`'s raw bits left by `bits`.
 public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return ud30x9::zero()
+        return zero()
     };
     wrap(x.unwrap() << bits)
 }
@@ -454,6 +456,24 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     wrap_u256(result)
 }
 
+/// Computes the square root of a `UD30x9` value.
+///
+/// The result is the largest `UD30x9` value `r` such that `r * r <= x`. In other words, the
+/// result is truncated (rounded down) to the nearest representable `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - The square root of `x`, rounded down to the nearest representable `UD30x9` value.
+public fun sqrt(x: UD30x9): UD30x9 {
+    let raw = x.unwrap() as u256;
+    // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
+    // sqrt(raw / SCALE) = sqrt(raw * SCALE) / SCALE
+    let result = u256::sqrt(raw * common::scale_u256!(), rounding::down());
+    wrap(result as u128)
+}
+
 /// Checks whether two `UD30x9` values are not equal.
 ///
 /// #### Parameters
@@ -520,7 +540,7 @@ public fun rshift(x: UD30x9, bits: u8): UD30x9 {
 /// - Otherwise, the result of shifting the `x`'s raw bits right by `bits`.
 public fun unchecked_rshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return ud30x9::zero()
+        return zero()
     };
     wrap(x.unwrap() >> bits)
 }
