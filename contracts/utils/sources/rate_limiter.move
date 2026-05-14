@@ -133,7 +133,7 @@ public fun new_bucket(
     initial_available: u64,
     clock: &Clock,
 ): RateLimiter {
-    assert_bucket_config!(capacity, refill_amount, refill_interval_ms);
+    assert_bucket_config(capacity, refill_amount, refill_interval_ms);
     assert!(initial_available <= capacity, EInitialAboveCapacity);
     RateLimiter::Bucket {
         capacity,
@@ -159,7 +159,7 @@ public fun new_bucket(
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroWindow` if `window_ms == 0`.
 public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateLimiter {
-    assert_fixed_window_config!(capacity, window_ms);
+    assert_fixed_window_config(capacity, window_ms);
     RateLimiter::FixedWindow {
         capacity,
         window_ms,
@@ -183,7 +183,7 @@ public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateL
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroCooldown` if `cooldown_ms == 0`.
 public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
-    assert_cooldown_config!(capacity, cooldown_ms);
+    assert_cooldown_config(capacity, cooldown_ms);
     RateLimiter::Cooldown {
         cooldown_ms,
         capacity,
@@ -351,7 +351,7 @@ public fun reconfigure_bucket(
             last_refill_ms,
             available,
         } => {
-            assert_bucket_config!(capacity, refill_amount, refill_interval_ms);
+            assert_bucket_config(capacity, refill_amount, refill_interval_ms);
             let (new_last, new_available) = bucket_accrue(
                 *last_refill_ms,
                 *available,
@@ -400,7 +400,7 @@ public fun reconfigure_fixed_window(
             window_start_ms,
             available,
         } => {
-            assert_fixed_window_config!(capacity, window_ms);
+            assert_fixed_window_config(capacity, window_ms);
             // roll forward under the OLD `window_ms` first; the new config takes
             // effect from the rolled-forward anchor going forward. If a roll
             // occurred, the fresh window starts with the NEW capacity available.
@@ -449,7 +449,7 @@ public fun reconfigure_cooldown(
             available,
             cooldown_end_ms,
         } => {
-            assert_cooldown_config!(capacity, cooldown_ms);
+            assert_cooldown_config(capacity, cooldown_ms);
             *cd_field = cooldown_ms;
             *cap_field = capacity;
             *available = (*available).min(capacity);
@@ -465,20 +465,20 @@ public fun reconfigure_cooldown(
 
 // === Private Functions ===
 
-macro fun assert_bucket_config($capacity: u64, $refill_amount: u64, $refill_interval_ms: u64) {
-    assert!($capacity > 0, EZeroCapacity);
-    assert!($refill_amount > 0, EZeroRefillAmount);
-    assert!($refill_interval_ms > 0, EZeroRefillInterval);
+fun assert_bucket_config(capacity: u64, refill_amount: u64, refill_interval_ms: u64) {
+    assert!(capacity > 0, EZeroCapacity);
+    assert!(refill_amount > 0, EZeroRefillAmount);
+    assert!(refill_interval_ms > 0, EZeroRefillInterval);
 }
 
-macro fun assert_fixed_window_config($capacity: u64, $window_ms: u64) {
-    assert!($capacity > 0, EZeroCapacity);
-    assert!($window_ms > 0, EZeroWindow);
+fun assert_fixed_window_config(capacity: u64, window_ms: u64) {
+    assert!(capacity > 0, EZeroCapacity);
+    assert!(window_ms > 0, EZeroWindow);
 }
 
-macro fun assert_cooldown_config($capacity: u64, $cooldown_ms: u64) {
-    assert!($capacity > 0, EZeroCapacity);
-    assert!($cooldown_ms > 0, EZeroCooldown);
+fun assert_cooldown_config(capacity: u64, cooldown_ms: u64) {
+    assert!(capacity > 0, EZeroCapacity);
+    assert!(cooldown_ms > 0, EZeroCooldown);
 }
 
 fun bucket_accrue(
