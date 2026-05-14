@@ -2,20 +2,21 @@
 module openzeppelin_fp_math::raw_log2_tests;
 
 use openzeppelin_fp_math::common;
+use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 const INTERNAL: u128 = 1_000_000_000_000_000_000;
 
-// ==== Boundary ====
+// === Boundary ===
 
 #[test]
 fun raw_log2_of_one_is_zero() {
     let (neg, mag) = common::raw_log2(SCALE);
     assert!(!neg);
-    assert!(mag == 0);
+    assert_eq!(mag, 0);
 }
 
-// ==== Positive branch: exact integer logs ====
+// === Positive branch: exact integer logs ===
 
 #[test]
 fun raw_log2_of_positive_powers_of_two_is_exact() {
@@ -24,12 +25,12 @@ fun raw_log2_of_positive_powers_of_two_is_exact() {
         let x_raw = SCALE << k;
         let (neg, mag) = common::raw_log2(x_raw);
         assert!(!neg);
-        assert!(mag == (k as u128) * INTERNAL);
+        assert_eq!(mag, (k as u128) * INTERNAL);
         k = k + 1;
     };
 }
 
-// ==== Negative branch: exact integer logs (k <= 9 because SCALE = 2^9 * 5^9) ====
+// === Negative branch: exact integer logs (k <= 9 because SCALE = 2^9 * 5^9) ===
 
 #[test]
 fun raw_log2_of_negative_powers_of_two_is_exact() {
@@ -38,12 +39,12 @@ fun raw_log2_of_negative_powers_of_two_is_exact() {
         let x_raw = SCALE >> k;
         let (neg, mag) = common::raw_log2(x_raw);
         assert!(neg);
-        assert!(mag == (k as u128) * INTERNAL);
+        assert_eq!(mag, (k as u128) * INTERNAL);
         k = k + 1;
     };
 }
 
-// ==== Spot check against off-chain reference ====
+// === Spot check against off-chain reference ===
 
 #[test]
 fun raw_log2_of_three_matches_reference() {
@@ -71,7 +72,7 @@ fun raw_log2_of_one_third_matches_reference_with_negation() {
     assert!(diff < 100_000);
 }
 
-// ==== Asymmetric inputs near SCALE boundary ====
+// === Asymmetric inputs near SCALE boundary ===
 
 #[test]
 fun raw_log2_just_below_one_is_negative() {
@@ -90,7 +91,7 @@ fun raw_log2_just_above_one_is_positive() {
     assert!(mag < 100_000_000_000);
 }
 
-// ==== Abort ====
+// === Abort ===
 
 #[test, expected_failure(abort_code = common::ELogOfZero)]
 fun raw_log2_of_zero_aborts() {

@@ -8,14 +8,14 @@ use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Exact value ====
+// === Exact value ===
 
 #[test]
 fun log10_of_one_is_zero() {
     assert_eq!(ud30x9::one().log10(), ud30x9::zero());
 }
 
-// ==== Powers of 10 (algorithm floors at user scale, so k >= 1 lands 1 ulp below) ====
+// === Powers of 10 (algorithm floors at user scale, so k >= 1 lands 1 ulp below) ===
 
 #[test]
 fun log10_of_powers_of_ten_pins_values() {
@@ -32,7 +32,7 @@ fun log10_of_powers_of_ten_pins_values() {
     };
 }
 
-// ==== Spot checks ====
+// === Spot checks ===
 
 #[test]
 fun log10_of_two_matches_reference() {
@@ -40,7 +40,7 @@ fun log10_of_two_matches_reference() {
     assert_eq!(fixed(2 * SCALE).log10(), fixed(301_029_995));
 }
 
-// ==== Aborts ====
+// === Aborts ===
 
 #[test, expected_failure(abort_code = ud30x9_base::ELogUndefined)]
 fun log10_of_zero_aborts() {
@@ -52,7 +52,7 @@ fun log10_of_sub_one_aborts() {
     fixed(SCALE - 1).log10();
 }
 
-// ==== Random property tests ====
+// === Random property tests ===
 
 #[random_test]
 fun log10_monotonicity(a: u128, b: u128) {

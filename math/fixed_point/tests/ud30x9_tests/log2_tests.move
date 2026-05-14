@@ -8,7 +8,7 @@ use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Exact integer logs ====
+// === Exact integer logs ===
 
 #[test]
 fun log2_of_one_is_zero() {
@@ -24,7 +24,7 @@ fun log2_of_powers_of_two_is_exact() {
     };
 }
 
-// ==== Spot checks against off-chain reference ====
+// === Spot checks against off-chain reference ===
 
 #[test]
 fun log2_of_three_matches_reference() {
@@ -38,7 +38,7 @@ fun log2_of_ten_matches_reference() {
     assert_eq!(fixed(10 * SCALE).log2(), fixed(3_321_928_094));
 }
 
-// ==== Aborts ====
+// === Aborts ===
 
 #[test, expected_failure(abort_code = ud30x9_base::ELogUndefined)]
 fun log2_of_zero_aborts() {
@@ -50,7 +50,7 @@ fun log2_of_sub_one_aborts() {
     fixed(SCALE - 1).log2();
 }
 
-// ==== Extreme values ====
+// === Extreme values ===
 
 #[test]
 fun log2_of_max_ud30x9() {
@@ -59,7 +59,7 @@ fun log2_of_max_ud30x9() {
     assert!(result >= 98 * SCALE && result < 99 * SCALE);
 }
 
-// ==== Random property tests ====
+// === Random property tests ===
 
 #[random_test]
 fun log2_monotonicity(a: u128, b: u128) {

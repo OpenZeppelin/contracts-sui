@@ -15,14 +15,14 @@ const E_RAW: u128 = 2_718_281_828;
 const LOG2_E_HI: u256 = 1_442_695_040_888_963_407;
 const INTERNAL: u256 = 1_000_000_000_000_000_000;
 
-// ==== Exact value ====
+// === Exact value ===
 
 #[test]
 fun ln_of_one_is_zero() {
     assert_eq!(ud30x9::one().ln(), ud30x9::zero());
 }
 
-// ==== Spot checks ====
+// === Spot checks ===
 
 #[test]
 fun ln_of_two_matches_reference() {
@@ -43,7 +43,7 @@ fun ln_of_e_matches_reference() {
     assert_eq!(fixed(E_RAW).ln(), fixed(SCALE - 1));
 }
 
-// ==== Aborts ====
+// === Aborts ===
 
 #[test, expected_failure(abort_code = ud30x9_base::ELogUndefined)]
 fun ln_of_zero_aborts() {
@@ -55,7 +55,7 @@ fun ln_of_sub_one_aborts() {
     fixed(SCALE - 1).ln();
 }
 
-// ==== Random property tests ====
+// === Random property tests ===
 
 #[random_test]
 fun ln_monotonicity(a: u128, b: u128) {
