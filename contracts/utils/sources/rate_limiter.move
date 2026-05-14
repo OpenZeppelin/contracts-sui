@@ -465,22 +465,71 @@ public fun reconfigure_cooldown(
 
 // === Private Functions ===
 
+/// Validate a `Bucket` configuration.
+///
+/// #### Parameters
+/// - `capacity`: Maximum token balance the bucket can hold.
+/// - `refill_amount`: Tokens credited per refill interval.
+/// - `refill_interval_ms`: Length of one refill interval, in milliseconds.
+///
+/// #### Aborts
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroRefillAmount` if `refill_amount == 0`.
+/// - `EZeroRefillInterval` if `refill_interval_ms == 0`.
 fun assert_bucket_config(capacity: u64, refill_amount: u64, refill_interval_ms: u64) {
     assert!(capacity > 0, EZeroCapacity);
     assert!(refill_amount > 0, EZeroRefillAmount);
     assert!(refill_interval_ms > 0, EZeroRefillInterval);
 }
 
+/// Validate a `FixedWindow` configuration.
+///
+/// #### Parameters
+/// - `capacity`: Maximum units consumable per window.
+/// - `window_ms`: Length of one window, in milliseconds.
+///
+/// #### Aborts
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroWindow` if `window_ms == 0`.
 fun assert_fixed_window_config(capacity: u64, window_ms: u64) {
     assert!(capacity > 0, EZeroCapacity);
     assert!(window_ms > 0, EZeroWindow);
 }
 
+/// Validate a `Cooldown` configuration.
+///
+/// #### Parameters
+/// - `capacity`: Maximum units consumable per batch.
+/// - `cooldown_ms`: Wait between batches, in milliseconds.
+///
+/// #### Aborts
+/// - `EZeroCapacity` if `capacity == 0`.
+/// - `EZeroCooldown` if `cooldown_ms == 0`.
 fun assert_cooldown_config(capacity: u64, cooldown_ms: u64) {
     assert!(capacity > 0, EZeroCapacity);
     assert!(cooldown_ms > 0, EZeroCooldown);
 }
 
+/// Project a `Bucket`'s `(last_refill_ms, available)` forward to `now` under the given
+/// configuration. Pure function: callers decide whether to persist the projected state.
+///
+/// Credits `refill_amount` per elapsed `refill_interval_ms` since `last_refill_ms`, capped
+/// at `capacity`. The returned `last_refill_ms` is advanced only by whole refill steps -
+/// any sub-interval remainder is preserved so accrual stays aligned to the original anchor.
+/// When the bucket fills, `last_refill_ms` advances by the minimal step count that reaches
+/// capacity, so future accrual resumes from the moment the bucket actually filled rather
+/// than from `now`.
+///
+/// #### Parameters
+/// - `last_refill_ms`: Timestamp of the last accrual checkpoint.
+/// - `available`: Stored token balance at `last_refill_ms`.
+/// - `capacity`: Maximum token balance.
+/// - `refill_amount`: Tokens credited per refill interval.
+/// - `refill_interval_ms`: Length of one refill interval, in milliseconds.
+/// - `now`: Current timestamp; must be `>= last_refill_ms`.
+///
+/// #### Returns
+/// - `(new_last_refill_ms, new_available)`: the advanced anchor and projected balance.
 fun bucket_accrue(
     last_refill_ms: u64,
     available: u64,
