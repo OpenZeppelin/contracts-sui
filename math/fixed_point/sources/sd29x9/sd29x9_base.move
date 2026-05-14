@@ -6,6 +6,8 @@ module openzeppelin_fp_math::sd29x9_base;
 use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u256;
 
 // === Errors ===
 
@@ -21,14 +23,16 @@ const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD3
 #[error(code = 2)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 
+/// Cannot compute square root of a negative value
+#[error(code = 3)]
+const ENegativeSqrt: vector<u8> = "Cannot compute square root of a negative value";
+
 // === Structs ===
 
 public struct Components has copy, drop {
     neg: bool,
     mag: u256,
 }
-
-// === Public Functions ===
 
 // === Conversion ===
 
@@ -63,6 +67,8 @@ public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
         option::some(ud30x9::wrap(mag as u128))
     }
 }
+
+// === Public Functions ===
 
 /// Returns the absolute value of a `SD29x9`.
 ///
@@ -467,6 +473,29 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
 
     let result = Components { neg: res_neg, mag: res_mag };
     result.wrap_components()
+}
+
+/// Computes the square root of a `SD29x9` value.
+///
+/// The result is the largest `SD29x9` value `r` such that `r * r <= x`. In other words, the
+/// result is truncated (rounded down) to the nearest representable `SD29x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - The non-negative square root of `x`, rounded down to the nearest representable `SD29x9`
+///   value.
+///
+/// #### Aborts
+/// - Aborts if `x` is negative.
+public fun sqrt(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg, ENegativeSqrt);
+    // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
+    // sqrt(mag / SCALE) = sqrt(mag * SCALE) / SCALE
+    let result = u256::sqrt(mag * common::scale_u256!(), rounding::down());
+    wrap_components(Components { neg: false, mag: result })
 }
 
 /// Returns the arithmetic negation of `x`.

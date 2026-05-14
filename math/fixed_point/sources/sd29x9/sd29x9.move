@@ -44,6 +44,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::mul_away as SD29x9.mul_away;
 public use fun openzeppelin_fp_math::sd29x9_base::mul_trunc as SD29x9.mul_trunc;
 public use fun openzeppelin_fp_math::sd29x9_base::negate as SD29x9.negate;
 public use fun openzeppelin_fp_math::sd29x9_base::pow as SD29x9.pow;
+public use fun openzeppelin_fp_math::sd29x9_base::sqrt as SD29x9.sqrt;
 public use fun openzeppelin_fp_math::sd29x9_base::rem as SD29x9.rem;
 public use fun openzeppelin_fp_math::sd29x9_base::sub as SD29x9.sub;
 public use fun openzeppelin_fp_math::sd29x9_base::unchecked_add as SD29x9.unchecked_add;
