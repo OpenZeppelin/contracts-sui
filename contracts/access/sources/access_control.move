@@ -360,7 +360,11 @@ public fun has_role<RootRole, Role>(ac: &AccessControl<RootRole>, account: addre
 /// #### Returns
 /// - The `TypeName` of `Role`'s admin role. Defaults to the root role's
 /// `TypeName` for roles that have no entry yet.
+///
+/// #### Aborts
+/// - `EForeignRole` if `Role`'s home module differs from `RootRole`'s.
 public fun get_role_admin<RootRole, Role>(ac: &AccessControl<RootRole>): TypeName {
+    assert_home_module<RootRole, Role>();
     ac.get_role_admin_name(with_original_ids<Role>())
 }
 
@@ -373,7 +377,7 @@ public fun get_role_admin<RootRole, Role>(ac: &AccessControl<RootRole>): TypeNam
 ///
 /// #### Aborts
 /// - `EUnauthorized` if `account` does not hold role `Role`.
-public fun assert_role<RootRole, Role>(ac: &AccessControl<RootRole>, account: address) {
+public fun assert_has_role<RootRole, Role>(ac: &AccessControl<RootRole>, account: address) {
     assert!(ac.has_role<_, Role>(account), EUnauthorized);
 }
 
@@ -850,7 +854,7 @@ public fun cancel_default_admin_delay_change<RootRole>(
 /// - `EUnauthorized` if the sender does not hold `Role`.
 public fun new_auth<RootRole, Role>(ac: &AccessControl<RootRole>, ctx: &mut TxContext): Auth<Role> {
     assert_home_module<RootRole, Role>();
-    assert_role<RootRole, Role>(ac, ctx.sender());
+    assert_has_role<RootRole, Role>(ac, ctx.sender());
     Auth<Role> { addr: ctx.sender() }
 }
 

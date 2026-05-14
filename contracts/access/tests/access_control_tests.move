@@ -1,4 +1,4 @@
-// `abort 0` sentinels appear after each known-aborting call in the
+// `abort 999` sentinels appear after each known-aborting call in the
 // `expected_failure` tests — they're deliberate, unreachable, and exist only
 // to satisfy the type checker on the `ac` / `clk` bindings without rewriting
 // every test as a by-value helper. Suppressed module-wide so individual
@@ -96,7 +96,7 @@ fun test_new_rejects_non_otw() {
     let deployer = @0xA;
     let mut scenario = test_scenario::begin(deployer);
     let _ac = access_control::new<NotAnOtw>(NotAnOtw {}, 0, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EDelayTooLarge)]
@@ -108,7 +108,7 @@ fun test_new_rejects_excessive_delay() {
         access_control::max_default_admin_delay_ms() + 1,
         scenario.ctx(),
     );
-    abort 0
+    abort 999
 }
 
 #[test]
@@ -224,7 +224,7 @@ fun test_grant_role_rejects_root() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.grant_role<_, ACCESS_CONTROL_TESTS>(@0xB, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EUnauthorized)]
@@ -236,7 +236,7 @@ fun test_grant_role_rejects_non_admin() {
     scenario.next_tx(alice);
     let mut ac = take_ac(&scenario);
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
@@ -245,7 +245,7 @@ fun test_grant_role_rejects_foreign() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.grant_role<_, ForeignRole>(@0xB, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EZeroAddress)]
@@ -254,7 +254,7 @@ fun test_grant_role_rejects_zero_address() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.grant_role<_, AdminA>(@0x0, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // === revoke_role ===
@@ -323,7 +323,7 @@ fun test_revoke_role_rejects_root() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.revoke_role<_, ACCESS_CONTROL_TESTS>(deployer, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EUnauthorized)]
@@ -339,7 +339,7 @@ fun test_revoke_role_rejects_non_admin() {
     scenario.next_tx(@0xC);
     let mut ac = take_ac(&scenario);
     ac.revoke_role<_, AdminA>(alice, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
@@ -348,7 +348,7 @@ fun test_revoke_role_rejects_foreign() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.revoke_role<_, ForeignRole>(@0xB, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // === renounce_role ===
@@ -392,7 +392,7 @@ fun test_renounce_role_rejects_root() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.renounce_role<_, ACCESS_CONTROL_TESTS>(deployer, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test]
@@ -444,7 +444,7 @@ fun test_renounce_role_rejects_other_account() {
     let mut ac = take_ac(&scenario);
     // Sender is deployer; trying to renounce on behalf of @0xB must abort.
     ac.renounce_role<_, AdminA>(@0xB, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
@@ -453,7 +453,7 @@ fun test_renounce_role_rejects_foreign() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.renounce_role<_, ForeignRole>(deployer, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // === set_role_admin ===
@@ -552,7 +552,7 @@ fun test_set_role_admin_rejects_root_subject() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.set_role_admin<_, ACCESS_CONTROL_TESTS, AdminA>(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EUnauthorized)]
@@ -562,7 +562,7 @@ fun test_set_role_admin_rejects_non_admin() {
     scenario.next_tx(@0xB);
     let mut ac = take_ac(&scenario);
     ac.set_role_admin<_, RoleX, AdminA>(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // Companion to `test_set_role_admin_rejects_non_admin`. The original test
@@ -584,7 +584,7 @@ fun test_set_role_admin_rejects_non_admin_existing_entry() {
     // Second call hits the update-existing branch. `previous_admin_role` is
     // now AdminA — deployer holds root but NOT AdminA, so this must abort.
     ac.set_role_admin<_, RoleX, AdminB>(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
@@ -593,7 +593,7 @@ fun test_set_role_admin_rejects_foreign_role() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.set_role_admin<_, ForeignRole, AdminA>(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
@@ -602,7 +602,7 @@ fun test_set_role_admin_rejects_foreign_admin_role() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.set_role_admin<_, RoleX, ForeignRole>(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // === Read-only queries ===
@@ -643,23 +643,23 @@ fun test_has_role_unknown_role_returns_false() {
 }
 
 #[test]
-fun test_assert_role_passes_for_member() {
+fun test_assert_has_role_passes_for_member() {
     let deployer = @0xA;
     let scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
-    // Deployer holds root — assert_role on root must not abort.
-    ac.assert_role<_, ACCESS_CONTROL_TESTS>(deployer);
+    // Deployer holds root — assert_has_role on root must not abort.
+    ac.assert_has_role<_, ACCESS_CONTROL_TESTS>(deployer);
     test_scenario::return_shared(ac);
     scenario.end();
 }
 
 #[test, expected_failure(abort_code = access_control::EUnauthorized)]
-fun test_assert_role_aborts_for_non_member() {
+fun test_assert_has_role_aborts_for_non_member() {
     let deployer = @0xA;
     let scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
-    ac.assert_role<_, AdminA>(@0xB);
-    abort 0
+    ac.assert_has_role<_, AdminA>(@0xB);
+    abort 999
 }
 
 #[test]
@@ -680,6 +680,16 @@ fun test_get_role_admin_after_set() {
     let mut ac = take_ac(&scenario);
     ac.set_role_admin<_, RoleX, AdminA>(scenario.ctx());
     assert_eq!(ac.get_role_admin<_, RoleX>(), with_original_ids<AdminA>());
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = access_control::EForeignRole)]
+fun test_get_role_admin_rejects_foreign() {
+    let deployer = @0xA;
+    let scenario = setup(deployer, 0);
+    let ac = take_ac(&scenario);
+    let _ = ac.get_role_admin<_, ForeignRole>();
     test_scenario::return_shared(ac);
     scenario.end();
 }
@@ -730,7 +740,7 @@ fun test_new_auth_aborts_for_non_member() {
     scenario.next_tx(@0xB);
     let ac = take_ac(&scenario);
     let _auth = ac.new_auth<_, AdminA>(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
@@ -739,7 +749,7 @@ fun test_new_auth_rejects_foreign() {
     let mut scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
     let _auth = ac.new_auth<_, ForeignRole>(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test]
@@ -789,7 +799,7 @@ fun test_begin_admin_transfer_rejects_non_root() {
     let mut ac = take_ac(&scenario);
     let clk = clock::create_for_testing(scenario.ctx());
     ac.begin_default_admin_transfer(@0xC, &clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EZeroAddress)]
@@ -799,7 +809,7 @@ fun test_begin_admin_transfer_rejects_zero_address() {
     let mut ac = take_ac(&scenario);
     let clk = clock::create_for_testing(scenario.ctx());
     ac.begin_default_admin_transfer(@0x0, &clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test]
@@ -893,7 +903,7 @@ fun test_accept_admin_transfer_rejects_no_pending() {
     let mut ac = take_ac(&scenario);
     let clk = clock::create_for_testing(scenario.ctx());
     ac.accept_default_admin_transfer(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::ENotPendingAdmin)]
@@ -911,7 +921,7 @@ fun test_accept_admin_transfer_rejects_wrong_caller() {
     scenario.next_tx(@0xC);
     let mut ac = take_ac(&scenario);
     ac.accept_default_admin_transfer(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EDelayNotElapsed)]
@@ -930,7 +940,7 @@ fun test_accept_admin_transfer_rejects_too_early() {
     let mut ac = take_ac(&scenario);
     clk.set_for_testing(delay - 1);
     ac.accept_default_admin_transfer(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test]
@@ -1048,7 +1058,7 @@ fun test_cancel_admin_transfer_rejects_no_pending() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.cancel_default_admin_transfer(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EUnauthorized)]
@@ -1064,7 +1074,7 @@ fun test_cancel_admin_transfer_rejects_non_root() {
     let mut ac = take_ac(&scenario);
     ac.cancel_default_admin_transfer(scenario.ctx());
     clock::destroy_for_testing(clk);
-    abort 0
+    abort 999
 }
 
 // `cancel_default_admin_transfer` clears either kind of pending action —
@@ -1193,7 +1203,7 @@ fun test_role_hierarchy_chain_root_loses_grant_authority() {
 
     // Deployer still has root, but root is not RoleX's admin anymore.
     ac.grant_role<_, RoleX>(user, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // === begin_default_admin_renounce ===
@@ -1235,7 +1245,7 @@ fun test_begin_admin_renounce_rejects_non_root() {
     let mut ac = take_ac(&scenario);
     let clk = clock::create_for_testing(scenario.ctx());
     ac.begin_default_admin_renounce(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // Scheduling a renounce overwrites an existing pending transfer (and vice
@@ -1357,7 +1367,7 @@ fun test_accept_admin_renounce_rejects_no_pending() {
     let mut ac = take_ac(&scenario);
     let clk = clock::create_for_testing(scenario.ctx());
     ac.accept_default_admin_renounce(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // `accept_default_admin_renounce` rejects when the pending action is a
@@ -1370,7 +1380,7 @@ fun test_accept_admin_renounce_rejects_pending_transfer() {
     let clk = clock::create_for_testing(scenario.ctx());
     ac.begin_default_admin_transfer(@0xB, &clk, scenario.ctx());
     ac.accept_default_admin_renounce(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // `accept_default_admin_transfer` rejects when the pending action is a
@@ -1383,7 +1393,7 @@ fun test_accept_admin_transfer_rejects_pending_renounce() {
     let clk = clock::create_for_testing(scenario.ctx());
     ac.begin_default_admin_renounce(&clk, scenario.ctx());
     ac.accept_default_admin_transfer(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EUnauthorized)]
@@ -1399,7 +1409,7 @@ fun test_accept_admin_renounce_rejects_non_root() {
     scenario.next_tx(@0xB);
     let mut ac = take_ac(&scenario);
     ac.accept_default_admin_renounce(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EDelayNotElapsed)]
@@ -1413,7 +1423,7 @@ fun test_accept_admin_renounce_rejects_too_early() {
     ac.begin_default_admin_renounce(&clk, scenario.ctx());
     clk.set_for_testing(delay - 1);
     ac.accept_default_admin_renounce(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test]
@@ -1556,7 +1566,7 @@ fun test_begin_delay_change_rejects_non_root() {
     let mut ac = take_ac(&scenario);
     let clk = clock::create_for_testing(scenario.ctx());
     ac.begin_default_admin_delay_change(100, &clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EDelayTooLarge)]
@@ -1570,7 +1580,7 @@ fun test_begin_delay_change_rejects_above_max() {
         &clk,
         scenario.ctx(),
     );
-    abort 0
+    abort 999
 }
 
 #[test]
@@ -1664,7 +1674,7 @@ fun test_accept_delay_change_rejects_no_pending() {
     let mut ac = take_ac(&scenario);
     let clk = clock::create_for_testing(scenario.ctx());
     ac.accept_default_admin_delay_change(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EDelayNotElapsed)]
@@ -1679,7 +1689,7 @@ fun test_accept_delay_change_rejects_too_early() {
     ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
     clk.set_for_testing(two_hours - 1);
     ac.accept_default_admin_delay_change(&clk, scenario.ctx());
-    abort 0
+    abort 999
 }
 
 // === cancel_default_admin_delay_change ===
@@ -1711,7 +1721,7 @@ fun test_cancel_delay_change_rejects_no_pending() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
     ac.cancel_default_admin_delay_change(scenario.ctx());
-    abort 0
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EUnauthorized)]
@@ -1727,7 +1737,7 @@ fun test_cancel_delay_change_rejects_non_root() {
     let mut ac = take_ac(&scenario);
     ac.cancel_default_admin_delay_change(scenario.ctx());
     clock::destroy_for_testing(clk);
-    abort 0
+    abort 999
 }
 
 // === Pending getters: delay change ===
