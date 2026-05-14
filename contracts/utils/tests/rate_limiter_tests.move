@@ -86,6 +86,58 @@ fun bucket_consume_or_abort_aborts_when_empty() {
     abort
 }
 
+// === Overflow-interval discard ===
+//
+// A bucket sitting at capacity while whole refill intervals elapse must treat those
+// intervals as overflow and discard them. Concretely, after a single drain at `now`,
+// a second consume at the SAME `now` must not succeed - the elapsed intervals that
+// were absorbed as overflow cannot reappear as fresh headroom.
+
+#[test]
+fun bucket_full_discards_overflow_intervals_at_same_timestamp() {
+    // capacity 10, refill 1 every 100ms, starts full at t=1_000_000.
+    // 10 intervals elapse with the bucket already at capacity → all 10 are overflow.
+    // A single try_consume(10) at t=1_001_000 must drain the bucket; a second
+    // consume at the same t must fail.
+    let (test, mut clk) = setup(1_000_000);
+
+    let mut rl = rate_limiter::new_bucket(10, 1, 100, 10, &clk);
+    clk.set_for_testing(1_001_000);
+
+    assert!(rl.try_consume(10, &clk));
+    assert_eq!(rl.available(&clk), 0);
+    assert!(!rl.try_consume(1, &clk));
+
+    teardown(test, clk);
+}
+
+#[test]
+fun bucket_partial_fill_discards_overflow_intervals_at_same_timestamp() {
+    // capacity 10, refill 1 every 100ms, starts at 8 tokens at t=1_000_000.
+    // Over 1000 ms (10 intervals): the first 2 intervals fill the bucket
+    // (reaches 10 at t=1_000_200), the remaining 8 are overflow.
+    // A single try_consume(10) at t=1_001_000 must drain the bucket; a second
+    // consume at the same t must fail.
+    let (test, mut clk) = setup(1_000_000);
+
+    let mut rl = rate_limiter::new_bucket(10, 1, 100, 8, &clk);
+    clk.set_for_testing(1_001_000);
+
+    assert!(rl.try_consume(10, &clk));
+    assert_eq!(rl.available(&clk), 0);
+    assert!(!rl.try_consume(1, &clk));
+
+    // One additional refill interval after the drain should credit exactly one token.
+    // If overflow intervals had been preserved as anchor drift instead of discarded,
+    // `available` here would jump to 9 (the 8 discarded intervals + 1 new).
+    clk.set_for_testing(1_001_100);
+    assert_eq!(rl.available(&clk), 1);
+    assert!(rl.try_consume(1, &clk));
+    assert!(!rl.try_consume(1, &clk));
+
+    teardown(test, clk);
+}
+
 #[test]
 fun bucket_reconfigure_clamps_tokens_to_new_capacity() {
     let (test, clk) = setup(0);
