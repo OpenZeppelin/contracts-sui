@@ -514,11 +514,11 @@ fun assert_cooldown_config(capacity: u64, cooldown_ms: u64) {
 /// configuration. Pure function: callers decide whether to persist the projected state.
 ///
 /// Credits `refill_amount` per elapsed `refill_interval_ms` since `last_refill_ms`, capped
-/// at `capacity`. The returned `last_refill_ms` is advanced only by whole refill steps -
-/// any sub-interval remainder is preserved so accrual stays aligned to the original anchor.
-/// When the bucket fills, `last_refill_ms` advances by the minimal step count that reaches
-/// capacity, so future accrual resumes from the moment the bucket actually filled rather
-/// than from `now`.
+/// at `capacity`. The returned `last_refill_ms` is advanced to the latest completed refill
+/// boundary at or before `now` whenever any whole step has elapsed - any sub-interval
+/// remainder is preserved so accrual stays aligned to the original anchor. Intervals that
+/// elapse after the bucket reaches capacity are overflow and are discarded by this same
+/// advance, so a subsequent drain at the same `now` cannot re-mint them as fresh headroom.
 ///
 /// #### Parameters
 /// - `last_refill_ms`: Timestamp of the last accrual checkpoint.
@@ -540,22 +540,22 @@ fun bucket_accrue(
 ): (u64, u64) {
     let elapsed_steps = (now - last_refill_ms) / refill_interval_ms;
     if (elapsed_steps == 0) return (last_refill_ms, available);
-    // Two branches keep all intermediate u64 products and sums bounded without relying on
-    // upper bounds on `capacity` or `refill_amount`:
+    // Both branches advance `last_refill_ms` by the full `elapsed_steps * refill_interval_ms`
+    // so overflow intervals (those after the bucket reaches capacity) are discarded rather
+    // than left as anchor drift that the next call would re-credit. The branch split keeps
+    // all intermediate u64 products bounded without relying on upper bounds on `capacity`
+    // or `refill_amount`:
     //   * Under-fill: `elapsed_steps * refill_amount <= steps_to_full * refill_amount <= headroom <= capacity`,
     //     so `available + credit <= capacity`. No overflow.
-    //   * Fill: write `capacity` directly; advance `last_refill_ms` by `steps * refill_interval_ms`
-    //     where `steps <= elapsed_steps`, bounded by `now - last_refill_ms`.
+    //   * Fill: write `capacity` directly. `elapsed_steps * refill_interval_ms <= now - last_refill_ms`,
+    //     so the new anchor stays `<= now`.
     let headroom = capacity - available;
     let steps_to_full = headroom / refill_amount;
+    let new_last = last_refill_ms + elapsed_steps * refill_interval_ms;
     if (elapsed_steps <= steps_to_full) {
         let credit = elapsed_steps * refill_amount;
-        (last_refill_ms + elapsed_steps * refill_interval_ms, available + credit)
+        (new_last, available + credit)
     } else {
-        // Smallest step count that reaches capacity: `steps_to_full` if exactly divisible, `steps_to_full + 1`
-        // otherwise. `steps_to_full + 1` cannot overflow: `steps_to_full <= elapsed_steps - 1 < u64::MAX`.
-        let steps = if (headroom == steps_to_full * refill_amount) steps_to_full
-        else steps_to_full + 1;
-        (last_refill_ms + steps * refill_interval_ms, capacity)
+        (new_last, capacity)
     }
 }
