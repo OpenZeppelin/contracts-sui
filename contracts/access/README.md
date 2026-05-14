@@ -1,4 +1,4 @@
-# OpenZeppelin Access for Sui
+# `openzeppelin_access`
 
 Role-based authorization and controlled ownership-transfer primitives for Sui Move protocols.
 
@@ -24,6 +24,12 @@ openzeppelin_access = { r.mvr = "@openzeppelin-move/access" }
 Use `access_control` when your package needs operational roles such as admins, treasurers, guardians, pausers, keepers, or governance executors.
 
 The registry is rooted in your module's One-Time Witness (OTW). Roles must be defined in the same module as that OTW, and `Auth<Role>` values can be minted in PTBs as typed authorization proofs.
+
+Initialize the registry from the module's `init` function when the package is
+first published. Sui does not run `init` for modules added in a later package
+upgrade, so an already-published package cannot adopt AccessControl by adding a
+new module that expects its OTW to be delivered. Publish a fresh package with
+its own initializing module and AccessControl registry instead.
 
 ```move
 use openzeppelin_access::access_control::{Self, AccessControl, Auth};

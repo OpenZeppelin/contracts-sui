@@ -2,11 +2,15 @@
 ///
 /// ### Structural invariants
 ///
-/// 1. **One AccessControl per module per publish.** `new<RootRole>` only accepts
-///    a One-Time Witness as `RootRole`. The Sui VM produces exactly one OTW
-///    value of a given type per package publish (passed into the consumer
-///    module's `init`), so a module can stand up at most one registry of its
-///    own type, ever.
+/// 1. **One AccessControl per module, initialized at first publish.**
+///    `new<RootRole>` only accepts a One-Time Witness as `RootRole`. The Sui VM
+///    produces exactly one OTW value of a given type when the package containing
+///    that type is first published (passed into the consumer module's `init`),
+///    so a module can stand up at most one registry of its own type, ever.
+///    Package upgrades do not run `init` for newly-added modules. To add
+///    AccessControl to an already-published protocol, publish a new package
+///    that initializes its own registry instead of adding a new module to the
+///    existing package.
 ///
 /// 2. **Only home-module roles.** Every role-typed entry point — the four
 ///    mutating functions (`grant_role`, `revoke_role`, `renounce_role`,
@@ -15,13 +19,13 @@
 ///    Foreign role types are rejected at the boundary; they cannot be
 ///    introduced into the bag. The check uses `type_name::with_original_ids`,
 ///    which compares the package's *original* publish address — so role
-///    types introduced in later upgrades of the same package pass the check
-///    too. The home-module rule restricts roles to the same package, not to
-///    the same package version.
+///    types introduced in later upgrades to the same module in the same
+///    package pass the check too. The home-module rule restricts roles to the
+///    same original package and module, not to the same package version.
 ///
 /// Together these guarantees make `Auth<Role>` a self-validating capability.
 /// `Role` can only live in the registry of its home module, that registry is
-/// unique per publish, and the only path to mint `Auth<Role>` is `new_auth`
+/// unique for its module, and the only path to mint `Auth<Role>` is `new_auth`
 /// against that registry. Action functions can take `&Auth<Role>` directly with
 /// no body checks.
 ///
@@ -138,7 +142,7 @@ const MAX_DELAY_INCREASE_WAIT_MS: u64 = 48 * 60 * 60 * 1_000;
 ///
 /// `Auth<Role>` is minted exclusively by `new_auth` against the unique
 /// `AccessControl<RootRole>` whose home module matches `Role`'s. Because that
-/// registry is singleton-per-publish (Invariant 1) and only home-module roles
+/// registry is the singleton for that module (Invariant 1) and only home-module roles
 /// can ever be registered in it (Invariant 2), every `Auth<Role>` that exists was
 /// produced by that one registry, against a sender that genuinely held `Role`.
 /// Consumers can take `&Auth<Role>` as authorization without any body checks.
@@ -274,11 +278,14 @@ public struct DefaultAdminDelayChangeCancelled has copy, drop {}
 ///
 /// The caller passes their module's One-Time Witness as `otw`. The runtime
 /// `is_one_time_witness` check confirms the value is genuine — this is what
-/// enforces Invariant 1 (one registry per module per publish). The
-/// transaction sender automatically becomes the root role holder.
+/// enforces Invariant 1 (one registry per module, initialized at first
+/// publish). The transaction sender automatically becomes the root role holder.
 ///
 /// The expected call site is the consumer module's `init` function, where
-/// the VM has already produced exactly one OTW value.
+/// the VM has already produced exactly one OTW value. That `init` function is
+/// only called on the package's first publish, not when an upgrade adds a new
+/// module. Existing published packages that want to adopt AccessControl should
+/// publish a new package with its own initializing module instead.
 ///
 /// #### Parameters
 /// - `otw`: a VM-issued One-Time Witness of type `RootRole`. Consumed by the call.
@@ -1003,10 +1010,10 @@ fun get_role_admin_name<RootRole>(ac: &AccessControl<RootRole>, role: TypeName):
 
 /// Asserts `Role` and `RootRole` come from the same package + module.
 ///
-/// Uses `with_original_ids` so role types introduced in later package
-/// upgrades still match — the address compared is the package's original
-/// publish ID, which is stable across upgrades. This is the runtime arm
-/// of Invariant 2.
+/// Uses `with_original_ids` so role types introduced in later upgrades to the
+/// same module still match — the address compared is the package's original
+/// publish ID, which is stable across upgrades. This is the runtime arm of
+/// Invariant 2.
 fun assert_home_module<RootRole, Role>() {
     let root = with_original_ids<RootRole>();
     let role = with_original_ids<Role>();
