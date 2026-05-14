@@ -10,14 +10,14 @@ const SCALE: u128 = 1_000_000_000;
 // e at UD30x9 scale: 2.71828182845904523536... -> floor 2_718_281_828
 const E_RAW: u128 = 2_718_281_828;
 
-// ==== Exact value ====
+// === Exact value ===
 
 #[test]
 fun ln_of_one_is_zero() {
     assert_eq!(sd29x9::one().ln(), sd29x9::zero());
 }
 
-// ==== Spot checks ====
+// === Spot checks ===
 
 #[test]
 fun ln_of_positive_two_matches_reference() {
@@ -45,7 +45,7 @@ fun ln_of_half_pins_value() {
     assert_eq!(result, neg(693_147_180));
 }
 
-// ==== Aborts ====
+// === Aborts ===
 
 #[test, expected_failure(abort_code = sd29x9_base::ELogUndefined)]
 fun ln_of_zero_aborts() {

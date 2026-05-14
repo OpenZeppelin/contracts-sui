@@ -38,6 +38,8 @@ public struct Components has copy, drop {
     mag: u256,
 }
 
+// === Public Functions ===
+
 // === Conversion ===
 
 /// Converts a `SD29x9` value to a `UD30x9` value.
@@ -71,8 +73,6 @@ public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
         option::some(ud30x9::wrap(mag as u128))
     }
 }
-
-// === Public Functions ===
 
 /// Returns the absolute value of a `SD29x9`.
 ///

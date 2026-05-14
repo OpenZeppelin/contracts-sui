@@ -9,14 +9,14 @@ use std::unit_test::assert_eq;
 const SCALE: u128 = 1_000_000_000;
 const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 
-// ==== Boundary ====
+// === Boundary ===
 
 #[test]
 fun log2_of_one_is_zero() {
     assert_eq!(sd29x9::one().log2(), sd29x9::zero());
 }
 
-// ==== Exact positive integer logs ====
+// === Exact positive integer logs ===
 
 #[test]
 fun log2_of_positive_powers_of_two_is_exact() {
@@ -27,7 +27,7 @@ fun log2_of_positive_powers_of_two_is_exact() {
     };
 }
 
-// ==== Exact negative integer logs (k <= 9 because SCALE = 2^9 * 5^9) ====
+// === Exact negative integer logs (k <= 9 because SCALE = 2^9 * 5^9) ===
 
 #[test]
 fun log2_of_negative_powers_of_two_is_exact() {
@@ -38,7 +38,7 @@ fun log2_of_negative_powers_of_two_is_exact() {
     };
 }
 
-// ==== Spot checks ====
+// === Spot checks ===
 
 #[test]
 fun log2_of_three_matches_reference() {
@@ -56,7 +56,7 @@ fun log2_of_one_third_pins_value() {
     assert_eq!(result.abs().unwrap(), 1_584_962_502);
 }
 
-// ==== Aborts ====
+// === Aborts ===
 
 #[test, expected_failure(abort_code = sd29x9_base::ELogUndefined)]
 fun log2_of_zero_aborts() {
@@ -78,7 +78,7 @@ fun log2_of_min_value_aborts() {
     sd29x9::min().log2();
 }
 
-// ==== Extreme and boundary values ====
+// === Extreme and boundary values ===
 
 #[test]
 fun log2_of_max_sd29x9() {
@@ -101,7 +101,7 @@ fun log2_just_above_one_pins_value() {
     assert_eq!(pos(SCALE + 1).log2(), pos(1));
 }
 
-// ==== Random property tests ====
+// === Random property tests ===
 
 #[random_test]
 fun log2_monotonicity_on_positive(a: u128, b: u128) {

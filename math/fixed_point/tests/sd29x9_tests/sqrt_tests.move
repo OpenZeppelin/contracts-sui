@@ -9,7 +9,7 @@ use std::unit_test::assert_eq;
 const SCALE: u128 = 1_000_000_000;
 const MAX_POSITIVE_VALUE: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 
-// ==== Tests ====
+// === Tests ===
 
 #[test]
 fun sqrt_of_zero_is_zero() {

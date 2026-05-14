@@ -8,14 +8,14 @@ use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Exact value ====
+// === Exact value ===
 
 #[test]
 fun log10_of_one_is_zero() {
     assert_eq!(sd29x9::one().log10(), sd29x9::zero());
 }
 
-// ==== Powers of ten (within 1 ulp at UD30x9 scale) ====
+// === Powers of ten (within 1 ulp at UD30x9 scale) ===
 
 #[test]
 fun log10_of_positive_powers_of_ten_pins_values() {
@@ -50,7 +50,7 @@ fun log10_of_negative_powers_of_ten_pins_values() {
     };
 }
 
-// ==== Spot checks ====
+// === Spot checks ===
 
 #[test]
 fun log10_of_positive_two_matches_reference() {
@@ -58,7 +58,7 @@ fun log10_of_positive_two_matches_reference() {
     assert_eq!(pos(2 * SCALE).log10(), pos(301_029_995));
 }
 
-// ==== Aborts ====
+// === Aborts ===
 
 #[test, expected_failure(abort_code = sd29x9_base::ELogUndefined)]
 fun log10_of_zero_aborts() {
@@ -75,7 +75,7 @@ fun log10_of_min_value_aborts() {
     sd29x9::min().log10();
 }
 
-// ==== Boundary at minimum positive input ====
+// === Boundary at minimum positive input ===
 
 #[test]
 fun log10_of_pos_1_matches_reference() {
