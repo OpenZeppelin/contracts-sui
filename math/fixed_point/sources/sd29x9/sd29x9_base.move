@@ -211,7 +211,7 @@ public fun is_zero(x: SD29x9): bool {
 /// see `log2` for full rounding semantics on signed results.
 ///
 /// #### Parameters
-/// - `x`: Input value. Must be strictly positive.
+/// - `x`: Input value.
 ///
 /// #### Returns
 /// - `ln(x)`, rounded toward zero.
@@ -232,7 +232,7 @@ public fun ln(x: SD29x9): SD29x9 {
 /// zero; see `log2` for full rounding semantics on signed results.
 ///
 /// #### Parameters
-/// - `x`: Input value. Must be strictly positive.
+/// - `x`: Input value.
 ///
 /// #### Returns
 /// - `log10(x)`, rounded toward zero.
@@ -254,11 +254,11 @@ public fun log10(x: SD29x9): SD29x9 {
 /// (inputs `>= 1`) this coincides with rounding down. For negative results
 /// (inputs in `(0, 1)`) the signed result usually sits closer to zero than
 /// the true value, but in narrow edge cases where the kernel's small upward
-/// magnitude bias crosses an integer boundary it may instead be 1 ulp
-/// further from zero.
+/// magnitude bias crosses an integer boundary it may instead be 1 ulp (unit
+/// in the last place) further from zero.
 ///
 /// #### Parameters
-/// - `x`: Input value. Must be strictly positive.
+/// - `x`: Input value.
 ///
 /// #### Returns
 /// - `log2(x)`, rounded toward zero.

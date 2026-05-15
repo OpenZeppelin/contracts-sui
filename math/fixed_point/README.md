@@ -41,7 +41,7 @@ underlying fixed-point representation and do not multiply or divide by `10^9`.
 - Constructors: `zero`, `one`, `max`, `wrap`
 - `SD29x9` only: `min`, `from_bits`
 
-```rust
+```move
 use openzeppelin_fp_math::{sd29x9, ud30x9};
 
 let one = ud30x9::wrap(1_000_000_000); // 1.0
@@ -56,7 +56,7 @@ let negative = sd29x9::wrap(42, true); // Raw bits for -0.000000042
 Casting also includes moves between fixed-point types that keep the same
 scaled numeric meaning and only validate signedness or range.
 
-```rust
+```move
 use openzeppelin_fp_math::{sd29x9, ud30x9_convert};
 
 let unsigned = ud30x9_convert::from_u128(42); // 42.0
@@ -72,7 +72,7 @@ These casts do not rescale the value. For example, `42.123456789` stays
 Use the conversion modules when you want semantic integer conversions that
 apply the fixed-point scale for you.
 
-```rust
+```move
 use openzeppelin_fp_math::{sd29x9_convert, ud30x9_convert};
 
 let whole = ud30x9_convert::from_u128(42); // 42.0
@@ -100,7 +100,7 @@ single `i128`-style input or output.
 Round-down compounding can put the result 1 ulp from the mathematical answer
 at irrational identity points (e.g. `log10(10·SCALE) == SCALE - 1`).
 
-```rust
+```move
 use openzeppelin_fp_math::{sd29x9, ud30x9_convert};
 
 let two = ud30x9_convert::from_u128(2);
@@ -114,7 +114,7 @@ let _ = half.log2();  // -1.0
 
 ## Usage Example
 
-```rust
+```move
 use openzeppelin_fp_math::{sd29x9, sd29x9_convert, ud30x9, ud30x9_convert};
 
 let price1 = ud30x9_convert::from_u128(1).add(ud30x9::wrap(500_000_000)); // 1.5

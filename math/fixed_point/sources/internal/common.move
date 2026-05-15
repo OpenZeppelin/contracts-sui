@@ -97,23 +97,6 @@ public(package) fun div_away_u256(numerator: u256, denominator: u256): u256 {
     }
 }
 
-/// Internal precision used by the fixed-point logarithm kernel: `10^18`
-/// (~`2^60`), an order of magnitude finer than the user-facing `10^9` scale.
-///
-/// Error analysis: in the squaring loop, error in `y` grows ~2× per iteration
-/// (since `y_new = y_old^2 / internal`), but a wrong bit at iteration `i`
-/// only perturbs `frac` by `internal / 2^(i+1)` — exponentially decaying, so
-/// late-iteration errors contribute little. Empirically the total `frac`
-/// error stays under `~10^3` at scale `10^18` (verified by `raw_log2_tests`),
-/// well below one user-facing ulp (`10^9`). A 9-decimal variant would lack
-/// the headroom for inputs near `1.0`; 18-decimal preserves precision.
-///
-/// #### Returns
-/// - `10^18` as `u128`.
-public(package) macro fun internal_log_scale(): u128 {
-    1_000_000_000_000_000_000 // 10^18
-}
-
 /// `ln(2)` represented at scale `10^18`, rounded down.
 ///
 /// #### Returns
@@ -130,6 +113,23 @@ public(package) macro fun log10_2_e18(): u128 {
     301_029_995_663_981_195
 }
 
+/// Internal precision used by the fixed-point logarithm kernel: `10^18`
+/// (~`2^60`), an order of magnitude finer than the user-facing `10^9` scale.
+///
+/// Error analysis: in the squaring loop, error in `y` grows ~2× per iteration
+/// (since `y_new = y_old^2 / internal`), but a wrong bit at iteration `i`
+/// only perturbs `frac` by `internal / 2^(i+1)` — exponentially decaying, so
+/// late-iteration errors contribute little. Empirically the total `frac`
+/// error stays under `~10^3` at scale `10^18`, well below one user-facing
+/// ulp (unit in the last place, `10^9`). A 9-decimal variant would lack the
+/// headroom for inputs near `1.0`; 18-decimal preserves precision.
+const INTERNAL_LOG_SCALE: u128 = 1_000_000_000_000_000_000; // 10^18
+
+/// Scale-correction denominator for `apply_log2_factor`: two scale-`10^18`
+/// factors yield a scale-`10^36` product; dividing by `10^27` lands the result
+/// at the user-facing scale `10^9`.
+const LOG_FACTOR_DENOM_E27: u128 = 1_000_000_000_000_000_000_000_000_000; // 10^27
+
 /// Combines a `raw_log2` magnitude with a base-conversion factor and returns
 /// the result at the user-facing `10^9` scale.
 ///
@@ -145,14 +145,12 @@ public(package) macro fun log10_2_e18(): u128 {
 /// - The magnitude at scale `10^9`, ready to wrap into `UD30x9` or `SD29x9`
 ///   raw form.
 public(package) fun apply_log2_factor(log2_mag_e18: u128, factor_e18: u128): u128 {
-    // Two scale-10^18 factors yield a scale-10^36 product; dividing by 10^27
-    // lands the result at scale 10^9 = UD30x9/SD29x9 raw. `log2_mag_e18 < 2^67`
-    // and `factor_e18 < 2^60`, so the product reaches up to ~2^127 — right at
-    // the `u128` boundary. `u128::mul_div` widens the product to `u256`
-    // internally before dividing, so the intermediate value never overflows;
-    // the final quotient (after `/ 10^27`) safely fits back in `u128`.
-    let denom: u128 = 1_000_000_000_000_000_000_000_000_000; // 10^27
-    u128::mul_div(log2_mag_e18, factor_e18, denom, rounding::down()).destroy_some()
+    // `log2_mag_e18 < 2^67` and `factor_e18 < 2^60`, so the product reaches up
+    // to ~2^127 — right at the `u128` boundary. `u128::mul_div` widens the
+    // product to `u256` internally before dividing, so the intermediate value
+    // never overflows; the final quotient (after `/ 10^27`) safely fits back
+    // in `u128`.
+    u128::mul_div(log2_mag_e18, factor_e18, LOG_FACTOR_DENOM_E27, rounding::down()).destroy_some()
 }
 
 /// Computes the base-2 logarithm of `x_raw / 10^9` in high precision.
@@ -178,7 +176,7 @@ public(package) fun raw_log2(x_raw: u128): (bool, u128) {
     assert!(x_raw > 0, ELogOfZero);
 
     let scale: u128 = scale!();
-    let internal: u128 = internal_log_scale!();
+    let internal: u128 = INTERNAL_LOG_SCALE;
 
     // Normalize so the real value is in `[1, 2)`, tracking the signed integer
     // part of `log2`.
@@ -199,8 +197,10 @@ public(package) fun raw_log2(x_raw: u128): (bool, u128) {
         (true, shift, shifted)
     };
 
-    // Lift from scale `10^9` to scale `10^18` for the iteration. After lift
-    // `y < 2 * 10^18 < 2^61`, so `y * y < 2^122` fits in `u128`.
+    // Lift from scale `10^9` to scale `10^18` for the iteration. The loop
+    // preserves the invariant `y < 2 * internal` (initially `y_at_scale * scale
+    // < 2 * 10^18`; restored each iteration by the `y >> 1` halving below).
+    // Hence `y * y < (2 * internal)^2 < 2^122` always fits in `u128`.
     let mut y: u128 = y_at_scale * scale;
     let internal_x2: u128 = 2 * internal;
 

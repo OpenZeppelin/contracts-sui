@@ -254,7 +254,7 @@ public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
 /// round toward zero, so the result may sit up to one ulp below the true value.
 ///
 /// #### Parameters
-/// - `x`: Input value. Must be greater than or equal to one.
+/// - `x`: Input value.
 ///
 /// #### Returns
 /// - `ln(x)`, rounded down to the nearest representable `UD30x9` value.
@@ -278,7 +278,7 @@ public fun ln(x: UD30x9): UD30x9 {
 /// round-down arithmetic.
 ///
 /// #### Parameters
-/// - `x`: Input value. Must be greater than or equal to one.
+/// - `x`: Input value.
 ///
 /// #### Returns
 /// - `log10(x)`, rounded down to the nearest representable `UD30x9` value.
@@ -300,7 +300,7 @@ public fun log10(x: UD30x9): UD30x9 {
 /// it is the largest `UD30x9` `r` such that `2^r <= x`.
 ///
 /// #### Parameters
-/// - `x`: Input value. Must be greater than or equal to one.
+/// - `x`: Input value.
 ///
 /// #### Returns
 /// - `log2(x)`, rounded down to the nearest representable `UD30x9` value.

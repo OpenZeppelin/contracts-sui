@@ -53,7 +53,7 @@ fun log2_of_one_third_pins_value() {
     // scale is 1_584_962_502; the algorithm returns this magnitude with the
     // negative sign.
     let result = pos(333_333_333).log2();
-    assert_eq!(result.abs().unwrap(), 1_584_962_502);
+    assert_eq!(result, neg(1_584_962_502));
 }
 
 // === Aborts ===
