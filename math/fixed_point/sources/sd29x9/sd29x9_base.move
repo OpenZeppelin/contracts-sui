@@ -27,12 +27,18 @@ const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 #[error(code = 3)]
 const ENegativeSqrt: vector<u8> = "Cannot compute square root of a negative value";
 
+/// Logarithm is undefined: input must be strictly positive
+#[error(code = 4)]
+const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictly positive";
+
 // === Structs ===
 
 public struct Components has copy, drop {
     neg: bool,
     mag: u256,
 }
+
+// === Public Functions ===
 
 // === Conversion ===
 
@@ -67,8 +73,6 @@ public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
         option::some(ud30x9::wrap(mag as u128))
     }
 }
-
-// === Public Functions ===
 
 /// Returns the absolute value of a `SD29x9`.
 ///
@@ -199,6 +203,74 @@ public fun gte(x: SD29x9, y: SD29x9): bool {
 /// - `true` if `x` is zero, otherwise `false`.
 public fun is_zero(x: SD29x9): bool {
     x.unwrap() == 0
+}
+
+/// Computes the natural logarithm of an `SD29x9` value.
+///
+/// Derived from `log2` via `ln(x) = log2(x) * ln(2)`. Rounded toward zero;
+/// see `log2` for full rounding semantics on signed results.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `ln(x)`, rounded toward zero.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is zero or negative.
+public fun ln(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg && mag > 0, ELogUndefined);
+    let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
+    let result_mag = common::apply_log2_factor(log_mag_internal, common::ln2_e18!());
+    wrap_components(Components { neg: log_neg, mag: result_mag as u256 })
+}
+
+/// Computes the base-10 logarithm of an `SD29x9` value.
+///
+/// Derived from `log2` via `log10(x) = log2(x) * log10(2)`. Rounded toward
+/// zero; see `log2` for full rounding semantics on signed results.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `log10(x)`, rounded toward zero.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is zero or negative.
+public fun log10(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg && mag > 0, ELogUndefined);
+    let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
+    let result_mag = common::apply_log2_factor(log_mag_internal, common::log10_2_e18!());
+    wrap_components(Components { neg: log_neg, mag: result_mag as u256 })
+}
+
+/// Computes the base-2 logarithm of an `SD29x9` value.
+///
+/// The result is rounded toward zero, matching the convention used by
+/// `mul_trunc`, `div_trunc`, and `pow` in this module. For positive results
+/// (inputs `>= 1`) this coincides with rounding down. For negative results
+/// (inputs in `(0, 1)`) the signed result usually sits closer to zero than
+/// the true value, but in narrow edge cases where the kernel's small upward
+/// magnitude bias crosses an integer boundary it may instead be 1 ulp (unit
+/// in the last place) further from zero.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `log2(x)`, rounded toward zero.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is zero or negative.
+public fun log2(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg && mag > 0, ELogUndefined);
+    let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
+    let log_mag = log_mag_internal / common::scale!();
+    wrap_components(Components { neg: log_neg, mag: log_mag as u256 })
 }
 
 /// Compares whether `x` is less than `y`.
