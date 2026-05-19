@@ -425,7 +425,7 @@ public(package) macro fun is_power_of_ten<$Int>($n: $Int): bool {
         return false
     };
     let exp = log10_floor(n);
-    n == std::u256::pow(10, exp)
+    n == 10u256.pow(exp)
 }
 
 /// Compute floor(log10(value)) using binary search over powers of 10.
