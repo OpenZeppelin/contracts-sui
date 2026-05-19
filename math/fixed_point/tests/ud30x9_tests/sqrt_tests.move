@@ -7,7 +7,7 @@ use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000;
 
-// ==== Tests ====
+// === Tests ===
 
 #[test]
 fun sqrt_of_zero_is_zero() {
