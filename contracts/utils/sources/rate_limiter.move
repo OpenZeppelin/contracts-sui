@@ -249,9 +249,9 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
                 *refill_interval_ms,
                 now,
             );
-            if (new_available < amount) return false;
-            *last_refill_ms = new_last;
+            if (amount > new_available) return false;
             *available = new_available - amount;
+            *last_refill_ms = new_last;
             true
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, available } => {

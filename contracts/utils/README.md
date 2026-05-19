@@ -16,11 +16,15 @@ Embeddable primitives for Sui smart contract development.
 
 Three strategies share the same API:
 
-| Variant | Semantics | When to pick it |
-|---------|-----------|-----------------|
-| `Bucket` | Tokens accrue continuously: `refill_amount` every `refill_interval_ms`, capped at `capacity`. | Smooth, sustained throughput with bursts up to `capacity`. |
-| `FixedWindow` | Up to `capacity` per `[k * window_ms, (k+1) * window_ms)` window anchored at creation. | Hard per-window quotas (e.g. "100 per hour"). |
-| `Cooldown` | Up to `capacity` units (drawn down by per-call `amount`), then a `cooldown_ms` gate before the next batch. | Burst-then-pause patterns (e.g. "1 minute cooldown after each batch"). |
+- **Bucket** ([Wikipedia](https://en.wikipedia.org/wiki/Token_bucket)) — a bucket holds up to `capacity` tokens and refills at a steady rate. Each consume drains tokens; an empty bucket denies the call. Permits short bursts up to `capacity` on top of a sustained average rate, which is what most APIs and on-chain throughput controls actually want.
+- **Fixed window** — time is partitioned into back-to-back windows of `window_ms`, anchored at limiter creation. Each window allows up to `capacity` units and resets to zero at the boundary. Cheap and easy to reason about; the known trade-off is that a caller can spend the full quota at the end of one window and the full quota at the start of the next, yielding a `2 * capacity` burst across the boundary. Pick it when the quota is the contract (e.g. "100 mints per hour") and the boundary burst is acceptable.
+- **Cooldown** — after `capacity` units are drawn down, the limiter is gated for `cooldown_ms` before any further consumption is allowed; once the gate elapses, the full `capacity` is available again. Equivalent to a "recharge after use" pattern (think action cooldowns in games, or "wait 60s before retrying").
+
+| Variant | When to pick it |
+|---------|-----------------|
+| `Bucket` | Smooth, sustained throughput with bursts up to `capacity`. |
+| `FixedWindow` | Hard per-window quotas (e.g. "100 per hour"). |
+| `Cooldown` | Burst-then-pause patterns (e.g. "1 minute cooldown after each batch"). |
 
 ### Lifecycle
 
