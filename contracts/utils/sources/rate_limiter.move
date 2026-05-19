@@ -27,6 +27,11 @@
 /// Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at
 /// any plausible chain timestamp during the limiter's lifetime - any policy-meaningful
 /// value (seconds to days to years in ms) satisfies this trivially.
+///
+/// Any function taking `&mut RateLimiter` mutates live state. Gate the entry functions
+/// that expose them with whatever authorization model is appropriate for the call site
+/// (`Cap`, `openzeppelin_access`, governance, multisig, ...) - admin-level for
+/// `reconfigure_*`, caller-level for `consume_*`. The library is agnostic.
 module openzeppelin_utils::rate_limiter;
 
 use sui::clock::Clock;
