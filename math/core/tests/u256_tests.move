@@ -918,16 +918,15 @@ fun is_power_of_ten_edge_cases() {
 }
 
 #[test]
-fun is_power_of_ten_binary_search_paths() {
-    // Test values to exercise different binary search paths
-    // These test values at different positions in the lookup table
+fun is_power_of_ten_diverse_inputs() {
+    // Sampled powers of ten across the u256 range.
     assert_eq!(u256::is_power_of_ten(100000), true); // 10^5 - middle range
     assert_eq!(u256::is_power_of_ten(10000000000000), true); // 10^13 - middle range
     assert_eq!(u256::is_power_of_ten(100000000000000000000000000000000), true); // 10^32 - upper middle
     assert_eq!(u256::is_power_of_ten(1000000000000000000000000000000000000000), true); // 10^39 - upper range
     assert_eq!(u256::is_power_of_ten(10000000000000000000000000000000000000000000000000000), true); // 10^52 - high range
 
-    // Test non-powers at various positions to exercise binary search failure paths
+    // Non-powers sampled at positions between consecutive powers of ten.
     assert_eq!(u256::is_power_of_ten(3), false); // Less than first non-1 power
     assert_eq!(u256::is_power_of_ten(15), false); // Between 10 and 100
     assert_eq!(u256::is_power_of_ten(150), false); // Between 100 and 1000

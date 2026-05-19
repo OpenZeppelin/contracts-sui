@@ -404,6 +404,30 @@ public(package) macro fun log10<$Int>($value: $Int, $rounding_mode: RoundingMode
     }
 }
 
+/// Test whether `$n` is an exact non-negative integer power of ten (`10^k` for some
+/// `k >= 0`).
+///
+/// The macro widens the input to `u256`, short-circuits to `false` on zero, then verifies
+/// `n == 10^log10_floor(n)`. Mirrors the structure of `log10` above: widen → early-return
+/// on zero → let-bound `log10_floor` result → equality check via `std::u256::pow`.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$n`: The unsigned integer to test.
+///
+/// #### Returns
+/// - `true` if `$n` equals `10^k` for some `k >= 0`, otherwise `false`.
+public(package) macro fun is_power_of_ten<$Int>($n: $Int): bool {
+    let n = $n as u256;
+    if (n == 0) {
+        return false
+    };
+    let exp = log10_floor(n);
+    n == std::u256::pow(10, exp)
+}
+
 /// Compute floor(log10(value)) using binary search over powers of 10.
 ///
 /// This helper uses precomputed constants (`TEN_POW_2`, `TEN_POW_4`, etc.) to efficiently
