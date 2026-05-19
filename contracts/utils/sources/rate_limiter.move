@@ -31,7 +31,7 @@
 /// Any function taking `&mut RateLimiter` mutates live state. Gate the entry functions
 /// that expose them with whatever authorization model is appropriate for the call site
 /// (`Cap`, `openzeppelin_access`, governance, multisig, ...) - admin-level for
-/// `reconfigure_*`, caller-level for `consume_*`. The library is agnostic.
+/// `reconfigure_*`, caller-level for `consume_*`. The module is agnostic.
 module openzeppelin_utils::rate_limiter;
 
 use sui::clock::Clock;
