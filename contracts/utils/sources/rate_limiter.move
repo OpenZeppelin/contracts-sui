@@ -80,6 +80,7 @@ public enum RateLimiter has drop, store {
         last_refill_ms: u64,
         available: u64,
     },
+
     /// Up to `capacity` units per window of length `window_ms`, anchored at the limiter's
     /// creation time. `available` resets to `capacity` when current time crosses into a
     /// later window boundary.
@@ -89,6 +90,7 @@ public enum RateLimiter has drop, store {
         window_start_ms: u64,
         available: u64,
     },
+
     /// Up to `capacity` units may be consumed before the limiter gates on `cooldown_ms`.
     /// Each successful `try_consume(amount, _)` decrements `available` by `amount` and
     /// rejects when `amount > available`. Once `available` reaches `0`, `cooldown_end_ms`
