@@ -133,8 +133,11 @@ public fun new_bucket(
     initial_available: u64,
     clock: &Clock,
 ): RateLimiter {
-    assert_bucket_config(capacity, refill_amount, refill_interval_ms);
+    assert!(capacity > 0, EZeroCapacity);
+    assert!(refill_amount > 0, EZeroRefillAmount);
+    assert!(refill_interval_ms > 0, EZeroRefillInterval);
     assert!(initial_available <= capacity, EInitialAboveCapacity);
+
     RateLimiter::Bucket {
         capacity,
         refill_amount,
@@ -159,7 +162,9 @@ public fun new_bucket(
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroWindow` if `window_ms == 0`.
 public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateLimiter {
-    assert_fixed_window_config(capacity, window_ms);
+    assert!(capacity > 0, EZeroCapacity);
+    assert!(window_ms > 0, EZeroWindow);
+
     RateLimiter::FixedWindow {
         capacity,
         window_ms,
@@ -183,7 +188,9 @@ public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateL
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroCooldown` if `cooldown_ms == 0`.
 public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
-    assert_cooldown_config(capacity, cooldown_ms);
+    assert!(capacity > 0, EZeroCapacity);
+    assert!(cooldown_ms > 0, EZeroCooldown);
+
     RateLimiter::Cooldown {
         cooldown_ms,
         capacity,
@@ -351,7 +358,10 @@ public fun reconfigure_bucket(
             last_refill_ms,
             available,
         } => {
-            assert_bucket_config(capacity, refill_amount, refill_interval_ms);
+            assert!(capacity > 0, EZeroCapacity);
+            assert!(refill_amount > 0, EZeroRefillAmount);
+            assert!(refill_interval_ms > 0, EZeroRefillInterval);
+
             let (new_last, new_available) = bucket_accrue(
                 *last_refill_ms,
                 *available,
@@ -400,7 +410,9 @@ public fun reconfigure_fixed_window(
             window_start_ms,
             available,
         } => {
-            assert_fixed_window_config(capacity, window_ms);
+            assert!(capacity > 0, EZeroCapacity);
+            assert!(window_ms > 0, EZeroWindow);
+
             // roll forward under the OLD `window_ms` first; the new config takes
             // effect from the rolled-forward anchor going forward. If a roll
             // occurred, the fresh window starts with the NEW capacity available.
@@ -449,7 +461,9 @@ public fun reconfigure_cooldown(
             available,
             cooldown_end_ms,
         } => {
-            assert_cooldown_config(capacity, cooldown_ms);
+            assert!(capacity > 0, EZeroCapacity);
+            assert!(cooldown_ms > 0, EZeroCooldown);
+
             *cd_field = cooldown_ms;
             *cap_field = capacity;
             *available = (*available).min(capacity);
@@ -464,51 +478,6 @@ public fun reconfigure_cooldown(
 }
 
 // === Private Functions ===
-
-/// Validate a `Bucket` configuration.
-///
-/// #### Parameters
-/// - `capacity`: Maximum token balance the bucket can hold.
-/// - `refill_amount`: Tokens credited per refill interval.
-/// - `refill_interval_ms`: Length of one refill interval, in milliseconds.
-///
-/// #### Aborts
-/// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroRefillAmount` if `refill_amount == 0`.
-/// - `EZeroRefillInterval` if `refill_interval_ms == 0`.
-fun assert_bucket_config(capacity: u64, refill_amount: u64, refill_interval_ms: u64) {
-    assert!(capacity > 0, EZeroCapacity);
-    assert!(refill_amount > 0, EZeroRefillAmount);
-    assert!(refill_interval_ms > 0, EZeroRefillInterval);
-}
-
-/// Validate a `FixedWindow` configuration.
-///
-/// #### Parameters
-/// - `capacity`: Maximum units consumable per window.
-/// - `window_ms`: Length of one window, in milliseconds.
-///
-/// #### Aborts
-/// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroWindow` if `window_ms == 0`.
-fun assert_fixed_window_config(capacity: u64, window_ms: u64) {
-    assert!(capacity > 0, EZeroCapacity);
-    assert!(window_ms > 0, EZeroWindow);
-}
-
-/// Validate a `Cooldown` configuration.
-///
-/// #### Parameters
-/// - `capacity`: Maximum units consumable per batch.
-/// - `cooldown_ms`: Wait between batches, in milliseconds.
-///
-/// #### Aborts
-/// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroCooldown` if `cooldown_ms == 0`.
-fun assert_cooldown_config(capacity: u64, cooldown_ms: u64) {
-    assert!(capacity > 0, EZeroCapacity);
-    assert!(cooldown_ms > 0, EZeroCooldown);
-}
 
 /// Project a `Bucket`'s `(last_refill_ms, available)` forward to `now` under the given
 /// configuration. Pure function: callers decide whether to persist the projected state.
