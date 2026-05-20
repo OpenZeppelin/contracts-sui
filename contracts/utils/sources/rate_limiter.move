@@ -72,7 +72,7 @@ const EInitialAboveCapacity: vector<u8> = "Initial available amount must not exc
 /// One embeddable limiter, three strategies. The variant is chosen at construction and can
 /// only be swapped by building a fresh `RateLimiter` and overwriting the field.
 ///
-/// All variants store an `available` counter that starts equal to `capacity` and is
+/// All variants store an `available` counter that starts at `initial_available` and is
 /// decremented by `try_consume`. Refill (Bucket), window rollover (FixedWindow), and cooldown
 /// release (Cooldown) all reset `available` back toward `capacity`.
 public enum RateLimiter has drop, store {
@@ -158,6 +158,7 @@ public fun new_bucket(
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per window.
 /// - `window_ms`: Length of one window, in milliseconds.
+/// - `initial_available`: Starting available units for the first window.
 /// - `clock`: Reference to the Sui `Clock`, used to anchor the first window.
 ///
 /// #### Returns
@@ -166,40 +167,50 @@ public fun new_bucket(
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroWindow` if `window_ms == 0`.
-public fun new_fixed_window(capacity: u64, window_ms: u64, clock: &Clock): RateLimiter {
+/// - `EInitialAboveCapacity` if `initial_available > capacity`.
+public fun new_fixed_window(
+    capacity: u64,
+    window_ms: u64,
+    initial_available: u64,
+    clock: &Clock,
+): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(window_ms > 0, EZeroWindow);
+    assert!(initial_available <= capacity, EInitialAboveCapacity);
 
     RateLimiter::FixedWindow {
         capacity,
         window_ms,
         window_start_ms: clock.timestamp_ms(),
-        available: capacity,
+        available: initial_available,
     }
 }
 
-/// Create a cooldown limiter that is ready to be used immediately. Up to `capacity` units
-/// may be consumed (in any combination of per-call `amount`s) before the limiter requires
-/// `cooldown_ms` to elapse before the next batch.
+/// Create a cooldown limiter. Up to `capacity` units may be consumed (in any combination of
+/// per-call `amount`s) before the limiter requires `cooldown_ms` to elapse before the next
+/// batch.
 ///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per batch.
 /// - `cooldown_ms`: Wait, in milliseconds, between exhausting the batch and the next reset.
+/// - `initial_available`: Starting available units.
 ///
 /// #### Returns
-/// - A new cooldown `RateLimiter` starting fully available.
+/// - A new cooldown `RateLimiter` with `initial_available` units available.
 ///
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroCooldown` if `cooldown_ms == 0`.
-public fun new_cooldown(capacity: u64, cooldown_ms: u64): RateLimiter {
+/// - `EInitialAboveCapacity` if `initial_available > capacity`.
+public fun new_cooldown(capacity: u64, cooldown_ms: u64, initial_available: u64): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(cooldown_ms > 0, EZeroCooldown);
+    assert!(initial_available <= capacity, EInitialAboveCapacity);
 
     RateLimiter::Cooldown {
         cooldown_ms,
         capacity,
-        available: capacity,
+        available: initial_available,
         cooldown_end_ms: 0,
     }
 }
