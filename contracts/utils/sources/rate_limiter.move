@@ -66,6 +66,12 @@ const EZeroCooldown: vector<u8> = "Cooldown must be greater than zero";
 /// Initial available amount must not exceed capacity.
 #[error(code = 8)]
 const EInitialAboveCapacity: vector<u8> = "Initial available amount must not exceed capacity";
+/// Cooldown `initial_available` must be greater than zero. The cooldown gate is a
+/// post-consumption penalty, so a "start drained" state has no consume to attach the
+/// gate to and would silently behave as `initial_available == capacity`.
+#[error(code = 9)]
+const EZeroCooldownInitial: vector<u8> =
+    "Cooldown initial available amount must be greater than zero";
 
 // === Structs ===
 
@@ -190,10 +196,15 @@ public fun new_fixed_window(
 /// per-call `amount`s) before the limiter requires `cooldown_ms` to elapse before the next
 /// batch.
 ///
+/// Unlike `Bucket` and `FixedWindow`, `Cooldown` does NOT support a "start drained" state:
+/// the cooldown gate is a post-consumption penalty that only arms once a batch has been
+/// drained by an actual `try_consume`. To force callers to wait before the first batch,
+/// gate creation of the enclosing object, not the limiter's initial balance.
+///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per batch.
 /// - `cooldown_ms`: Wait, in milliseconds, between exhausting the batch and the next reset.
-/// - `initial_available`: Starting available units.
+/// - `initial_available`: Starting available units. Must be `> 0` and `<= capacity`.
 ///
 /// #### Returns
 /// - A new cooldown `RateLimiter` with `initial_available` units available.
@@ -201,10 +212,12 @@ public fun new_fixed_window(
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroCooldown` if `cooldown_ms == 0`.
+/// - `EZeroCooldownInitial` if `initial_available == 0`.
 /// - `EInitialAboveCapacity` if `initial_available > capacity`.
 public fun new_cooldown(capacity: u64, cooldown_ms: u64, initial_available: u64): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(cooldown_ms > 0, EZeroCooldown);
+    assert!(initial_available > 0, EZeroCooldownInitial);
     assert!(initial_available <= capacity, EInitialAboveCapacity);
 
     RateLimiter::Cooldown {
@@ -348,8 +361,10 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
 
 /// Rewrite a `Bucket` limiter's configuration in place.
 ///
-/// Accrues any tokens earned under the old rules first, then updates the configuration and
-/// clamps the stored token balance to the new capacity.
+/// Accrues any tokens earned under the old rules first, then re-anchors the refill counter
+/// at `now`, installs the new configuration, and clamps the stored token balance to the new
+/// capacity. Any sub-interval remainder still pending under the old anchor is discarded -
+/// future refills accrue from `now` under the new configuration.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
@@ -383,7 +398,7 @@ public fun reconfigure_bucket(
             assert!(refill_amount > 0, EZeroRefillAmount);
             assert!(refill_interval_ms > 0, EZeroRefillInterval);
 
-            let (new_last, new_available) = bucket_accrue(
+            let (_, new_available) = bucket_accrue(
                 *last_refill_ms,
                 *available,
                 *cap_field,
@@ -394,7 +409,7 @@ public fun reconfigure_bucket(
             *cap_field = capacity;
             *refill_amount_field = refill_amount;
             *refill_interval_field = refill_interval_ms;
-            *last_refill_ms = new_last;
+            *last_refill_ms = now;
             *available = new_available.min(capacity);
         },
         _ => abort EWrongVariant,
@@ -403,9 +418,11 @@ public fun reconfigure_bucket(
 
 /// Rewrite a `FixedWindow` limiter's configuration in place.
 ///
-/// Rolls the window forward if current time has crossed into a later window, then updates
-/// the configuration and clamps `available` to the new capacity. If a rollover occurred,
-/// the fresh window starts fully available under the new `capacity`.
+/// Rolls the window forward under the old config if current time has crossed into a later
+/// window, then re-anchors the window at `now`, installs the new configuration, and clamps
+/// `available` to the new capacity. Future windows run for the new `window_ms` each,
+/// anchored at `now`. If a rollover occurred under the old config, the new window starts
+/// fully available under the new `capacity`.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
@@ -434,18 +451,16 @@ public fun reconfigure_fixed_window(
             assert!(capacity > 0, EZeroCapacity);
             assert!(window_ms > 0, EZeroWindow);
 
-            // roll forward under the OLD `window_ms` first; the new config takes
-            // effect from the rolled-forward anchor going forward. If a roll
-            // occurred, the fresh window starts with the NEW capacity available.
+            // Roll forward under the OLD `window_ms` first so the carried-over `available`
+            // reflects the old schedule; then re-anchor at `now` and install the new config.
+            // If a roll occurred, the new window starts with the NEW capacity available.
             let steps = (now - *window_start_ms) / *window_field;
             if (steps > 0) {
-                // `steps * window_field <= now - window_start_ms` (floor division above),
-                // so the advanced `window_start_ms <= now`. No overflow.
-                *window_start_ms = *window_start_ms + steps * *window_field;
                 *available = capacity;
             } else {
                 *available = (*available).min(capacity);
             };
+            *window_start_ms = now;
             *cap_field = capacity;
             *window_field = window_ms;
         },
@@ -455,11 +470,11 @@ public fun reconfigure_fixed_window(
 
 /// Rewrite a `Cooldown` limiter's configuration in place.
 ///
-/// An in-flight cooldown deadline is preserved as-is - the new `cooldown_ms` does NOT
-/// retroactively shift a gate that is already armed. `available` is clamped to the new
-/// capacity. If after the clamp `available == 0` and no in-flight gate exists (deadline
-/// already elapsed, or never set), a fresh deadline is armed at `now + cooldown_ms` so
-/// the gate engages instead of granting a free reset.
+/// `available` is clamped to the new capacity. If after the clamp `available == 0` - whether
+/// because a gate was already armed under the old config or because the clamp drained the
+/// batch - the cooldown deadline is reset to `now + cooldown_ms` under the new `cooldown_ms`.
+/// An in-flight deadline armed under the old config does NOT carry over; reconfigure
+/// restarts the wait from `now`.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
@@ -491,11 +506,10 @@ public fun reconfigure_cooldown(
             *cap_field = capacity;
             *available = (*available).min(capacity);
 
-            let now = clock.timestamp_ms();
-            if (*available == 0 && now >= *cooldown_end_ms) {
+            if (*available == 0) {
                 // `now + cooldown_ms` overflow is the operator's responsibility (see
                 // module-level "Operator responsibilities").
-                *cooldown_end_ms = now + cooldown_ms;
+                *cooldown_end_ms = clock.timestamp_ms() + cooldown_ms;
             };
         },
         _ => abort EWrongVariant,

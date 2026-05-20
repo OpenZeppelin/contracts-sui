@@ -227,6 +227,13 @@ fun cooldown_rejects_initial_above_capacity() {
     rate_limiter::new_cooldown(5, 50, 6);
 }
 
+#[test, expected_failure(abort_code = rate_limiter::EZeroCooldownInitial)]
+fun cooldown_rejects_zero_initial_available() {
+    // Cooldown's gate is post-consumption: a "start drained" state has no consume to
+    // attach the gate to and would silently behave as `initial_available == capacity`.
+    rate_limiter::new_cooldown(5, 50, 0);
+}
+
 #[test]
 fun cooldown_requires_elapsed_time_between_consumes() {
     let (test, mut clk) = setup(100);
@@ -555,35 +562,97 @@ fun fixed_window_reconfigure_rolls_under_old_window_first() {
     teardown(test, clk);
 }
 
-// === Cooldown reconfigure preserves in-flight deadline ===
+// === Cooldown reconfigure resets in-flight deadline ===
 
 #[test]
-fun cooldown_reconfigure_preserves_in_flight_deadline() {
+fun cooldown_reconfigure_resets_in_flight_deadline() {
     let (test, mut clk) = setup(0);
 
     let mut rl = rate_limiter::new_cooldown(1, 50, 1);
-    assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 50
+    assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 50, available = 0
 
-    // Reconfigure with a longer cooldown while the gate is in-flight. The deadline
-    // is preserved at its original value (50) - the new `cooldown_ms` does NOT
-    // retroactively shift the in-flight gate. The new value applies to the *next*
-    // gate armed after this one releases.
+    // Reconfigure mid-cooldown with a longer cooldown. The in-flight deadline does NOT
+    // carry over; `cooldown_end_ms` is reset to `now + new_cooldown_ms = 20 + 100 = 120`.
+    clk.set_for_testing(20);
     rl.reconfigure_cooldown(1, 100, &clk);
 
-    // Just before the original deadline: still gated.
-    clk.set_for_testing(49);
+    // Past the OLD deadline of 50: still gated under the new schedule.
+    clk.set_for_testing(50);
     assert_eq!(rl.available(&clk), 0);
 
-    // At the original deadline: gate releases under the OLD cooldown.
-    clk.set_for_testing(50);
+    // Just before the new deadline: still gated.
+    clk.set_for_testing(119);
+    assert_eq!(rl.available(&clk), 0);
+
+    // At the new deadline: gate releases.
+    clk.set_for_testing(120);
     assert_eq!(rl.available(&clk), 1);
     assert!(rl.try_consume(1, &clk)); // arms a fresh gate with NEW cooldown_ms=100
 
-    // The fresh gate uses the new cooldown: 50 + 100 = 150.
-    clk.set_for_testing(149);
+    // The fresh gate uses the new cooldown: 120 + 100 = 220.
+    clk.set_for_testing(219);
     assert_eq!(rl.available(&clk), 0);
-    clk.set_for_testing(150);
+    clk.set_for_testing(220);
     assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+// === Reconfigure resets the variant's timing anchor to now ===
+
+#[test]
+fun bucket_reconfigure_resets_refill_anchor() {
+    let (test, mut clk) = setup(0);
+
+    // Refill 10 tokens every 10 ms, starting empty.
+    let mut rl = rate_limiter::new_bucket(100, 10, 10, 0, &clk);
+
+    // 5 ms in - no whole step has elapsed, so accrual under the old rules credits 0.
+    // Reconfigure with the same config: under the new logic, `last_refill_ms` is reset
+    // to `now = 5`, discarding the 5 ms of sub-interval remainder.
+    clk.set_for_testing(5);
+    rl.reconfigure_bucket(100, 10, 10, &clk);
+    assert_eq!(rl.available(&clk), 0);
+
+    // 10 ms after the reconfigure call - exactly one step under the new anchor. If the
+    // remainder had been preserved (last_refill_ms = 0), we'd already be at t=10 = one
+    // full step from 0 here at t=10, but instead the next step lands at t=15.
+    clk.set_for_testing(10);
+    assert_eq!(rl.available(&clk), 0);
+
+    clk.set_for_testing(15);
+    assert_eq!(rl.available(&clk), 10);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun fixed_window_reconfigure_resets_window_anchor() {
+    let (test, mut clk) = setup(0);
+
+    // 10 units per 100 ms window.
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 10, &clk);
+    rl.consume_or_abort(5, &clk);
+    assert_eq!(rl.available(&clk), 5);
+
+    // 50 ms in - still inside the first window under the old rules (no rollover). The
+    // remaining `available` (5) is clamped to the new capacity (10), so it carries over.
+    // The new anchor is `now = 50`, so the next window begins at t=150.
+    clk.set_for_testing(50);
+    rl.reconfigure_fixed_window(10, 100, &clk);
+    assert_eq!(rl.available(&clk), 5);
+
+    // At t=100 the OLD anchor (window_start=0) would have rolled to a fresh window of 10.
+    // With the new anchor at 50, no rollover yet - `available` stays at 5.
+    clk.set_for_testing(100);
+    assert_eq!(rl.available(&clk), 5);
+
+    clk.set_for_testing(149);
+    assert_eq!(rl.available(&clk), 5);
+
+    // 100 ms after the reconfigure call - first roll under the new anchor.
+    clk.set_for_testing(150);
+    assert_eq!(rl.available(&clk), 10);
 
     teardown(test, clk);
 }
