@@ -58,24 +58,15 @@ fun is_power_of_ten_macro_works_on_u128() {
     assert_eq!(macros::is_power_of_ten!(100000000u128), true); // 10^8
     assert_eq!(macros::is_power_of_ten!(10000000000000000u128), true); // 10^16
     assert_eq!(macros::is_power_of_ten!(10000000000000000000u128), true); // 10^19
-    assert_eq!(
-        macros::is_power_of_ten!(100000000000000000000000000000000u128),
-        true,
-    ); // 10^32
-    assert_eq!(
-        macros::is_power_of_ten!(100000000000000000000000000000000000000u128),
-        true,
-    ); // 10^38 (max power of ten in u128)
+    assert_eq!(macros::is_power_of_ten!(100000000000000000000000000000000u128), true); // 10^32
+    assert_eq!(macros::is_power_of_ten!(100000000000000000000000000000000000000u128), true); // 10^38 (max power of ten in u128)
 
     // Off-by-one non-powers around several powers.
     assert_eq!(macros::is_power_of_ten!(9u128), false);
     assert_eq!(macros::is_power_of_ten!(11u128), false);
     assert_eq!(macros::is_power_of_ten!(99u128), false);
     assert_eq!(macros::is_power_of_ten!(101u128), false);
-    assert_eq!(
-        macros::is_power_of_ten!(99999999999999999999999999999999999999u128),
-        false,
-    ); // 10^38 - 1
+    assert_eq!(macros::is_power_of_ten!(99999999999999999999999999999999999999u128), false); // 10^38 - 1
 
     // Multiples of ten that are not powers of ten.
     assert_eq!(macros::is_power_of_ten!(20u128), false);
@@ -97,10 +88,7 @@ fun is_power_of_ten_macro_works_on_u256() {
     assert_eq!(macros::is_power_of_ten!(10000u256), true); // 10^4
     assert_eq!(macros::is_power_of_ten!(100000000u256), true); // 10^8
     assert_eq!(macros::is_power_of_ten!(10000000000000000u256), true); // 10^16
-    assert_eq!(
-        macros::is_power_of_ten!(100000000000000000000000000000000u256),
-        true,
-    ); // 10^32
+    assert_eq!(macros::is_power_of_ten!(100000000000000000000000000000000u256), true); // 10^32
     assert_eq!(
         macros::is_power_of_ten!(
             10000000000000000000000000000000000000000000000000000000000000000u256,
