@@ -9,7 +9,8 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
 ## Operations
 
-- Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`
+- Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`, `sqrt`
+- Logarithms: `log2`, `ln`, `log10`
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`, `unchecked_lshift`, `unchecked_rshift`
 
@@ -34,7 +35,13 @@ Rule of thumb:
 The core `wrap` / `unwrap` APIs are **raw casts**. They preserve the
 underlying fixed-point representation and do not multiply or divide by `10^9`.
 
-```rust
+- `u128 -> UD30x9`: `into_UD30x9`
+- `UD30x9 -> SD29x9`: `into_SD29x9`, `try_into_SD29x9`
+- `SD29x9 -> UD30x9`: `into_UD30x9`, `try_into_UD30x9`
+- Constructors: `zero`, `one`, `max`, `wrap`
+- `SD29x9` only: `min`, `from_bits`
+
+```move
 use openzeppelin_fp_math::{sd29x9, ud30x9};
 
 let one = ud30x9::wrap(1_000_000_000); // 1.0
@@ -49,7 +56,7 @@ let negative = sd29x9::wrap(42, true); // Raw bits for -0.000000042
 Casting also includes moves between fixed-point types that keep the same
 scaled numeric meaning and only validate signedness or range.
 
-```rust
+```move
 use openzeppelin_fp_math::{sd29x9, ud30x9_convert};
 
 let unsigned = ud30x9_convert::from_u128(42); // 42.0
@@ -65,7 +72,7 @@ These casts do not rescale the value. For example, `42.123456789` stays
 Use the conversion modules when you want semantic integer conversions that
 apply the fixed-point scale for you.
 
-```rust
+```move
 use openzeppelin_fp_math::{sd29x9_convert, ud30x9_convert};
 
 let whole = ud30x9_convert::from_u128(42); // 42.0
@@ -80,9 +87,34 @@ Because Move does not provide a native signed integer type for this package,
 `SD29x9` conversions use an unsigned magnitude plus a sign flag instead of a
 single `i128`-style input or output.
 
+## Logarithms
+
+`log2`, `ln`, and `log10` are computed from a shared `log2` kernel; `ln` and
+`log10` apply a base-conversion factor on top.
+
+- **UD30x9** aborts on `x < 1` (the result would be negative).
+  Rounds down.
+- **SD29x9** aborts on `x <= 0`. Rounds toward zero, matching `mul_trunc`,
+  `div_trunc`, and `pow` in the same module.
+
+Round-down compounding can put the result 1 ulp from the mathematical answer
+at irrational identity points (e.g. `log10(10·SCALE) == SCALE - 1`).
+
+```move
+use openzeppelin_fp_math::{sd29x9, ud30x9_convert};
+
+let two = ud30x9_convert::from_u128(2);
+let _ = two.log2();   // 1.0
+let _ = two.ln();     // 0.693147180
+let _ = two.log10();  // 0.301029995
+
+let half = sd29x9::wrap(500_000_000, false); // 0.5
+let _ = half.log2();  // -1.0
+```
+
 ## Usage Example
 
-```rust
+```move
 use openzeppelin_fp_math::{sd29x9, sd29x9_convert, ud30x9, ud30x9_convert};
 
 let price1 = ud30x9_convert::from_u128(1).add(ud30x9::wrap(500_000_000)); // 1.5
