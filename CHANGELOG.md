@@ -21,6 +21,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `sqrt` for `UD30x9` and `SD29x9` with round-down semantics. (#286)
 - `log2`, `ln`, `log10` for `UD30x9` (rounds down) and `SD29x9` (rounds toward zero). (#320)
 
+### `openzeppelin_math`
+
+#### Changed
+
+- `u128::is_power_of_ten` and `u256::is_power_of_ten` now compute the result via `log10_floor` and `pow` instead of a hardcoded lookup table. (#323)
+
 ### `openzeppelin_utils`
 
 #### Added

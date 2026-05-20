@@ -918,16 +918,15 @@ fun is_power_of_ten_edge_cases() {
 }
 
 #[test]
-fun is_power_of_ten_binary_search_paths() {
-    // Test values to exercise different binary search paths
-    // These test values at different positions in the lookup table
+fun is_power_of_ten_diverse_inputs() {
+    // Sampled powers of ten across the u256 range.
     assert_eq!(u256::is_power_of_ten(100000), true); // 10^5 - middle range
     assert_eq!(u256::is_power_of_ten(10000000000000), true); // 10^13 - middle range
     assert_eq!(u256::is_power_of_ten(100000000000000000000000000000000), true); // 10^32 - upper middle
     assert_eq!(u256::is_power_of_ten(1000000000000000000000000000000000000000), true); // 10^39 - upper range
     assert_eq!(u256::is_power_of_ten(10000000000000000000000000000000000000000000000000000), true); // 10^52 - high range
 
-    // Test non-powers at various positions to exercise binary search failure paths
+    // Non-powers sampled at positions between consecutive powers of ten.
     assert_eq!(u256::is_power_of_ten(3), false); // Less than first non-1 power
     assert_eq!(u256::is_power_of_ten(15), false); // Between 10 and 100
     assert_eq!(u256::is_power_of_ten(150), false); // Between 100 and 1000
@@ -935,4 +934,62 @@ fun is_power_of_ten_binary_search_paths() {
     assert_eq!(u256::is_power_of_ten(5000000000), false); // Between 10^9 and 10^10
     assert_eq!(u256::is_power_of_ten(50000000000000000000), false); // Between 10^19 and 10^20
     assert_eq!(u256::is_power_of_ten(500000000000000000000000000000), false); // Between 10^29 and 10^30
+}
+
+#[test]
+fun is_power_of_ten_at_log10_floor_cascade_boundary() {
+    // 10^64 boundary (TEN_POW_64 cascade branch).
+    assert_eq!(
+        u256::is_power_of_ten(
+            10000000000000000000000000000000000000000000000000000000000000000,
+        ),
+        true,
+    ); // 10^64
+    assert_eq!(
+        u256::is_power_of_ten(
+            9999999999999999999999999999999999999999999999999999999999999999,
+        ),
+        false,
+    ); // 10^64 - 1
+    assert_eq!(
+        u256::is_power_of_ten(
+            10000000000000000000000000000000000000000000000000000000000000001,
+        ),
+        false,
+    ); // 10^64 + 1
+
+    // 10^32 boundary (TEN_POW_32 cascade branch).
+    assert_eq!(u256::is_power_of_ten(100000000000000000000000000000000), true); // 10^32
+    assert_eq!(u256::is_power_of_ten(99999999999999999999999999999999), false); // 10^32 - 1
+    assert_eq!(u256::is_power_of_ten(100000000000000000000000000000001), false); // 10^32 + 1
+
+    // 10^16 boundary (TEN_POW_16 cascade branch).
+    assert_eq!(u256::is_power_of_ten(10000000000000000), true); // 10^16
+    assert_eq!(u256::is_power_of_ten(9999999999999999), false); // 10^16 - 1
+    assert_eq!(u256::is_power_of_ten(10000000000000001), false); // 10^16 + 1
+
+    // 10^8 boundary (TEN_POW_8 cascade branch).
+    assert_eq!(u256::is_power_of_ten(100000000), true); // 10^8
+    assert_eq!(u256::is_power_of_ten(99999999), false); // 10^8 - 1
+    assert_eq!(u256::is_power_of_ten(100000001), false); // 10^8 + 1
+
+    // 10^4 boundary (TEN_POW_4 cascade branch).
+    assert_eq!(u256::is_power_of_ten(10000), true); // 10^4
+    assert_eq!(u256::is_power_of_ten(9999), false); // 10^4 - 1
+    assert_eq!(u256::is_power_of_ten(10001), false); // 10^4 + 1
+
+    // 10^2 boundary (TEN_POW_2 cascade branch).
+    assert_eq!(u256::is_power_of_ten(100), true); // 10^2
+    assert_eq!(u256::is_power_of_ten(99), false); // 10^2 - 1
+    assert_eq!(u256::is_power_of_ten(101), false); // 10^2 + 1
+
+    // 10 boundary (`value >= 10` cascade branch).
+    assert_eq!(u256::is_power_of_ten(10), true); // 10
+    assert_eq!(u256::is_power_of_ten(9), false); // 10 - 1
+    assert_eq!(u256::is_power_of_ten(11), false); // 10 + 1
+}
+
+#[test]
+fun is_power_of_ten_u256_max() {
+    assert_eq!(u256::is_power_of_ten(std::u256::max_value!()), false);
 }
