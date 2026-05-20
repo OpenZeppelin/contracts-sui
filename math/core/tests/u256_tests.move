@@ -935,3 +935,30 @@ fun is_power_of_ten_diverse_inputs() {
     assert_eq!(u256::is_power_of_ten(50000000000000000000), false); // Between 10^19 and 10^20
     assert_eq!(u256::is_power_of_ten(500000000000000000000000000000), false); // Between 10^29 and 10^30
 }
+
+#[test]
+fun is_power_of_ten_at_log10_floor_cascade_boundary() {
+    assert_eq!(
+        u256::is_power_of_ten(
+            10000000000000000000000000000000000000000000000000000000000000000,
+        ),
+        true,
+    ); // 10^64
+    assert_eq!(
+        u256::is_power_of_ten(
+            9999999999999999999999999999999999999999999999999999999999999999,
+        ),
+        false,
+    ); // 10^64 - 1
+    assert_eq!(
+        u256::is_power_of_ten(
+            10000000000000000000000000000000000000000000000000000000000000001,
+        ),
+        false,
+    ); // 10^64 + 1
+}
+
+#[test]
+fun is_power_of_ten_u256_max() {
+    assert_eq!(u256::is_power_of_ten(std::u256::max_value!()), false);
+}
