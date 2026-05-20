@@ -336,7 +336,7 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
             // A new window has begun once `window_ms` has elapsed since the current anchor.
             if (now - *window_start_ms >= *window_ms) *capacity else *available
         },
-        RateLimiter::Cooldown { cooldown_ms: _, capacity, available, cooldown_end_ms } => {
+        RateLimiter::Cooldown { capacity, available, cooldown_end_ms, .. } => {
             if (*available > 0) *available
             else if (now >= *cooldown_end_ms) *capacity
             else 0
