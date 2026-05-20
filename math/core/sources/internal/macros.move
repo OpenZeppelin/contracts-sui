@@ -407,9 +407,6 @@ public(package) macro fun log10<$Int>($value: $Int, $rounding_mode: RoundingMode
 /// Test whether `$n` is an exact non-negative integer power of ten (`10^k` for some
 /// `k >= 0`).
 ///
-/// The macro widens the input to `u256`, short-circuits to `false` on zero, then verifies
-/// `n == 10^log10_floor(n)`.
-///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
