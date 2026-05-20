@@ -843,3 +843,8 @@ fun is_power_of_ten_diverse_inputs() {
     assert_eq!(u128::is_power_of_ten(50000000000000000000), false); // Between 10^19 and 10^20
     assert_eq!(u128::is_power_of_ten(500000000000000000000000000000), false); // Between 10^29 and 10^30
 }
+
+#[test]
+fun is_power_of_ten_u128_max() {
+    assert_eq!(u128::is_power_of_ten(std::u128::max_value!()), false);
+}
