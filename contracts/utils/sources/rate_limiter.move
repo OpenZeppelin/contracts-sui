@@ -102,10 +102,10 @@ public enum RateLimiter has drop, store {
     /// `available` resets to `capacity` and the next batch is granted. `cooldown_end_ms`
     /// is taken into account only once the limiter has been drained and the gate is armed.
     Cooldown {
-        cooldown_ms: u64,
         capacity: u64,
-        available: u64,
+        cooldown_ms: u64,
         cooldown_end_ms: u64,
+        available: u64,
     },
 }
 
