@@ -35,6 +35,28 @@ Three strategies share the same API:
 
 ### Usage
 
+Pick the constructor that matches your policy; the consume and inspect calls are identical for all three variants.
+
+```move
+use openzeppelin_utils::rate_limiter::{Self, RateLimiter};
+use sui::clock::Clock;
+
+// Bucket — smooth throughput with bursts; refills 100 units every 6 s, cap 1 000.
+let limiter: RateLimiter = rate_limiter::new_bucket(1_000, 100, 6_000, 1_000, clock);
+
+// Fixed window — hard per-hour quota of 100 units, starting full.
+let limiter: RateLimiter = rate_limiter::new_fixed_window(100, 3_600_000, 100, clock);
+
+// Cooldown — up to 1 000 units per batch, then a 60 s gate before the next batch.
+let limiter: RateLimiter = rate_limiter::new_cooldown(1_000, 60_000, 1_000);
+
+// Identical hot-path API regardless of variant:
+let units = limiter.available(clock);   // how many units are consumable right now
+limiter.consume_or_abort(amount, clock); // deduct or abort with ERateLimited
+```
+
+A typical integration embeds `RateLimiter` as an object field:
+
 ```move
 module my_protocol::vault;
 
@@ -48,7 +70,6 @@ public struct Vault has key {
 }
 
 public fun new(clock: &Clock, ctx: &mut TxContext): Vault {
-    // Cap at 1_000 tokens, refilling 100 every 6 s, starting full.
     let withdraw_limiter = rate_limiter::new_bucket(1_000, 100, 6_000, 1_000, clock);
     Vault { id: object::new(ctx), withdraw_limiter }
 }
