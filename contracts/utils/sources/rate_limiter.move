@@ -452,7 +452,6 @@ public fun reconfigure_fixed_window(
     window_ms: u64,
     clock: &Clock,
 ) {
-    let now = clock.timestamp_ms();
     match (self) {
         RateLimiter::FixedWindow {
             capacity: cap_field,
@@ -466,6 +465,7 @@ public fun reconfigure_fixed_window(
             // Roll forward under the OLD `window_ms` first so the carried-over `available`
             // reflects the old schedule; then re-anchor at `now` and install the new config.
             // If a roll occurred, the new window starts with the NEW capacity available.
+            let now = clock.timestamp_ms();
             let steps = (now - *window_start_ms) / *window_field;
             if (steps > 0) {
                 *available = capacity;
