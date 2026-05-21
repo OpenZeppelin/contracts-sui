@@ -32,6 +32,14 @@
 /// that expose them with whatever authorization model is appropriate for the call site
 /// (`Cap`, `openzeppelin_access`, governance, multisig, ...) - admin-level for
 /// `reconfigure_*`, caller-level for `consume_*`. The module is agnostic.
+///
+/// # Upgrade compatibility
+///
+/// `RateLimiter` is a `public enum` embedded inside integrator-owned objects. Adding a new
+/// variant or new fields to an existing variant in a future package upgrade is not a
+/// binary-compatible change: any object that already stored a prior shape would fail to
+/// deserialize. Future evolution must either preserve the current variant set and field
+/// layouts, or ship as a parallel `RateLimiterV2` type with a migration path for integrators.
 module openzeppelin_utils::rate_limiter;
 
 use sui::clock::Clock;
