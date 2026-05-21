@@ -926,6 +926,32 @@ fun try_consume_of_available_aborts_when_drained() {
     abort
 }
 
+#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
+fun fixed_window_try_consume_of_available_aborts_when_exhausted() {
+    // Same footgun as `try_consume_of_available_aborts_when_drained` but for FixedWindow:
+    // available() returns 0 inside an exhausted window before rollover, and try_consume(0)
+    // aborts EInvalidAmount.
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 5, &clk);
+    rl.consume_or_abort(5, &clk);
+    let n = rl.available(&clk);
+    rl.try_consume(n, &clk);
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
+fun cooldown_try_consume_of_available_aborts_when_gated() {
+    // Same footgun as `try_consume_of_available_aborts_when_drained` but for Cooldown:
+    // available() returns 0 while the gate is armed (deadline not yet elapsed), and
+    // try_consume(0) aborts EInvalidAmount.
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_cooldown(5, 50, 5);
+    rl.consume_or_abort(5, &clk); // drains and arms the gate
+    let n = rl.available(&clk);
+    rl.try_consume(n, &clk);
+    abort
+}
+
 // === consume_or_abort across variants ===
 
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
@@ -959,6 +985,35 @@ fun cooldown_reconfigure_clamps_available_to_new_capacity() {
     // Shrink capacity below current `available`; clamp keeps `available <= capacity`.
     rl.reconfigure_cooldown(5, 100, &clk);
     assert_eq!(rl.available(&clk), 5);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_reconfigure_capacity_increase_preserves_available() {
+    // When post-clamp `available > 0` (here: `available=3` clamped against `new_cap=10`
+    // is a no-op), `cooldown_end_ms` is left untouched. The new `cooldown_ms` only
+    // becomes observable when the next drain arms a fresh gate.
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(5, 50, 3);
+    assert_eq!(rl.available(&clk), 3);
+
+    // Increase capacity (3 <= 10 => min-clamp is a no-op). cooldown_ms also bumped.
+    rl.reconfigure_cooldown(10, 100, &clk);
+    assert_eq!(rl.available(&clk), 3);
+
+    // Drain the current batch; gate arms under the NEW cooldown_ms (deadline = 0 + 100).
+    rl.consume_or_abort(3, &clk);
+    assert_eq!(rl.available(&clk), 0);
+
+    // Just before the new deadline: still gated.
+    clk.set_for_testing(99);
+    assert!(!rl.try_consume(1, &clk));
+
+    // At the new deadline: fresh batch under the new capacity.
+    clk.set_for_testing(100);
+    assert_eq!(rl.available(&clk), 10);
 
     teardown(test, clk);
 }
