@@ -913,6 +913,19 @@ fun cooldown_available_predicts_try_consume() {
     teardown(test, clk);
 }
 
+#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
+fun try_consume_of_available_aborts_when_drained() {
+    // The `try_consume(self.available(clock), clock)` idiom is unsafe when the limiter
+    // is empty: available() returns 0 and try_consume(0) aborts EInvalidAmount.
+    // Callers must guard with `if n > 0 { ... }`.
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_bucket(10, 1, 1_000_000, 10, &clk);
+    rl.consume_or_abort(10, &clk);
+    let n = rl.available(&clk);
+    rl.try_consume(n, &clk);
+    abort
+}
+
 // === consume_or_abort across variants ===
 
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
