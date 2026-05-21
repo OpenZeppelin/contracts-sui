@@ -1,5 +1,8 @@
 module openzeppelin_math::vector;
 
+use openzeppelin_math::macros;
+use openzeppelin_math::rounding::RoundingMode;
+
 // === Public Functions ===
 
 /// Sort an unsigned integer vector in-place using the quicksort algorithm.
@@ -193,4 +196,46 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             };
         };
     };
+}
+
+/// Compute the median of an unsigned integer vector.
+///
+/// For odd-length vectors, the median is the middle element of the sorted vector
+/// and `$rounding_mode` has no effect on the result.
+///
+/// For even-length vectors, the median is the arithmetic mean of the two central
+/// values, rounded according to `$rounding_mode`.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$vec`: Vector whose median is desired.
+/// - `$rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - `option::some(median)` when `$vec` is non-empty.
+/// - `option::none()` when `$vec` is empty — median of empty data is undefined.
+public macro fun median<$Int>($vec: vector<$Int>, $rounding_mode: RoundingMode): Option<$Int> {
+    let mut vec = $vec;
+    let len = vec.length();
+
+    // Median of empty data is undefined — signal "no value" rather than abort.
+    if (len == 0) {
+        return option::none()
+    };
+
+    quick_sort!(&mut vec);
+
+    let mid = len / 2;
+    let result = if (len % 2 == 1) {
+        // Odd length: middle element of the sorted vector.
+        vec[mid]
+    } else {
+        // Even length: rounded mean of the two central order statistics.
+        let lower = vec[mid - 1];
+        let upper = vec[mid];
+        macros::average!(lower, upper, $rounding_mode)
+    };
+    option::some(result)
 }
