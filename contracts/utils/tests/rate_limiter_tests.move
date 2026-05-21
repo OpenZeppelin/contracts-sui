@@ -315,6 +315,22 @@ fun try_consume_with_zero_amount_aborts() {
     abort
 }
 
+#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
+fun try_consume_with_zero_amount_aborts_fixed_window() {
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 10, &clk);
+    rl.try_consume(0, &clk);
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
+fun try_consume_with_zero_amount_aborts_cooldown() {
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_cooldown(10, 50, 10);
+    rl.try_consume(0, &clk);
+    abort
+}
+
 // === Reconfigure variant guards ===
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
