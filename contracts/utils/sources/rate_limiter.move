@@ -319,6 +319,10 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
 /// `FixedWindow` it is the remaining headroom after any window rollover; for `Cooldown` it
 /// is `capacity` if the cooldown has elapsed and the stored `available` otherwise.
 ///
+/// Note: `try_consume(self.available(clock), clock)` aborts with `EInvalidAmount` when
+/// `available()` returns `0` (empty Bucket, exhausted FixedWindow, or gated Cooldown).
+/// Guard with `if n > 0 { self.try_consume(n, clock) }` or branch on `available()` directly.
+///
 /// #### Parameters
 /// - `self`: Limiter to inspect.
 /// - `clock`: Reference to the Sui `Clock`, used to project pending accrual / rollover / release.
