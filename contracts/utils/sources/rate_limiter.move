@@ -229,10 +229,10 @@ public fun new_cooldown(capacity: u64, cooldown_ms: u64, initial_available: u64)
     assert!(initial_available <= capacity, EInitialAboveCapacity);
 
     RateLimiter::Cooldown {
-        cooldown_ms,
         capacity,
-        available: initial_available,
+        cooldown_ms,
         cooldown_end_ms: 0,
+        available: initial_available,
     }
 }
 
