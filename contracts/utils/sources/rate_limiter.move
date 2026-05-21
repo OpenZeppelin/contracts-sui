@@ -286,7 +286,7 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, available } => {
             let steps = (now - *window_start_ms) / *window_ms;
             if (steps != 0) {
-                // `steps * window_ms <= now - window_start_ms` (floor division above),
+                // SAFETY: `steps * window_ms <= now - window_start_ms` (floor division above),
                 // so the advanced `window_start_ms <= now`. No overflow.
                 *window_start_ms = *window_start_ms + steps * *window_ms;
                 *available = *capacity;
@@ -303,8 +303,8 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             if (amount > *available) return false;
             *available = *available - amount;
             if (*available == 0) {
-                // `now + cooldown_ms` overflow is the operator's responsibility (see
-                // module-level "Operator responsibilities"). Trivially safe for any
+                // SAFETY: `now + cooldown_ms` overflow is the operator's responsibility
+                // (see module-level "Operator responsibilities"). Trivially safe for any
                 // policy-meaningful `cooldown_ms`.
                 *cooldown_end_ms = now + *cooldown_ms;
             };
@@ -507,8 +507,8 @@ public fun reconfigure_cooldown(
             *available = (*available).min(capacity);
 
             if (*available == 0) {
-                // `now + cooldown_ms` overflow is the operator's responsibility (see
-                // module-level "Operator responsibilities").
+                // SAFETY: `now + cooldown_ms` overflow is the operator's responsibility
+                // (see module-level "Operator responsibilities").
                 *cooldown_end_ms = clock.timestamp_ms() + cooldown_ms;
             };
         },
@@ -555,12 +555,13 @@ fun bucket_accrue(
     // `refill_amount`.
     let headroom = capacity - available;
     let steps_to_full = headroom / refill_amount;
-    // `elapsed_steps * refill_interval_ms <= now - last_refill_ms` (floor division above),
+    // SAFETY: `elapsed_steps * refill_interval_ms <= now - last_refill_ms` (floor division above),
     // so the advanced `new_last <= now`. No overflow.
     let new_last = last_refill_ms + elapsed_steps * refill_interval_ms;
     if (elapsed_steps <= steps_to_full) {
-        // Under-fill branch: `elapsed_steps * refill_amount <= steps_to_full * refill_amount
-        // <= headroom <= capacity`, so `available + credit <= capacity`. No overflow.
+        // SAFETY: Under-fill branch:
+        // `elapsed_steps * refill_amount <= steps_to_full * refill_amount <= headroom <= capacity`,
+        // so `available + credit <= capacity`. No overflow.
         let credit = elapsed_steps * refill_amount;
         (new_last, available + credit)
     } else {
