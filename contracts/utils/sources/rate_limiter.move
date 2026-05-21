@@ -482,11 +482,10 @@ public fun reconfigure_fixed_window(
 
 /// Rewrite a `Cooldown` limiter's configuration in place.
 ///
-/// `available` is clamped to the new capacity. If after the clamp `available == 0` - whether
-/// because a gate was already armed under the old config or because the clamp drained the
-/// batch - the cooldown deadline is reset to `now + cooldown_ms` under the new `cooldown_ms`.
-/// An in-flight deadline armed under the old config does NOT carry over; reconfigure
-/// restarts the wait from `now`.
+/// `available` is clamped to the new capacity. If after the clamp `available == 0` (e.g.
+/// because a gate was already armed under the old config) the cooldown deadline is reset to
+/// `now + cooldown_ms` under the new `cooldown_ms`. An in-flight deadline armed under the
+/// old config does NOT carry over; reconfigure restarts the wait from `now`.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
