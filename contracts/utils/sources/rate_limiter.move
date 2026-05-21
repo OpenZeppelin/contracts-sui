@@ -304,12 +304,13 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             true
         },
         RateLimiter::Cooldown { cooldown_ms, capacity, available, cooldown_end_ms } => {
-            if (*available == 0) {
-                if (now < *cooldown_end_ms) return false;
-                *available = *capacity;
-            };
-            if (amount > *available) return false;
-            *available = *available - amount;
+            let usable = if (*available > 0) *available
+            else if (now >= *cooldown_end_ms) *capacity
+            else return false;
+
+            if (amount > usable) return false;
+
+            *available = usable - amount;
             if (*available == 0) {
                 // SAFETY: `now + cooldown_ms` overflow is the operator's responsibility
                 // (see module-level "Operator responsibilities"). Trivially safe for any
@@ -482,10 +483,12 @@ public fun reconfigure_fixed_window(
 
 /// Rewrite a `Cooldown` limiter's configuration in place.
 ///
-/// `available` is clamped to the new capacity. If after the clamp `available == 0` (e.g.
-/// because a gate was already armed under the old config) the cooldown deadline is reset to
+/// Projects state forward under the old config first: if the gate has already elapsed,
+/// `available` is realized to the old capacity (mirroring what the next `try_consume` would
+/// have done). Then `available` is clamped to the new capacity. If after projection and
+/// clamping `available == 0`, the gate is still in flight - the deadline is restarted at
 /// `now + cooldown_ms` under the new `cooldown_ms`. An in-flight deadline armed under the
-/// old config does NOT carry over; reconfigure restarts the wait from `now`.
+/// old config does NOT carry over.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
@@ -513,6 +516,13 @@ public fun reconfigure_cooldown(
             assert!(capacity > 0, EZeroCapacity);
             assert!(cooldown_ms > 0, EZeroCooldown);
 
+            let now = clock.timestamp_ms();
+            // Project under the OLD config: if the gate has elapsed, realize the release
+            // to the old capacity. Otherwise `available` stays at its stored value (which
+            // already reflects either an in-flight gate at 0, or an unspent batch > 0).
+            if (*available == 0 && now >= *cooldown_end_ms) {
+                *available = *cap_field;
+            };
             *cd_field = cooldown_ms;
             *cap_field = capacity;
             *available = (*available).min(capacity);
@@ -520,7 +530,7 @@ public fun reconfigure_cooldown(
             if (*available == 0) {
                 // SAFETY: `now + cooldown_ms` overflow is the operator's responsibility
                 // (see module-level "Operator responsibilities").
-                *cooldown_end_ms = clock.timestamp_ms() + cooldown_ms;
+                *cooldown_end_ms = now + cooldown_ms;
             };
         },
         _ => abort EWrongVariant,

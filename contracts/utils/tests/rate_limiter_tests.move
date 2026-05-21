@@ -1019,31 +1019,64 @@ fun cooldown_reconfigure_capacity_increase_preserves_available() {
 }
 
 #[test]
-fun cooldown_reconfigure_rearms_when_drained_and_deadline_elapsed() {
-    // When `available == 0` and the prior `cooldown_end_ms` has already elapsed,
-    // `reconfigure_cooldown` arms a fresh deadline at `now + cooldown_ms` instead of
-    // letting the next `try_consume` reset to capacity for free.
+fun cooldown_reconfigure_realizes_released_gate_without_rearming() {
+    // When `available == 0` but the prior `cooldown_end_ms` has already elapsed, the gate
+    // is no longer in flight. Reconfigure must project the release forward under the old
+    // config (resetting `available` to the old capacity) instead of treating stale
+    // `available == 0` as a still-armed gate and starting a fresh wait.
     let (test, mut clk) = setup(0);
 
-    let mut rl = rate_limiter::new_cooldown(1, 50, 1);
-    assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 50, available = 0
+    let mut rl = rate_limiter::new_cooldown(3, 50, 3);
+    assert!(rl.try_consume(3, &clk)); // cooldown_end_ms = 50, available = 0
 
     // Let the original cooldown elapse naturally without consuming.
     clk.set_for_testing(60);
-    assert_eq!(rl.available(&clk), 1); // gate has released
+    assert_eq!(rl.available(&clk), 3); // gate has released
 
-    // Reconfigure now: available is still 0 in storage, deadline (50) has passed.
-    // The re-arm path should set a fresh cooldown_end_ms = 60 + 100 = 160.
-    rl.reconfigure_cooldown(1, 100, &clk);
-    assert_eq!(rl.available(&clk), 0);
+    // Reconfigure now: stored available is 0, but the prior deadline (50) has passed,
+    // so projection realizes the release and `available` becomes the old capacity (3),
+    // then clamps to the new capacity (5).
+    rl.reconfigure_cooldown(5, 100, &clk);
+    assert_eq!(rl.available(&clk), 3);
 
-    // Just before the new deadline: still gated.
-    clk.set_for_testing(159);
-    assert!(!rl.try_consume(1, &clk));
+    // No fresh gate was armed: the next consume must succeed immediately.
+    assert!(rl.try_consume(3, &clk));
 
-    // At the new deadline: gate releases.
-    clk.set_for_testing(160);
-    assert!(rl.try_consume(1, &clk));
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_failed_try_consume_does_not_skew_reconfigure() {
+    // A failed `try_consume` between drain and reconfigure must produce the same persisted
+    // state as no probe at all - try_consume failure is observably a no-op, even across a
+    // subsequent reconfigure that inspects the gate state.
+    let (test, mut clk) = setup(0);
+
+    let mut rl_probed = rate_limiter::new_cooldown(10, 100, 10);
+    let mut rl_unprobed = rate_limiter::new_cooldown(10, 100, 10);
+
+    // Both drain at t=10 → available=0, cooldown_end_ms=110.
+    clk.set_for_testing(10);
+    rl_probed.consume_or_abort(10, &clk);
+    rl_unprobed.consume_or_abort(10, &clk);
+
+    // Only `rl_probed` is hit with an oversized request after the gate releases.
+    clk.set_for_testing(200);
+    assert!(!rl_probed.try_consume(15, &clk));
+
+    // Both reconfigure under a longer cooldown.
+    clk.set_for_testing(201);
+    rl_probed.reconfigure_cooldown(10, 500, &clk);
+    rl_unprobed.reconfigure_cooldown(10, 500, &clk);
+
+    // Both paths must agree: the prior gate had released, so `available` is realized to
+    // the old capacity and no fresh gate is armed under the new cooldown.
+    assert_eq!(rl_probed.available(&clk), 10);
+    assert_eq!(rl_unprobed.available(&clk), 10);
+
+    // Both must spend immediately without waiting on a re-armed deadline.
+    assert!(rl_probed.try_consume(10, &clk));
+    assert!(rl_unprobed.try_consume(10, &clk));
 
     teardown(test, clk);
 }
