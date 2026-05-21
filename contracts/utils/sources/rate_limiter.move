@@ -397,7 +397,6 @@ public fun reconfigure_bucket(
     refill_interval_ms: u64,
     clock: &Clock,
 ) {
-    let now = clock.timestamp_ms();
     match (self) {
         RateLimiter::Bucket {
             capacity: cap_field,
@@ -410,6 +409,7 @@ public fun reconfigure_bucket(
             assert!(refill_amount > 0, EZeroRefillAmount);
             assert!(refill_interval_ms > 0, EZeroRefillInterval);
 
+            let now = clock.timestamp_ms();
             let (_, new_available) = bucket_accrue(
                 *last_refill_ms,
                 *available,
