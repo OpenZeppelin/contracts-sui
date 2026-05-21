@@ -440,6 +440,38 @@ fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
     abort
 }
 
+#[test, expected_failure(abort_code = rate_limiter::EZeroRefillAmount)]
+fun reconfigure_bucket_rejects_zero_refill_amount() {
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
+    rl.reconfigure_bucket(10, 0, 10, &clk);
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EZeroRefillInterval)]
+fun reconfigure_bucket_rejects_zero_refill_interval_ms() {
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
+    rl.reconfigure_bucket(10, 1, 0, &clk);
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
+fun reconfigure_fixed_window_rejects_zero_capacity() {
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 10, &clk);
+    rl.reconfigure_fixed_window(0, 100, &clk);
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
+fun reconfigure_cooldown_rejects_zero_capacity() {
+    let (_test, clk) = setup(0);
+    let mut rl = rate_limiter::new_cooldown(1, 50, 1);
+    rl.reconfigure_cooldown(0, 50, &clk);
+    abort
+}
+
 // === All-or-nothing failure semantics ===
 
 #[test]
