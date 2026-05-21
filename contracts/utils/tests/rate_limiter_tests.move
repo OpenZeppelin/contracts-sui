@@ -499,6 +499,66 @@ fun cooldown_failed_try_consume_does_not_reset_anchor() {
     teardown(test, clk);
 }
 
+// === Time transitions commit on failed try_consume ===
+//
+// For all three variants, accrual / window rollover / gate release are applied
+// before the amount check, so a failed consume that crosses a time boundary still
+// advances the limiter's internal anchor. Balance deduction itself happens only on
+// success (covered by the *_failed_try_consume_does_not_* tests above).
+
+#[test]
+fun bucket_available_returns_up_to_date_accrual_even_on_failed_try_consume() {
+    let (test, mut clk) = setup(0);
+
+    // Empty bucket, 1 token / 10 ms.
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, &clk);
+
+    // 50 ms in: 5 tokens accrued under the old anchor. An oversized request fails,
+    // but the accrual is committed: available reflects the new balance.
+    clk.set_for_testing(50);
+    assert!(!rl.try_consume(99, &clk));
+    assert_eq!(rl.available(&clk), 5);
+
+    // The accrued tokens are immediately spendable at the same `now`.
+    assert!(rl.try_consume(5, &clk));
+    assert_eq!(rl.available(&clk), 0);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun fixed_window_rollover_commits_even_on_failed_try_consume() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 5, &clk);
+    rl.consume_or_abort(3, &clk);
+    assert_eq!(rl.available(&clk), 2);
+
+    // Cross the window boundary with an oversized request. The rollover is committed
+    // even though the consume itself fails - the new window legitimately opened.
+    clk.set_for_testing(100);
+    assert!(!rl.try_consume(6, &clk));
+    assert_eq!(rl.available(&clk), 5);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_gate_release_commits_even_on_failed_try_consume() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(5, 50, 5);
+    assert!(rl.try_consume(5, &clk)); // arms the gate: deadline = 50, available = 0
+
+    // Past the deadline, attempt an oversized consume. The gate release is committed
+    // even though the consume itself fails.
+    clk.set_for_testing(50);
+    assert!(!rl.try_consume(6, &clk));
+    assert_eq!(rl.available(&clk), 5);
+
+    teardown(test, clk);
+}
+
 // === Fractional time preservation ===
 
 #[test]
