@@ -24,7 +24,7 @@ Operations for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`, including:
 Generic over `u8`..`u256`:
 
 - `vector::quick_sort` / `vector::quick_sort_by`: In-place iterative quicksort with three-way partitioning
-- `vector::median`: Median of an unsigned integer vector with configurable rounding for even-length input; returns `Option`
+- `vector::median`: Median of an unsigned integer vector with configurable rounding for even-length input; aborts on empty input
 
 ## Rounding modes
 
@@ -52,5 +52,5 @@ let mean = u64::average(5, 6, rounding::down());
 use openzeppelin_math::{vector, rounding};
 
 let med = vector::median!(vector[5u64, 1, 9, 3, 7], rounding::down());
-// med = option::some(5)
+// med = 5
 ```

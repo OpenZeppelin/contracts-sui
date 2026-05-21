@@ -3,6 +3,11 @@ module openzeppelin_math::vector;
 use openzeppelin_math::macros;
 use openzeppelin_math::rounding::RoundingMode;
 
+// === Errors ===
+
+#[error(code = 0)]
+const EEmptyVector: vector<u8> = "Median of empty vector is undefined";
+
 // === Public Functions ===
 
 /// Sort an unsigned integer vector in-place using the quicksort algorithm.
@@ -206,6 +211,10 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 /// For even-length vectors, the median is the arithmetic mean of the two central
 /// values, rounded according to `$rounding_mode`.
 ///
+/// The macro is a thin wrapper that upcasts the input to `vector<u256>` and delegates
+/// to `median_u256`, so the sort and average expansions are paid once inside the
+/// package rather than at every integrator call site.
+///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
@@ -214,28 +223,47 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 /// - `$rounding_mode`: Rounding strategy, applied only when the length is even.
 ///
 /// #### Returns
-/// - `option::some(median)` when `$vec` is non-empty.
-/// - `option::none()` when `$vec` is empty — median of empty data is undefined.
-public macro fun median<$Int>($vec: vector<$Int>, $rounding_mode: RoundingMode): Option<$Int> {
-    let mut vec = $vec;
-    let len = vec.length();
+/// - The median of `$vec`.
+///
+/// #### Aborts
+/// - `EEmptyVector` if `$vec` is empty.
+public macro fun median<$Int>($vec: vector<$Int>, $rounding_mode: RoundingMode): $Int {
+    let vec = $vec;
+    let vec_u256 = vec.map!(|x| x as u256);
+    median_u256(vec_u256, $rounding_mode) as $Int
+}
 
-    // Median of empty data is undefined — signal "no value" rather than abort.
-    if (len == 0) {
-        return option::none()
-    };
+// === Package Functions ===
+
+/// Compute the median of a `u256` vector with configurable rounding.
+///
+/// Shared workhorse behind the `median!` macro. Centralises the macro expansions of
+/// `quick_sort!` and `macros::average!` so they are paid once in this package rather
+/// than at every integrator call site.
+///
+/// #### Parameters
+/// - `vec`: Vector whose median is desired (consumed).
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
+/// #### Aborts
+/// - `EEmptyVector` if `vec` is empty.
+public(package) fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256 {
+    let len = vec.length();
+    assert!(len != 0, EEmptyVector);
 
     quick_sort!(&mut vec);
 
     let mid = len / 2;
-    let result = if (len % 2 == 1) {
+    if (len % 2 == 1) {
         // Odd length: middle element of the sorted vector.
         vec[mid]
     } else {
         // Even length: rounded mean of the two central order statistics.
         let lower = vec[mid - 1];
         let upper = vec[mid];
-        macros::average!(lower, upper, $rounding_mode)
-    };
-    option::some(result)
+        macros::average!(lower, upper, rounding_mode)
+    }
 }
