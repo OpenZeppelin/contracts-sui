@@ -627,6 +627,34 @@ fun bucket_reconfigure_resets_refill_anchor() {
 }
 
 #[test]
+fun bucket_reconfigure_to_faster_rate_discards_old_subinterval() {
+    let (test, mut clk) = setup(0);
+
+    // Old config: 1 token per 1_000 ms, capacity 1_000, starts empty.
+    let mut rl = rate_limiter::new_bucket(1_000, 1, 1_000, 0, &clk);
+
+    // 1 ms before the first OLD step would have fired. No accrual under old rules.
+    // Reconfigure to a much faster refill (1 token per 10 ms). Sub-interval (999 ms
+    // of the old 1_000-ms step) is discarded: the new anchor is `now = 999`.
+    clk.set_for_testing(999);
+    rl.reconfigure_bucket(1_000, 1, 10, &clk);
+
+    // 1 ms after the reconfigure call - only 1 ms under the new 10-ms interval, so no
+    // step has fired and no token has been credited. If the old sub-interval had been
+    // preserved (last_refill_ms still at 0), the new rate would have retroactively
+    // credited (1_000 - 0) / 10 = 100 tokens.
+    clk.set_for_testing(1_000);
+    assert_eq!(rl.available(&clk), 0);
+    assert!(!rl.try_consume(1, &clk));
+
+    // First credit under the new schedule lands at `now + 10 = 1_009`.
+    clk.set_for_testing(1_009);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
 fun fixed_window_reconfigure_resets_window_anchor() {
     let (test, mut clk) = setup(0);
 
