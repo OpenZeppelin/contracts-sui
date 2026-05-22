@@ -286,31 +286,31 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             refill_interval_ms,
             last_refill_ms,
             available,
-        } => {
-            let (new_last, new_available) = bucket_accrue(
-                *last_refill_ms,
-                *available,
-                *capacity,
-                *refill_amount,
-                *refill_interval_ms,
-                now,
-            );
-            if (amount > new_available) return false;
-            *available = new_available - amount;
-            *last_refill_ms = new_last;
-            true
-        },
-        RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, available } => {
-            let steps = (now - *window_start_ms) / *window_ms;
-            // SAFETY: `steps * window_ms <= now - window_start_ms` (floor division above),
-            // so the advanced anchor <= now. No overflow.
-            let new_window_start = *window_start_ms + steps * *window_ms;
-            let new_available = if (steps != 0) *capacity else *available;
-            if (amount > new_available) return false;
-            *window_start_ms = new_window_start;
-            *available = new_available - amount;
-            true
-        },
+        } => bucket_try_consume(
+            last_refill_ms,
+            available,
+            *capacity,
+            *refill_amount,
+            *refill_interval_ms,
+            amount,
+            now,
+        ),
+        // FixedWindow is a Bucket with `refill_amount = capacity`: one elapsed window
+        // refills the bucket exactly to the cap, mirroring window rollover semantics.
+        RateLimiter::FixedWindow {
+            capacity,
+            window_ms,
+            window_start_ms,
+            available,
+        } => bucket_try_consume(
+            window_start_ms,
+            available,
+            *capacity,
+            *capacity,
+            *window_ms,
+            amount,
+            now,
+        ),
         RateLimiter::Cooldown { cooldown_ms, capacity, available, cooldown_end_ms } => {
             let usable = if (*available > 0) *available
             else if (now >= *cooldown_end_ms) *capacity
@@ -367,8 +367,16 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
             accrued
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, available } => {
-            // A new window has begun once `window_ms` has elapsed since the current anchor.
-            if (now - *window_start_ms >= *window_ms) *capacity else *available
+            // FixedWindow is a Bucket with `refill_amount = capacity`; see `try_consume`.
+            let (_, accrued) = bucket_accrue(
+                *window_start_ms,
+                *available,
+                *capacity,
+                *capacity,
+                *window_ms,
+                now,
+            );
+            accrued
         },
         RateLimiter::Cooldown { capacity, available, cooldown_end_ms, .. } => {
             if (*available > 0) *available
@@ -546,6 +554,35 @@ public fun reconfigure_cooldown(
 }
 
 // === Private Functions ===
+
+/// Project bucket-shaped state forward and consume `amount` on success. Shared by `Bucket`
+/// and `FixedWindow` (the latter passes `refill_amount = capacity`, so one elapsed interval
+/// refills exactly to the cap - the window-rollover semantics).
+///
+/// All-or-nothing: on success advances `last_refill_ms` to the latest completed boundary
+/// and deducts `amount` from `available`; on failure leaves both untouched.
+fun bucket_try_consume(
+    last_refill_ms: &mut u64,
+    available: &mut u64,
+    capacity: u64,
+    refill_amount: u64,
+    refill_interval_ms: u64,
+    amount: u64,
+    now: u64,
+): bool {
+    let (new_last, new_available) = bucket_accrue(
+        *last_refill_ms,
+        *available,
+        capacity,
+        refill_amount,
+        refill_interval_ms,
+        now,
+    );
+    if (amount > new_available) return false;
+    *available = new_available - amount;
+    *last_refill_ms = new_last;
+    true
+}
 
 /// Project a `Bucket`'s `(last_refill_ms, available)` forward to `now` under the given
 /// configuration. Pure function: callers decide whether to persist the projected state.
