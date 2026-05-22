@@ -547,12 +547,12 @@ fun cooldown_failed_try_consume_does_not_reset_anchor() {
     teardown(test, clk);
 }
 
-// === Time transitions commit on failed try_consume ===
+// === available() reflects pending time transitions after failed try_consume ===
 //
-// For all three variants, accrual / window rollover / gate release are applied
-// before the amount check, so a failed consume that crosses a time boundary still
-// advances the limiter's internal anchor. Balance deduction itself happens only on
-// success (covered by the *_failed_try_consume_does_not_* tests above).
+// Failed `try_consume` is observably a no-op: no anchor advance, no balance change.
+// `available()` projects accrual / window rollover / gate release on read, so a failed
+// consume that crosses a time boundary still reports the up-to-date headroom via
+// `available()` - it just doesn't persist the projection.
 
 #[test]
 fun bucket_available_returns_up_to_date_accrual_even_on_failed_try_consume() {
@@ -561,8 +561,8 @@ fun bucket_available_returns_up_to_date_accrual_even_on_failed_try_consume() {
     // Empty bucket, 1 token / 10 ms.
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, &clk);
 
-    // 50 ms in: 5 tokens accrued under the old anchor. An oversized request fails,
-    // but the accrual is committed: available reflects the new balance.
+    // 50 ms in: 5 tokens accrued under the old anchor. An oversized request fails
+    // without mutating state, but `available()` projects the accrual on read.
     clk.set_for_testing(50);
     assert!(!rl.try_consume(99, &clk));
     assert_eq!(rl.available(&clk), 5);
@@ -575,15 +575,15 @@ fun bucket_available_returns_up_to_date_accrual_even_on_failed_try_consume() {
 }
 
 #[test]
-fun fixed_window_rollover_commits_even_on_failed_try_consume() {
+fun fixed_window_available_reflects_rollover_after_failed_try_consume() {
     let (test, mut clk) = setup(0);
 
     let mut rl = rate_limiter::new_fixed_window(5, 100, 5, &clk);
     rl.consume_or_abort(3, &clk);
     assert_eq!(rl.available(&clk), 2);
 
-    // Cross the window boundary with an oversized request. The rollover is committed
-    // even though the consume itself fails - the new window legitimately opened.
+    // Cross the window boundary with an oversized request. The failed consume does NOT
+    // mutate state, but `available()` projects the rollover and reports the fresh window.
     clk.set_for_testing(100);
     assert!(!rl.try_consume(6, &clk));
     assert_eq!(rl.available(&clk), 5);
@@ -592,14 +592,15 @@ fun fixed_window_rollover_commits_even_on_failed_try_consume() {
 }
 
 #[test]
-fun cooldown_gate_release_commits_even_on_failed_try_consume() {
+fun cooldown_available_reflects_release_after_failed_try_consume() {
     let (test, mut clk) = setup(0);
 
     let mut rl = rate_limiter::new_cooldown(5, 50, 5);
     assert!(rl.try_consume(5, &clk)); // arms the gate: deadline = 50, available = 0
 
-    // Past the deadline, attempt an oversized consume. The gate release is committed
-    // even though the consume itself fails.
+    // Past the deadline, attempt an oversized consume. The failed consume does NOT
+    // mutate state, but `available()` projects the gate release and reports the
+    // fresh batch.
     clk.set_for_testing(50);
     assert!(!rl.try_consume(6, &clk));
     assert_eq!(rl.available(&clk), 5);
@@ -1094,6 +1095,38 @@ fun fixed_window_reconfigure_clamps_available_to_new_capacity() {
     // Shrinking capacity below current `available` must clamp `available` down.
     rl.reconfigure_fixed_window(5, 100, &clk);
     assert_eq!(rl.available(&clk), 5);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun fixed_window_failed_try_consume_does_not_skew_reconfigure() {
+    // A failed `try_consume` that crosses a window boundary must produce the same
+    // persisted state as no probe at all - try_consume failure is observably a no-op,
+    // even across a subsequent reconfigure that inspects the window anchor.
+    let (test, mut clk) = setup(0);
+
+    let mut rl_probed = rate_limiter::new_fixed_window(5, 100, 5, &clk);
+    let mut rl_unprobed = rate_limiter::new_fixed_window(5, 100, 5, &clk);
+
+    // Both consume 3 at t=10 → available=2, window_start_ms=0.
+    clk.set_for_testing(10);
+    rl_probed.consume_or_abort(3, &clk);
+    rl_unprobed.consume_or_abort(3, &clk);
+
+    // Only `rl_probed` is hit with an oversized request after the window crosses.
+    clk.set_for_testing(100);
+    assert!(!rl_probed.try_consume(6, &clk));
+
+    // Both reconfigure under the same new config.
+    clk.set_for_testing(150);
+    rl_probed.reconfigure_fixed_window(10, 100, &clk);
+    rl_unprobed.reconfigure_fixed_window(10, 100, &clk);
+
+    // Both paths must agree: the prior window had crossed under the old window_ms,
+    // so available is realized to the new capacity (fresh window).
+    assert_eq!(rl_probed.available(&clk), 10);
+    assert_eq!(rl_unprobed.available(&clk), 10);
 
     teardown(test, clk);
 }

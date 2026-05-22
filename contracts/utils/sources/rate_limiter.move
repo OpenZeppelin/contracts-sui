@@ -87,8 +87,11 @@ const EZeroCooldownInitial: vector<u8> =
 /// only be swapped by building a fresh `RateLimiter` and overwriting the field.
 ///
 /// All variants store an `available` counter that starts at `initial_available` and is
-/// decremented by `try_consume`. Refill (Bucket), window rollover (FixedWindow), and cooldown
-/// release (Cooldown) all reset `available` back toward `capacity`.
+/// decremented by successful `try_consume` calls. Refill (Bucket), window rollover
+/// (FixedWindow), and cooldown release (Cooldown) all reset `available` back toward `capacity`.
+/// A failed `try_consume` (returning `false`) leaves persisted state untouched across all
+/// variants; pending time transitions are still observable through `available()`, which always
+/// projects on read.
 public enum RateLimiter has drop, store {
     /// Continuously refilling bucket. `available` accrues `refill_amount` every
     /// `refill_interval_ms`, capped at `capacity`. Each `try_consume` draws `available` down.
@@ -110,7 +113,8 @@ public enum RateLimiter has drop, store {
     },
     /// Up to `capacity` units may be consumed before the limiter gates on `cooldown_ms`.
     /// Each successful `try_consume(amount, _)` decrements `available` by `amount` and
-    /// rejects when `amount > available`. Once `available` reaches `0`, `cooldown_end_ms`
+    /// rejects when `amount` exceeds the projected headroom (the stored `available`, or
+    /// `capacity` once the gate has elapsed). Once `available` reaches `0`, `cooldown_end_ms`
     /// is set to `now + cooldown_ms` - the absolute deadline at which the gate releases.
     /// No further consume succeeds until `now >= cooldown_end_ms`, at which point
     /// `available` resets to `capacity` and the next batch is granted. `cooldown_end_ms`
@@ -252,7 +256,12 @@ public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) 
     assert!(self.try_consume(amount, clock), ERateLimited);
 }
 
-/// Apply accrual, then consume `amount` if the limiter allows it.
+/// Project state forward (accrual / window rollover / gate release), then consume `amount`
+/// if the projected headroom allows it.
+///
+/// All-or-nothing: on success the projected state is committed and `amount` is deducted; on
+/// failure (return `false`) persisted state is left untouched. Pending time transitions
+/// remain observable through `available()`, which projects on read.
 ///
 /// A zero-unit consume is treated as a programmer error, not a rate-limit condition, so
 /// behavior stays uniform across variants.
@@ -260,7 +269,7 @@ public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) 
 /// #### Parameters
 /// - `self`: Limiter being charged.
 /// - `amount`: Units to consume.
-/// - `clock`: Reference to the Sui `Clock`, used to apply accrual / window rollover / cooldown release.
+/// - `clock`: Reference to the Sui `Clock`, used to project accrual / window rollover / cooldown release.
 ///
 /// #### Returns
 /// - `true` if the consume succeeded, `false` if the limiter refused.
@@ -293,14 +302,13 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, available } => {
             let steps = (now - *window_start_ms) / *window_ms;
-            if (steps != 0) {
-                // SAFETY: `steps * window_ms <= now - window_start_ms` (floor division above),
-                // so the advanced `window_start_ms <= now`. No overflow.
-                *window_start_ms = *window_start_ms + steps * *window_ms;
-                *available = *capacity;
-            };
-            if (amount > *available) return false;
-            *available = *available - amount;
+            // SAFETY: `steps * window_ms <= now - window_start_ms` (floor division above),
+            // so the advanced anchor <= now. No overflow.
+            let new_window_start = *window_start_ms + steps * *window_ms;
+            let new_available = if (steps != 0) *capacity else *available;
+            if (amount > new_available) return false;
+            *window_start_ms = new_window_start;
+            *available = new_available - amount;
             true
         },
         RateLimiter::Cooldown { cooldown_ms, capacity, available, cooldown_end_ms } => {
