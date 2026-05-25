@@ -15,7 +15,11 @@ Each package within a group is a self-contained Move package with its own `Move.
 
 ## Machine-readable module metadata
 
-Each package's `llms/` directory contains per-module YAML files describing APIs, error codes, integration patterns, and anti-patterns — designed for AI agents to ground code generation at the schema level rather than re-deriving structure from source. A module declared as `openzeppelin_<pkg>::<module>` is documented at `<package-path>/llms/<module>.yaml`, with subdirectories mirroring the package's `sources/` organization where applicable. Coverage is incremental — not every module ships a YAML yet.
+Each package's `llms/` directory contains per-module YAML files describing APIs, error codes, integration patterns, and anti-patterns — designed for AI agents to ground code generation at the schema level rather than re-deriving structure from source. A module declared as `openzeppelin_<pkg>::<module>` is documented at `<package-path>/llms/<module>.yaml`, with subdirectories mirroring the package's `sources/` organization where applicable.
+
+For single-fetch discovery of "what modules exist in a package", each package's `llms/` directory also contains an `index.yaml` enumerating every module YAML with a one-line summary plus the package's MVR slug and the commit SHA the YAMLs were extracted from. Fetch a package's `index.yaml` to learn its full module set in one request before drilling into individual per-module YAMLs.
+
+Every public module in this library ships a YAML. Private helpers under each package's `sources/internal/` directory are intentionally not documented at the schema level — they are not part of the integrator-facing API.
 
 ## Depending on a package from your project
 
