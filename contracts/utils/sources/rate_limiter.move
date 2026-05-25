@@ -240,14 +240,17 @@ public fun new_fixed_window(
 /// per-call `amount`s) before the limiter requires `cooldown_ms` to elapse before the next
 /// batch.
 ///
-/// Two configurations are valid:
+/// The only rejected combination is `initial_available > 0` with `cooldown_end_ms > now`,
+/// which is self-contradictory: the hot path consults `cooldown_end_ms` only when
+/// `available == 0`, so a seeded future deadline would be silently dropped the next time
+/// the batch drains. Every other pairing is valid:
 /// - greenfield: `initial_available > 0` with `cooldown_end_ms <= now` (typically `0`). The
 ///   gate is not armed; up to `initial_available` units can be consumed before the first arm.
 /// - in-flight gate: `initial_available == 0` with `cooldown_end_ms > now`, used when
 ///   reconstructing a limiter mid-throttle.
-///
-/// The library rejects contradictory combination: `initial_available > 0` with
-/// `cooldown_end_ms > now`.
+/// - released gate: `initial_available == 0` with `cooldown_end_ms <= now` (e.g. both `0`).
+///   Projects to fully available on the next read or consume; useful when reconstructing a
+///   limiter whose gate has just elapsed without recomputing `capacity`.
 ///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per batch.
