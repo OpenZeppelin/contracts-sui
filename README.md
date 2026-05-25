@@ -27,8 +27,11 @@ Follow the installation guide in the [Sui documentation](https://docs.sui.io/gui
 
 ## Docs
 
-Documentation is available inline in the source code. You can generate the
-documentation locally using:
+Comprehensive documentation lives at [docs.openzeppelin.com/contracts-sui](https://docs.openzeppelin.com/contracts-sui/1.x/) — package guides, API reference, and integration tutorials.
+
+For AI integrator agents (Cursor, Claude Code, Cline, GitHub Copilot, Aider, Gemini CLI, and similar), see [`llms.txt`](./llms.txt) at the repo root for the discovery convention, plus per-package `llms/` directories with machine-readable module metadata.
+
+Inline source-code documentation can also be generated locally:
 
 ```bash
 # Generate and view documentation for a specific package

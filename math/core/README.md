@@ -2,6 +2,13 @@
 
 Overflow-safe arithmetic helpers for unsigned integers with configurable rounding.
 
+## Install
+
+```toml
+[dependencies]
+openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
+```
+
 ## What it provides
 
 Operations for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`, including:
@@ -27,16 +34,22 @@ Operations for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`, including:
 
 ## Usage examples
 
-```rust
+```move
 use openzeppelin_math::{u128, rounding};
 
 let result = u128::mul_div(100, 200, 3, rounding::up());
 // result = Some(6667) (rounded up from 6666.66...)
 ```
 
-```rust
+```move
 use openzeppelin_math::{u64, rounding};
 
 let mean = u64::average(5, 6, rounding::down());
 // mean = 5
 ```
+
+## Learn More
+
+- [Integer math package overview](https://docs.openzeppelin.com/contracts-sui/1.x/math)
+- [Integer math API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/math)
+- [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)
