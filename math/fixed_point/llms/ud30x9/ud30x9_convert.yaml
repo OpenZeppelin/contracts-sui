@@ -1,0 +1,305 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_fp_math::ud30x9_convert
+  package: openzeppelin_fp_math
+  one_liner: |
+    Scale-aware conversions between whole unsigned integers (`u64`, `u128`)
+    and the `UD30x9` 9-decimal fixed-point type. Multiplies by `10^9` on the
+    way in, truncates the fractional part on the way out. Reach for this
+    when `42` in your domain means the fixed-point value `42.0`; use
+    `ud30x9::wrap` / `unwrap` instead when `42` already represents raw
+    fixed-point bits (i.e., `0.000_000_042`).
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Raw bit-preserving casts between `u128` and `UD30x9` — use `ud30x9::wrap` / `unwrap`."
+  - "Cross-type fixed-point casts (UD30x9 <-> SD29x9) — use `ud30x9::into_SD29x9` / `sd29x9::into_UD30x9`."
+  - "Signed whole-integer conversions — use `openzeppelin_fp_math::sd29x9_convert`."
+  - "Rounding direction other than floor (toward-zero / truncation) — `UD30x9` is unsigned, so `floor`, `trunc`, and `round_down` collapse to one operation; choose a different `*_trunc` / `*_away` arithmetic helper if you need ceiling at some other step."
+  - "Conversions into integer widths narrower than `u64` — cast the `u64` result yourself with explicit range checks."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/fp_math"          # Primary — Move Package Registry.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_fp_math::ud30x9_convert;
+    use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fp_math" }
+  github_alternative: |                      # Secondary — direct git pin if MVR is unavailable.
+    [dependencies.openzeppelin_fp_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/fixed_point"
+    rev = "<commit-sha-or-tag>"              # Agent fills in — see install.repo_ref for the
+                                              # commit this metadata was extracted from; prefer
+                                              # the latest release tag for stable builds.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_app::prices;
+
+  use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
+  use openzeppelin_fp_math::ud30x9_convert;
+
+  /// Build a UD30x9 price from a whole-token amount the user typed.
+  /// `amount` is a domain integer like `42` meaning `42.0`, NOT raw fixed-point bits.
+  public fun price_from_whole(amount: u64): UD30x9 {
+      ud30x9_convert::from_u64(amount)            // 42 -> 42.0
+  }
+
+  /// Read a UD30x9 amount back as a whole `u64` quantity (e.g., a coin amount).
+  /// Aborts EIntegerOverflow if `floor(amount) > u64::MAX`.
+  public fun whole_from_price(amount: UD30x9): u64 {
+      amount.to_u64_trunc()
+  }
+
+quick_start: |
+  // Minimal end-to-end. Convert a whole integer into fixed-point, do one
+  // arithmetic step, then read the whole portion back.
+
+  // 1. Scale 42 into the fixed-point domain (42 -> 42.0).
+  let price = ud30x9_convert::from_u64(42);
+
+  // 2. Add a half (raw bits 500_000_000 == 0.5) — fixed-point arithmetic.
+  let bumped = price.add(ud30x9::wrap(500_000_000));    // 42.5
+
+  // 3. Read the whole part back as u64 (floor; fractional dropped).
+  //    Aborts EIntegerOverflow if floor(bumped) > u64::MAX — guaranteed
+  //    safe here because we started from a u64.
+  let whole = bumped.to_u64_trunc();                    // 42
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # Empty — this module is a free-function conversion surface.
+            # The `UD30x9` type it operates on is owned by sibling module
+            # `openzeppelin_fp_math::ud30x9`; see that module's metadata for
+            # capabilities, constructors, and storage guidance.
+
+api:
+  - name: from_u64
+    sig: "(x: u64) -> UD30x9"
+    role: "Scale a whole `u64` into `UD30x9` by multiplying by `10^9`. Total — cannot overflow because `u64::MAX * 10^9` fits in `u128`."
+    aborts: []
+
+  - name: from_u128
+    sig: "(x: u128) -> UD30x9"
+    role: "Scale a whole `u128` into `UD30x9` by multiplying by `10^9`. Aborts when the scaled value would overflow the raw `u128` carrier."
+    aborts: [EOverflow]
+    notes: |
+      Safe input range: `x <= floor(u128::MAX / 10^9)` ≈ `3.4 * 10^29`.
+      Use `try_from_u128` when the caller wants to handle the overflow
+      branch without aborting.
+
+  - name: try_from_u128
+    sig: "(x: u128) -> Option<UD30x9>"
+    role: "Same as `from_u128` but returns `none` instead of aborting on overflow."
+    aborts: []
+
+  - name: to_u128_trunc
+    sig: "(x: UD30x9) -> u128"
+    role: "Return the whole-number portion of `x` as `u128` — `floor(x)`. The fractional part is discarded; rounding is one-directional (down)."
+    aborts: []
+    notes: |
+      Total over all `UD30x9` inputs. Output range is
+      `[0, floor(u128::MAX / 10^9)]` ≈ `[0, 3.4 * 10^29]`, so even
+      `ud30x9::max()` round-trips without aborting.
+
+  - name: to_u64_trunc
+    sig: "(x: UD30x9) -> u64"
+    role: "Return the whole-number portion of `x` as `u64`. Aborts when `floor(x)` does not fit in `u64`."
+    aborts: [EIntegerOverflow]
+    notes: |
+      Use this when the downstream consumer is a `u64` quantity (e.g., a
+      coin amount). Use `try_to_u64_trunc` when overflow is recoverable.
+      Computed as `to_u128_trunc(x) as u64` with an explicit range check
+      against `u64::MAX`; rounding is floor.
+
+  - name: try_to_u64_trunc
+    sig: "(x: UD30x9) -> Option<u64>"
+    role: "Same as `to_u64_trunc` but returns `none` instead of aborting when `floor(x) > u64::MAX`."
+    aborts: []
+
+errors:
+  EOverflow:
+    code: 0
+    message: "Whole integer overflows UD30x9 once scaled by 10^9"
+  EIntegerOverflow:
+    code: 1
+    message: "Truncated whole part does not fit in u64"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I have a whole integer in my domain and want it as `UD30x9`. Which function?"
+    options:
+      - use: "ud30x9_convert::from_u64"
+        when: "The source value is already a `u64` and you want a total (non-aborting) conversion."
+        why: "Cheapest. `u64 * 10^9` is provably safe in `u128`, so no abort path is needed."
+      - use: "ud30x9_convert::from_u128"
+        when: "The source value is `u128` AND you want the caller to abort on overflow (e.g., an invariant violation)."
+        why: "One assert against `floor(u128::MAX / 10^9)`. Surfaces the overflow as a clean `EOverflow` abort."
+      - use: "ud30x9_convert::try_from_u128"
+        when: "The source value is `u128` AND overflow is a recoverable input-validation failure."
+        why: "Returns `none` instead of aborting; the caller picks the response (default, user error, retry with a clamp)."
+      - use: "ud30x9::wrap"
+        when: "The integer is ALREADY raw fixed-point bits (e.g., loaded from storage, returned by another fixed-point function)."
+        why: "`from_u128(42)` produces `42.0`; `ud30x9::wrap(42)` produces `0.000_000_042`. Mixing them creates a `10^9` scale bug. See do_not[scale-confusion]."
+
+  - question: "I have a `UD30x9` and want a whole integer out. Which function?"
+    options:
+      - use: "ud30x9_convert::to_u128_trunc"
+        when: "Any whole portion of any `UD30x9` is acceptable (including values up to `ud30x9::max()`)."
+        why: "Total — never aborts. `floor(x)` always fits in `u128`."
+      - use: "ud30x9_convert::to_u64_trunc"
+        when: "The whole portion MUST fit in `u64` (e.g., a coin amount) and overflow is a programmer error."
+        why: "Aborts `EIntegerOverflow` if `floor(x) > u64::MAX`. Use when the caller has already constrained inputs."
+      - use: "ud30x9_convert::try_to_u64_trunc"
+        when: "Overflow is a recoverable input-validation failure rather than a bug."
+        why: "Returns `none` instead of aborting. Caller decides how to fall back."
+      - use: "ud30x9::unwrap"
+        when: "You want the RAW fixed-point bits, not the whole-number portion."
+        why: "`unwrap(42.0)` returns `42_000_000_000`; `to_u128_trunc(42.0)` returns `42`. Don't confuse the two — see do_not[scale-confusion]."
+
+  - question: "Where does the rounding go on the way out (UD30x9 -> integer)?"
+    options:
+      - use: "Accept floor (truncation toward zero)"
+        when: "Always — there is no alternative in this module."
+        why: "`UD30x9` is unsigned, so floor / trunc / round-down all collapse to one operation. If you need ceiling semantics, perform `add(epsilon)` in the fixed-point domain BEFORE calling `to_*_trunc`, where `epsilon = ud30x9::wrap(scale - 1)`."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Pass `x <= floor(u128::MAX / 10^9)` to `from_u128`. Otherwise the scaled value overflows the `UD30x9` raw `u128` carrier."
+    fails_with: EOverflow
+    affects: [from_u128]
+
+  - must: "Ensure `floor(x) <= u64::MAX` before calling `to_u64_trunc`. Otherwise the truncated whole portion does not fit in `u64`."
+    fails_with: EIntegerOverflow
+    affects: [to_u64_trunc]
+
+do_not:
+  - id: scale-confusion
+    severity: high
+    description: "Use `ud30x9::wrap(n)` when you mean `n.0` (or `ud30x9::unwrap(value)` when you want the whole-number portion)."
+    why_bad: "`wrap` / `unwrap` are RAW casts — they do not multiply or divide by `10^9`. `wrap(42)` produces `0.000_000_042`, not `42.0`. The resulting `10^9` scale error compounds silently across downstream arithmetic and usually surfaces as a wrong-by-a-billion bug far from the call site."
+    fix: "Use `ud30x9_convert::from_u64(n)` / `from_u128(n)` whenever `n` is a whole-integer quantity in your domain (token amount, count, percentage point). Use `wrap` only when `n` is already raw fixed-point bits (e.g., loaded from storage, returned by another fixed-point function). Same rule in reverse: `to_u128_trunc` / `to_u64_trunc` for whole-number readback, `unwrap` for raw bits."
+    example_bad: |
+      // WRONG — caller meant "42.0" but produced "0.000_000_042".
+      let price = ud30x9::wrap(42);             // raw bits — 0.000_000_042
+      let total = price.add(ud30x9::wrap(8));   // 0.000_000_050, not 50.0
+    example_good: |
+      // RIGHT — semantic whole-integer in, fixed-point out.
+      let price = ud30x9_convert::from_u64(42); // 42.0
+      let total = price.add(ud30x9_convert::from_u64(8)); // 50.0
+
+  - id: lossy-readback-assumed-roundtrip
+    severity: medium
+    description: "Round-trip a `UD30x9` through `to_u*_trunc` and back via `from_u*` and assume the value is unchanged."
+    why_bad: "`to_*_trunc` drops the fractional portion (floor). A value like `42.5` round-trips to `42.0`, not `42.5`. Treating the readback as lossless silently zeros out user balances below 1 unit and causes accounting drift."
+    fix: "Either keep the original `UD30x9` value and pass it around in fixed-point form, or check `unwrap(value) % 10^9 == 0` before truncating if you need to assert the value is integer-valued. For ceiling-style readback, add `ud30x9::wrap(10^9 - 1)` before calling `to_*_trunc`."
+    example_bad: |
+      // WRONG — silently loses the fractional 0.5 token.
+      let amount = ud30x9_convert::from_u64(42).add(ud30x9::wrap(500_000_000));
+      let whole = amount.to_u64_trunc();                    // 42, NOT 43
+      let back = ud30x9_convert::from_u64(whole);           // 42.0 — drift of 0.5
+    example_good: |
+      // RIGHT — keep the fixed-point value; truncate only at the I/O boundary.
+      let amount = ud30x9_convert::from_u64(42).add(ud30x9::wrap(500_000_000));
+      // ... pass `amount: UD30x9` through the protocol ...
+      // Only at the boundary where you must produce a u64 coin amount:
+      let coin_amount = amount.to_u64_trunc();              // 42
+
+  - id: from_u128-on-untrusted-input
+    severity: medium
+    description: "Pass user-supplied `u128` directly into `from_u128` and treat the resulting abort as a protocol invariant violation."
+    why_bad: "`from_u128` aborts `EOverflow` for `x > floor(u128::MAX / 10^9)`. Aborting on caller-supplied input turns an input-validation problem into a transaction failure with a hard-to-debug error code; users see `EOverflow` and cannot recover."
+    fix: "Use `try_from_u128` for any value that comes from outside the protocol (CLI input, oracle, cross-package call). Branch on `none` and surface a domain-specific error or fall back to a clamped value."
+    example_bad: |
+      // WRONG — user-supplied `amount` aborts the whole tx on overflow.
+      public fun deposit(pool: &mut Pool, amount: u128, ctx: &mut TxContext) {
+          let scaled = ud30x9_convert::from_u128(amount); // aborts EOverflow
+          // ...
+      }
+    example_good: |
+      // RIGHT — surface overflow as a domain error the caller can recover from.
+      public fun deposit(pool: &mut Pool, amount: u128, ctx: &mut TxContext) {
+          let maybe_scaled = ud30x9_convert::try_from_u128(amount);
+          assert!(maybe_scaled.is_some(), EDepositTooLarge);
+          let scaled = maybe_scaled.destroy_some();
+          // ...
+      }
+
+composes_with: []   # Empty — no compositions are source-cited. The README and docs guide
+                    # demonstrate `ud30x9_convert` next to `ud30x9` arithmetic helpers, but
+                    # that is sibling use within the same package (already covered by
+                    # `setup_snippet` and `quick_start`), not a cross-module composition.
+                    # Choosing between `from_u128` / `try_from_u128` / `wrap` lives in
+                    # decisions[]; sibling pointers (`sd29x9_convert`, `ud30x9::wrap`) live
+                    # in does_not_solve[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  tests_count: 11
+
+  canonical_test:
+    file: math/fixed_point/tests/ud30x9_tests/conversion_tests.move
+    function: whole_number_roundtrip_preserves_supported_values
+
+  precondition_proofs:
+    - precondition_fails_with: EOverflow
+      test_file: math/fixed_point/tests/ud30x9_tests/conversion_tests.move
+      test_functions:
+        - from_u128_aborts_when_scaled_value_overflows
+        - try_from_u128_returns_none_when_scaled_value_overflows
+        - from_u128_scales_max_supported_whole_number
+        - try_from_u128_returns_some_for_max_supported_whole_number
+    - precondition_fails_with: EIntegerOverflow
+      test_file: math/fixed_point/tests/ud30x9_tests/conversion_tests.move
+      test_functions:
+        - to_u64_trunc_aborts_when_whole_part_exceeds_u64_max
+        - try_to_u64_trunc_returns_none_when_whole_part_exceeds_u64_max
+        - to_u64_trunc_converts_supported_values
+
+  do_not_demonstrations:
+    - do_not_id: scale-confusion
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: lossy-readback-assumed-roundtrip
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: from_u128-on-untrusted-input
+      test_functions: []   # consumer-side pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: scale-confusion
+      pattern: "ud30x9::wrap(n) called with a small literal that looks like a domain integer (1..1000) instead of raw fixed-point bits"
+      heuristic: "regex /ud30x9::wrap\\(\\s*[0-9]{1,3}\\s*\\)/ — flag for manual review; raw bits below 1_000_000_000 are sub-unit values and rarely intentional"
+    - do_not_id: lossy-readback-assumed-roundtrip
+      pattern: "result of to_u64_trunc / to_u128_trunc piped straight back into from_u64 / from_u128 within the same function"
+      heuristic: "AST: `from_u(64|128)(.*to_u(64|128)_trunc(.*).*)` in the same expression / let-binding"
+    - do_not_id: from_u128-on-untrusted-input
+      pattern: "from_u128 called with a parameter that flows from a public entry function argument without prior range check"
+      heuristic: "taint: public-entry parameter -> ud30x9_convert::from_u128 with no intervening assert or try_from_u128"
+
+  events: []   # Module emits no events.

@@ -1,0 +1,629 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_fp_math::ud30x9_base
+  package: openzeppelin_fp_math
+  one_liner: |
+    Low-level arithmetic, comparison, bitwise, logarithm, and cross-type
+    casting primitives for the `UD30x9` unsigned decimal fixed-point type
+    (9 decimals, `u128`-backed, range 0 to ~3.4e29). This is the operations
+    layer — the `UD30x9` type itself, its constants (`zero`, `one`, `max`),
+    and raw `wrap` / `unwrap` casts live in the wrapper module
+    `openzeppelin_fp_math::ud30x9`. Every function here takes one or two
+    `UD30x9` values, treats them as raw scaled `u128` bits via `unwrap`,
+    performs the operation, and re-wraps. Reach for this module whenever
+    you need to do math on `UD30x9` values; the wrapper module re-exports
+    every function in `ud30x9_base` as a method on `UD30x9` via
+    `public use fun`, so `x.add(y)` and `ud30x9_base::add(x, y)` are
+    equivalent.
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "The `UD30x9` type definition, constants, or raw casts — those live in `openzeppelin_fp_math::ud30x9`."
+  - "Signed fixed-point arithmetic — use `openzeppelin_fp_math::sd29x9_base`."
+  - "Whole-integer ↔ fixed-point conversions that apply or remove the `10^9` scale — use `openzeppelin_fp_math::ud30x9_convert`."
+  - "Integer arithmetic on raw `u64` / `u128` / `u256` widths — use `openzeppelin_math` (rounding, `u*::mul_div`, `u*::sqrt`)."
+  - "Cross-decimal-scale conversions (e.g. 6-decimals ↔ 9-decimals token amounts) — use `openzeppelin_math::decimal_scaling`."
+  - "An `Option`-returning surface — every function here aborts on out-of-range; build a `try_*` wrapper locally if you need it."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/fixed-point-math"
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_fp_math::ud30x9_base;
+    use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
+  github_alternative: |
+    [dependencies.openzeppelin_fp_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/fixed_point"
+    rev = "<commit-sha-or-tag>"
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  // `ud30x9_base` has no setup, no init, no shared object. It is a pure
+  // operations module: import it (or rely on the method-style re-exports
+  // from `ud30x9`) and call functions on `UD30x9` values you got from
+  // `ud30x9::wrap`, `ud30x9::zero`, `ud30x9::one`, `ud30x9::max`, or
+  // `ud30x9_convert::from_u128` / `from_u64`.
+  module my_sui_app::pricing;
+
+  use openzeppelin_fp_math::{ud30x9, ud30x9_convert};
+  use openzeppelin_fp_math::ud30x9::UD30x9;
+
+  /// 1.5 built two ways — both produce the same `UD30x9`.
+  public fun reference_price(): UD30x9 {
+      // From whole-integer + raw fractional bits.
+      ud30x9_convert::from_u128(1).add(ud30x9::wrap(500_000_000))
+  }
+
+quick_start: |
+  use openzeppelin_fp_math::{ud30x9, ud30x9_convert};
+  use openzeppelin_fp_math::ud30x9::UD30x9;
+
+  // 1. Build operands. `from_u128` applies the 10^9 scale; `wrap` does NOT.
+  let amount   = ud30x9_convert::from_u128(1_000);     // 1000.0
+  let fee_rate = ud30x9::wrap(25_000_000);             // 0.025  (raw bits = 0.025 * 10^9)
+
+  // 2. Multiply with explicit rounding. `mul_away` rounds away from zero so
+  //    the protocol never undercharges. Aborts EOverflow on out-of-range.
+  let fee = amount.mul_away(fee_rate);                 // 25.0
+
+  // 3. Subtract. Aborts EUnderflow if y > x. Use `unchecked_sub` only if
+  //    you have already proved the operation is safe.
+  let net = amount.sub(fee);                           // 975.0
+
+  // 4. Compare. Total functions over the domain — these never abort.
+  let solvent: bool = net.gt(ud30x9::zero());          // true
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # Empty — the integrator-facing type is `UD30x9`, which is defined
+            # in the sibling wrapper module `openzeppelin_fp_math::ud30x9`, not
+            # here. This module declares no public types; it only exposes
+            # operations on `UD30x9` values produced by the wrapper module.
+
+api:
+  # --- Arithmetic ---
+  - name: add
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Returns `x + y`. Default checked addition."
+    aborts: [EOverflow]
+
+  - name: sub
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Returns `x - y`. Default checked subtraction."
+    aborts: [EUnderflow]
+
+  - name: mul
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Multiply with fixed-point scaling, rounded toward zero. Alias of `mul_trunc`."
+    aborts: [EOverflow]
+    notes: |
+      `mul(x, y) == mul_trunc(x, y)`. Use `mul_trunc` at the call site when
+      you want the rounding direction spelled out; use `mul_away` when the
+      protocol must never undercharge (fees, slippage caps).
+
+  - name: mul_trunc
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Multiply with fixed-point scaling, rounded toward zero (truncate)."
+    aborts: [EOverflow]
+
+  - name: mul_away
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Multiply with fixed-point scaling, rounded away from zero when inexact."
+    aborts: [EOverflow]
+    notes: |
+      Use for fees, slippage caps, and protocol-side accounting where
+      rounding should never favor the user against the protocol.
+
+  - name: div
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Divide with fixed-point scaling, rounded toward zero. Alias of `div_trunc`."
+    aborts: [EDivideByZero, EOverflow]
+    notes: |
+      `div(x, y) == div_trunc(x, y)`. `1.0 / 3.0` yields `0.333333333`
+      with `div` / `div_trunc`, `0.333333334` with `div_away`.
+
+  - name: div_trunc
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Divide with fixed-point scaling, rounded toward zero (truncate)."
+    aborts: [EDivideByZero, EOverflow]
+
+  - name: div_away
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Divide with fixed-point scaling, rounded away from zero when inexact."
+    aborts: [EDivideByZero, EOverflow]
+
+  - name: mod
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Remainder of `x / y`. Always non-negative since `UD30x9` is unsigned."
+    aborts: [EDivideByZero]
+
+  - name: pow
+    sig: "(x: UD30x9, exp: u8) -> UD30x9"
+    role: "Binary-exponentiation `x^exp`. Approximate — truncates at every intermediate step."
+    aborts: [EOverflow]
+    notes: |
+      Each intermediate multiply / square applies fixed-point truncation
+      by `10^9`. Results are biased toward zero; rounding error compounds
+      as `exp` grows; for `0 < x < 1` intermediates can hit zero before
+      the mathematical result would. Fixed-point multiplication is NOT
+      associative under truncation, so the binary-exponentiation grouping
+      affects the value. `pow(x, 0)` returns `one()`; `pow(x, 1)` returns
+      `x`. Reasonable for small integer exponents over operands near
+      `1.0`; for long compounded products restructure or switch to a
+      higher-precision representation.
+
+  - name: sqrt
+    sig: "(x: UD30x9) -> UD30x9"
+    role: "Truncating square root: largest `r` such that `r * r <= x`."
+    aborts: []
+    notes: |
+      Total function over `UD30x9`. Internally lifts to `u256` so the
+      intermediate `raw * scale` cannot overflow. Rounded down.
+
+  - name: abs
+    sig: "(x: UD30x9) -> UD30x9"
+    role: "Identity — `UD30x9` is unsigned. Provided for symmetry with `SD29x9::abs`."
+    aborts: []
+
+  - name: ceil
+    sig: "(x: UD30x9) -> UD30x9"
+    role: "Round toward positive infinity to the next integer multiple of `10^9`."
+    aborts: [EOverflow]
+    notes: |
+      Returns `x` unchanged if it is already a whole multiple of the
+      scale. Aborts `EOverflow` when rounding up would cross the
+      `UD30x9` range ceiling.
+
+  - name: floor
+    sig: "(x: UD30x9) -> UD30x9"
+    role: "Round toward zero to the nearest integer multiple of `10^9`."
+    aborts: []
+    notes: |
+      Total function over `UD30x9` — fractional bits are simply cleared,
+      no overflow path.
+
+  - name: unchecked_add
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Wrapping addition modulo `2^128`. Does NOT abort on overflow."
+    aborts: []
+    notes: |
+      Escape hatch — use only when you have already proved the sum is
+      in range and want to skip the abort path. Prefer `add` for normal
+      application code so aborts surface programmer bugs.
+
+  - name: unchecked_sub
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Wrapping subtraction modulo `2^128`. Does NOT abort on underflow."
+    aborts: []
+    notes: |
+      Escape hatch — `unchecked_sub(fixed(0), fixed(1))` yields
+      `UD30x9::max()`, not zero. Prefer `sub` unless the wrap is
+      intentional (e.g. a hand-rolled `try_sub`).
+
+  # --- Logarithms ---
+  - name: ln
+    sig: "(x: UD30x9) -> UD30x9"
+    role: "Natural log via `log2(x) * ln(2)`. Rounds down."
+    aborts: [ELogUndefined]
+    notes: |
+      Both `log2` and the base-conversion factor round toward zero, so the
+      result may sit up to one ulp below the true value.
+
+  - name: log10
+    sig: "(x: UD30x9) -> UD30x9"
+    role: "Base-10 log via `log2(x) * log10(2)`. Rounds down."
+    aborts: [ELogUndefined]
+    notes: |
+      Same compounding round-down as `ln`. In particular,
+      `log10(ud30x9::wrap(10 * 10^9))` returns `one() - 1` ulp under pure
+      round-down arithmetic — not exactly `1.0`. Plan for this when
+      identity points matter.
+
+  - name: log2
+    sig: "(x: UD30x9) -> UD30x9"
+    role: "Base-2 log, rounded down: largest `r` such that `2^r <= x`."
+    aborts: [ELogUndefined]
+
+  # --- Comparison ---
+  - name: eq
+    sig: "(x: UD30x9, y: UD30x9) -> bool"
+    role: "`true` iff `x == y`. Compares raw bits."
+    aborts: []
+
+  - name: neq
+    sig: "(x: UD30x9, y: UD30x9) -> bool"
+    role: "`true` iff `x != y`."
+    aborts: []
+
+  - name: gt
+    sig: "(x: UD30x9, y: UD30x9) -> bool"
+    role: "`true` iff `x > y`."
+    aborts: []
+
+  - name: gte
+    sig: "(x: UD30x9, y: UD30x9) -> bool"
+    role: "`true` iff `x >= y`."
+    aborts: []
+
+  - name: lt
+    sig: "(x: UD30x9, y: UD30x9) -> bool"
+    role: "`true` iff `x < y`."
+    aborts: []
+
+  - name: lte
+    sig: "(x: UD30x9, y: UD30x9) -> bool"
+    role: "`true` iff `x <= y`."
+    aborts: []
+
+  - name: is_zero
+    sig: "(x: UD30x9) -> bool"
+    role: "`true` iff `x` is exactly zero."
+    aborts: []
+
+  # --- Bitwise (on raw 128-bit representation) ---
+  - name: and
+    sig: "(x: UD30x9, bits: u128) -> UD30x9"
+    role: "Bitwise AND between `x`'s raw bits and a `u128` mask."
+    aborts: []
+    notes: |
+      Operates on RAW BITS, not on the decimal value. `x.and(0xFF)` masks
+      to the low 8 bits of the underlying `u128`; it has no decimal
+      meaning.
+
+  - name: and2
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Bitwise AND between two `UD30x9` raw bit patterns."
+    aborts: []
+
+  - name: or
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Bitwise OR between two `UD30x9` raw bit patterns."
+    aborts: []
+
+  - name: xor
+    sig: "(x: UD30x9, y: UD30x9) -> UD30x9"
+    role: "Bitwise XOR between two `UD30x9` raw bit patterns."
+    aborts: []
+
+  - name: not
+    sig: "(x: UD30x9) -> UD30x9"
+    role: "Bitwise NOT of `x`'s raw bits (`x ^ u128::MAX`)."
+    aborts: []
+
+  - name: lshift
+    sig: "(x: UD30x9, bits: u8) -> UD30x9"
+    role: "Logical left shift on the underlying 128-bit representation."
+    aborts: [EInvalidShiftSize, EOverflow]
+    notes: |
+      Bit shift on raw bits, NOT a decimal multiply by `2^bits`. Aborts
+      `EInvalidShiftSize` if `bits >= 128`; aborts `EOverflow` if the
+      shift would consume non-zero high bits. For decimal `x * 2` use
+      `x.add(x)`, not `x.lshift(1)`.
+
+  - name: unchecked_lshift
+    sig: "(x: UD30x9, bits: u8) -> UD30x9"
+    role: "Unchecked left shift — truncates high bits past 128; returns zero for `bits >= 128`."
+    aborts: []
+    notes: |
+      Escape hatch; loses high bits silently. Prefer `lshift` for normal
+      application code so out-of-range shifts surface programmer bugs.
+
+  - name: rshift
+    sig: "(x: UD30x9, bits: u8) -> UD30x9"
+    role: "Logical right shift on the underlying 128-bit representation."
+    aborts: [EInvalidShiftSize]
+    notes: |
+      Bit shift on raw bits, NOT a decimal divide by `2^bits` or by
+      `10^bits`. Aborts `EInvalidShiftSize` if `bits >= 128`.
+
+  - name: unchecked_rshift
+    sig: "(x: UD30x9, bits: u8) -> UD30x9"
+    role: "Unchecked right shift — returns zero for `bits >= 128`."
+    aborts: []
+
+  # --- Cross-type casts ---
+  - name: into_SD29x9
+    sig: "(x: UD30x9) -> SD29x9"
+    role: "Cast `UD30x9` → `SD29x9` preserving the scaled numeric meaning. Aborts on out-of-range."
+    aborts: [ECannotBeConvertedToSD29x9]
+    notes: |
+      Cast (range-check only), NOT a conversion — does not multiply or
+      divide by `10^9`. Aborts when the magnitude exceeds the maximum
+      positive `SD29x9` value (`2^127 - 1`). Use `try_into_SD29x9` when
+      the input may come from untrusted callers.
+
+  - name: try_into_SD29x9
+    sig: "(x: UD30x9) -> Option<SD29x9>"
+    role: "Same cast as `into_SD29x9` but returns `none` instead of aborting on out-of-range."
+    aborts: []
+
+errors:
+  EOverflow:
+    code: 0
+    message: "Value overflows UD30x9 (must be less than 2^128)"
+  EUnderflow:
+    code: 1
+    message: "Value underflows UD30x9 (result would be negative)"
+  EDivideByZero:
+    code: 2
+    message: "Divisor must be non-zero"
+  ECannotBeConvertedToSD29x9:
+    code: 3
+    message: "Value cannot be converted to SD29x9"
+  EInvalidShiftSize:
+    code: 4
+    message: "Shift size is out of range (must be less than 128)"
+  ELogUndefined:
+    code: 5
+    message: "Logarithm is undefined: input must be greater than or equal to one"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "Multiplying two fixed-point values — which rounding direction?"
+    options:
+      - use: "mul_trunc (or its alias mul)"
+        when: "Default. Rounding direction does not matter, OR you want to truncate explicitly."
+        why: "Rounds toward zero. Aliases — pick `mul_trunc` if you want the rounding direction visible at the call site."
+      - use: "mul_away"
+        when: "Quoting fees, slippage caps, or any protocol-side accounting where rounding must never favor the user."
+        why: "Rounds away from zero when inexact. Pairs with `div_away` in vault accounting that keeps the dust."
+      - use: "unchecked_add or hand-rolled try_add"
+        when: "You need a non-aborting variant for try_*-style APIs."
+        why: "`unchecked_add` wraps modulo `2^128` (silent — only safe if you proved the sum is in range); for a real `Option`-returning surface, lift to `u256` like the package's own `try_add` example."
+
+  - question: "Dividing two fixed-point values — which rounding direction?"
+    options:
+      - use: "div_trunc (or its alias div)"
+        when: "Default. Vault converts assets ↔ shares (truncate keeps dust in the vault) or rounding direction is a wash."
+        why: "Rounds toward zero. `1.0 / 3.0` = `0.333333333`."
+      - use: "div_away"
+        when: "Inverse-rate conversions where rounding down systematically under-pays the user, or protocol owes some fraction `x / n`."
+        why: "Rounds away from zero when inexact. `1.0 / 3.0` = `0.333333334`."
+
+  - question: "How do I convert a whole `u64` / `u128` integer into `UD30x9`?"
+    options:
+      - use: "ud30x9_convert::from_u64 / from_u128"
+        when: "Input represents a whole-number quantity (token amount, count, percentage point). `42` means `42.0`."
+        why: "Multiplies by `10^9`. The semantic-conversion path."
+      - use: "ud30x9::wrap"
+        when: "Input is already in fixed-point form (raw scaled bits — loaded from storage, returned by another fixed-point fn, hand-encoded constant). `42` means `0.000000042`."
+        why: "Does NOT multiply by `10^9`. Mixing this up with `from_u*` is the most common way to introduce a `10^9`-sized bug."
+      - use: "ud30x9::zero / one / max"
+        when: "You want the standard constants without typing the raw bits."
+        why: "Reads better than `ud30x9::wrap(1_000_000_000)` and avoids transcription errors."
+
+  - question: "I need a bit shift — should I use `lshift` / `rshift` for fast multiply / divide by powers of 2?"
+    options:
+      - use: "add / sub / mul / mul_trunc"
+        when: "You want a DECIMAL-VALUE multiply or divide (e.g. `x * 2`, `x / 10`)."
+        why: "`lshift` / `rshift` operate on RAW BITS — they multiply / divide the underlying `u128`, not the decimal value. `x.lshift(1)` is NOT `x * 2.0` in decimal terms."
+      - use: "lshift / rshift / and / or / xor / not"
+        when: "You are packing flags, masking raw bit patterns, or doing scale-shifting inside a custom fixed-point pipeline."
+        why: "Bit-level operations on the raw 128-bit representation. Use only when you actually want bit semantics."
+
+  - question: "Computing a logarithm — what input range is safe?"
+    options:
+      - use: "ln / log10 / log2 on x >= one()"
+        when: "Input is at least `1.0` (raw value at least `10^9`)."
+        why: "Total over this domain. Result rounds down — may sit up to one ulp below the true value (e.g. `log10(10.0) == 1.0 - 1` ulp)."
+      - use: "Do NOT call ln / log10 / log2 on x < one()"
+        when: "Input could be less than `1.0`."
+        why: "Aborts `ELogUndefined`. Negative logs are unrepresentable in `UD30x9`; cast to `SD29x9` if you need them."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Subtraction must satisfy `x >= y`."
+    fails_with: EUnderflow
+    affects: [sub]
+
+  - must: "Divisor `y` must be non-zero in `div`, `div_trunc`, `div_away`, and `mod`."
+    fails_with: EDivideByZero
+    affects: [div, div_trunc, div_away, mod]
+
+  - must: "Arithmetic / shift / ceiling / cross-type cast results must fit in `u128`."
+    fails_with: EOverflow
+    affects: [add, mul, mul_trunc, mul_away, div, div_trunc, div_away, pow, ceil, lshift]
+
+  - must: "Shift count `bits` must be less than 128 in `lshift` / `rshift`."
+    fails_with: EInvalidShiftSize
+    affects: [lshift, rshift]
+
+  - must: "Logarithm input `x` must be at least `one()` (raw value `>= 10^9`)."
+    fails_with: ELogUndefined
+    affects: [ln, log10, log2]
+
+  - must: "`into_SD29x9` input `x` must be `<= 2^127 - 1` (max positive `SD29x9` magnitude)."
+    fails_with: ECannotBeConvertedToSD29x9
+    affects: [into_SD29x9]
+
+do_not:
+  - id: confusing-wrap-with-convert
+    severity: high
+    description: "Build a `UD30x9` from a whole integer via `ud30x9::wrap(n)` instead of `ud30x9_convert::from_u128(n)`."
+    why_bad: "`wrap` does NOT apply the `10^9` scale. `ud30x9::wrap(42)` is `0.000000042`, not `42.0`. The error usually surfaces far from the call site as a quantity that is 10^9 times too small (or large)."
+    fix: "Use `ud30x9_convert::from_u128(n)` / `from_u64(n)` when `n` means `n.0`. Reserve `ud30x9::wrap` for inputs that are already in raw fixed-point form (storage reads, results of other fixed-point fns, hand-encoded fractional constants)."
+    example_bad: |
+      use openzeppelin_fp_math::ud30x9;
+
+      // WRONG — meant 42.0 but produced 0.000000042.
+      let amount = ud30x9::wrap(42);
+    example_good: |
+      use openzeppelin_fp_math::ud30x9_convert;
+
+      // RIGHT — 42 means 42.0, so apply the 10^9 scale.
+      let amount = ud30x9_convert::from_u128(42);
+
+  - id: bitshift-for-decimal-scaling
+    severity: high
+    description: "Use `lshift(1)` / `rshift(1)` thinking they multiply / divide the DECIMAL value by 2."
+    why_bad: "`lshift` and `rshift` operate on the raw `u128` bits underneath `UD30x9`. `ud30x9::wrap(2_000_000_000).rshift(1)` is NOT `1.0` — it is `1_000_000_000 / 2 = 500_000_000`, the raw bits of `0.5`. The decimal value is halved here only by coincidence of the example; in general the relationship is `lshift(k)` multiplies the decimal value by `2^k`, but only when no high-bit overflow happens, and never by `10^k` or any decimal factor."
+    fix: "Use `add` / `sub` / `mul` / `mul_trunc` for decimal arithmetic. Reserve `lshift` / `rshift` for raw bit packing and masking pipelines where you actually want bit semantics."
+    example_bad: |
+      use openzeppelin_fp_math::ud30x9_convert;
+
+      // WRONG — author wanted `x / 1_000_000_000` (i.e. divide decimal by 10^9).
+      let x = ud30x9_convert::from_u128(1_000_000_000);
+      let bad = x.rshift(30); // raw 1e9 * 1e9 >> 30 — NOT 1.0
+    example_good: |
+      use openzeppelin_fp_math::ud30x9_convert;
+
+      // RIGHT — divide the decimal value, not the bits.
+      let x = ud30x9_convert::from_u128(1_000_000_000);
+      let good = x.div_trunc(ud30x9_convert::from_u128(1_000_000_000)); // 1.0
+
+  - id: unchecked-without-proof
+    severity: high
+    description: "Reach for `unchecked_add` / `unchecked_sub` / `unchecked_lshift` / `unchecked_rshift` to skip an abort without a proof that the operation is safe."
+    why_bad: "The `unchecked_*` variants wrap modulo `2^128` (or return zero on out-of-range shifts) silently. Bugs surface as state corruption far from the call site, with no abort trail to chase."
+    fix: "Default to the checked variants (`add`, `sub`, `lshift`, `rshift`). Use `unchecked_*` only after you have proved the operation cannot overflow / underflow / out-of-range-shift in the calling context — typically because you constrained the inputs upstream."
+    example_bad: |
+      use openzeppelin_fp_math::ud30x9;
+
+      // WRONG — silent wrap, balance becomes UD30x9::max() instead of aborting.
+      let balance = ud30x9::zero();
+      let withdrawal = ud30x9::one();
+      let new_balance = balance.unchecked_sub(withdrawal);
+    example_good: |
+      use openzeppelin_fp_math::ud30x9;
+
+      // RIGHT — abort EUnderflow surfaces the bug at the call site.
+      let balance = ud30x9::zero();
+      let withdrawal = ud30x9::one();
+      let new_balance = balance.sub(withdrawal); // aborts EUnderflow
+
+  - id: pow-for-long-compounding
+    severity: medium
+    description: "Use `pow` for long compounded products (interest accrual over many periods, statistical computations) on operands far from `1.0`."
+    why_bad: "Each intermediate multiply applies fixed-point truncation by `10^9`. Errors compound as `exp` grows, results are biased toward zero, and for `0 < x < 1` intermediates can hit zero before the mathematical result would. Fixed-point multiplication is not associative under truncation."
+    fix: "Restructure the computation to reduce the number of intermediate truncations, switch to a higher-precision representation in the worst-case region, or bound the rounding error analytically and decide if the protocol can absorb it. `pow` is fine for small integer exponents over operands near `1.0`."
+    example_bad: |
+      use openzeppelin_fp_math::ud30x9;
+
+      // WRONG — compounding rounding error: ~0.000000953... biased toward zero,
+      // and for slightly smaller half (e.g. 0.49) intermediates can underflow to 0.
+      let half = ud30x9::wrap(500_000_000); // 0.5
+      let approx = half.pow(20);
+    example_good: |
+      use openzeppelin_fp_math::{ud30x9, ud30x9_base};
+
+      // RIGHT — restructure: use the `log2` / `ln` identities where applicable,
+      // or do the multiply in higher precision off-chain and verify on-chain.
+      // For an integer base near 1.0, `pow` is still fine:
+      let two = ud30x9::wrap(2_000_000_000);
+      let eight = two.pow(3); // 8.0, exact for whole-number bases.
+
+  - id: log-on-fractional-input
+    severity: medium
+    description: "Call `ln` / `log10` / `log2` on a `UD30x9` value less than `one()`."
+    why_bad: "Aborts `ELogUndefined`. Negative logarithms are unrepresentable in unsigned `UD30x9`."
+    fix: "Guard with a precondition (`x.gte(ud30x9::one())`) before calling, or cast to `SD29x9` and use that module's logarithm — `SD29x9::log*` accepts values in `(0, max]`."
+    example_bad: |
+      use openzeppelin_fp_math::ud30x9;
+
+      // WRONG — half is less than one; aborts ELogUndefined.
+      let half = ud30x9::wrap(500_000_000); // 0.5
+      let bad = half.log2();
+    example_good: |
+      use openzeppelin_fp_math::{sd29x9, ud30x9};
+
+      // RIGHT — cast to signed; SD29x9::log2(0.5) == -1.0.
+      let half = sd29x9::wrap(500_000_000, false); // 0.5 as SD29x9
+      let good = half.log2(); // -1.0
+
+composes_with: []   # Empty — no compositions are source-cited. Method-style
+                    # method re-exports from `openzeppelin_fp_math::ud30x9` are
+                    # NOT compositions (same module pair, same call). Sibling
+                    # pointers (sd29x9_base, ud30x9_convert, openzeppelin_math)
+                    # live in does_not_solve[]; picking between siblings (mul
+                    # vs mul_trunc vs mul_away, wrap vs from_u128) lives in
+                    # decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  # Tests for ud30x9_base are sharded across `math/fixed_point/tests/ud30x9_tests/`
+  # (arithmetic_tests.move, comparison_tests.move, bitwise_tests.move, ln_tests.move,
+  # log10_tests.move, log2_tests.move, mul_tests.move, div_tests.move, pow_tests.move,
+  # sqrt_tests.move, ceil_tests.move, floor_tests.move, abs_tests.move, casting_tests.move,
+  # unchecked_tests.move, conversion_tests.move, wrap_tests.move). No single
+  # end-to-end happy-path test exists — each module exercises one operation in isolation.
+  tests_count: 0
+  canonical_test: null
+
+  precondition_proofs:
+    - precondition_fails_with: EUnderflow
+      test_file: math/fixed_point/tests/ud30x9_tests/arithmetic_tests.move
+      test_functions: []
+    - precondition_fails_with: EDivideByZero
+      test_file: math/fixed_point/tests/ud30x9_tests/arithmetic_tests.move
+      test_functions: []
+    - precondition_fails_with: EOverflow
+      test_file: math/fixed_point/tests/ud30x9_tests/arithmetic_tests.move
+      test_functions: []
+    - precondition_fails_with: EInvalidShiftSize
+      test_file: math/fixed_point/tests/ud30x9_tests/bitwise_tests.move
+      test_functions: []
+    - precondition_fails_with: ELogUndefined
+      test_file: math/fixed_point/tests/ud30x9_tests/log2_tests.move
+      test_functions: []
+    - precondition_fails_with: ECannotBeConvertedToSD29x9
+      test_file: math/fixed_point/tests/ud30x9_tests/casting_tests.move
+      test_functions: []
+
+  do_not_demonstrations:
+    - do_not_id: confusing-wrap-with-convert
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: bitshift-for-decimal-scaling
+      test_functions: []
+    - do_not_id: unchecked-without-proof
+      test_functions: []
+    - do_not_id: pow-for-long-compounding
+      test_functions: []
+    - do_not_id: log-on-fractional-input
+      test_functions: []
+
+  do_not_detection:
+    - do_not_id: confusing-wrap-with-convert
+      pattern: "`ud30x9::wrap(<integer-literal-without-fractional-bits>)` where the literal looks like a whole-number quantity"
+      heuristic: "regex: /ud30x9::wrap\\(\\s*\\d+\\s*\\)/  — flag if the integer is small (< 10^9) and not a recognized raw bit pattern"
+    - do_not_id: bitshift-for-decimal-scaling
+      pattern: "`<UD30x9>.lshift(k)` or `<UD30x9>.rshift(k)` in a context that names a decimal quantity (`amount`, `price`, `balance`, `fee`)"
+      heuristic: "regex: /\\b(amount|price|balance|fee|rate)\\b[^\\n]*\\.(lshift|rshift)\\(/"
+    - do_not_id: unchecked-without-proof
+      pattern: "`unchecked_(add|sub|lshift|rshift)` without a guarding `assert!` in the surrounding block"
+      heuristic: "AST rule: in the function body containing the call, no `assert!` predicate references the operands in a way that bounds them"
+    - do_not_id: pow-for-long-compounding
+      pattern: "`.pow(exp)` with `exp > ~16` or in a loop / fold over many periods"
+      heuristic: "regex: /\\.pow\\(\\s*(\\d+)\\s*\\)/ — flag when the literal exceeds 16, or any `pow` call inside a `while` / `loop` / `vector::fold` body"
+    - do_not_id: log-on-fractional-input
+      pattern: "`.log2() | .log10() | .ln()` without a preceding `.gte(ud30x9::one())` guard"
+      heuristic: "AST rule: the receiver of the log call has no upstream `assert!(x.gte(one()), _)` or `if (x.lt(one())) { ... } else { x.log*() }`"
+
+  events: []   # ud30x9_base emits no events.

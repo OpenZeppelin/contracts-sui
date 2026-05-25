@@ -1,0 +1,362 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_fp_math::sd29x9_convert
+  package: openzeppelin_fp_math
+  one_liner: |
+    Scale-aware conversions between whole signed magnitudes and `SD29x9`
+    (applies / removes the `10^9` scale factor). Use this module whenever
+    `42` should mean `42.0` (or `-42.0`) in fixed-point, NOT
+    `0.000_000_042`. Move has no native signed integer for this package,
+    so inputs take an unsigned magnitude plus a `bool is_negative` flag,
+    and outputs return either a single magnitude (when sign is asserted)
+    or a `(magnitude, is_negative)` pair. Distinct from `sd29x9::wrap` /
+    `sd29x9::unwrap`, which are raw casts that preserve the `10^9` scale
+    already present in the value. Note: file is named `conversions.move`
+    but the module declaration is `openzeppelin_fp_math::sd29x9_convert`.
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Casting a raw `u128` that is already in `10^9` scale — use `openzeppelin_fp_math::sd29x9::wrap`."
+  - "Cross-type fixed-point casts (`UD30x9` <-> `SD29x9`) that preserve the scale — use `sd29x9::into_UD30x9` / `ud30x9::into_SD29x9`."
+  - "Arithmetic, comparison, logarithms, cross-type casts on `SD29x9` — use `openzeppelin_fp_math::sd29x9_base`."
+  - "Unsigned-only whole-integer conversion — use `openzeppelin_fp_math::ud30x9_convert`."
+  - "Lossless conversion of fractional `SD29x9` to `u64` / `u128` — `to_*_trunc` truncates the fractional part toward zero."
+  - "Recovering a `+2^127` magnitude — `SD29x9` is two's complement; only `-2^127` exists."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/fixed-point-math"   # Primary — Move Package Registry.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212    # OpenZeppelin/contracts-sui @ main (2026-05-25)
+  use_statement: |
+    use openzeppelin_fp_math::sd29x9::SD29x9;
+    use openzeppelin_fp_math::sd29x9_convert;
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
+  github_alternative: |                     # Secondary — direct git pin if MVR is unavailable.
+    [dependencies.openzeppelin_fp_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/fixed_point"
+    rev = "<commit-sha-or-tag>"             # Agent fills in — see install.repo_ref for the
+                                             # commit this YAML was extracted from; prefer the latest
+                                             # release tag (e.g., v1.1.0) for stable builds.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_protocol::signed_balance;
+
+  use openzeppelin_fp_math::sd29x9::SD29x9;
+  use openzeppelin_fp_math::sd29x9_convert;
+
+  /// Build a signed delta from a user-supplied (magnitude, sign) pair.
+  /// Example: apply_delta(5, true) gives -5.0 as SD29x9.
+  public fun build_delta(magnitude: u128, is_negative: bool): SD29x9 {
+      sd29x9_convert::from_u128(magnitude, is_negative)
+  }
+
+  /// Convert SD29x9 back to a (magnitude, is_negative) pair for display.
+  /// Truncates the fractional part toward zero.
+  public fun split_for_display(value: SD29x9): (u128, bool) {
+      sd29x9_convert::to_parts_trunc(value)
+  }
+
+quick_start: |
+  use openzeppelin_fp_math::sd29x9::SD29x9;
+  use openzeppelin_fp_math::sd29x9_convert;
+
+  // 1. Whole signed integer -> SD29x9 (applies 10^9 scale).
+  let positive: SD29x9 = sd29x9_convert::from_u64(42, false);   // 42.0
+  let negative: SD29x9 = sd29x9_convert::from_u128(5, true);    // -5.0
+
+  // 2. SD29x9 -> (magnitude, sign) pair (always safe, no abort path).
+  let (mag, neg) = sd29x9_convert::to_parts_trunc(negative);    // (5, true)
+
+  // 3. SD29x9 -> unsigned whole integer when sign is asserted non-negative.
+  let whole: u64 = sd29x9_convert::to_u64_trunc(positive);      // 42 (aborts if negative)
+
+  // 4. Untrusted input -> use try_* to get Option back instead of aborting.
+  let maybe: Option<SD29x9> = sd29x9_convert::try_from_u128(huge_user_input, false);
+  let maybe_u64: Option<u64> = sd29x9_convert::try_to_u64_trunc(positive);
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # All operations are on `SD29x9` from sibling module — see sd29x9.yaml.
+
+api:
+  - name: from_u64
+    sig: "(x: u64, is_negative: bool) -> SD29x9"
+    role: "Convert a whole `u64` magnitude into `SD29x9` by multiplying by 10^9 and applying the sign."
+    aborts: []
+    notes: "u64 always fits — no abort path. For u128 use `from_u128` (which can overflow)."
+
+  - name: from_u128
+    sig: "(x: u128, is_negative: bool) -> SD29x9"
+    role: "Convert a whole `u128` magnitude into `SD29x9`. Aborts `EOverflow` if `x * 10^9` would exceed the `SD29x9` raw representation."
+    aborts: [EOverflow]
+    notes: "Bound check: magnitude must be <= (2^127 - 1) / 10^9 ~= 1.7 x 10^29. Passing `is_negative = true` with `x = 0` produces canonical zero, not `negative zero`."
+
+  - name: try_from_u128
+    sig: "(x: u128, is_negative: bool) -> Option<SD29x9>"
+    role: "Same as `from_u128`; returns `none()` on overflow instead of aborting."
+    aborts: []
+    notes: "Use for external / untrusted input. Internal protocol code can use the abort variant."
+
+  - name: to_parts_trunc
+    sig: "(x: SD29x9) -> (u128, bool)"
+    role: "Convert `SD29x9` into a truncated `(magnitude, is_negative)` pair. Always safe — no abort path."
+    aborts: []
+    notes: "`is_negative` is always `false` when the truncated whole magnitude is zero, even if `x` was a small negative sub-unit value (e.g. -0.5). Prefer this over `to_u128_trunc` when the caller might be negative."
+
+  - name: to_u128_trunc
+    sig: "(x: SD29x9) -> u128"
+    role: "Convert a non-negative `SD29x9` into a whole `u128` by truncating the fractional part."
+    aborts: [ENegativeValue]
+    notes: "Aborts if `x` is negative (any negative value, including sub-unit values like -0.000_000_001). Use `try_to_u128_trunc` for untrusted input or `to_parts_trunc` when sign should be inspected, not asserted."
+
+  - name: try_to_u128_trunc
+    sig: "(x: SD29x9) -> Option<u128>"
+    role: "Same as `to_u128_trunc`; returns `none()` when `x` is negative instead of aborting."
+    aborts: []
+
+  - name: to_u64_trunc
+    sig: "(x: SD29x9) -> u64"
+    role: "Convert a non-negative `SD29x9` into a whole `u64` by truncating the fractional part."
+    aborts: [ENegativeValue, EIntegerOverflow]
+    notes: "Aborts `ENegativeValue` if `x` is negative; aborts `EIntegerOverflow` if the truncated whole exceeds `u64::MAX` (~1.8 x 10^19). Use `try_to_u64_trunc` for untrusted input."
+
+  - name: try_to_u64_trunc
+    sig: "(x: SD29x9) -> Option<u64>"
+    role: "Same as `to_u64_trunc`; returns `none()` when `x` is negative or the truncated whole exceeds `u64::MAX`."
+    aborts: []
+
+errors:
+  EOverflow:
+    code: 0
+    message: "Whole integer overflows SD29x9 once scaled by 10^9"
+  ENegativeValue:
+    code: 1
+    message: "Negative SD29x9 value cannot be converted to an unsigned integer"
+  EIntegerOverflow:
+    code: 2
+    message: "Truncated whole part does not fit in u64"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I have a whole signed value (`(magnitude, is_negative)`) and need an `SD29x9`. Which constructor?"
+    options:
+      - use: "sd29x9_convert::from_u64(x: u64, is_negative: bool)"
+        when: "Magnitude fits in u64 (typical balance / count up to ~1.8 x 10^19)."
+        why: "u64 can never overflow when scaled by 10^9 (max scaled ~1.8 x 10^28 < 2^127), so no abort path. Cheapest correct option."
+      - use: "sd29x9_convert::from_u128(x: u128, is_negative: bool)"
+        when: "Magnitude is `u128` and you have proven `x <= 1.7 x 10^29`."
+        why: "Aborts `EOverflow` on out-of-range input. Use the abort variant for internal / proven-safe code."
+      - use: "sd29x9_convert::try_from_u128(x: u128, is_negative: bool)"
+        when: "Magnitude is untrusted (user-supplied, external oracle, on-chain read of unknown bounds)."
+        why: "Returns `Option<SD29x9>` — caller handles the overflow case explicitly."
+      - use: "sd29x9::wrap(x: u128, is_negative: bool)"
+        when: "NEVER for whole-integer input. Only when `x` is already in 10^9-scaled raw bits."
+        why: "`wrap` is a CAST not a CONVERT. `wrap(100, false)` produces 0.000_000_100, NOT 100.0."
+
+  - question: "I have an `SD29x9` and need a whole-integer representation back. Which extractor?"
+    options:
+      - use: "sd29x9_convert::to_parts_trunc(x)"
+        when: "Default for signed values. You want both magnitude and sign in one go."
+        why: "Always safe — no abort path. Returns `(magnitude, is_negative)`. Reports `is_negative = false` when truncated magnitude is zero, avoiding `negative zero` surprises."
+      - use: "sd29x9_convert::to_u64_trunc(x)"
+        when: "You have asserted the value is non-negative AND the truncated whole fits in u64 (typical token amount)."
+        why: "Aborts on either violation; surfaces protocol bugs early. Use `try_to_u64_trunc` for untrusted input."
+      - use: "sd29x9_convert::to_u128_trunc(x)"
+        when: "Non-negative input where the truncated whole may exceed u64::MAX (large supply totals, aggregates)."
+        why: "Aborts `ENegativeValue` if `x` is negative; cannot overflow once non-negativity is established."
+      - use: "sd29x9_convert::try_to_u64_trunc(x) / try_to_u128_trunc(x)"
+        when: "Untrusted input where you want `Option` back instead of aborting."
+        why: "Same semantics as the abort variants; surfaces sign and overflow violations as `none()`."
+      - use: "sd29x9::unwrap(x)"
+        when: "You want raw 10^9-scaled bits, NOT the whole-integer part."
+        why: "Symmetric with `wrap`. `unwrap(sd29x9_convert::from_u64(42, false))` returns `42_000_000_000`, NOT 42."
+
+  - question: "I have a negative `SD29x9` and need it as an unsigned `u64` / `u128`. What now?"
+    options:
+      - use: "sd29x9_convert::to_parts_trunc(x)"
+        when: "You actually want the absolute-value magnitude plus the sign flag (most common case)."
+        why: "Designed for exactly this. Returns `(|truncated whole|, is_negative)` without aborting."
+      - use: "sd29x9_convert::to_u64_trunc / to_u128_trunc"
+        when: "NEVER on a value that might be negative."
+        why: "These abort `ENegativeValue` on any negative input, including sub-unit values like -0.000_000_001. They are explicitly asymmetric: the function exists to enforce the non-negativity invariant, not to silently absolute-value."
+      - use: "sd29x9_base::abs(x).into_UD30x9() then ud30x9_convert::to_u64_trunc"
+        when: "You want a strictly non-negative `u64` from any `SD29x9`, treating sign as an orthogonal concern."
+        why: "Two-step: take absolute value (aborts `EOverflow` only on `sd29x9::min()`), then cross-type cast, then truncate. More allocations, but semantically explicit about what is happening."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Input magnitude to `from_u128` must satisfy `x <= (2^127 - 1) / 10^9` ~= 1.7 x 10^29 to avoid `EOverflow`."
+    fails_with: EOverflow
+    affects: [from_u128]
+
+  - must: "`SD29x9` passed to `to_u128_trunc` or `to_u64_trunc` must be non-negative (even sub-unit negatives like -0.000_000_001 abort)."
+    fails_with: ENegativeValue
+    affects: [to_u128_trunc, to_u64_trunc]
+
+  - must: "`SD29x9` passed to `to_u64_trunc` must have a truncated whole magnitude <= `u64::MAX` (~1.8 x 10^19) to avoid `EIntegerOverflow`."
+    fails_with: EIntegerOverflow
+    affects: [to_u64_trunc]
+
+do_not:
+  - id: confuse-from-with-wrap
+    severity: high
+    description: "Use `sd29x9::wrap(x, is_negative)` when the source is a whole-integer signed magnitude."
+    why_bad: "`wrap` is a cast — it preserves the 10^9 scale already present in the input. `wrap(100, false)` is 0.000_000_100, NOT 100.0. Every downstream calculation is off by a factor of a billion, silently. Same class of bug as the `confuse-from-with-wrap` entry in `ud30x9_convert.yaml`."
+    fix: "Use `sd29x9_convert::from_u64(x, is_negative)` or `from_u128(x, is_negative)` whenever the input is a whole-integer magnitude. Use `wrap` ONLY when the `u128` is already in 10^9 form (e.g., reading back a previous `unwrap` result)."
+    example_bad: |
+      // WRONG — -100 token units silently becomes -0.000_000_100.
+      let delta: SD29x9 = sd29x9::wrap(100, true);
+    example_good: |
+      // RIGHT — -100 token units becomes -100.0 in SD29x9.
+      let delta: SD29x9 = sd29x9_convert::from_u64(100, true);
+
+  - id: to-u64-trunc-on-untrusted-negative
+    severity: high
+    description: "Call `to_u64_trunc` / `to_u128_trunc` on an `SD29x9` whose sign you have not asserted."
+    why_bad: "Both abort `ENegativeValue` on ANY negative input, including sub-unit values like -0.000_000_001 where the truncated whole is zero. The abort is intentional — these functions enforce the non-negativity invariant rather than silently dropping the sign. A function that aborts on values close to zero is hard to debug after the fact."
+    fix: "Use `to_parts_trunc` when you want both magnitude and sign, `try_to_u64_trunc` / `try_to_u128_trunc` when you want `Option` back, or compose `sd29x9_base::abs` first if you want absolute-value semantics explicitly."
+    example_bad: |
+      // WRONG — aborts on any negative value, including small negatives where caller might
+      // intuitively expect 0.
+      let small_negative = sd29x9_convert::from_u128(0, true).sub(
+          sd29x9::wrap(1, false)  // -0.000_000_001
+      );
+      let n: u128 = sd29x9_convert::to_u128_trunc(small_negative); // aborts ENegativeValue
+    example_good: |
+      // RIGHT — to_parts_trunc returns sign and magnitude without aborting.
+      let small_negative = sd29x9_convert::from_u128(0, true).sub(
+          sd29x9::wrap(1, false)
+      );
+      let (mag, neg) = sd29x9_convert::to_parts_trunc(small_negative); // (0, false) — sign cleared at zero
+      // Or, with explicit option handling:
+      let maybe: Option<u128> = sd29x9_convert::try_to_u128_trunc(small_negative); // none()
+
+  - id: lossy-roundtrip-without-acknowledgment
+    severity: medium
+    description: "Round-trip an `SD29x9` through `to_u*_trunc` -> `from_u*` and assume the result equals the original."
+    why_bad: "`to_*_trunc` discards the fractional part. `0.5` becomes `0`, which becomes `0.0` after `from_u*`. The original was `0.5`, the result is `0`. Lossy without warning. For signed values the sign is also dropped at zero — `-0.5` becomes `(0, false)` then `0.0`, NOT `-0.5`."
+    fix: "If you need the original value back later, store the `SD29x9` directly. Only round-trip when you genuinely want truncation toward zero."
+    example_bad: |
+      // WRONG — silently drops both fractional part AND sign on round-trip.
+      let original = compute_signed_fee();                                  // -0.5 SD29x9
+      let (mag, neg) = sd29x9_convert::to_parts_trunc(original);            // (0, false)
+      let restored = sd29x9_convert::from_u128(mag, neg);                    // 0.0, NOT -0.5
+    example_good: |
+      // RIGHT — keep the SD29x9 form across the boundary.
+      let original = compute_signed_fee();
+      // ... use `original` directly; only project to (u, bool) at the API surface where
+      // truncation is acceptable.
+      let (mag, neg) = sd29x9_convert::to_parts_trunc(original);             // only for display
+
+  - id: assume-symmetric-magnitude-range
+    severity: medium
+    description: "Assume `from_u128(x, true)` accepts the same magnitudes as `from_u128(x, false)` up to `+2^127`."
+    why_bad: "`SD29x9` is two's complement: the representable range is `[-2^127, +2^127 - 1]`. The max magnitude bound is computed on the positive side (`(2^127 - 1) / 10^9`); the wrap helper supports `-2^127` directly via `sd29x9::min()`, but `sd29x9_convert::from_u128` does not produce that exact value because the conversion is `wrap(x * 10^9, true)` and `x * 10^9` saturates at `2^127 - 1` not `2^127`. Code that hard-codes `+2^127` as a valid magnitude will surprise the next reader."
+    fix: "Treat the conversion bound as `max_whole = (2^127 - 1) / 10^9` ~= 1.7 x 10^29 for both signs. If you need exactly `sd29x9::min()`, construct it directly from the sibling module rather than via `from_u128`."
+    example_bad: |
+      // WRONG — assumes negative side can hold the +2^127 magnitude.
+      let edge: SD29x9 = sd29x9_convert::from_u128(0x8000_0000_0000_0000_0000_0000_0000_0000, true);
+    example_good: |
+      // RIGHT — use try_from_u128 when bounds matter, or sd29x9::min() for the exact edge value.
+      let maybe_edge: Option<SD29x9> = sd29x9_convert::try_from_u128(0x8000_0000_0000_0000_0000_0000_0000_0000, true);
+      let true_min: SD29x9 = sd29x9::min();
+
+composes_with: []   # Empty — no source-cited cross-module compositions. Sibling pointers
+                    # (sd29x9_base, sd29x9, ud30x9_convert) live in does_not_solve[];
+                    # choosing between siblings lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  # M-01 audit fix (missing scaled conversion functions between integer and
+  # fixed-point types) shipped here. `sd29x9_convert` is the canonical
+  # whole-integer <-> SD29x9 API that the audit required; previously callers
+  # had to hand-roll the 10^9 multiply / divide on top of sd29x9::wrap /
+  # unwrap, which is exactly the class of bug `confuse-from-with-wrap` warns
+  # about. Sibling module `ud30x9_convert` is the unsigned counterpart.
+  tests_count: 22
+
+  canonical_test:
+    file: math/fixed_point/tests/sd29x9_tests/conversion_tests.move
+    function: whole_number_roundtrip_preserves_supported_positive_values
+
+  precondition_proofs:
+    - precondition_fails_with: EOverflow
+      test_file: math/fixed_point/tests/sd29x9_tests/conversion_tests.move
+      test_functions: [from_u128_aborts_when_scaled_value_overflows]
+
+    - precondition_fails_with: ENegativeValue
+      test_file: math/fixed_point/tests/sd29x9_tests/conversion_tests.move
+      test_functions:
+        - to_u128_trunc_aborts_for_negative_values
+        - to_u128_trunc_aborts_for_negative_subunit_values
+        - to_u64_trunc_aborts_for_negative_subunit_values
+
+    - precondition_fails_with: EIntegerOverflow
+      test_file: math/fixed_point/tests/sd29x9_tests/conversion_tests.move
+      test_functions: [to_u64_trunc_aborts_when_whole_part_exceeds_u64_max]
+
+  do_not_demonstrations:
+    - do_not_id: confuse-from-with-wrap
+      test_functions: []   # consumer-side pattern; not in-tree
+
+    - do_not_id: to-u64-trunc-on-untrusted-negative
+      test_functions:
+        - to_u128_trunc_aborts_for_negative_values
+        - to_u128_trunc_aborts_for_negative_subunit_values
+        - to_u64_trunc_aborts_for_negative_subunit_values
+
+    - do_not_id: lossy-roundtrip-without-acknowledgment
+      test_functions:
+        - to_parts_trunc_clears_sign_for_subunit_negative_values
+        - from_u128_zero_clears_negative_sign
+
+    - do_not_id: assume-symmetric-magnitude-range
+      test_functions:
+        - from_u128_scales_max_supported_whole_magnitude
+        - from_u128_aborts_when_scaled_value_overflows
+
+  do_not_detection:
+    - do_not_id: confuse-from-with-wrap
+      pattern: "`sd29x9::wrap` called with a u64-shaped argument or a constant that semantically represents a whole-integer magnitude (e.g. literal in the low tens / hundreds)."
+      heuristic: "regex: sd29x9::wrap\\(\\s*[0-9]{1,9}\\s*,\\s*(true|false)\\s*\\)"
+
+    - do_not_id: to-u64-trunc-on-untrusted-negative
+      pattern: "`to_u64_trunc` / `to_u128_trunc` invoked on an SD29x9 value whose sign has not been narrowed by `is_zero`, `gte(sd29x9::zero())`, `abs`, or an `sd29x9_base::is_negative`-equivalent check immediately upstream."
+      heuristic: "rule: SD29x9 value -> to_u64_trunc / to_u128_trunc with no preceding non-negativity assertion in the same function body."
+
+    - do_not_id: lossy-roundtrip-without-acknowledgment
+      pattern: "to_parts_trunc / to_u*_trunc immediately followed by from_u* on the same value — round-trip would have been a no-op except for the discarded fractional part / dropped sign-at-zero."
+      heuristic: "regex: (to_parts_trunc|to_u[0-9]+_trunc)\\b[^;]*;.*\\b(from_u[0-9]+)\\b"
+
+    - do_not_id: assume-symmetric-magnitude-range
+      pattern: "Magnitude literal close to 2^127 (`0x8000_...`) passed to `from_u128(_, true)` on the assumption that the negative side accepts one more than the positive side."
+      heuristic: "constant-folding check: `x * 10^9 > 2^127 - 1` at any call site of `sd29x9_convert::from_u128`."
+
+  events: []   # No events emitted — pure conversion module.
