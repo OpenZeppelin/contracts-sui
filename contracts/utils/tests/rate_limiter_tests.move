@@ -25,7 +25,7 @@ fun bucket_starts_full_and_refills_over_time() {
     let (test, mut clk) = setup(0);
 
     // Create a bucket with capacity 30, refilling 5 every 10 ms.
-    let mut rl = rate_limiter::new_bucket(30, 5, 10, 30, &clk);
+    let mut rl = rate_limiter::new_bucket(30, 5, 10, 30, clk.timestamp_ms(), &clk);
     assert_eq!(rl.available(&clk), 30);
 
     // Consuming 20 leaves 10 tokens.
@@ -48,7 +48,7 @@ fun bucket_with_tokens_can_start_empty_and_accrue() {
     let (test, mut clk) = setup(0);
 
     // Start empty: no headroom until the first refill interval elapses.
-    let mut rl = rate_limiter::new_bucket(10, 2, 5, 0, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 2, 5, 0, clk.timestamp_ms(), &clk);
     assert_eq!(rl.available(&clk), 0);
     assert!(!rl.try_consume(1, &clk));
 
@@ -62,7 +62,7 @@ fun bucket_with_tokens_can_start_empty_and_accrue() {
 #[test, expected_failure(abort_code = rate_limiter::EInitialAboveCapacity)]
 fun bucket_with_tokens_rejects_initial_above_capacity() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_bucket(10, 1, 10, 11, &clk);
+    rate_limiter::new_bucket(10, 1, 10, 11, clk.timestamp_ms(), &clk);
     abort
 }
 
@@ -70,7 +70,7 @@ fun bucket_with_tokens_rejects_initial_above_capacity() {
 fun bucket_try_consume_returns_false_when_empty() {
     let (test, clk) = setup(0);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 100, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 100, 10, clk.timestamp_ms(), &clk);
     assert!(rl.try_consume(10, &clk));
     // No refill has happened yet, so the next consume fails without aborting.
     assert!(!rl.try_consume(1, &clk));
@@ -81,7 +81,7 @@ fun bucket_try_consume_returns_false_when_empty() {
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
 fun bucket_consume_or_abort_aborts_when_empty() {
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_bucket(5, 1, 10, 5, &clk);
+    let mut rl = rate_limiter::new_bucket(5, 1, 10, 5, clk.timestamp_ms(), &clk);
     rl.consume_or_abort(10, &clk);
     abort
 }
@@ -101,7 +101,7 @@ fun bucket_full_discards_overflow_intervals_at_same_timestamp() {
     // consume at the same t must fail.
     let (test, mut clk) = setup(1_000_000);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 100, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 100, 10, clk.timestamp_ms(), &clk);
     clk.set_for_testing(1_001_000);
 
     assert!(rl.try_consume(10, &clk));
@@ -120,7 +120,7 @@ fun bucket_partial_fill_discards_overflow_intervals_at_same_timestamp() {
     // consume at the same t must fail.
     let (test, mut clk) = setup(1_000_000);
 
-    let mut rl = rate_limiter::new_bucket(10, 1, 100, 8, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 100, 8, clk.timestamp_ms(), &clk);
     clk.set_for_testing(1_001_000);
 
     assert!(rl.try_consume(10, &clk));
@@ -349,7 +349,7 @@ fun cooldown_rejects_amount_exceeding_available() {
 #[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
 fun try_consume_with_zero_amount_aborts() {
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, clk.timestamp_ms(), &clk);
     rl.try_consume(0, &clk);
     abort
 }
@@ -375,21 +375,28 @@ fun try_consume_with_zero_amount_aborts_cooldown() {
 #[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun new_bucket_rejects_zero_capacity() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_bucket(0, 1, 1, 0, &clk);
+    rate_limiter::new_bucket(0, 1, 1, 0, clk.timestamp_ms(), &clk);
     abort
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroRefillAmount)]
 fun new_bucket_rejects_zero_refill_amount() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_bucket(10, 0, 1, 10, &clk);
+    rate_limiter::new_bucket(10, 0, 1, 10, clk.timestamp_ms(), &clk);
     abort
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroRefillInterval)]
 fun new_bucket_rejects_zero_refill_interval_ms() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_bucket(10, 1, 0, 10, &clk);
+    rate_limiter::new_bucket(10, 1, 0, 10, clk.timestamp_ms(), &clk);
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EBucketAnchorInFuture)]
+fun new_bucket_rejects_anchor_in_future() {
+    let (_test, clk) = setup(50);
+    rate_limiter::new_bucket(10, 1, 10, 10, 51, &clk);
     abort
 }
 
@@ -428,7 +435,7 @@ fun bucket_failed_try_consume_does_not_drain_state() {
     let (test, clk) = setup(0);
 
     // Long refill interval keeps accrual out of the picture.
-    let mut rl = rate_limiter::new_bucket(10, 1, 1_000_000, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 1_000_000, 10, clk.timestamp_ms(), &clk);
     rl.consume_or_abort(5, &clk);
     assert_eq!(rl.available(&clk), 5);
 
@@ -492,7 +499,7 @@ fun bucket_available_returns_up_to_date_accrual_even_on_failed_try_consume() {
     let (test, mut clk) = setup(0);
 
     // Empty bucket, 1 token / 10 ms.
-    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, clk.timestamp_ms(), &clk);
 
     // 50 ms in: 5 tokens accrued under the old anchor. An oversized request fails
     // without mutating state, but `available()` projects the accrual on read.
@@ -548,7 +555,7 @@ fun bucket_preserves_subinterval_time_across_consumes() {
     let (test, mut clk) = setup(0);
 
     // Refill 1 token every 10 ms, starting empty.
-    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, clk.timestamp_ms(), &clk);
 
     // 15 ms elapsed → exactly 1 token credited; 5 ms of fractional time must carry over.
     clk.set_for_testing(15);
@@ -573,7 +580,7 @@ fun bucket_no_overflow_with_huge_refill_amount() {
     // u64 at modest elapsed counts; the fill branch in `bucket_accrue` writes
     // `capacity` directly without computing the product.
     let huge_refill = 1_000_000_000_000_000_000;
-    let rl = rate_limiter::new_bucket(1_000_000, huge_refill, 1, 0, &clk);
+    let rl = rate_limiter::new_bucket(1_000_000, huge_refill, 1, 0, clk.timestamp_ms(), &clk);
 
     clk.set_for_testing(20);
     assert_eq!(rl.available(&clk), 1_000_000);
@@ -588,7 +595,7 @@ fun bucket_no_overflow_under_extreme_clock_advance() {
     // capacity = u64::MAX - 1 with refill_amount = 1 - exercises the fill branch under the
     // largest plausible elapsed-step count without any product overflow.
     let cap = 18446744073709551614;
-    let rl = rate_limiter::new_bucket(cap, 1, 1, 0, &clk);
+    let rl = rate_limiter::new_bucket(cap, 1, 1, 0, clk.timestamp_ms(), &clk);
 
     // elapsed_steps ≈ u64::MAX → fill branch must produce `capacity` without overflow.
     clk.set_for_testing(18446744073709551615);
@@ -646,7 +653,7 @@ fun fixed_window_first_window_has_full_length_at_nonzero_creation() {
 fun bucket_available_predicts_try_consume() {
     let (test, clk) = setup(50);
 
-    let mut rl = rate_limiter::new_bucket(20, 5, 10, 20, &clk);
+    let mut rl = rate_limiter::new_bucket(20, 5, 10, 20, clk.timestamp_ms(), &clk);
     let avail = rl.available(&clk);
     assert_eq!(avail, 20);
     assert!(rl.try_consume(avail, &clk));
@@ -689,7 +696,7 @@ fun try_consume_of_available_aborts_when_drained() {
     // is empty: available() returns 0 and try_consume(0) aborts EInvalidAmount.
     // Callers must guard with `if n > 0 { ... }`.
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_bucket(10, 1, 1_000_000, 10, &clk);
+    let mut rl = rate_limiter::new_bucket(10, 1, 1_000_000, 10, clk.timestamp_ms(), &clk);
     rl.consume_or_abort(10, &clk);
     let n = rl.available(&clk);
     rl.try_consume(n, &clk);
@@ -748,10 +755,11 @@ fun cooldown_consume_or_abort_aborts_when_in_cooldown() {
 fun getters_return_constructor_values() {
     let (test, clk) = setup(0);
 
-    let b = rate_limiter::new_bucket(30, 5, 10, 30, &clk);
+    let b = rate_limiter::new_bucket(30, 5, 10, 30, clk.timestamp_ms(), &clk);
     assert_eq!(b.capacity(), 30);
     assert_eq!(b.refill_amount(), 5);
     assert_eq!(b.refill_interval_ms(), 10);
+    assert_eq!(b.last_refill_ms(), clk.timestamp_ms());
 
     let fw = rate_limiter::new_fixed_window(7, 100, 0, 7, &clk);
     assert_eq!(fw.capacity(), 7);
@@ -792,7 +800,7 @@ fun refill_amount_on_non_bucket_aborts() {
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun window_start_ms_on_non_fixed_window_aborts() {
     let (_test, clk) = setup(0);
-    let b = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
+    let b = rate_limiter::new_bucket(10, 1, 10, 10, clk.timestamp_ms(), &clk);
     b.window_start_ms();
     abort
 }
@@ -800,7 +808,7 @@ fun window_start_ms_on_non_fixed_window_aborts() {
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun cooldown_end_ms_on_non_cooldown_aborts() {
     let (_test, clk) = setup(0);
-    let b = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
+    let b = rate_limiter::new_bucket(10, 1, 10, 10, clk.timestamp_ms(), &clk);
     b.cooldown_end_ms();
     abort
 }
@@ -816,14 +824,14 @@ fun reconfigure_bucket_via_construct_fresh_project_and_reanchor() {
     let (test, mut clk) = setup(0);
 
     // Old rate: 10 tokens / 10 ms, starts empty.
-    let mut rl = rate_limiter::new_bucket(100, 10, 10, 0, &clk);
+    let mut rl = rate_limiter::new_bucket(100, 10, 10, 0, clk.timestamp_ms(), &clk);
 
     // 50 ms in, want to switch to capacity=200 with the same projected balance, anchored
     // at now. `available(clock)` projects the 50 tokens accrued under the old rate; we
     // pass that as the new `initial_available` and reconstruct.
     clk.set_for_testing(50);
     let projected = rl.available(&clk);
-    rl = rate_limiter::new_bucket(200, 100, 1, projected, &clk);
+    rl = rate_limiter::new_bucket(200, 100, 1, projected, clk.timestamp_ms(), &clk);
 
     // Same balance as before, no retroactive new-rate credit.
     assert_eq!(rl.available(&clk), 50);

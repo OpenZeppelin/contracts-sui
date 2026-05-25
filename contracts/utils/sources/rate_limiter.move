@@ -87,6 +87,9 @@ const EInitialAboveCapacity: vector<u8> = "Initial available amount must not exc
 /// `FixedWindow` anchor strictly in the future would underflow the next projection.
 #[error(code = 9)]
 const EWindowAnchorInFuture: vector<u8> = "window_start_ms must not be in the future";
+/// `Bucket` refill anchor strictly in the future would underflow the next projection.
+#[error(code = 12)]
+const EBucketAnchorInFuture: vector<u8> = "last_refill_ms must not be in the future";
 /// `Cooldown` with both `initial_available > 0` and a future `cooldown_end_ms` is
 /// self-contradictory: the hot path ignores the gate while `available > 0`, so the
 /// seeded deadline would be silently dropped the next time the batch drains.
@@ -152,7 +155,10 @@ public enum RateLimiter has drop, store {
 /// - `refill_interval_ms`: Length of one refill interval, in milliseconds.
 /// - `initial_available`: Starting token balance. Must be `<= capacity`. Setting this to
 ///   `0` forces the caller to wait for the first refill interval before any consume succeeds.
-/// - `clock`: Reference to the Sui `Clock`, used to anchor the first refill timestamp.
+/// - `last_refill_ms`: Anchor for the refill schedule. For greenfield use, pass
+///   `clock.timestamp_ms()`; pass an earlier value to preserve the refill phase when
+///   reconstructing under a new configuration. Must be `<= clock.timestamp_ms()`.
+/// - `clock`: Reference to the Sui `Clock`, used to validate the anchor.
 ///
 /// #### Returns
 /// - A new bucket `RateLimiter` ready to be embedded in the caller's object.
@@ -162,23 +168,26 @@ public enum RateLimiter has drop, store {
 /// - `EZeroRefillAmount` if `refill_amount == 0`.
 /// - `EZeroRefillInterval` if `refill_interval_ms == 0`.
 /// - `EInitialAboveCapacity` if `initial_available > capacity`.
+/// - `EBucketAnchorInFuture` if `last_refill_ms > clock.timestamp_ms()`.
 public fun new_bucket(
     capacity: u64,
     refill_amount: u64,
     refill_interval_ms: u64,
     initial_available: u64,
+    last_refill_ms: u64,
     clock: &Clock,
 ): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(refill_amount > 0, EZeroRefillAmount);
     assert!(refill_interval_ms > 0, EZeroRefillInterval);
     assert!(initial_available <= capacity, EInitialAboveCapacity);
+    assert!(last_refill_ms <= clock.timestamp_ms(), EBucketAnchorInFuture);
 
     RateLimiter::Bucket {
         capacity,
         refill_amount,
         refill_interval_ms,
-        last_refill_ms: clock.timestamp_ms(),
+        last_refill_ms,
         available: initial_available,
     }
 }
@@ -456,6 +465,18 @@ public fun refill_amount(self: &RateLimiter): u64 {
 public fun refill_interval_ms(self: &RateLimiter): u64 {
     match (self) {
         RateLimiter::Bucket { refill_interval_ms, .. } => *refill_interval_ms,
+        _ => abort EWrongVariant,
+    }
+}
+
+/// Timestamp of the last refill checkpoint. Exposed so callers can preserve the
+/// refill phase when reconstructing a bucket under a new configuration.
+///
+/// #### Aborts
+/// - `EWrongVariant` if the limiter is not a `Bucket`.
+public fun last_refill_ms(self: &RateLimiter): u64 {
+    match (self) {
+        RateLimiter::Bucket { last_refill_ms, .. } => *last_refill_ms,
         _ => abort EWrongVariant,
     }
 }
