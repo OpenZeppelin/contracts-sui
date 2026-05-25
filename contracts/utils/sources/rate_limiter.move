@@ -440,7 +440,6 @@ public fun reconfigure_bucket(
             );
             *refill_amount_field = refill_amount;
             *refill_interval_field = refill_interval_ms;
-            // new configs apply from now on, so completely restart the refill interval
             *last_refill_ms = now;
             // capacity was already updated, so we can just assign
             *available = new_available;
