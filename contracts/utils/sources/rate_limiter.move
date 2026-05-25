@@ -426,9 +426,6 @@ public fun reconfigure_bucket(
             assert!(refill_amount > 0, EZeroRefillAmount);
             assert!(refill_interval_ms > 0, EZeroRefillInterval);
 
-            // capacity will be clamped anyway, so do it prior to accrual
-            *cap_field = capacity;
-
             let now = clock.timestamp_ms();
             let (_, new_available) = bucket_accrue(
                 *last_refill_ms,
@@ -438,11 +435,11 @@ public fun reconfigure_bucket(
                 *refill_interval_field,
                 now,
             );
+            *cap_field = capacity;
             *refill_amount_field = refill_amount;
             *refill_interval_field = refill_interval_ms;
             *last_refill_ms = now;
-            // capacity was already updated, so we can just assign
-            *available = new_available;
+            *available = new_available.min(capacity);
         },
         _ => abort EWrongVariant,
     }
