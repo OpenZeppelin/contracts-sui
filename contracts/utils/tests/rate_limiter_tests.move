@@ -1615,10 +1615,42 @@ fun refill_amount_on_non_bucket_aborts() {
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
+fun refill_interval_ms_on_non_bucket_aborts() {
+    let (_test, clk) = setup(0);
+    let fw = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    fw.refill_interval_ms();
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
+fun last_refill_ms_on_non_bucket_aborts() {
+    let (_test, clk) = setup(0);
+    let cd = rate_limiter::new_cooldown(1, 50, 1, 0, &clk);
+    cd.last_refill_ms();
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun window_start_ms_on_non_fixed_window_aborts() {
     let (_test, clk) = setup(0);
     let b = rate_limiter::new_bucket(10, 1, 10, 10, clk.timestamp_ms(), &clk);
     b.window_start_ms();
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
+fun window_ms_on_non_fixed_window_aborts() {
+    let (_test, clk) = setup(0);
+    let cd = rate_limiter::new_cooldown(1, 50, 1, 0, &clk);
+    cd.window_ms();
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
+fun cooldown_ms_on_non_cooldown_aborts() {
+    let (_test, clk) = setup(0);
+    let fw = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    fw.cooldown_ms();
     abort
 }
 
@@ -1630,7 +1662,35 @@ fun cooldown_end_ms_on_non_cooldown_aborts() {
     abort
 }
 
-// === Reconfigure via construct-fresh path ===
+// === Construction-time anchor boundaries ===
+
+#[test]
+fun bucket_with_past_anchor_credits_elapsed_time_on_first_read() {
+    // `last_refill_ms < now` is accepted: elapsed intervals since the past anchor are
+    // credited the next time accrual is projected, with `initial_available` as the
+    // starting balance.
+    let (test, clk) = setup(100);
+
+    // Anchor 50 ms in the past, empty start, 1 token / 10 ms. 5 intervals already elapsed.
+    let rl = rate_limiter::new_bucket(10, 1, 10, 0, 50, &clk);
+    assert_eq!(rl.last_refill_ms(), 50);
+    assert_eq!(rl.available(&clk), 5);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_accepts_gate_at_exact_now_with_tokens() {
+    // The constructor's gate-with-tokens check is `cooldown_end_ms <= now`, so
+    // `cooldown_end_ms == now` with `initial_available > 0` is the inclusive boundary
+    // and must be accepted.
+    let (test, clk) = setup(100);
+    let rl = rate_limiter::new_cooldown(5, 50, 3, 100, &clk);
+    assert_eq!(rl.available(&clk), 3);
+    teardown(test, clk);
+}
+
+// === Reconfigure via construct-fresh ===
 //
 // The rich constructors + getters let integrators express any carry-over semantics by
 // reading current state, computing the desired field values, and overwriting the field
