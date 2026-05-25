@@ -145,7 +145,7 @@ fun fixed_window_can_start_with_partial_available() {
     let (test, mut clk) = setup(0);
 
     // Start with 1 of 3 units available; the first window is partially consumed.
-    let mut rl = rate_limiter::new_fixed_window(3, 100, 0, 1);
+    let mut rl = rate_limiter::new_fixed_window(3, 100, 0, 1, &clk);
     assert_eq!(rl.available(&clk), 1);
 
     rl.consume_or_abort(1, &clk);
@@ -162,7 +162,14 @@ fun fixed_window_can_start_with_partial_available() {
 #[test, expected_failure(abort_code = rate_limiter::EInitialAboveCapacity)]
 fun fixed_window_rejects_initial_above_capacity() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_fixed_window(5, 100, 0, 6);
+    rate_limiter::new_fixed_window(5, 100, 0, 6, &clk);
+    abort
+}
+
+#[test, expected_failure(abort_code = rate_limiter::EWindowAnchorInFuture)]
+fun fixed_window_rejects_anchor_in_future() {
+    let (_test, clk) = setup(50);
+    rate_limiter::new_fixed_window(5, 100, 51, 5, &clk);
     abort
 }
 
@@ -171,7 +178,7 @@ fun fixed_window_counts_per_window_and_resets_on_boundary() {
     let (test, mut clk) = setup(0);
 
     // 3 consumes per 100 ms window.
-    let mut rl = rate_limiter::new_fixed_window(3, 100, 0, 3);
+    let mut rl = rate_limiter::new_fixed_window(3, 100, 0, 3, &clk);
     assert_eq!(rl.available(&clk), 3);
 
     rl.consume_or_abort(1, &clk);
@@ -197,7 +204,7 @@ fun cooldown_can_start_with_partial_available() {
     let (test, clk) = setup(0);
 
     // Start with 2 of 5 units already consumed.
-    let mut rl = rate_limiter::new_cooldown(5, 50, 3, 0);
+    let mut rl = rate_limiter::new_cooldown(5, 50, 3, 0, &clk);
     assert_eq!(rl.available(&clk), 3);
 
     rl.consume_or_abort(3, &clk);
@@ -209,14 +216,39 @@ fun cooldown_can_start_with_partial_available() {
 
 #[test, expected_failure(abort_code = rate_limiter::EInitialAboveCapacity)]
 fun cooldown_rejects_initial_above_capacity() {
-    rate_limiter::new_cooldown(5, 50, 6, 0);
+    let (_test, clk) = setup(0);
+    rate_limiter::new_cooldown(5, 50, 6, 0, &clk);
+    abort
 }
 
-#[test, expected_failure(abort_code = rate_limiter::ECooldownBricked)]
-fun cooldown_rejects_zero_initial_and_zero_end() {
-    // With both `initial_available == 0` and `cooldown_end_ms == 0` the limiter is
-    // permanently bricked: nothing to consume now and no gate to ever release.
-    rate_limiter::new_cooldown(5, 50, 0, 0);
+#[test, expected_failure(abort_code = rate_limiter::ECooldownArmedWithTokens)]
+fun cooldown_rejects_armed_gate_with_tokens() {
+    // initial_available > 0 with cooldown_end_ms in the future is contradictory:
+    // the hot path consults cooldown_end_ms only when available == 0, so the seeded
+    // deadline would be silently dropped the next time the batch drains.
+    let (_test, clk) = setup(50);
+    rate_limiter::new_cooldown(5, 50, 3, 100, &clk);
+    abort
+}
+
+#[test]
+fun cooldown_accepts_stale_gate_with_tokens() {
+    // A non-zero cooldown_end_ms that's already in the past is harmless: the gate
+    // would project as released anyway, and it will be overwritten on the next drain.
+    let (test, clk) = setup(100);
+    let rl = rate_limiter::new_cooldown(5, 50, 3, 50, &clk);
+    assert_eq!(rl.available(&clk), 3);
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_accepts_zero_initial_and_zero_end() {
+    // With both `initial_available == 0` and `cooldown_end_ms == 0` the limiter acts
+    // as if available was appropriately set.
+    let (test, clk) = setup(0);
+    let rl = rate_limiter::new_cooldown(5, 50, 0, 0, &clk);
+    assert_eq!(rl.available(&clk), 5);
+    teardown(test, clk);
 }
 
 #[test]
@@ -225,7 +257,7 @@ fun cooldown_zero_initial_with_armed_gate_releases_on_elapse() {
     // `cooldown_end_ms > 0` (e.g. when reconstructing a limiter mid-throttle).
     let (test, mut clk) = setup(0);
 
-    let mut rl = rate_limiter::new_cooldown(5, 50, 0, 100);
+    let mut rl = rate_limiter::new_cooldown(5, 50, 0, 100, &clk);
     assert_eq!(rl.available(&clk), 0);
     assert!(!rl.try_consume(1, &clk));
 
@@ -246,7 +278,7 @@ fun cooldown_requires_elapsed_time_between_consumes() {
     let (test, mut clk) = setup(100);
 
     // 50 ms cooldown between single-unit consumes (capacity 1 => cooldown after each).
-    let mut rl = rate_limiter::new_cooldown(1, 50, 1, 0);
+    let mut rl = rate_limiter::new_cooldown(1, 50, 1, 0, &clk);
     assert_eq!(rl.available(&clk), 1);
 
     // First consume succeeds.
@@ -271,7 +303,7 @@ fun cooldown_decrements_available_by_amount_until_drained_then_gates() {
 
     // Capacity 5: try_consume(amount) decrements `available` by `amount`,
     // until `available == 0`, then the cooldown gates.
-    let mut rl = rate_limiter::new_cooldown(5, 50, 5, 0);
+    let mut rl = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
     assert!(rl.try_consume(2, &clk));
     assert_eq!(rl.available(&clk), 3);
     assert!(rl.try_consume(1, &clk));
@@ -295,7 +327,7 @@ fun cooldown_rejects_amount_exceeding_available() {
 
     // Picking an `amount` that fits is the caller's responsibility; oversized requests
     // are rejected without changing state.
-    let mut rl = rate_limiter::new_cooldown(5, 50, 5, 0);
+    let mut rl = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
     assert!(rl.try_consume(3, &clk));
     assert_eq!(rl.available(&clk), 2);
 
@@ -325,7 +357,7 @@ fun try_consume_with_zero_amount_aborts() {
 #[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
 fun try_consume_with_zero_amount_aborts_fixed_window() {
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_fixed_window(10, 100, 0, 10);
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 0, 10, &clk);
     rl.try_consume(0, &clk);
     abort
 }
@@ -333,7 +365,7 @@ fun try_consume_with_zero_amount_aborts_fixed_window() {
 #[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
 fun try_consume_with_zero_amount_aborts_cooldown() {
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_cooldown(10, 50, 10, 0);
+    let mut rl = rate_limiter::new_cooldown(10, 50, 10, 0, &clk);
     rl.try_consume(0, &clk);
     abort
 }
@@ -364,25 +396,29 @@ fun new_bucket_rejects_zero_refill_interval_ms() {
 #[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun new_fixed_window_rejects_zero_capacity() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_fixed_window(0, 100, 0, 0);
+    rate_limiter::new_fixed_window(0, 100, 0, 0, &clk);
     abort
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroWindow)]
 fun new_fixed_window_rejects_zero_window_ms() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_fixed_window(10, 0, 0, 10);
+    rate_limiter::new_fixed_window(10, 0, 0, 10, &clk);
     abort
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCooldown)]
 fun new_cooldown_rejects_zero_cooldown_ms() {
-    rate_limiter::new_cooldown(1, 0, 1, 0);
+    let (_test, clk) = setup(0);
+    rate_limiter::new_cooldown(1, 0, 1, 0, &clk);
+    abort
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EZeroCapacity)]
 fun new_cooldown_rejects_zero_capacity() {
-    rate_limiter::new_cooldown(0, 50, 0, 0);
+    let (_test, clk) = setup(0);
+    rate_limiter::new_cooldown(0, 50, 0, 0, &clk);
+    abort
 }
 
 // === All-or-nothing failure semantics ===
@@ -411,7 +447,7 @@ fun bucket_failed_try_consume_does_not_drain_state() {
 fun fixed_window_failed_try_consume_does_not_advance_used() {
     let (test, clk) = setup(0);
 
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
     rl.consume_or_abort(3, &clk);
     assert_eq!(rl.available(&clk), 2);
 
@@ -429,7 +465,7 @@ fun fixed_window_failed_try_consume_does_not_advance_used() {
 fun cooldown_failed_try_consume_does_not_reset_anchor() {
     let (test, mut clk) = setup(0);
 
-    let mut rl = rate_limiter::new_cooldown(1, 100, 1, 0);
+    let mut rl = rate_limiter::new_cooldown(1, 100, 1, 0, &clk);
     assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 100
 
     // Failed call mid-cooldown must NOT push the deadline forward.
@@ -475,7 +511,7 @@ fun bucket_available_returns_up_to_date_accrual_even_on_failed_try_consume() {
 fun fixed_window_available_reflects_rollover_after_failed_try_consume() {
     let (test, mut clk) = setup(0);
 
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
     rl.consume_or_abort(3, &clk);
     assert_eq!(rl.available(&clk), 2);
 
@@ -492,7 +528,7 @@ fun fixed_window_available_reflects_rollover_after_failed_try_consume() {
 fun cooldown_available_reflects_release_after_failed_try_consume() {
     let (test, mut clk) = setup(0);
 
-    let mut rl = rate_limiter::new_cooldown(5, 50, 5, 0);
+    let mut rl = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
     assert!(rl.try_consume(5, &clk)); // arms the gate: deadline = 50, available = 0
 
     // Past the deadline, attempt an oversized consume. The failed consume does NOT
@@ -567,7 +603,7 @@ fun fixed_window_try_consume_max_amount_returns_false() {
 
     // The check is `amount > capacity - used` (not `used + amount > capacity`), so
     // u64::MAX is rejected without overflowing.
-    let mut rl = rate_limiter::new_fixed_window(10, 100, 0, 10);
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 0, 10, &clk);
     assert!(!rl.try_consume(18446744073709551615, &clk));
     // State unchanged on rejection.
     assert_eq!(rl.available(&clk), 10);
@@ -583,7 +619,7 @@ fun fixed_window_first_window_has_full_length_at_nonzero_creation() {
 
     // Creation at t=99 with window_ms=100. First window is [99, 199), not the
     // wall-clock-aligned [0, 100) the previous design produced.
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 99, 5);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 99, 5, &clk);
     rl.consume_or_abort(3, &clk);
 
     // Wall-clock alignment would have rolled at t=100 (start of [100, 200)). With the
@@ -623,7 +659,7 @@ fun bucket_available_predicts_try_consume() {
 fun fixed_window_available_predicts_try_consume() {
     let (test, clk) = setup(0);
 
-    let mut rl = rate_limiter::new_fixed_window(7, 100, 0, 7);
+    let mut rl = rate_limiter::new_fixed_window(7, 100, 0, 7, &clk);
     let avail = rl.available(&clk);
     assert_eq!(avail, 7);
     assert!(rl.try_consume(avail, &clk));
@@ -638,7 +674,7 @@ fun cooldown_available_predicts_try_consume() {
 
     // available == N ⇒ try_consume(amount) succeeds whenever amount ≤ N
     // (uniform with Bucket / FixedWindow).
-    let mut rl = rate_limiter::new_cooldown(7, 50, 7, 0);
+    let mut rl = rate_limiter::new_cooldown(7, 50, 7, 0, &clk);
     let avail = rl.available(&clk);
     assert_eq!(avail, 7);
     assert!(rl.try_consume(avail, &clk));
@@ -666,7 +702,7 @@ fun fixed_window_try_consume_of_available_aborts_when_exhausted() {
     // available() returns 0 inside an exhausted window before rollover, and try_consume(0)
     // aborts EInvalidAmount.
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
     rl.consume_or_abort(5, &clk);
     let n = rl.available(&clk);
     rl.try_consume(n, &clk);
@@ -679,7 +715,7 @@ fun cooldown_try_consume_of_available_aborts_when_gated() {
     // available() returns 0 while the gate is armed (deadline not yet elapsed), and
     // try_consume(0) aborts EInvalidAmount.
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_cooldown(5, 50, 5, 0);
+    let mut rl = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
     rl.consume_or_abort(5, &clk); // drains and arms the gate
     let n = rl.available(&clk);
     rl.try_consume(n, &clk);
@@ -691,7 +727,7 @@ fun cooldown_try_consume_of_available_aborts_when_gated() {
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
 fun fixed_window_consume_or_abort_aborts_when_full() {
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_fixed_window(2, 100, 0, 2);
+    let mut rl = rate_limiter::new_fixed_window(2, 100, 0, 2, &clk);
     rl.consume_or_abort(2, &clk);
     rl.consume_or_abort(1, &clk);
     abort
@@ -700,7 +736,7 @@ fun fixed_window_consume_or_abort_aborts_when_full() {
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
 fun cooldown_consume_or_abort_aborts_when_in_cooldown() {
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_cooldown(1, 100, 1, 0);
+    let mut rl = rate_limiter::new_cooldown(1, 100, 1, 0, &clk);
     rl.consume_or_abort(1, &clk);
     rl.consume_or_abort(1, &clk);
     abort
@@ -717,12 +753,12 @@ fun getters_return_constructor_values() {
     assert_eq!(b.refill_amount(), 5);
     assert_eq!(b.refill_interval_ms(), 10);
 
-    let fw = rate_limiter::new_fixed_window(7, 100, 0, 7);
+    let fw = rate_limiter::new_fixed_window(7, 100, 0, 7, &clk);
     assert_eq!(fw.capacity(), 7);
     assert_eq!(fw.window_ms(), 100);
     assert_eq!(fw.window_start_ms(), 0);
 
-    let cd = rate_limiter::new_cooldown(5, 50, 5, 0);
+    let cd = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
     assert_eq!(cd.capacity(), 5);
     assert_eq!(cd.cooldown_ms(), 50);
     assert_eq!(cd.cooldown_end_ms(), 0);
@@ -734,7 +770,7 @@ fun getters_return_constructor_values() {
 fun cooldown_end_ms_getter_observes_arm_after_drain() {
     let (test, mut clk) = setup(0);
 
-    let mut rl = rate_limiter::new_cooldown(1, 100, 1, 0);
+    let mut rl = rate_limiter::new_cooldown(1, 100, 1, 0, &clk);
     assert_eq!(rl.cooldown_end_ms(), 0);
 
     clk.set_for_testing(10);
@@ -747,8 +783,10 @@ fun cooldown_end_ms_getter_observes_arm_after_drain() {
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun refill_amount_on_non_bucket_aborts() {
-    let cd = rate_limiter::new_cooldown(1, 50, 1, 0);
+    let (_test, clk) = setup(0);
+    let cd = rate_limiter::new_cooldown(1, 50, 1, 0, &clk);
     cd.refill_amount();
+    abort
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
@@ -798,7 +836,7 @@ fun reconfigure_fixed_window_via_construct_fresh_preserve_anchor() {
     let (test, mut clk) = setup(0);
 
     // 5 units per 100 ms, anchored at 0.
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
     rl.consume_or_abort(2, &clk);
     assert_eq!(rl.available(&clk), 3);
 
@@ -809,7 +847,7 @@ fun reconfigure_fixed_window_via_construct_fresh_preserve_anchor() {
     let projected = rl.available(&clk);
     let new_cap = 4;
     let initial = if (projected < new_cap) projected else new_cap;
-    rl = rate_limiter::new_fixed_window(new_cap, 100, anchor, initial);
+    rl = rate_limiter::new_fixed_window(new_cap, 100, anchor, initial, &clk);
 
     // Same window as before — rollover still lands at t=100.
     assert_eq!(rl.available(&clk), 3);
@@ -826,7 +864,7 @@ fun reconfigure_cooldown_via_construct_fresh_preserve_in_flight_gate() {
     let (test, mut clk) = setup(0);
 
     // Capacity 3, cooldown 50, fully available.
-    let mut rl = rate_limiter::new_cooldown(3, 50, 3, 0);
+    let mut rl = rate_limiter::new_cooldown(3, 50, 3, 0, &clk);
     assert!(rl.try_consume(3, &clk)); // arms gate at cooldown_end_ms = 50
 
     // Mid-throttle: keep the in-flight deadline, just change cooldown_ms (which only
@@ -834,7 +872,7 @@ fun reconfigure_cooldown_via_construct_fresh_preserve_in_flight_gate() {
     // runs to completion under the old schedule.
     clk.set_for_testing(20);
     let end = rl.cooldown_end_ms();
-    rl = rate_limiter::new_cooldown(3, 500, 0, end);
+    rl = rate_limiter::new_cooldown(3, 500, 0, end, &clk);
 
     // Original deadline still in effect.
     clk.set_for_testing(49);

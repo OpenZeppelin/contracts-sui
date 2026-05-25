@@ -84,13 +84,15 @@ const EZeroCooldown: vector<u8> = "Cooldown must be greater than zero";
 /// Initial available amount must not exceed capacity.
 #[error(code = 8)]
 const EInitialAboveCapacity: vector<u8> = "Initial available amount must not exceed capacity";
-/// A `Cooldown` limiter must be constructible in some state from which a future consume
-/// can succeed: either `initial_available > 0`, or the gate is armed
-/// (`cooldown_end_ms > 0`) so a future consume can release on elapse. Both zero would
-/// permanently brick the limiter.
+/// `FixedWindow` anchor strictly in the future would underflow the next projection.
 #[error(code = 9)]
-const ECooldownBricked: vector<u8> =
-    "Cooldown must have nonzero initial_available or armed cooldown_end_ms";
+const EWindowAnchorInFuture: vector<u8> = "window_start_ms must not be in the future";
+/// `Cooldown` with both `initial_available > 0` and a future `cooldown_end_ms` is
+/// self-contradictory: the hot path ignores the gate while `available > 0`, so the
+/// seeded deadline would be silently dropped the next time the batch drains.
+#[error(code = 10)]
+const ECooldownArmedWithTokens: vector<u8> =
+    "Armed cooldown_end_ms is incompatible with initial_available > 0";
 
 // === Structs ===
 
@@ -186,15 +188,16 @@ public fun new_bucket(
 /// `k >= 0`. For greenfield use, pass `clock.timestamp_ms()` as `window_start_ms`; pass an
 /// earlier value to seed a limiter that is already partway through a window.
 ///
-/// The caller is responsible for ensuring `window_start_ms <= clock.timestamp_ms()` at
-/// every subsequent call site: an anchor strictly in the future would underflow the next
-/// projection.
+/// A future anchor is rejected at construction; combined with the Sui `Clock`'s
+/// monotonicity, this keeps `window_start_ms <= clock.timestamp_ms()` at every subsequent
+/// call site so that the projection cannot underflow.
 ///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per window.
 /// - `window_ms`: Length of one window, in milliseconds.
-/// - `window_start_ms`: Anchor for the first window.
+/// - `window_start_ms`: Anchor for the first window. Must be `<= clock.timestamp_ms()`.
 /// - `initial_available`: Starting available units for the current window.
+/// - `clock`: Reference to the Sui `Clock`, used to validate the anchor.
 ///
 /// #### Returns
 /// - A new fixed window `RateLimiter` ready to be embedded in the caller's object.
@@ -203,15 +206,18 @@ public fun new_bucket(
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroWindow` if `window_ms == 0`.
 /// - `EInitialAboveCapacity` if `initial_available > capacity`.
+/// - `EWindowAnchorInFuture` if `window_start_ms > clock.timestamp_ms()`.
 public fun new_fixed_window(
     capacity: u64,
     window_ms: u64,
     window_start_ms: u64,
     initial_available: u64,
+    clock: &Clock,
 ): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(window_ms > 0, EZeroWindow);
     assert!(initial_available <= capacity, EInitialAboveCapacity);
+    assert!(window_start_ms <= clock.timestamp_ms(), EWindowAnchorInFuture);
 
     RateLimiter::FixedWindow {
         capacity,
@@ -225,20 +231,21 @@ public fun new_fixed_window(
 /// per-call `amount`s) before the limiter requires `cooldown_ms` to elapse before the next
 /// batch.
 ///
-/// For greenfield use, pass `cooldown_end_ms = 0` (no gate armed) and `initial_available > 0`.
-/// To seed a limiter with an in-flight gate (e.g. when migrating state), pass
-/// `initial_available = 0` together with `cooldown_end_ms` set to the deadline. The library
-/// rejects only the bricked combination where both are zero.
+/// Two configurations are valid:
+/// - greenfield: `initial_available > 0` with `cooldown_end_ms <= now` (typically `0`). The
+///   gate is not armed; up to `initial_available` units can be consumed before the first arm.
+/// - in-flight gate: `initial_available == 0` with `cooldown_end_ms > now`, used when
+///   reconstructing a limiter mid-throttle.
 ///
-/// `cooldown_end_ms` is only consulted by the hot path when `available == 0`; if
-/// `initial_available > 0`, any value of `cooldown_end_ms` is harmless (it will be
-/// overwritten the next time the batch drains).
+/// The library rejects contradictory combination: `initial_available > 0` with
+/// `cooldown_end_ms > now`.
 ///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per batch.
 /// - `cooldown_ms`: Wait, in milliseconds, between exhausting the batch and the next reset.
 /// - `initial_available`: Starting available units. Must be `<= capacity`.
-/// - `cooldown_end_ms`: Initial gate deadline. `0` means no gate armed.
+/// - `cooldown_end_ms`: Initial gate deadline. `<= now` means no gate armed.
+/// - `clock`: Reference to the Sui `Clock`, used to validate the gate-deadline pairing.
 ///
 /// #### Returns
 /// - A new cooldown `RateLimiter`.
@@ -247,17 +254,21 @@ public fun new_fixed_window(
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroCooldown` if `cooldown_ms == 0`.
 /// - `EInitialAboveCapacity` if `initial_available > capacity`.
-/// - `ECooldownBricked` if `initial_available == 0 && cooldown_end_ms == 0`.
+/// - `ECooldownArmedWithTokens` if `initial_available > 0 && cooldown_end_ms > clock.timestamp_ms()`.
 public fun new_cooldown(
     capacity: u64,
     cooldown_ms: u64,
     initial_available: u64,
     cooldown_end_ms: u64,
+    clock: &Clock,
 ): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(cooldown_ms > 0, EZeroCooldown);
     assert!(initial_available <= capacity, EInitialAboveCapacity);
-    assert!(initial_available > 0 || cooldown_end_ms > 0, ECooldownBricked);
+    assert!(
+        initial_available == 0 || cooldown_end_ms <= clock.timestamp_ms(),
+        ECooldownArmedWithTokens,
+    );
 
     RateLimiter::Cooldown {
         capacity,
@@ -394,7 +405,6 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
             accrued
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, available } => {
-            // FixedWindow is a Bucket with `refill_amount = capacity`; see `try_consume`.
             let (_, accrued) = bucket_accrue(
                 *window_start_ms,
                 *available,
