@@ -671,37 +671,99 @@ fun fixed_window_reconfigure_rolls_under_old_window_first() {
     teardown(test, clk);
 }
 
-// === Cooldown reconfigure resets in-flight deadline ===
+// === Cooldown reconfigure: clamped rebase (no-extend) ===
+//
+// In-flight deadline rebases as `arm_time + new_cooldown_ms`, clamped to the old deadline:
+// admin can shorten an active wait but never extend it.
 
 #[test]
-fun cooldown_reconfigure_resets_in_flight_deadline() {
+fun cooldown_reconfigure_grow_does_not_extend_in_flight_deadline() {
     let (test, mut clk) = setup(0);
 
     let mut rl = rate_limiter::new_cooldown(1, 50, 1);
-    assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 50, available = 0
+    assert!(rl.try_consume(1, &clk)); // cooldown_end_ms = 50, available = 0, arm_time = 0
 
-    // Reconfigure mid-cooldown with a longer cooldown. The in-flight deadline does NOT
-    // carry over; `cooldown_end_ms` is reset to `now + new_cooldown_ms = 20 + 100 = 120`.
+    // Reconfigure mid-cooldown with a LONGER cooldown. Rebased would be 0 + 100 = 100,
+    // but no-extend clamps it to the old deadline (50). The active wait is unchanged.
     clk.set_for_testing(20);
     rl.reconfigure_cooldown(1, 100, &clk);
 
-    // Past the OLD deadline of 50: still gated under the new schedule.
+    // Just before the old deadline: still gated.
+    clk.set_for_testing(49);
+    assert_eq!(rl.available(&clk), 0);
+
+    // At the old deadline: gate releases (no extension applied).
     clk.set_for_testing(50);
-    assert_eq!(rl.available(&clk), 0);
-
-    // Just before the new deadline: still gated.
-    clk.set_for_testing(119);
-    assert_eq!(rl.available(&clk), 0);
-
-    // At the new deadline: gate releases.
-    clk.set_for_testing(120);
     assert_eq!(rl.available(&clk), 1);
     assert!(rl.try_consume(1, &clk)); // arms a fresh gate with NEW cooldown_ms=100
 
-    // The fresh gate uses the new cooldown: 120 + 100 = 220.
-    clk.set_for_testing(219);
+    // The fresh gate uses the new cooldown: 50 + 100 = 150.
+    clk.set_for_testing(149);
     assert_eq!(rl.available(&clk), 0);
-    clk.set_for_testing(220);
+    clk.set_for_testing(150);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_reconfigure_shrink_brings_in_flight_deadline_forward() {
+    let (test, mut clk) = setup(0);
+
+    // Long cooldown: 1000 ms. Gate armed at t=0, deadline = 1000.
+    let mut rl = rate_limiter::new_cooldown(1, 1000, 1);
+    assert!(rl.try_consume(1, &clk));
+
+    // 200 ms later, shrink cooldown to 500. Rebased = 0 + 500 = 500; old = 1000.
+    // No-extend clamp picks the smaller: deadline = 500.
+    clk.set_for_testing(200);
+    rl.reconfigure_cooldown(1, 500, &clk);
+
+    // Just before rebased deadline: still gated.
+    clk.set_for_testing(499);
+    assert_eq!(rl.available(&clk), 0);
+
+    // At rebased deadline: gate releases.
+    clk.set_for_testing(500);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_reconfigure_shrink_past_now_releases_immediately() {
+    let (test, mut clk) = setup(0);
+
+    // Gate armed at t=0 with cooldown=1000, deadline=1000.
+    let mut rl = rate_limiter::new_cooldown(1, 1000, 1);
+    assert!(rl.try_consume(1, &clk));
+
+    // At t=500, shrink cooldown to 100. Rebased = 0 + 100 = 100; min(100, 1000) = 100.
+    // 100 <= 500, so gate releases immediately and `available` becomes new capacity.
+    clk.set_for_testing(500);
+    rl.reconfigure_cooldown(2, 100, &clk);
+    assert_eq!(rl.available(&clk), 2);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_reconfigure_with_identical_cooldown_preserves_deadline() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(1, 100, 1);
+    assert!(rl.try_consume(1, &clk)); // deadline = 100
+
+    // Reconfiguring with the same cooldown_ms mid-flight must be a no-op for the deadline.
+    clk.set_for_testing(50);
+    rl.reconfigure_cooldown(1, 100, &clk);
+
+    // Just before the original deadline: still gated.
+    clk.set_for_testing(99);
+    assert_eq!(rl.available(&clk), 0);
+
+    // At the original deadline: gate releases.
+    clk.set_for_testing(100);
     assert_eq!(rl.available(&clk), 1);
 
     teardown(test, clk);

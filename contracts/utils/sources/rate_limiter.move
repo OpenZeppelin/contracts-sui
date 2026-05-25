@@ -502,15 +502,21 @@ public fun reconfigure_fixed_window(
 /// Projects state forward under the old config first: if the gate has already elapsed,
 /// `available` is realized to the old capacity (mirroring what the next `try_consume` would
 /// have done). Then `available` is clamped to the new capacity. If after projection and
-/// clamping `available == 0`, the gate is still in flight - the deadline is restarted at
-/// `now + cooldown_ms` under the new `cooldown_ms`. An in-flight deadline armed under the
-/// old config does NOT carry over.
+/// clamping `available == 0`, the gate is still in flight - its deadline is rebased to
+/// `arm_time + cooldown_ms` (as if the new `cooldown_ms` had been in effect since the gate
+/// was armed), but **clamped to the old deadline** so reconfigure can never extend an
+/// in-flight wait. If the rebased deadline is `<= now`, the gate releases immediately and
+/// `available` is set to the new capacity.
+///
+/// In short: a benevolent admin can shorten an active wait (emergency release, fix an
+/// over-long misconfig) but can never lengthen one. Reconfiguring with identical
+/// `cooldown_ms` is observably a no-op for the deadline.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
 /// - `capacity`: New maximum units consumable per batch.
 /// - `cooldown_ms`: New wait between batches, in milliseconds.
-/// - `clock`: Reference to the Sui `Clock`, used to arm a fresh deadline if needed.
+/// - `clock`: Reference to the Sui `Clock`, used to detect gate release and rebase the deadline.
 ///
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not currently a `Cooldown`.
@@ -539,15 +545,28 @@ public fun reconfigure_cooldown(
             if (*available == 0 && now >= *cooldown_end_ms) {
                 *available = *cap_field;
             };
-            *cd_field = cooldown_ms;
             *cap_field = capacity;
             *available = (*available).min(capacity);
 
             if (*available == 0) {
-                // SAFETY: `now + cooldown_ms` overflow is the operator's responsibility
-                // (see module-level "Operator responsibilities").
-                *cooldown_end_ms = now + cooldown_ms;
+                // Gate is in flight. Rebase the deadline as if the new `cooldown_ms` had
+                // been in effect since the gate was armed, but never extend past the old
+                // deadline - admin can only shorten.
+                // SAFETY: `cooldown_end_ms >= *cd_field` because the gate was armed as
+                // `now_at_arm + *cd_field`, so the subtraction does not underflow.
+                let arm_time = *cooldown_end_ms - *cd_field;
+                // SAFETY: `arm_time + cooldown_ms` overflow is the operator's responsibility
+                // (see module-level "Operator responsibilities"). `arm_time <= now`, so any
+                // policy-meaningful `cooldown_ms` stays well below `u64::MAX`.
+                let rebased = arm_time + cooldown_ms;
+                let new_deadline = rebased.min(*cooldown_end_ms);
+                if (new_deadline <= now) {
+                    *available = capacity;
+                } else {
+                    *cooldown_end_ms = new_deadline;
+                };
             };
+            *cd_field = cooldown_ms;
         },
         _ => abort EWrongVariant,
     }
