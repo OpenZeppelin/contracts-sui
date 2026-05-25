@@ -13,6 +13,10 @@ The library is organized into top-level package groups, and each group has its o
 
 Each package within a group is a self-contained Move package with its own `Move.toml`, `Published.toml`, `sources/`, `tests/`, and `README.md`. The package's README is the authoritative documentation for what that package provides and how to use it.
 
+## Machine-readable module metadata
+
+Each package's `llms/` directory contains per-module YAML files describing APIs, error codes, integration patterns, and anti-patterns — designed for AI agents to ground code generation at the schema level rather than re-deriving structure from source. A module declared as `openzeppelin_<pkg>::<module>` is documented at `<package-path>/llms/<module>.yaml`, with subdirectories mirroring the package's `sources/` organization where applicable. Coverage is incremental — not every module ships a YAML yet.
+
 ## Depending on a package from your project
 
 **Stable releases (recommended).** Audited stable releases of each package are published to the [Move Package Registry (MVR)](https://www.moveregistry.com/) under the `@openzeppelin-move` namespace — for example, [@openzeppelin-move/fixed-point-math](https://www.moveregistry.com/package/@openzeppelin-move/fixed-point-math). This is the right pin for production code. To depend on a package, add it to your `Move.toml`:
