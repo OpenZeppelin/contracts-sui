@@ -15,8 +15,9 @@
 ///    their own struct,
 /// 2. hot paths call `consume_or_abort` or `try_consume`,
 /// 3. read paths call `available` for inspection,
-/// 4. when configuration changes, the integrator calls the matching `reconfigure_*` function
-///    on its own object's limiter field.
+/// 4. when configuration or runtime state must change, the integrator constructs a fresh
+///    `RateLimiter` with the desired field values (reading current state via `available`,
+///    `capacity`, `window_start_ms`, `cooldown_end_ms`, etc.) and overwrites the field.
 ///
 /// # Operator responsibilities
 ///
@@ -30,8 +31,17 @@
 ///
 /// Any function taking `&mut RateLimiter` mutates live state. Gate the entry functions
 /// that expose them with whatever authorization model is appropriate for the call site
-/// (`Cap`, `openzeppelin_access`, governance, multisig, ...) - admin-level for
-/// `reconfigure_*`, caller-level for `consume_*`. The module is agnostic.
+/// (`Cap`, `openzeppelin_access`, governance, multisig, ...). The module is agnostic.
+///
+/// # Reconfiguration
+///
+/// This module deliberately does not provide in-place reconfigure functions. To change a
+/// limiter's configuration or runtime state, read the current state via the getters,
+/// compute the desired new field values, construct a fresh `RateLimiter`, and overwrite
+/// the field. Every reconfigure policy - preserve anchor, project then re-anchor, full
+/// reset, proportional carry, freeze in-flight gate, etc. - is expressible in caller code.
+/// The library validates structural invariants on construction; the choice of semantics is
+/// entirely the integrator's.
 ///
 /// # Upgrade compatibility
 ///
@@ -74,12 +84,13 @@ const EZeroCooldown: vector<u8> = "Cooldown must be greater than zero";
 /// Initial available amount must not exceed capacity.
 #[error(code = 8)]
 const EInitialAboveCapacity: vector<u8> = "Initial available amount must not exceed capacity";
-/// Cooldown `initial_available` must be greater than zero. The cooldown gate is a
-/// post-consumption penalty, so a "start drained" state has no consume to attach the
-/// gate to and would silently behave as `initial_available == capacity`.
+/// A `Cooldown` limiter must be constructible in some state from which a future consume
+/// can succeed: either `initial_available > 0`, or the gate is armed
+/// (`cooldown_end_ms > 0`) so a future consume can release on elapse. Both zero would
+/// permanently brick the limiter.
 #[error(code = 9)]
-const EZeroCooldownInitial: vector<u8> =
-    "Cooldown initial available amount must be greater than zero";
+const ECooldownBricked: vector<u8> =
+    "Cooldown must have nonzero initial_available or armed cooldown_end_ms";
 
 // === Structs ===
 
@@ -170,14 +181,20 @@ public fun new_bucket(
     }
 }
 
-/// Create a fixed window limiter with its first window anchored at `now`. Subsequent
-/// windows are exactly `[now + k * window_ms, now + (k+1) * window_ms)` for `k >= 0`.
+/// Create a fixed window limiter anchored at `window_start_ms`. Subsequent windows are
+/// exactly `[window_start_ms + k * window_ms, window_start_ms + (k+1) * window_ms)` for
+/// `k >= 0`. For greenfield use, pass `clock.timestamp_ms()` as `window_start_ms`; pass an
+/// earlier value to seed a limiter that is already partway through a window.
+///
+/// The caller is responsible for ensuring `window_start_ms <= clock.timestamp_ms()` at
+/// every subsequent call site: an anchor strictly in the future would underflow the next
+/// projection.
 ///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per window.
 /// - `window_ms`: Length of one window, in milliseconds.
-/// - `initial_available`: Starting available units for the first window.
-/// - `clock`: Reference to the Sui `Clock`, used to anchor the first window.
+/// - `window_start_ms`: Anchor for the first window.
+/// - `initial_available`: Starting available units for the current window.
 ///
 /// #### Returns
 /// - A new fixed window `RateLimiter` ready to be embedded in the caller's object.
@@ -189,8 +206,8 @@ public fun new_bucket(
 public fun new_fixed_window(
     capacity: u64,
     window_ms: u64,
+    window_start_ms: u64,
     initial_available: u64,
-    clock: &Clock,
 ): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(window_ms > 0, EZeroWindow);
@@ -199,7 +216,7 @@ public fun new_fixed_window(
     RateLimiter::FixedWindow {
         capacity,
         window_ms,
-        window_start_ms: clock.timestamp_ms(),
+        window_start_ms,
         available: initial_available,
     }
 }
@@ -208,34 +225,44 @@ public fun new_fixed_window(
 /// per-call `amount`s) before the limiter requires `cooldown_ms` to elapse before the next
 /// batch.
 ///
-/// Unlike `Bucket` and `FixedWindow`, `Cooldown` does NOT support a "start drained" state:
-/// the cooldown gate is a post-consumption penalty that only arms once a batch has been
-/// drained by an actual `try_consume`. To force callers to wait before the first batch,
-/// gate creation of the enclosing object, not the limiter's initial balance.
+/// For greenfield use, pass `cooldown_end_ms = 0` (no gate armed) and `initial_available > 0`.
+/// To seed a limiter with an in-flight gate (e.g. when migrating state), pass
+/// `initial_available = 0` together with `cooldown_end_ms` set to the deadline. The library
+/// rejects only the bricked combination where both are zero.
+///
+/// `cooldown_end_ms` is only consulted by the hot path when `available == 0`; if
+/// `initial_available > 0`, any value of `cooldown_end_ms` is harmless (it will be
+/// overwritten the next time the batch drains).
 ///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per batch.
 /// - `cooldown_ms`: Wait, in milliseconds, between exhausting the batch and the next reset.
-/// - `initial_available`: Starting available units. Must be `> 0` and `<= capacity`.
+/// - `initial_available`: Starting available units. Must be `<= capacity`.
+/// - `cooldown_end_ms`: Initial gate deadline. `0` means no gate armed.
 ///
 /// #### Returns
-/// - A new cooldown `RateLimiter` with `initial_available` units available.
+/// - A new cooldown `RateLimiter`.
 ///
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroCooldown` if `cooldown_ms == 0`.
-/// - `EZeroCooldownInitial` if `initial_available == 0`.
 /// - `EInitialAboveCapacity` if `initial_available > capacity`.
-public fun new_cooldown(capacity: u64, cooldown_ms: u64, initial_available: u64): RateLimiter {
+/// - `ECooldownBricked` if `initial_available == 0 && cooldown_end_ms == 0`.
+public fun new_cooldown(
+    capacity: u64,
+    cooldown_ms: u64,
+    initial_available: u64,
+    cooldown_end_ms: u64,
+): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(cooldown_ms > 0, EZeroCooldown);
-    assert!(initial_available > 0, EZeroCooldownInitial);
     assert!(initial_available <= capacity, EInitialAboveCapacity);
+    assert!(initial_available > 0 || cooldown_end_ms > 0, ECooldownBricked);
 
     RateLimiter::Cooldown {
         capacity,
         cooldown_ms,
-        cooldown_end_ms: 0,
+        cooldown_end_ms,
         available: initial_available,
     }
 }
@@ -386,169 +413,84 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
     }
 }
 
-// === Reconfigure ===
+// === Getters ===
+//
+// These expose the inner fields a caller needs to rebuild a limiter with adjusted state.
+// Raw `available` is intentionally NOT exposed: use `available(&self, clock)` for the
+// projected reading, which is the only semantically meaningful value at a point in time.
 
-/// Rewrite a `Bucket` limiter's configuration in place.
-///
-/// Accrues any tokens earned under the old rules first, then re-anchors the refill counter
-/// at `now`, installs the new configuration, and clamps the stored token balance to the new
-/// capacity. Any sub-interval remainder still pending under the old anchor is discarded -
-/// future refills accrue from `now` under the new configuration.
-///
-/// #### Parameters
-/// - `self`: Limiter to reconfigure.
-/// - `capacity`: New maximum token balance.
-/// - `refill_amount`: New tokens credited per refill interval.
-/// - `refill_interval_ms`: New refill interval, in milliseconds.
-/// - `clock`: Reference to the Sui `Clock`, used to apply accrual under the old config.
+/// Capacity of the limiter, regardless of variant.
+public fun capacity(self: &RateLimiter): u64 {
+    match (self) {
+        RateLimiter::Bucket { capacity, .. } => *capacity,
+        RateLimiter::FixedWindow { capacity, .. } => *capacity,
+        RateLimiter::Cooldown { capacity, .. } => *capacity,
+    }
+}
+
+/// Tokens credited per refill interval.
 ///
 /// #### Aborts
-/// - `EWrongVariant` if the limiter is not currently a `Bucket`.
-/// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroRefillAmount` if `refill_amount == 0`.
-/// - `EZeroRefillInterval` if `refill_interval_ms == 0`.
-public fun reconfigure_bucket(
-    self: &mut RateLimiter,
-    capacity: u64,
-    refill_amount: u64,
-    refill_interval_ms: u64,
-    clock: &Clock,
-) {
+/// - `EWrongVariant` if the limiter is not a `Bucket`.
+public fun refill_amount(self: &RateLimiter): u64 {
     match (self) {
-        RateLimiter::Bucket {
-            capacity: cap_field,
-            refill_amount: refill_amount_field,
-            refill_interval_ms: refill_interval_field,
-            last_refill_ms,
-            available,
-        } => {
-            assert!(capacity > 0, EZeroCapacity);
-            assert!(refill_amount > 0, EZeroRefillAmount);
-            assert!(refill_interval_ms > 0, EZeroRefillInterval);
-
-            let now = clock.timestamp_ms();
-            let (_, new_available) = bucket_accrue(
-                *last_refill_ms,
-                *available,
-                *cap_field,
-                *refill_amount_field,
-                *refill_interval_field,
-                now,
-            );
-            *cap_field = capacity;
-            *refill_amount_field = refill_amount;
-            *refill_interval_field = refill_interval_ms;
-            *last_refill_ms = now;
-            *available = new_available.min(capacity);
-        },
+        RateLimiter::Bucket { refill_amount, .. } => *refill_amount,
         _ => abort EWrongVariant,
     }
 }
 
-/// Rewrite a `FixedWindow` limiter's configuration in place.
-///
-/// Rolls the window forward under the old config if current time has crossed into a later
-/// window, then re-anchors the window at `now`, installs the new configuration, and clamps
-/// `available` to the new capacity. Future windows run for the new `window_ms` each,
-/// anchored at `now`. If a rollover occurred under the old config, the new window starts
-/// fully available under the new `capacity`.
-///
-/// #### Parameters
-/// - `self`: Limiter to reconfigure.
-/// - `capacity`: New maximum units consumable per window.
-/// - `window_ms`: New window length, in milliseconds.
-/// - `clock`: Reference to the Sui `Clock`, used to roll the anchor forward under the old config.
+/// Length of one refill interval, in milliseconds.
 ///
 /// #### Aborts
-/// - `EWrongVariant` if the limiter is not currently a `FixedWindow`.
-/// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroWindow` if `window_ms == 0`.
-public fun reconfigure_fixed_window(
-    self: &mut RateLimiter,
-    capacity: u64,
-    window_ms: u64,
-    clock: &Clock,
-) {
+/// - `EWrongVariant` if the limiter is not a `Bucket`.
+public fun refill_interval_ms(self: &RateLimiter): u64 {
     match (self) {
-        RateLimiter::FixedWindow {
-            capacity: cap_field,
-            window_ms: window_field,
-            window_start_ms,
-            available,
-        } => {
-            assert!(capacity > 0, EZeroCapacity);
-            assert!(window_ms > 0, EZeroWindow);
-
-            // Roll forward under the OLD `window_ms` first so the carried-over `available`
-            // reflects the old schedule; then re-anchor at `now` and install the new config.
-            // If a roll occurred, the new window starts with the NEW capacity available.
-            let now = clock.timestamp_ms();
-            let steps = (now - *window_start_ms) / *window_field;
-            if (steps > 0) {
-                *available = capacity;
-            } else {
-                *available = (*available).min(capacity);
-            };
-            *window_start_ms = now;
-            *cap_field = capacity;
-            *window_field = window_ms;
-        },
+        RateLimiter::Bucket { refill_interval_ms, .. } => *refill_interval_ms,
         _ => abort EWrongVariant,
     }
 }
 
-/// Rewrite a `Cooldown` limiter's configuration in place.
-///
-/// Projects state forward under the old config first: if the gate has already elapsed,
-/// `available` is realized to the old capacity (mirroring what the next `try_consume` would
-/// have done). Then `available` is clamped to the new capacity. If after projection and
-/// clamping `available == 0`, the gate is still in flight - the deadline is restarted at
-/// `now + cooldown_ms` under the new `cooldown_ms`. An in-flight deadline armed under the
-/// old config does NOT carry over.
-///
-/// #### Parameters
-/// - `self`: Limiter to reconfigure.
-/// - `capacity`: New maximum units consumable per batch.
-/// - `cooldown_ms`: New wait between batches, in milliseconds.
-/// - `clock`: Reference to the Sui `Clock`, used to arm a fresh deadline if needed.
+/// Length of one window, in milliseconds.
 ///
 /// #### Aborts
-/// - `EWrongVariant` if the limiter is not currently a `Cooldown`.
-/// - `EZeroCapacity` if `capacity == 0`.
-/// - `EZeroCooldown` if `cooldown_ms == 0`.
-public fun reconfigure_cooldown(
-    self: &mut RateLimiter,
-    capacity: u64,
-    cooldown_ms: u64,
-    clock: &Clock,
-) {
+/// - `EWrongVariant` if the limiter is not a `FixedWindow`.
+public fun window_ms(self: &RateLimiter): u64 {
     match (self) {
-        RateLimiter::Cooldown {
-            cooldown_ms: cd_field,
-            capacity: cap_field,
-            available,
-            cooldown_end_ms,
-        } => {
-            assert!(capacity > 0, EZeroCapacity);
-            assert!(cooldown_ms > 0, EZeroCooldown);
+        RateLimiter::FixedWindow { window_ms, .. } => *window_ms,
+        _ => abort EWrongVariant,
+    }
+}
 
-            let now = clock.timestamp_ms();
-            // Project under the OLD config: if the gate has elapsed, realize the release
-            // to the old capacity. Otherwise `available` stays at its stored value (which
-            // already reflects either an in-flight gate at 0, or an unspent batch > 0).
-            if (*available == 0 && now >= *cooldown_end_ms) {
-                *available = *cap_field;
-            };
-            *cd_field = cooldown_ms;
-            *cap_field = capacity;
-            *available = (*available).min(capacity);
+/// Anchor timestamp of the current window.
+///
+/// #### Aborts
+/// - `EWrongVariant` if the limiter is not a `FixedWindow`.
+public fun window_start_ms(self: &RateLimiter): u64 {
+    match (self) {
+        RateLimiter::FixedWindow { window_start_ms, .. } => *window_start_ms,
+        _ => abort EWrongVariant,
+    }
+}
 
-            if (*available == 0) {
-                // SAFETY: `now + cooldown_ms` overflow is the operator's responsibility
-                // (see module-level "Operator responsibilities").
-                *cooldown_end_ms = now + cooldown_ms;
-            };
-        },
+/// Wait between batches, in milliseconds.
+///
+/// #### Aborts
+/// - `EWrongVariant` if the limiter is not a `Cooldown`.
+public fun cooldown_ms(self: &RateLimiter): u64 {
+    match (self) {
+        RateLimiter::Cooldown { cooldown_ms, .. } => *cooldown_ms,
+        _ => abort EWrongVariant,
+    }
+}
+
+/// Absolute deadline at which an armed cooldown gate releases. `0` means no gate is
+/// armed. Only consulted by the hot path when `available == 0`.
+///
+/// #### Aborts
+/// - `EWrongVariant` if the limiter is not a `Cooldown`.
+public fun cooldown_end_ms(self: &RateLimiter): u64 {
+    match (self) {
+        RateLimiter::Cooldown { cooldown_end_ms, .. } => *cooldown_end_ms,
         _ => abort EWrongVariant,
     }
 }
