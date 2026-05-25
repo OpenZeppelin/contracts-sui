@@ -1,0 +1,388 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::u256
+  package: openzeppelin_math
+  one_liner: |
+    Overflow-safe 256-bit unsigned integer arithmetic with explicit rounding.
+    The `u256` width variant of `openzeppelin_math` — one of six per-width
+    facades (`u8`, `u16`, `u32`, `u64`, `u128`, `u256`) sharing one API
+    surface; pick the narrowest type your domain actually needs (`u64` is
+    the Sui standard for balances). Every divide / shift / sqrt / log takes
+    a `RoundingMode`, and operations that can exceed `u256` return
+    `Option<u256>` instead of silently wrapping or truncating. Intermediate
+    products are computed in `u512` so `mul_div` / `mul_shr` / `mul_mod`
+    never overflow before the final result.
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Fixed-point fractional values, prices, or signed deltas — use openzeppelin_math::ud30x9 / sd29x9 (fixed-point package)."
+  - "Decimal scaling between balance precisions — use openzeppelin_math::decimal_scaling."
+  - "Direct 512-bit arithmetic in application code — use the per-width facades; u512 is an internal intermediate."
+  - "Choosing a rounding direction for you — every divide / shift / sqrt / log is an explicit RoundingMode argument."
+  - "Narrower-width arithmetic — use openzeppelin_math::u8 / u16 / u32 / u64 / u128 (same API surface)."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/integer-math"        # Primary — Move Package Registry.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_math::{rounding, u256};
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
+  github_alternative: |                          # Secondary — direct git pin if MVR is unavailable.
+    [dependencies.openzeppelin_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/core"
+    rev = "<commit-sha-or-tag>"                  # Agent fills in — see install.repo_ref for the
+                                                  # commit this metadata was extracted from; prefer
+                                                  # the latest release tag (e.g., v1.1.0) for stable
+                                                  # builds, pin a SHA for audited releases.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  // openzeppelin_math::u256 has no init / no shared object. Import it
+  // directly into the module that needs 256-bit arithmetic.
+  module my_sui_app::pricing;
+
+  use openzeppelin_math::{rounding, u256};
+
+  const EMathOverflow: u64 = 0;
+
+  public fun quote_with_fee(amount: u256): u256 {
+      u256::mul_div(amount, 1025u256, 1000u256, rounding::nearest())
+          .destroy_or!(abort EMathOverflow)
+  }
+
+quick_start: |
+  // Typical 3-call shape for 256-bit math: scale → bound → root.
+  // No setup required — the module exposes pure functions.
+
+  // 1. Multiply-then-divide with explicit rounding. Returns Option<u256>
+  //    when the rounded result cannot be represented in 256 bits.
+  let scaled: Option<u256> =
+      u256::mul_div(reserve_out, amount_in, reserve_in + amount_in, rounding::down());
+
+  // 2. Resolve the Option at the boundary. Abort with a domain-specific
+  //    error, fall back to u256::MAX, or propagate Option<u256> upward.
+  let output: u256 = scaled.destroy_or!(abort EMathOverflow);
+
+  // 3. Integer sqrt with rounding. Always returns u256 (never overflows).
+  let mid: u256 = u256::sqrt(output, rounding::down());
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # Empty — u256 is a built-in Move primitive. The module defines no structs.
+            # `RoundingMode` is re-exported via `openzeppelin_math::rounding` (see that
+            # module's metadata for the enum and constructors).
+
+api:
+  - name: average
+    sig: "(a: u256, b: u256, rounding_mode: RoundingMode) -> u256"
+    role: "Arithmetic mean of two u256 values with explicit rounding. Cannot overflow."
+    aborts: []
+    notes: "Avoids the intermediate `(a + b)` sum so it is safe even when both operands are near u256::MAX. Use for TWAP midpoints, interpolation, and pairwise averaging."
+
+  - name: mul_div
+    sig: "(a: u256, b: u256, denominator: u256, rounding_mode: RoundingMode) -> Option<u256>"
+    role: "Compute `(a * b) / denominator` with explicit rounding. Intermediate is computed in u512 so the product never wraps."
+    aborts: [EDivideByZero]
+    notes: |
+      Returns `option::none()` when the rounded quotient does not fit in
+      u256 (only possible when `denominator == 1` AND the true product
+      exceeds u256). Always prefer `mul_div` over hand-written `(a * b) / c`
+      — the manual form overflows when `a * b > u256::MAX` even if the
+      quotient would fit. Resolve the Option at the boundary with
+      `.destroy_or!(abort ...)`, a fallback value, or propagate upward.
+
+  - name: mul_shr
+    sig: "(a: u256, b: u256, shift: u8, rounding_mode: RoundingMode) -> Option<u256>"
+    role: "Compute `(a * b) >> shift` with explicit rounding. Faster than `mul_div` when the divisor is a power of two."
+    aborts: []
+    notes: "Use for Q-notation fixed-point math (Q64.64, Q96, etc.) and tick-math in concentrated liquidity AMMs. The Cetus exploit involved exactly this operation class — `checked_shl`-style truncation in a fixed-point intermediate."
+
+  - name: checked_shl
+    sig: "(value: u256, shift: u8) -> Option<u256>"
+    role: "Lossless left shift. Returns `option::none()` if any non-zero bit would be discarded."
+    aborts: []
+    notes: |
+      Move's native `<<` silently discards high bits — `checked_shl`
+      catches that by round-tripping the shift and verifying no
+      information was lost. Returns `option::some(0)` for `value == 0`
+      regardless of `shift`. Use anywhere you scale values via bit shifts
+      and need a guarantee no data is silently lost.
+
+  - name: checked_shr
+    sig: "(value: u256, shift: u8) -> Option<u256>"
+    role: "Lossless right shift. Returns `option::none()` if any non-zero low bit would be discarded."
+    aborts: []
+    notes: "Returns `option::some(0)` for `value == 0`. Symmetric to `checked_shl`."
+
+  - name: inv_mod
+    sig: "(value: u256, modulus: u256) -> Option<u256>"
+    role: "Modular multiplicative inverse: the unique x such that `value * x ≡ 1 (mod modulus)` when `gcd(value, modulus) = 1`."
+    aborts: [EZeroModulus]
+    notes: "Returns `option::none()` when `value` and `modulus` are not coprime, or when `modulus == 1`. Used in cryptographic verification, on-chain randomness schemes, and certain pricing algorithms."
+
+  - name: mul_mod
+    sig: "(a: u256, b: u256, modulus: u256) -> u256"
+    role: "Multiplication modulo `modulus`. Uses u512 internally so the intermediate product never wraps."
+    aborts: [EZeroModulus]
+
+  - name: sqrt
+    sig: "(value: u256, rounding_mode: RoundingMode) -> u256"
+    role: "Integer square root with explicit rounding. Cannot overflow."
+    aborts: []
+    notes: "Rounding direction is load-bearing — rounding the wrong way in concentrated-liquidity `sqrtPriceX96` or geometric-mean oracles creates an exploitable discrepancy. Returns 0 for input 0."
+
+  - name: log2
+    sig: "(value: u256, rounding_mode: RoundingMode) -> u16"
+    role: "Base-2 logarithm with explicit rounding."
+    aborts: []
+    notes: "Returns 0 for input 0. Return type is `u16` (not `u8`) for `u256` because the rounded-up result can be 256. Used in tick-math for concentrated liquidity AMMs."
+
+  - name: log10
+    sig: "(value: u256, rounding_mode: RoundingMode) -> u8"
+    role: "Base-10 logarithm with explicit rounding."
+    aborts: []
+    notes: "Returns 0 for input 0. Used in decimal-aware scaling and display formatting."
+
+  - name: log256
+    sig: "(value: u256, rounding_mode: RoundingMode) -> u8"
+    role: "Base-256 logarithm with explicit rounding."
+    aborts: []
+    notes: "Returns 0 for input 0. Determines byte-length for encoding and serialization."
+
+  - name: clz
+    sig: "(value: u256) -> u16"
+    role: "Count leading zero bits."
+    aborts: []
+    notes: "Return type is `u16` for `u256` (not `u8`) because the result for `value == 0` is 256. Use when you need the minimum bit width to represent a value (packing, encoding, choosing a narrower type)."
+
+  - name: msb
+    sig: "(value: u256) -> u8"
+    role: "Zero-based index of the most significant set bit."
+    aborts: []
+    notes: "Returns 0 for `value == 0` (convention — distinguishes via the application context)."
+
+  - name: is_power_of_ten
+    sig: "(n: u256) -> bool"
+    role: "True when `n` is a power of ten in the range 10^0 through 10^77 (u256's maximum exact power of ten)."
+    aborts: []
+    notes: |
+      O(1) lookup-table check; never aborts. The width-specific table for
+      `u256` runs from 10^0 through 10^77. M2 audit issue H-01 fixed a
+      missing 10^77 entry in this table — confirm with the
+      `is_power_of_ten_basic` and `is_power_of_ten_u256_max` tests; both
+      now cover the maximum boundary.
+
+errors:
+  EDivideByZero:
+    code: 0
+    message: "Divisor must be non-zero"
+  EZeroModulus:
+    code: 1
+    message: "Modulus must be non-zero"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "What integer width should I use for balances / amounts on Sui?"
+    options:
+      - use: "openzeppelin_math::u64"
+        when: "Standard Sui protocol values — coin balances, timestamps, gas amounts."
+        why: "u64 is what the Sui framework uses everywhere. Reach wider only when the domain genuinely needs it; the API surface is identical."
+      - use: "openzeppelin_math::u128"
+        when: "Mid-precision fixed-point representations or balance products that overflow u64."
+        why: "Wider intermediates without paying the full u256 gas / storage cost."
+      - use: "openzeppelin_math::u256"
+        when: "Cross-chain interop with EVM (256-bit native), high-precision fixed-point, or cryptographic moduli."
+        why: "Maximum width on the per-width facades; intermediates run in u512 so mul_div / mul_shr / mul_mod still cannot overflow."
+
+  - question: "I need to compute `(a * b) / c`. Which function?"
+    options:
+      - use: "u256::mul_div(a, b, c, rounding_mode)"
+        when: "Always, when `c` is a runtime value or not a power of two."
+        why: "Intermediate product is computed in u512 — `a * b` cannot wrap. Hand-rolled `(a * b) / c` aborts the transaction when `a * b > u256::MAX`, even if the quotient fits in u256."
+      - use: "u256::mul_shr(a, b, shift, rounding_mode)"
+        when: "`c` is a power of two — e.g., Q-notation fixed-point (Q64.64, Q96)."
+        why: "Faster than `mul_div` with `denominator = 1 << shift`. Same overflow safety."
+
+  - question: "What rounding direction should I pass?"
+    options:
+      - use: "rounding::down()"
+        when: "Default for protocol-to-user paths (deposit / withdraw / quote). Caller absorbs the remainder."
+        why: "Rounds toward zero (truncation). The vault keeps the fractional remainder — safe against repeated-deposit-withdraw value extraction."
+      - use: "rounding::up()"
+        when: "Protocol should absorb the remainder, or you need a conservative upper bound (e.g., fee floor)."
+        why: "Rounds away from zero (ceiling)."
+      - use: "rounding::nearest()"
+        when: "Fee quotes and display calculations where neither party should systematically absorb the remainder."
+        why: "Round-half-up. Tied values round up; otherwise the closest integer wins."
+
+  - question: "`mul_div` (or `mul_shr` / `checked_shl` / `inv_mod`) returned `Option<u256>`. How do I handle it?"
+    options:
+      - use: ".destroy_or!(abort EMyError)"
+        when: "Overflow is a protocol-level error — the caller's input was invalid or state has drifted."
+        why: "Aborts the transaction with your domain-specific error code. Most common pattern."
+      - use: "result.is_some() ? result.destroy_some() : <fallback>"
+        when: "Overflow means cap-at-maximum, not an error (e.g., supply caps, display formatting)."
+        why: "Continues execution with a sentinel value. Make sure downstream code reads the sentinel correctly."
+      - use: "return result;  // propagate Option<u256> upward"
+        when: "Your function is a reusable building block — let the caller decide the policy."
+        why: "Defers the boundary decision to the caller. The right shape for libraries."
+
+  - question: "I need to halve a value. Should I use `value / 2` or `u256::average(value, 0, ...)`?"
+    options:
+      - use: "value / 2"
+        when: "You only ever halve ONE value (not averaging two)."
+        why: "Move's native `/` works fine for a single operand — `average` is overkill."
+      - use: "u256::average(a, b, rounding_mode)"
+        when: "Computing the mean of two values that may both be near u256::MAX."
+        why: "`(a + b) / 2` overflows when `a + b > u256::MAX`. `average` avoids the intermediate sum entirely via bit manipulation."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Pass a non-zero `denominator` to `mul_div`."
+    fails_with: EDivideByZero
+    affects: [mul_div]
+
+  - must: "Pass a non-zero `modulus` to `inv_mod` and `mul_mod`."
+    fails_with: EZeroModulus
+    affects: [inv_mod, mul_mod]
+
+do_not:
+  - id: hand-rolled-mul-div
+    severity: high
+    description: "Compute `(a * b) / c` directly with Move's native operators when `a * b` could exceed u256::MAX."
+    why_bad: "Move's native `*` aborts on overflow. A `(a * b) / c` whose final quotient fits in u256 will still abort the transaction if the intermediate product overflows — silently turning a valid call into a runtime failure."
+    fix: "Use `u256::mul_div(a, b, c, rounding_mode)`. The intermediate is computed in u512, so only the final-rounded-result-doesn't-fit case returns `option::none()`; the call never aborts on intermediate overflow."
+    example_bad: |
+      // WRONG — aborts when a * b > u256::MAX, even if the quotient fits.
+      let output = (reserve_out * amount_in) / (reserve_in + amount_in);
+    example_good: |
+      // RIGHT — intermediate runs in u512; rounded quotient resolved at the boundary.
+      let output = u256::mul_div(
+          reserve_out,
+          amount_in,
+          reserve_in + amount_in,
+          rounding::down(),
+      ).destroy_or!(abort EMathOverflow);
+
+  - id: native-shift-without-checked
+    severity: high
+    description: "Use Move's native `<<` / `>>` operators when you need to preserve every bit of the value."
+    why_bad: "Native shifts silently discard bits that fall off the end. The Cetus exploit was an off-by-one in an overflow check on a left shift in a shared fixed-point math library — roughly $223M drained because a corrupted intermediate flowed downstream."
+    fix: "Use `u256::checked_shl(value, shift)` / `u256::checked_shr(value, shift)`. They round-trip the shift and return `option::none()` if any non-zero bit was discarded."
+    example_bad: |
+      // WRONG — silently drops the top bit when shift pushes it out.
+      let scaled = value << shift;
+    example_good: |
+      // RIGHT — option::none() if the shift would lose information.
+      let scaled = u256::checked_shl(value, shift)
+          .destroy_or!(abort EMathOverflow);
+
+  - id: implicit-rounding-via-truncation
+    severity: medium
+    description: "Pick a width-narrowing cast or a native `/` to get implicit rounding, then forget which direction the truncation went."
+    why_bad: "Move's `/` rounds toward zero unconditionally. In a vault, rounding the wrong way on one side of deposit / withdraw lets an attacker repeatedly deposit-and-withdraw small amounts to extract the rounding remainder — a systematic value leak."
+    fix: "Use an explicit `RoundingMode` on every divide / shift / sqrt / log. Both `deposit` and `withdraw` should round in the protocol's favor (typically `rounding::down()` on both)."
+    example_bad: |
+      // WRONG — implicit truncation; reviewer cannot tell who absorbs the remainder.
+      public fun deposit_shares(amount: u256, total_assets: u256, total_supply: u256): u256 {
+          amount * total_supply / total_assets
+      }
+    example_good: |
+      // RIGHT — explicit rounding direction; vault keeps the remainder.
+      public fun deposit_shares(amount: u256, total_assets: u256, total_supply: u256): u256 {
+          u256::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: overuse-of-u256
+    severity: low
+    description: "Use `openzeppelin_math::u256` for values that comfortably fit in `u64` (coin balances, gas, timestamps)."
+    why_bad: "u256 arithmetic on Sui is significantly more expensive (storage and compute) than u64. The API surface is identical across widths — you pay the cost for no benefit."
+    fix: "Default to `openzeppelin_math::u64`. Reach for `u128` when balance products overflow; reach for `u256` only for EVM-bridged values, high-precision fixed-point, or cryptographic moduli."
+    example_bad: |
+      // WRONG — coin balance in u256 wastes gas and storage.
+      public struct MyCoin has key { id: UID, balance: u256 }
+    example_good: |
+      // RIGHT — match the Sui framework convention.
+      public struct MyCoin has key { id: UID, balance: u64 }
+
+composes_with: []   # Empty — no compositions are source-cited. Sibling pointers
+                    # (use u64 / u128 / decimal_scaling / ud30x9 instead) live in
+                    # does_not_solve[]; picking between siblings lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  tests_count: 77
+
+  canonical_test:
+    file: math/core/tests/u256_tests.move
+    function: mul_div_rounding_modes
+
+  precondition_proofs:
+    - precondition_fails_with: EDivideByZero
+      test_file: math/core/tests/u256_tests.move
+      test_functions: [mul_div_rejects_zero_denominator]
+    - precondition_fails_with: EZeroModulus
+      test_file: math/core/tests/u256_tests.move
+      test_functions: [inv_mod_rejects_zero_modulus, mul_mod_rejects_zero_modulus]
+
+  do_not_demonstrations:
+    - do_not_id: hand-rolled-mul-div
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: native-shift-without-checked
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: implicit-rounding-via-truncation
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: overuse-of-u256
+      test_functions: []   # consumer-side pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: hand-rolled-mul-div
+      pattern: "`(a * b) / c` expression with u256 operands when one or both inputs are runtime-bounded"
+      heuristic: "regex `\\((\\w+)\\s*\\*\\s*(\\w+)\\)\\s*/\\s*\\w+` inside a function whose body never calls `mul_div`"
+    - do_not_id: native-shift-without-checked
+      pattern: "binary `<<` or `>>` on a u256 lvalue without a surrounding `checked_shl` / `checked_shr` call"
+      heuristic: "regex `\\bu256\\b.*(?:<<|>>)` and the file does not import `checked_shl`/`checked_shr`"
+    - do_not_id: implicit-rounding-via-truncation
+      pattern: "u256 `/` operator inside a vault deposit / withdraw / mint / burn function"
+      heuristic: "function name matches /^(deposit|withdraw|mint|burn|redeem|convert)/ AND body uses bare `/` on u256"
+    - do_not_id: overuse-of-u256
+      pattern: "`balance: u256` in a struct that wraps a Sui coin"
+      heuristic: "struct field typed `u256` co-located with `sui::coin` or `sui::balance` imports"
+
+  events: []   # u256 module emits no events.
+
+  # M2 audit H-01 (now fixed in main): the u256 `is_power_of_ten` lookup
+  # table was missing the 10^77 entry, so the maximum power-of-ten u256
+  # representable was returning `false`. Tests `is_power_of_ten_basic`
+  # (lines around 878-883 — the 10^77 literal) and
+  # `is_power_of_ten_u256_max` (line 993, std::u256::max_value!() returns
+  # false) ground the fix. The fix lives upstream in the macros::is_power_of_ten
+  # cascade — this module's surface is unchanged.

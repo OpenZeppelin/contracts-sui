@@ -1,0 +1,439 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::u64
+  package: openzeppelin_math
+  one_liner: |
+    Overflow-safe arithmetic for 64-bit unsigned integers — the native width
+    Sui uses for coin balances, timestamps, and gas, so this is the hot path
+    in nearly every protocol. Provides `mul_div`, `mul_shr`, `average`,
+    checked shifts, integer logs (`log2`/`log10`/`log256`), `sqrt`, modular
+    helpers, and `is_power_of_ten`, all with explicit `RoundingMode` and
+    `Option<u64>` returns at the overflow boundary. Per-width facade over the
+    shared `macros` helpers — same API as the `u8` / `u16` / `u32` / `u128` /
+    `u256` siblings; pick the narrowest width that fits your domain.
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Fractional / fixed-point arithmetic — use openzeppelin_fixed_point::ud30x9 or sd29x9."
+  - "Signed integers — no i64 module; encode sign separately or use sd29x9 for fractional signed values."
+  - "Wider operands — use openzeppelin_math::u128 / u256 (or u512 for intermediates) when u64 overflows."
+  - "Decimal-precision conversion between tokens — use openzeppelin_math::decimal_scaling."
+  - "Sorting / data-structure helpers — use openzeppelin_math::vector for quick_sort macros."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/integer-math"        # Primary — Move Package Registry.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_math::{rounding, u64};
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
+  github_alternative: |                         # Secondary — direct git pin if MVR is unavailable.
+    [dependencies.openzeppelin_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/core"
+    rev = "<commit-sha-or-tag>"                 # Agent fills in — see install.repo_ref for the
+                                                # commit this metadata was extracted from; prefer
+                                                # the latest release tag for stable builds.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_sui_app::pricing;
+
+  use openzeppelin_math::{rounding, u64};
+
+  // Domain-specific abort code for overflow at the Option<u64> boundary.
+  const EMathOverflow: u64 = 0;
+
+  /// Quote a fee with explicit rounding — the canonical u64 use case.
+  public fun quote_with_fee(amount: u64, fee_bps: u64): u64 {
+      u64::mul_div(amount, fee_bps, 10_000u64, rounding::up())
+          .destroy_or!(abort EMathOverflow)
+  }
+
+quick_start: |
+  // u64 is a stateless math module — no init, no shared object.
+  // The minimal flow is: pick a rounding mode, call the helper, handle Option.
+
+  use openzeppelin_math::{rounding, u64};
+
+  const EMathOverflow: u64 = 0;
+
+  // 1. Overflow-safe multiply-then-divide. Returns Option<u64>; abort or fall
+  //    back at the boundary. mul_div uses a wider intermediate so a * b never
+  //    silently overflows before the divide.
+  let payout: u64 = u64::mul_div(amount, num, denom, rounding::down())
+      .destroy_or!(abort EMathOverflow);
+
+  // 2. Total-function helpers do NOT return Option (no overflow possible).
+  //    `average` uses bit tricks to avoid the intermediate sum.
+  let mid: u64 = u64::average(price_a, price_b, rounding::nearest());
+
+  // 3. Introspection. clz / msb / log2 are total over u64 (return 0 for 0).
+  let bits: u8 = u64::msb(value);
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []                                       # u64 is a stateless math facade — it operates on the
+                                                # native `u64` type and `RoundingMode` from
+                                                # `openzeppelin_math::rounding`. No new types are
+                                                # introduced by this module.
+
+api:
+  - name: mul_div
+    sig: "(a: u64, b: u64, denominator: u64, rounding_mode: RoundingMode) -> Option<u64>"
+    role: "Multiply then divide with explicit rounding. The intermediate `a * b` is computed in a wider type so it never silently overflows. Returns None when the rounded quotient does not fit in u64."
+    aborts: [EDivideByZero]
+    notes: |
+      The u64 workhorse — coin balances, fee quotes, share/asset conversions
+      all live here. ALWAYS prefer this over manual `(a * b) / c`: the manual
+      form overflows when `a * b` exceeds `u64::MAX = 18_446_744_073_709_551_615`
+      even when the final quotient would fit. Resolve the Option at the
+      boundary with `destroy_or!(abort EYourOverflow)` or a saturating cap.
+      Rounding direction is a protocol decision, not cosmetic — see
+      `decisions[rounding-direction]`.
+
+  - name: mul_shr
+    sig: "(a: u64, b: u64, shift: u8, rounding_mode: RoundingMode) -> Option<u64>"
+    role: "Multiply then right-shift by `shift` with rounding. Faster than `mul_div` when the divisor is a power of two."
+    aborts: []
+    notes: |
+      Use for Q-notation fixed-point (Q32.32 inside u64; for wider Q-formats
+      reach for u128). The Cetus exploit (May 2025, ~$223M) was an
+      off-by-one in this exact operation class on a custom math lib — the
+      checked-shift here returns None instead of corrupting the value.
+
+  - name: average
+    sig: "(a: u64, b: u64, rounding_mode: RoundingMode) -> u64"
+    role: "Arithmetic mean of `a` and `b` with rounding. Cannot overflow — uses bit tricks to avoid the intermediate `a + b`."
+    aborts: []
+    notes: "Use for TWAP midpoints and pairwise averaging. `(a + b) / 2` overflows when both operands are near `u64::MAX`; this does not."
+
+  - name: checked_shl
+    sig: "(value: u64, shift: u8) -> Option<u64>"
+    role: "Left-shift by `shift` bits, returning None if any non-zero bit would be pushed past bit 63."
+    aborts: []
+    notes: |
+      `value == 0` returns `Some(0)` for any shift. `shift >= 64` returns
+      `None` for non-zero input (would discard all bits). Use anywhere you
+      scale by powers of two and need a guarantee no data is silently lost.
+
+  - name: checked_shr
+    sig: "(value: u64, shift: u8) -> Option<u64>"
+    role: "Right-shift by `shift` bits, returning None if any non-zero bit would be discarded."
+    aborts: []
+    notes: "Mirror of `checked_shl`. `value == 0` returns `Some(0)`. `shift >= 64` returns `None` for non-zero input."
+
+  - name: clz
+    sig: "(value: u64) -> u8"
+    role: "Count leading zero bits. Returns 64 for input 0."
+    aborts: []
+
+  - name: msb
+    sig: "(value: u64) -> u8"
+    role: "Zero-based index of the most significant set bit. Returns 0 for input 0."
+    aborts: []
+    notes: "Use to size narrower types or pack values: `value` fits in a `uN` when `msb(value) < N`. Watch the input-0 case — `msb(0) == 0` collides with `msb(1) == 0`."
+
+  - name: log2
+    sig: "(value: u64, rounding_mode: RoundingMode) -> u8"
+    role: "Base-2 logarithm with rounding. Returns 0 for input 0."
+    aborts: []
+    notes: "Tick-math, range-pricing, bit-width sizing. Total over u64 — no Option return."
+
+  - name: log256
+    sig: "(value: u64, rounding_mode: RoundingMode) -> u8"
+    role: "Base-256 logarithm with rounding. Returns 0 for input 0."
+    aborts: []
+    notes: "Use to compute the minimum byte width needed to encode a value."
+
+  - name: log10
+    sig: "(value: u64, rounding_mode: RoundingMode) -> u8"
+    role: "Base-10 logarithm with rounding. Returns 0 for input 0."
+    aborts: []
+    notes: "Decimal-aware scaling and display formatting."
+
+  - name: sqrt
+    sig: "(value: u64, rounding_mode: RoundingMode) -> u64"
+    role: "Integer square root with rounding. Returns 0 for input 0. Cannot overflow."
+    aborts: []
+    notes: "Geometric-mean oracles, sqrtPrice-style pricing, volatility math. Rounding direction is exploitable — round the same way attackers cannot extract from."
+
+  - name: inv_mod
+    sig: "(value: u64, modulus: u64) -> Option<u64>"
+    role: "Modular multiplicative inverse: the `x` where `value * x = 1 (mod modulus)`. Returns None when `value` and `modulus` are not coprime, or when `modulus` is 1."
+    aborts: [EZeroModulus]
+
+  - name: mul_mod
+    sig: "(a: u64, b: u64, modulus: u64) -> u64"
+    role: "Compute `(a * b) mod modulus` without intermediate overflow."
+    aborts: [EZeroModulus]
+    notes: "Uses a wider intermediate internally, so `a * b` never overflows in u64 before the mod."
+
+  - name: is_power_of_ten
+    sig: "(n: u64) -> bool"
+    role: "Check whether `n` is one of {1, 10, 100, ..., 10^19}. Total — never aborts."
+    aborts: []
+    notes: "Decimal-scale guards. Note 10^20 > u64::MAX, so the largest valid power is 10^19 = 10_000_000_000_000_000_000."
+
+errors:
+  EDivideByZero:
+    code: 0
+    message: "Divisor must be non-zero"
+  EZeroModulus:
+    code: 1
+    message: "Modulus must be non-zero"
+  # Note: both error consts live in `openzeppelin_math::macros` (the internal
+  # implementation module), NOT in `u64.move`. The u64 facade re-exposes them
+  # via the `macros::*!` macro expansions. Aborts surface to the caller under
+  # these names. The metadata validator scans only the facade source for
+  # `^const E...:` and will emit `fails_with references undefined error: E*`
+  # ERRs for both — that is a known false positive for per-width math
+  # facades.
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "Which integer width should I use for this value?"
+    options:
+      - use: "u64"
+        when: "Coin balances (Sui framework default), timestamps in ms, gas-style counters, and any value that fits in ~1.8e19. The hot path for most protocols."
+        why: "Native Sui width — matches `Coin<T>` balances, `Clock::timestamp_ms`, and gas accounting. No widening needed at the boundary."
+      - use: "openzeppelin_math::u128"
+        when: "Q-notation fixed-point with >32 fractional bits, or values that exceed ~1.8e19 (e.g., total supplies for high-decimal tokens scaled to base units)."
+        why: "Same API as u64; just swap the module. Roughly 2x gas per op."
+      - use: "openzeppelin_math::u256"
+        when: "Cross-chain interop with EVM/256-bit systems, or precision-critical fixed-point intermediates."
+        why: "Same API; bigger gas cost. Reach for it only when the domain requires 256-bit values — the docs guide flags u64 as the default and recommended width on Sui."
+      - use: "openzeppelin_math::u8 / u16 / u32"
+        when: "Bit-packed flags, narrow enum-style fields, or storage-optimized counters."
+        why: "Same API across all widths. Pick the narrowest that fits the domain."
+
+  - question: "Which RoundingMode should I pass?"
+    options:
+      - use: "rounding::down()"
+        when: "Protocol-to-user calculations where the user receives the rounded value (deposit shares, withdrawal assets, payouts)."
+        why: "The protocol keeps the fractional remainder — users never receive more than the exact ratio, so attackers cannot extract via deposit/withdraw loops."
+      - use: "rounding::up()"
+        when: "User-to-protocol calculations where the protocol receives the value (fees owed, debt accrual, conservative upper bounds)."
+        why: "The protocol absorbs the remainder. Mirror image of `down()` — same anti-extraction logic, inverted direction."
+      - use: "rounding::nearest()"
+        when: "Display values, fee quotes, and any symmetric calculation where rounding against either party on non-tie inputs is undesirable."
+        why: "Round-half-up. Use for cosmetic / informational paths, NOT for value-bearing accounting."
+
+  - question: "How do I handle the `Option<u64>` returned by mul_div / mul_shr / checked_shl / checked_shr / inv_mod?"
+    options:
+      - use: "destroy_or!(abort EMathOverflow)"
+        when: "Default path — overflow is an unexpected error that should fail the transaction."
+        why: "Defines a domain-specific abort code; the caller sees `MoveAbort(EMathOverflow)` and can map it back to your module."
+      - use: "Saturate to u64::MAX (or a domain-specific cap)"
+        when: "Overflow means 'cap at maximum' rather than 'fail' — e.g., display values, soft-limited counters."
+        why: "Replaces None with a known sentinel. Document the cap; users see clamped behavior instead of an abort."
+      - use: "Return Option<u64> from your function"
+        when: "Your function is a math building-block called by other math code."
+        why: "Defers the boundary decision to the highest-level caller, where the protocol semantics are clearest."
+
+  - question: "I need `(a * b) / c` over u64 — write it directly or call mul_div?"
+    options:
+      - use: "u64::mul_div(a, b, c, rounding_mode)"
+        when: "Always."
+        why: "Manual `(a * b) / c` overflows whenever `a * b > u64::MAX`, even when the final quotient fits. `mul_div` widens the intermediate so the product cannot silently wrap. The Cetus exploit (~$223M) was this exact bug class on a custom math lib."
+      - use: "Manual `(a * b) / c`"
+        when: "Never — there is no case where this is safer."
+        why: "Even when you can prove `a * b` fits today, the proof breaks the moment any input domain changes. Use mul_div."
+
+  - question: "Powers of two are involved — mul_div or mul_shr?"
+    options:
+      - use: "u64::mul_shr(a, b, shift, rounding_mode)"
+        when: "The divisor is a power of two (Q-notation fixed-point, bit-shift scaling)."
+        why: "Cheaper than the equivalent `mul_div(a, b, 1 << shift, _)`. Returns Option for the same overflow boundary."
+      - use: "u64::mul_div(a, b, denominator, rounding_mode)"
+        when: "The divisor is not a power of two."
+        why: "General-purpose multiply-then-divide. Same Option<u64> boundary semantics."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Pass a non-zero `denominator` to `mul_div`."
+    fails_with: EDivideByZero
+    affects: [mul_div]
+
+  - must: "Pass a non-zero `modulus` to `inv_mod` and `mul_mod`."
+    fails_with: EZeroModulus
+    affects: [inv_mod, mul_mod]
+
+do_not:
+  - id: manual-mul-then-div-u64
+    severity: high
+    description: "Write `(a * b) / c` over u64 manually instead of using `u64::mul_div`."
+    why_bad: "Move u64 multiplication aborts on overflow. `a * b` exceeds `u64::MAX = 18_446_744_073_709_551_615` for many input pairs that produce a valid final quotient — your tx aborts before the divide can rescue the result. This is the exploit class behind the May 2025 Cetus drain (~$223M)."
+    fix: "Always go through `u64::mul_div`, which computes the intermediate product in a wider type and returns `Option<u64>` for the rounded quotient."
+    example_bad: |
+      // WRONG — overflows when amount * num > u64::MAX, even if (amount * num) / denom fits.
+      public fun payout_wrong(amount: u64, num: u64, denom: u64): u64 {
+          (amount * num) / denom
+      }
+    example_good: |
+      // RIGHT — wider intermediate, explicit rounding, Option<u64> at the boundary.
+      use openzeppelin_math::{rounding, u64};
+
+      const EMathOverflow: u64 = 0;
+
+      public fun payout(amount: u64, num: u64, denom: u64): u64 {
+          u64::mul_div(amount, num, denom, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: raw-shift-on-untrusted-u64
+    severity: high
+    description: "Use the built-in `<<` / `>>` operators on a u64 you do not statically know fits, instead of `checked_shl` / `checked_shr`."
+    why_bad: "Move's raw shifts silently discard bits — a left shift that pushes a non-zero bit past position 63 returns a corrupted value with no abort and no signal. The Cetus exploit (~$223M) was an off-by-one in a custom checked-shift threshold; the raw operator has no threshold at all."
+    fix: "Use `u64::checked_shl` / `u64::checked_shr`. Both return `Option<u64>` — `Some` on lossless shift, `None` if any non-zero bit would be lost."
+    example_bad: |
+      // WRONG — silently loses bit 63 when value has it set and shift >= 1.
+      public fun scale_wrong(value: u64, shift: u8): u64 {
+          value << shift
+      }
+    example_good: |
+      use openzeppelin_math::u64;
+
+      const EShiftOverflow: u64 = 1;
+
+      public fun scale(value: u64, shift: u8): u64 {
+          u64::checked_shl(value, shift)
+              .destroy_or!(abort EShiftOverflow)
+      }
+
+  - id: u64-overflow-via-narrow-width
+    severity: medium
+    description: "Use `u64` for a value that exceeds ~1.8e19 — token total supplies at high decimals, cumulative price oracles, or 256-bit interop values."
+    why_bad: "u64::MAX is 18_446_744_073_709_551_615. A token with 18 decimals and supply >= 18 base units already approaches the ceiling; cross-chain values from EVM systems are routinely 256-bit. Picking u64 here forces an overflow path that mul_div cannot save."
+    fix: "Widen to `openzeppelin_math::u128` or `openzeppelin_math::u256`. The API is identical — only the module prefix changes."
+    example_bad: |
+      // WRONG — token has 18 decimals; total_supply * shares can blow u64 trivially.
+      use openzeppelin_math::{rounding, u64};
+
+      const EMathOverflow: u64 = 0;
+
+      public fun shares_18_decimals(amount: u64, total_supply: u64, total_assets: u64): u64 {
+          u64::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+    example_good: |
+      // RIGHT — widen the high-precision values; keep u64 only where Sui requires it.
+      use openzeppelin_math::{rounding, u128};
+
+      const EMathOverflow: u64 = 0;
+
+      public fun shares_18_decimals(amount: u128, total_supply: u128, total_assets: u128): u128 {
+          u128::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: rounding-against-the-protocol
+    severity: high
+    description: "Round in the direction that lets the user extract value — `rounding::up()` on deposits or `rounding::up()` on withdrawals against a vault."
+    why_bad: "Rounding direction determines which side of a transaction absorbs the fractional remainder. Rounding up on deposit gives the user extra shares per token; rounding up on withdraw gives the user extra tokens per share. Either direction lets an attacker deposit/withdraw in a tight loop, extracting the rounding remainder each iteration. This is a well-known share-vault exploit pattern."
+    fix: "Round so the protocol absorbs the remainder: `rounding::down()` on user-receives paths, `rounding::up()` on user-owes paths."
+    example_bad: |
+      // WRONG — user receives extra shares; attacker farms rounding via deposit/withdraw loop.
+      public fun deposit_shares_wrong(amount: u64, total_supply: u64, total_assets: u64): u64 {
+          u64::mul_div(amount, total_supply, total_assets, rounding::up())
+              .destroy_or!(abort EMathOverflow)
+      }
+    example_good: |
+      // RIGHT — user receives slightly fewer shares; the vault keeps the remainder.
+      public fun deposit_shares(amount: u64, total_supply: u64, total_assets: u64): u64 {
+          u64::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: ignore-option-mul-div
+    severity: medium
+    description: "Unwrap `mul_div` / `mul_shr` / `checked_shl` / `checked_shr` / `inv_mod` with `option::destroy_some` or `.borrow()` without a None branch."
+    why_bad: "These functions return `Option<u64>` precisely because the rounded result may not fit in u64. Blind unwrap aborts with a generic Option error and gives no signal to the caller about whether the overflow is recoverable, what cap to apply, or which math step failed."
+    fix: "Use `destroy_or!(abort EYourOverflowCode)` with a domain-specific abort code, OR pattern-match `is_some()` and fall back to a saturating value."
+    example_bad: |
+      // WRONG — generic abort on None; caller cannot tell math overflow from any other Option misuse.
+      let result = u64::mul_div(a, b, c, rounding::down()).destroy_some();
+    example_good: |
+      use openzeppelin_math::{rounding, u64};
+
+      const EMathOverflow: u64 = 0;
+
+      let result = u64::mul_div(a, b, c, rounding::down())
+          .destroy_or!(abort EMathOverflow);
+
+composes_with: []   # Empty — no compositions are source-cited. Sibling pointers
+                    # (use u128 / u256 / decimal_scaling / fixed_point::ud30x9
+                    # for use case X) live in does_not_solve[]; picking between
+                    # u-widths and between RoundingModes lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  tests_count: 68
+
+  canonical_test:
+    file: math/core/tests/u64_tests.move
+    function: mul_div_rounding_modes
+
+  precondition_proofs:
+    - precondition_fails_with: EDivideByZero
+      test_file: math/core/tests/u64_tests.move
+      test_functions: [mul_div_rejects_zero_denominator]
+    - precondition_fails_with: EZeroModulus
+      test_file: math/core/tests/u64_tests.move
+      test_functions: [inv_mod_rejects_zero_modulus, mul_mod_rejects_zero_modulus]
+
+  do_not_demonstrations:
+    - do_not_id: manual-mul-then-div-u64
+      test_functions: []   # consumer-side anti-pattern; in-tree tests show the SAFE form (mul_div) only
+    - do_not_id: raw-shift-on-untrusted-u64
+      test_functions: []   # consumer-side anti-pattern; checked_shl/checked_shr tests cover the SAFE form
+    - do_not_id: u64-overflow-via-narrow-width
+      test_functions: []   # width-choice mistake; not exercised in-tree
+    - do_not_id: rounding-against-the-protocol
+      test_functions: []   # protocol-design mistake; not exercised in-tree
+    - do_not_id: ignore-option-mul-div
+      test_functions: []   # consumer-side handling pattern; not exercised in-tree
+
+  do_not_detection:
+    - do_not_id: manual-mul-then-div-u64
+      pattern: "manual `(a * b) / c` on u64 operands instead of u64::mul_div"
+      heuristic: "binary `/` whose left operand is a binary `*` over u64 expressions; no openzeppelin_math::u64::mul_div on the same path"
+    - do_not_id: raw-shift-on-untrusted-u64
+      pattern: "raw `<<` or `>>` on a u64 where the shift amount is non-const or where overflow safety is not statically proven"
+      heuristic: "u64 expression followed by `<<` or `>>` with a non-literal shift; no checked_shl/checked_shr on the same path"
+    - do_not_id: u64-overflow-via-narrow-width
+      pattern: "u64::mul_div on a value derived from a high-decimal token total_supply"
+      heuristic: "u64 typed parameter named like `total_supply` / `total_assets` / `cum_*` reaching u64::mul_div; recommend widening to u128/u256"
+    - do_not_id: rounding-against-the-protocol
+      pattern: "rounding::up() on a path where the caller receives the value, or rounding::down() where the caller owes the value"
+      heuristic: "function name matches /^(deposit|stake|mint).*shares?$/ with rounding::up; /^(withdraw|redeem|burn).*assets?$/ with rounding::up; or /^(fee|owed|debt)/ with rounding::down"
+    - do_not_id: ignore-option-mul-div
+      pattern: "blind unwrap of Option<u64> from a math helper"
+      heuristic: "`.destroy_some()` or `.borrow()` on the return of u64::mul_div / mul_shr / checked_shl / checked_shr / inv_mod with no preceding `is_some()` check"
+
+  events: []

@@ -1,0 +1,402 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::u8
+  package: openzeppelin_math
+  one_liner: |
+    Overflow-safe arithmetic on `u8` values with explicit rounding —
+    `mul_div`, `mul_shr`, `average`, `sqrt`, `log2`/`log10`/`log256`,
+    `checked_shl`/`checked_shr`, `inv_mod`, `mul_mod`. This is the
+    `u8`-width variant of an API shape repeated across
+    `u8`/`u16`/`u32`/`u64`/`u128`/`u256` — pick the narrowest width that
+    fits your domain (and reach for `u64` for Sui coin / timestamp paths).
+    Functions that may not be representable in `u8` return `Option<u8>`;
+    `inv_mod`, `mul_mod`, and `mul_div` abort when their denominator /
+    modulus is zero.
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Wider arithmetic — use openzeppelin_math::u16/u32/u64/u128/u256 for matching width APIs."
+  - "Fractional values — use openzeppelin_math::ud30x9 / sd29x9 (fixed-point package)."
+  - "Decimal precision conversion between token domains — use openzeppelin_math::decimal_scaling."
+  - "Signed integers — there is no signed `i8`; use the fixed-point sd29x9 type for signed deltas."
+  - "Cross-width intermediates (e.g. multiplying two u8 values into a u16) — `mul_div`/`mul_shr` widen internally; raw multiplication does not."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/integer-math"     # Primary — Move Package Registry.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_math::{u8, rounding};
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
+  github_alternative: |
+    # Uses TOML table-heading form (`[dependencies.name]`) — inline tables
+    # cannot span multiple lines in TOML, so the heading form is the only
+    # readable option with inline comments.
+    [dependencies.openzeppelin_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/core"
+    rev = "<commit-sha-or-tag>"             # Agent fills in — see install.repo_ref for the
+                                             # commit this metadata was extracted from; prefer
+                                             # the latest release tag (e.g., v1.1.0) for stable builds.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  // openzeppelin_math::u8 is stateless — no `init`, no shared object.
+  // Just `use` the module alongside `rounding` and call its functions
+  // anywhere arithmetic is needed.
+  module my_sui_app::tiny_math;
+
+  use openzeppelin_math::{u8, rounding};
+
+  public fun midpoint(a: u8, b: u8): u8 {
+      u8::average(a, b, rounding::nearest())
+  }
+
+quick_start: |
+  // u8 end-to-end — overflow-safe arithmetic in the typical 3-call shape.
+  // Choose a rounding mode, call the operation, and handle `Option<u8>`
+  // for paths that can overflow.
+
+  // 1. Multiply-then-divide with explicit rounding. Returns Option<u8>;
+  //    aborts EDivideByZero only if `denominator == 0`.
+  let fee_quote = u8::mul_div(amount, 5u8, 100u8, rounding::nearest());
+  let value = fee_quote.destroy_or!(abort EMathOverflow);
+
+  // 2. Square root rounded down (cannot overflow; always returns u8).
+  let root = u8::sqrt(value, rounding::down());
+
+  // 3. Lossless left shift; returns None if non-zero bits would be lost.
+  let scaled = u8::checked_shl(root, 2u8);
+  assert!(scaled.is_some(), EMathOverflow);
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []  # Empty — `u8` is a Move primitive, not a struct. The module
+           # exposes only free functions; `RoundingMode` lives in
+           # openzeppelin_math::rounding and is the only type the caller
+           # references at use sites.
+
+api:
+  - name: average
+    sig: "(a: u8, b: u8, rounding_mode: RoundingMode) -> u8"
+    role: "Arithmetic mean of `a` and `b`. Never overflows (uses bit manipulation)."
+    aborts: []
+    notes: "Returns `u8` directly — no `Option`. Use `rounding::nearest()` for symmetric TWAP-style midpoints."
+
+  - name: checked_shl
+    sig: "(value: u8, shift: u8) -> Option<u8>"
+    role: "Lossless left shift. Returns `none()` if any non-zero bit would be discarded; `some(0)` when `value == 0`."
+    aborts: []
+    notes: |
+      Returns `none()` for `shift >= 8` (the bit width of `u8`) unless
+      `value == 0`. Use anywhere a silent bit drop would be a bug — the
+      Cetus exploit was exactly this class of mistake on a `u128` shift.
+
+  - name: checked_shr
+    sig: "(value: u8, shift: u8) -> Option<u8>"
+    role: "Lossless right shift. Returns `none()` if any non-zero bit would be discarded."
+    aborts: []
+    notes: "Returns `none()` for `shift >= 8` unless `value == 0`."
+
+  - name: mul_div
+    sig: "(a: u8, b: u8, denominator: u8, rounding_mode: RoundingMode) -> Option<u8>"
+    role: "Compute `(a * b) / denominator` with explicit rounding. Intermediate product is widened internally so it never silently overflows."
+    aborts: [EDivideByZero]
+    notes: |
+      Returns `none()` when the rounded quotient does not fit in `u8`.
+      Prefer this over manual `(a * b) / c` — the manual form aborts on
+      `u8` overflow of the intermediate even when the final result would
+      fit. `denominator == 0` aborts `EDivideByZero` (from the shared
+      `macros` helper); guard against it at the call site if untrusted.
+
+  - name: mul_shr
+    sig: "(a: u8, b: u8, shift: u8, rounding_mode: RoundingMode) -> Option<u8>"
+    role: "Compute `(a * b) >> shift` with explicit rounding. Power-of-two-denominator fast path for `mul_div`."
+    aborts: []
+    notes: "Returns `none()` when the rounded value does not fit in `u8`. Use in Q-notation fixed-point pipelines that bottom out at `u8`."
+
+  - name: clz
+    sig: "(value: u8) -> u8"
+    role: "Count leading zero bits. Returns `8` for `value == 0`."
+    aborts: []
+
+  - name: msb
+    sig: "(value: u8) -> u8"
+    role: "Zero-based index of the most significant set bit. Returns `0` for `value == 0`."
+    aborts: []
+
+  - name: log2
+    sig: "(value: u8, rounding_mode: RoundingMode) -> u8"
+    role: "Integer base-2 logarithm with explicit rounding. Returns `0` for `value == 0` (or `value == 1`)."
+    aborts: []
+
+  - name: log256
+    sig: "(value: u8, rounding_mode: RoundingMode) -> u8"
+    role: "Integer base-256 logarithm with explicit rounding. Returns `0` for `value == 0`. Use to size encoding buffers."
+    aborts: []
+
+  - name: log10
+    sig: "(value: u8, rounding_mode: RoundingMode) -> u8"
+    role: "Integer base-10 logarithm with explicit rounding. Returns `0` for `value == 0`. Use for decimal-aware scaling."
+    aborts: []
+
+  - name: sqrt
+    sig: "(value: u8, rounding_mode: RoundingMode) -> u8"
+    role: "Integer square root with explicit rounding. Returns `0` for `value == 0`. Result always fits in `u8`."
+    aborts: []
+    notes: "Pick `rounding::down()` for safe-floor flows (price floors, share calculations); `rounding::up()` for conservative upper bounds."
+
+  - name: inv_mod
+    sig: "(value: u8, modulus: u8) -> Option<u8>"
+    role: "Modular multiplicative inverse: the `x` such that `value * x ≡ 1 (mod modulus)`."
+    aborts: [EZeroModulus]
+    notes: |
+      Returns `none()` when `value` and `modulus` are not coprime, or when
+      `modulus == 1`. Aborts `EZeroModulus` if `modulus == 0` — guard
+      against zero at the call site for untrusted inputs.
+
+  - name: mul_mod
+    sig: "(a: u8, b: u8, modulus: u8) -> u8"
+    role: "Compute `(a * b) mod modulus`. Intermediate product is widened internally so it never overflows."
+    aborts: [EZeroModulus]
+    notes: "Aborts `EZeroModulus` if `modulus == 0`. Returns `u8` directly — the result is always representable since it is bounded by `modulus`."
+
+  - name: is_power_of_ten
+    sig: "(n: u8) -> bool"
+    role: "Return `true` iff `n` is a power of ten in the `u8` range — i.e. one of `1`, `10`, `100`."
+    aborts: []
+    notes: "O(1) lookup against the three power-of-ten values that fit in `u8`. Use for decimal-scale sanity checks."
+
+errors:
+  EDivideByZero:
+    code: 0
+    message: "Divisor must be non-zero"
+  EZeroModulus:
+    code: 1
+    message: "Modulus must be non-zero"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "Which integer width should I reach for?"
+    options:
+      - use: "openzeppelin_math::u64"
+        when: "Default for any Sui-native value — coin amounts, timestamps, gas-style accounting, balance arithmetic."
+        why: "Sui framework uses `u64` for balances and clocks. `u64` is the path of least friction across the ecosystem."
+      - use: "openzeppelin_math::u8"
+        when: "Bytes, decimal counts (token decimals), small bounded counters, bit-shift amounts, ABI nibble packing."
+        why: "Tightest representation for sub-256-byte domains. Wider operations on `u8` automatically widen internally via the same shared macros."
+      - use: "openzeppelin_math::u128 / u256"
+        when: "High-precision fixed-point intermediates, cross-chain interop with EVM `uint256`, very large balances."
+        why: "Wider widths cost more gas and serialization. Don't reach for them unless your domain requires the range."
+
+  - question: "Which rounding mode should I pass to `mul_div` / `sqrt` / `log*` / `average`?"
+    options:
+      - use: "rounding::down()"
+        when: "Computing what the protocol owes the caller — deposits, withdrawals, share issuance. Or any safe-floor calculation."
+        why: "Caller absorbs the fractional remainder. Vault never gives away more than it holds; eliminates round-trip rounding extraction attacks."
+      - use: "rounding::up()"
+        when: "Computing what the caller owes the protocol — fees, debt repayment, conservative upper bounds, buffer sizing (e.g. `log256` for byte length)."
+        why: "Protocol absorbs the fractional remainder. Safe ceiling for fees and resource estimates."
+      - use: "rounding::nearest()"
+        when: "Fee quotes, midpoints, display values — anywhere rounding against either side on non-tie cases would be undesirable."
+        why: "Round-half-up minimises directional bias on non-tie inputs but still leaks half a unit on ties; not appropriate for value-at-risk flows."
+
+  - question: "How should I handle an `Option<u8>` returned by `mul_div`, `mul_shr`, `checked_shl`, `checked_shr`, or `inv_mod`?"
+    options:
+      - use: "destroy_or!(abort EMyOverflow)"
+        when: "Overflow / non-representability is an error in your domain — the call should fail fast."
+        why: "Most common pattern in the docs guide. Surfaces a domain-specific abort code the integrator picks, not the math library's internal code."
+      - use: "if option.is_some() { ... } else { fallback }"
+        when: "Overflow means 'cap at maximum' or 'use a sentinel' rather than 'fail'."
+        why: "Keeps the transaction live. Use when the cap value is meaningful (e.g. saturating arithmetic)."
+      - use: "return Option<u8> from your own function"
+        when: "Your function is a building block; the caller decides how to handle non-representability."
+        why: "Composes naturally — propagate failure rather than swallow it."
+
+  - question: "Should I use `mul_div` or `mul_shr` for fixed-point multiplication?"
+    options:
+      - use: "mul_shr"
+        when: "Your denominator is a power of two (Q-notation fixed-point, tick math, bit-scaled formats)."
+        why: "Cheaper than `mul_div` — shift instead of division. Same overflow / rounding semantics."
+      - use: "mul_div"
+        when: "Denominator is arbitrary (basis points, decimal scales, runtime-computed)."
+        why: "Generalises to any positive denominator. Aborts `EDivideByZero` if `denominator == 0` (guard at call site if untrusted)."
+
+  - question: "Do I need `Option`-handling for `average`, `sqrt`, `log2`, `log10`, `log256`, `mul_mod`?"
+    options:
+      - use: "No — these return the value directly"
+        when: "Always. By construction these functions cannot overflow `u8`."
+        why: "Saves an unwrap. `average` uses bit manipulation; `sqrt`/`log*` results are bounded by the input width; `mul_mod` is bounded by `modulus`."
+      - use: "Yes — these return Option<u8>"
+        when: "`mul_div`, `mul_shr`, `checked_shl`, `checked_shr`, `inv_mod`."
+        why: "These can produce values outside `u8` range or have no solution (inv_mod with non-coprime inputs)."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Pass a non-zero `denominator` to `mul_div`. Guard untrusted inputs at the call site if they could be zero."
+    fails_with: EDivideByZero
+    affects: [mul_div]
+
+  - must: "Pass a non-zero `modulus` to `inv_mod` and `mul_mod`. Guard untrusted inputs at the call site if they could be zero."
+    fails_with: EZeroModulus
+    affects: [inv_mod, mul_mod]
+
+do_not:
+  - id: native-mul-then-div-on-u8
+    severity: high
+    description: "Compute `(a * b) / c` with native operators on `u8` instead of `u8::mul_div`."
+    why_bad: "The intermediate `a * b` aborts on `u8` overflow even when the final quotient would fit. You get a silent failure mode at the call boundary — the abort message is the VM's arithmetic-error, not a domain error you control."
+    fix: "Use `u8::mul_div(a, b, c, rounding_mode)` — the helper widens the intermediate so it never overflows. You also have to make rounding explicit, which the native form silently truncates."
+    example_bad: |
+      // WRONG — overflows when a * b exceeds u8::MAX even though the result would fit.
+      public fun fee(amount: u8, fee_bps: u8, denom: u8): u8 {
+          (amount * fee_bps) / denom
+      }
+    example_good: |
+      // RIGHT — widened intermediate, explicit rounding, Option handling.
+      use openzeppelin_math::{u8, rounding};
+
+      const EMathOverflow: u64 = 0;
+
+      public fun fee(amount: u8, fee_bps: u8, denom: u8): u8 {
+          u8::mul_div(amount, fee_bps, denom, rounding::up())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: native-shift-on-u8
+    severity: high
+    description: "Use the native `<<` / `>>` operators on `u8` instead of `checked_shl` / `checked_shr`."
+    why_bad: "Native shifts silently discard bits on overflow. A shift that quietly truncates a non-zero bit corrupts downstream calculations — exactly the class of bug behind the Cetus exploit on Sui."
+    fix: "Use `u8::checked_shl(value, shift)` / `u8::checked_shr(value, shift)`; handle the `Option<u8>` explicitly. Returns `none()` if any non-zero bit would be lost."
+    example_bad: |
+      // WRONG — bit silently lost when shift >= 8 or top bits are set.
+      public fun scale(value: u8, shift: u8): u8 {
+          value << shift
+      }
+    example_good: |
+      // RIGHT — explicit none() on data loss.
+      use openzeppelin_math::u8;
+
+      const EOverflow: u64 = 0;
+
+      public fun scale(value: u8, shift: u8): u8 {
+          u8::checked_shl(value, shift).destroy_or!(abort EOverflow)
+      }
+
+  - id: implicit-rounding-via-truncation
+    severity: medium
+    description: "Round implicitly by truncating with native integer division when the protocol's value flow depends on rounding direction."
+    why_bad: "Native integer division always rounds toward zero. If your protocol issues shares or computes fees, that direction may favour the caller — repeatable deposit/withdraw cycles can extract the rounding remainder."
+    fix: "Always pass an explicit `RoundingMode`. Round in the direction that benefits the protocol (typically `down()` for amounts owed to the caller, `up()` for amounts owed to the protocol)."
+    example_bad: |
+      // WRONG — implicit truncation; depositor may extract rounding via cycles.
+      public fun shares(amount: u8, total_assets: u8, total_supply: u8): u8 {
+          (amount * total_supply) / total_assets
+      }
+    example_good: |
+      // RIGHT — round down so the vault never gives away more than it holds.
+      use openzeppelin_math::{u8, rounding};
+
+      const EOverflow: u64 = 0;
+
+      public fun shares(amount: u8, total_assets: u8, total_supply: u8): u8 {
+          u8::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EOverflow)
+      }
+
+  - id: u8-for-coin-balances
+    severity: medium
+    description: "Reach for `openzeppelin_math::u8` for Sui coin balances, timestamps, or gas-style accounting because the values look 'small enough'."
+    why_bad: "Sui framework uses `u64` end-to-end for balances and timestamps. `u8` ranges out at 255; any production value path will overflow. Even decimal-counted tokens cross this boundary trivially."
+    fix: "Use `openzeppelin_math::u64` for balance / timestamp / coin paths. Reserve `u8` for byte counts, decimal-precision values, bit-shift amounts, and similarly bounded domains."
+    example_bad: |
+      // WRONG — `u8` cannot represent a realistic balance.
+      use openzeppelin_math::{u8, rounding};
+
+      public fun fee_on_balance(balance: u8, fee_bps: u8): u8 {
+          u8::mul_div(balance, fee_bps, 100u8, rounding::down())
+              .destroy_or!(abort 0)
+      }
+    example_good: |
+      // RIGHT — match the framework's width for balance paths.
+      use openzeppelin_math::{u64, rounding};
+
+      public fun fee_on_balance(balance: u64, fee_bps: u64): u64 {
+          u64::mul_div(balance, fee_bps, 100u64, rounding::down())
+              .destroy_or!(abort 0)
+      }
+
+composes_with: []   # Empty — no compositions are source-cited for `u8`. Sibling pointers
+                    # (e.g. "use u64 for balances", "use ud30x9 for fractional values") live
+                    # in does_not_solve[]; picking between widths or rounding modes lives in
+                    # decisions[]; `decimal_scaling` bridging is documented in the math guide
+                    # but is not a per-width composition.
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  tests_count: 66
+
+  canonical_test:
+    file: math/core/tests/u8_tests.move
+    function: mul_div_rounding_modes
+
+  precondition_proofs:
+    - precondition_fails_with: EDivideByZero
+      test_file: math/core/tests/u8_tests.move
+      test_functions: [mul_div_rejects_zero_denominator]
+    - precondition_fails_with: EZeroModulus
+      test_file: math/core/tests/u8_tests.move
+      test_functions:
+        - inv_mod_rejects_zero_modulus
+        - mul_mod_rejects_zero_modulus
+
+  do_not_demonstrations:
+    - do_not_id: native-mul-then-div-on-u8
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: native-shift-on-u8
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: implicit-rounding-via-truncation
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: u8-for-coin-balances
+      test_functions: []   # consumer-side pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: native-mul-then-div-on-u8
+      pattern: "binary `*` followed by `/` on `u8` operands without going through `u8::mul_div`"
+      heuristic: "regex `\\b([a-zA-Z_][a-zA-Z_0-9]*\\s*\\*\\s*[a-zA-Z_][a-zA-Z_0-9]*)\\s*/` where both operands are typed `u8`"
+    - do_not_id: native-shift-on-u8
+      pattern: "native `<<` or `>>` operator applied to a `u8` expression"
+      heuristic: "regex `\\b[a-zA-Z_][a-zA-Z_0-9]*\\s*(<<|>>)\\s*` on a `u8`-typed lhs"
+    - do_not_id: implicit-rounding-via-truncation
+      pattern: "`/` operator on `u8` operands inside a value-flow function (fees, shares, deposits, withdrawals, prices)"
+      heuristic: "function name matches /^(fee|fees|shares|deposit|withdraw|price|quote|payout|reward)/ AND body contains `/` on a `u8` numerator"
+    - do_not_id: u8-for-coin-balances
+      pattern: "`openzeppelin_math::u8` used in a balance / timestamp / coin path"
+      heuristic: "`use openzeppelin_math::u8` AND function signature mentions `Coin`, `Balance`, `&Clock`, or a parameter named `balance`/`amount`/`timestamp`"
+
+  events: []   # u8 module emits no events (pure stateless arithmetic).

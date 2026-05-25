@@ -1,0 +1,343 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::rounding
+  package: openzeppelin_math
+  one_liner: |
+    Shared `RoundingMode` enum (`Down`, `Up`, `Nearest`) and zero-argument
+    constructors (`down()`, `up()`, `nearest()`) consumed by the arithmetic
+    helpers in `openzeppelin_math` (`u8`, `u16`, `u32`, `u64`, `u128`,
+    `u256`, `u512`, `decimal_scaling`) wherever a divide / shift / log /
+    sqrt operation must commit to a rounding direction. You almost never
+    reach for this module directly — you pass `rounding::down()` /
+    `rounding::up()` / `rounding::nearest()` as the last argument to a
+    sibling function. Picking the wrong direction is the typical
+    rounding-asymmetry vulnerability (the vault that lets a depositor
+    extract value by repeatedly depositing and withdrawing).
+
+domain: math
+frequency: mixed
+does_not_solve:
+  - "Banker's rounding / round-half-to-even — `Nearest` is round-half-up only."
+  - "Floating-point or fixed-point arithmetic — use `openzeppelin_math::u*` (integer) or `openzeppelin_math::fixed_point` (fractional)."
+  - "Signed arithmetic — `Down` is round-toward-zero, which for unsigned values matches floor; semantics for signed values are not defined here."
+  - "Stochastic / random rounding — every mode is deterministic."
+  - "Per-call configurability beyond the three modes — extending the enum is a breaking change for every consumer."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/integer-math"     # Primary — Move Package Registry pin.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_math::rounding;
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
+  github_alternative: |                       # Secondary — direct git pin if MVR is unavailable.
+    [dependencies.openzeppelin_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/core"
+    rev = "<commit-sha-or-tag>"               # Agent fills in — see install.repo_ref for the
+                                              # commit this metadata was extracted from; prefer
+                                              # the latest release tag for stable builds.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  // `rounding` has no `init`. It is a pure helper module — bring it into
+  // scope alongside the width module you actually use.
+  module my_sui_app::pricing;
+
+  use openzeppelin_math::{rounding, u64};
+
+  const EMathOverflow: u64 = 0;
+
+  public fun quote_with_fee(amount: u64): u64 {
+      // Pass a RoundingMode as the LAST argument to every divide / shift /
+      // log / sqrt call. There is no default — the choice must be explicit.
+      u64::mul_div(amount, 1025u64, 1000u64, rounding::nearest())
+          .destroy_or!(abort EMathOverflow)
+  }
+
+quick_start: |
+  // The three constructors are the entire public API. They produce a
+  // `RoundingMode` value you hand to a sibling arithmetic function.
+
+  // 1. Floor / truncate — caller absorbs the remainder. Default for
+  //    protocol-to-user paths (the protocol never gives away more than it holds).
+  let floor_share = u64::mul_div(amount, supply, assets, rounding::down())
+      .destroy_or!(abort EMathOverflow);
+
+  // 2. Ceiling — protocol absorbs the remainder. Use for fees, debt rounding,
+  //    or any conservative upper bound.
+  let fee = u64::mul_div(amount, fee_bps, 10_000u64, rounding::up())
+      .destroy_or!(abort EMathOverflow);
+
+  // 3. Round-half-up — symmetric for non-tie values, ties go up. Use for
+  //    display, midpoints, fee quotes where bias toward either party is undesirable.
+  let mid = u64::average(price_a, price_b, rounding::nearest());
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types:
+  - name: RoundingMode
+    type_params: ""
+    capabilities: [copy, drop]
+    role: |
+      Plain enum tag with three variants — `Down`, `Up`, `Nearest`. `copy`
+      means you can pass the SAME `RoundingMode` value into multiple
+      arithmetic calls in one PTB without re-constructing it. `drop` means
+      you do not need to store or forward it. There is no `key` / `store`
+      — `RoundingMode` is never an on-chain object; it lives only as a
+      function argument. Construct it via `down()` / `up()` / `nearest()`
+      — do NOT pattern-match `RoundingMode::Down` etc. from outside the
+      module; the enum variants are accessible but the constructors are
+      the documented surface that survives refactors.
+
+api:
+  - name: down
+    sig: "(): RoundingMode"
+    role: "Round toward zero (truncate). For unsigned arithmetic this is `floor`; the fractional remainder is dropped."
+    aborts: []
+    notes: |
+      Naming gotcha: this is `Down` (toward zero / truncate / floor for
+      unsigned), NOT a separate `Floor` or `Truncate` mode — there is no
+      such variant. For non-negative integers `down == floor == truncate`;
+      for the signed case the module does not define semantics (no signed
+      arithmetic consumers ship in `openzeppelin_math` today). Use this
+      for the side of a calculation that SHOULD absorb the fractional
+      remainder (typically the caller in a protocol-to-user calculation).
+
+  - name: up
+    sig: "(): RoundingMode"
+    role: "Round away from zero (ceiling). Always rounds up to the next integer when there is any non-zero remainder."
+    aborts: []
+    notes: |
+      Naming gotcha: this is `Up` (away from zero / ceiling for unsigned),
+      NOT a separate `Ceiling` or `Ceil` mode. For non-negative integers
+      `up == ceiling`. Use this for the side of a calculation that SHOULD
+      cover the fractional remainder (fee calculations, debt accrual, any
+      conservative upper bound). Rounding the wrong direction in a vault
+      lets a user extract the rounding remainder per round-trip.
+
+  - name: nearest
+    sig: "(): RoundingMode"
+    role: "Round to the closest integer; ties (exactly 0.5) round up."
+    aborts: []
+    notes: |
+      Naming gotcha: this is round-half-UP, NOT banker's rounding
+      (round-half-to-even / `HalfEven`) and NOT round-half-away-from-zero
+      (`HalfAwayFromZero`) — `openzeppelin_math` exposes only the
+      half-up variant. Banker's rounding is NOT available. Use `Nearest`
+      for display calculations, fee quotes, and midpoints where biasing
+      against either party on non-tie values is undesirable — but be aware
+      that ties tilt in favor of the larger value (callers receiving a
+      tied amount get `ceil`, not a coin flip).
+
+errors: {}   # `rounding` declares no error constants. Every public function is
+             # total over its (empty) input domain; `aborts: []` everywhere.
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "Which `RoundingMode` should I pass to a divide / shift / sqrt / log call?"
+    options:
+      - use: "rounding::down()"
+        when: "The caller (depositor, user, withdrawer) should absorb the fractional remainder. Default for protocol-to-user calculations where the protocol must never give away more than it holds — shares on deposit, tokens on withdrawal, value-out in a swap."
+        why: "Truncates toward zero; the protocol keeps the fractional remainder. Rounding-up here lets a user extract value by repeated deposit/withdrawal round-trips (the canonical vault rounding bug)."
+      - use: "rounding::up()"
+        when: "The PROTOCOL should absorb the rounding (fees collected, debt owed, conservative upper bound)."
+        why: "Ceiling. Ensures the caller is charged at least the exact amount; the protocol never loses to truncation. Use for any quantity the caller must `pay` or `cover`."
+      - use: "rounding::nearest()"
+        when: "Display, midpoints, TWAP, fee quotes — calculations where neither side should be systematically penalized on non-tie values."
+        why: "Symmetric on non-ties. Ties round UP (half-up), so callers should not assume ties are unbiased. Avoid for accounting paths where direction matters; use `down` or `up` there."
+
+  - question: "Is there a `Floor`, `Ceiling`, `Truncate`, `HalfEven`, or `HalfAwayFromZero` mode?"
+    options:
+      - use: "rounding::down() (= floor / truncate for unsigned)"
+        when: "You wanted `Floor` or `Truncate`. For non-negative integers they are identical."
+        why: "Avoids the common AI hallucination of inventing a `Floor` constructor that does not exist."
+      - use: "rounding::up() (= ceiling for unsigned)"
+        when: "You wanted `Ceiling` or `Ceil`."
+        why: "Same — there is no separate `Ceiling` constructor."
+      - use: "None — half-even / half-away-from-zero / random rounding are NOT supported"
+        when: "You wanted banker's rounding or a different half-tie policy."
+        why: "`Nearest` is round-half-UP only. There is no escape hatch. Use a manual `if (remainder == half) {...}` if you need a different tie policy, or pre/post-adjust the value."
+
+  - question: "Should I import the `RoundingMode` type directly, or just the constructors?"
+    options:
+      - use: "use openzeppelin_math::rounding; … rounding::down()"
+        when: "Your code only constructs and forwards `RoundingMode` values to sibling math functions (the typical case)."
+        why: "No naked type identifier in your signatures; the module path scopes the constructors. Easier to grep for `rounding::` to find every site that picks a direction."
+      - use: "use openzeppelin_math::rounding::{Self, RoundingMode}"
+        when: "Your own function takes a `RoundingMode` parameter and forwards it (e.g., a wrapper around `mul_div`)."
+        why: "You need the type name in scope. Bring it in explicitly — do not rely on the `rounding::RoundingMode` long path in signatures."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions: []   # `rounding` has no error constants and every public function
+                    # is total. There are no caller-side preconditions whose
+                    # violation triggers an abort here. Caller-side mistakes
+                    # (picking the wrong direction, hallucinating a non-existent
+                    # mode) are silent-failure / compile-error issues — they
+                    # live in do_not[] below, not preconditions[].
+
+do_not:
+  - id: hallucinated-rounding-mode
+    severity: high
+    description: "Reach for a `RoundingMode::Floor`, `RoundingMode::Ceiling`, `RoundingMode::Truncate`, `RoundingMode::HalfEven`, `RoundingMode::HalfAwayFromZero`, or `rounding::floor()` / `rounding::ceil()` / `rounding::half_even()` constructor."
+    why_bad: "None of those names exist. The module exposes exactly three constructors — `down()`, `up()`, `nearest()` — and one enum with exactly three variants. Inventing a name produces a compile error (best case) or, worse, an apparently-plausible-but-broken code suggestion that the integrator pastes in and only catches at `sui move build`."
+    fix: "Use `rounding::down()` (for floor / truncate), `rounding::up()` (for ceiling), or `rounding::nearest()` (for round-half-up). There is NO half-even / banker's-rounding option — pick `nearest` and accept the half-up tie policy, or implement the tie correction yourself before the call."
+    example_bad: |
+      // WRONG — none of these exist.
+      use openzeppelin_math::{rounding, u64};
+
+      let a = u64::mul_div(x, y, z, rounding::floor());        // no such function
+      let b = u64::mul_div(x, y, z, rounding::ceil());         // no such function
+      let c = u64::mul_div(x, y, z, rounding::half_even());    // no such function
+      let d = u64::mul_div(x, y, z, RoundingMode::Truncate);   // no such variant
+    example_good: |
+      use openzeppelin_math::{rounding, u64};
+
+      let a = u64::mul_div(x, y, z, rounding::down());     // floor / truncate
+      let b = u64::mul_div(x, y, z, rounding::up());       // ceiling
+      let c = u64::mul_div(x, y, z, rounding::nearest());  // round-half-up
+
+  - id: wrong-direction-in-vault-roundtrip
+    severity: high
+    description: "Round UP on a calculation that converts value FROM the user (deposit shares, swap-out) or round DOWN on a calculation that converts value TO the user when the protocol owes the user a coverage guarantee (debt repayment, fee collected)."
+    why_bad: "An attacker repeatedly deposits and withdraws tiny amounts; each round-trip extracts the rounding remainder. Cumulatively this drains the vault. The Sui Math docs guide flags this explicitly under `## Rounding as a protocol decision`."
+    fix: "Mirror the canonical vault pattern in the docs guide: round DOWN on BOTH deposit (shares minted to user) AND withdrawal (assets sent to user) so the vault always retains the fractional remainder. Reverse the rule for the side where the protocol absorbs — fees and accrued interest round UP."
+    example_bad: |
+      // WRONG — depositor receives an extra share's worth on rounding.
+      // Combined with rounding-down on withdrawal it lets the attacker
+      // extract value per round-trip.
+      public fun deposit_shares(amount: u64, total_assets: u64, total_supply: u64): u64 {
+          u64::mul_div(amount, total_supply, total_assets, rounding::up())
+              .destroy_or!(abort EMathOverflow)
+      }
+    example_good: |
+      // RIGHT — both directions round toward the protocol; the vault never
+      // gives away more than it holds.
+      public fun deposit_shares(amount: u64, total_assets: u64, total_supply: u64): u64 {
+          u64::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+      public fun withdraw_assets(shares: u64, total_assets: u64, total_supply: u64): u64 {
+          u64::mul_div(shares, total_assets, total_supply, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: assume-banker-rounding-from-nearest
+    severity: medium
+    description: "Assume `rounding::nearest()` implements banker's rounding (round-half-to-even) and use it for accounting paths where systematic bias on ties is unacceptable."
+    why_bad: "`Nearest` is round-half-UP, not round-half-to-even. Over many ties the caller receiving the rounded amount gets a small systematic bonus. For high-volume protocols (DEX fee quotes that hit exact halves repeatedly) this is a real (small) leak."
+    fix: "Use `rounding::nearest()` knowing ties go up; or, if your protocol cannot tolerate that bias, pick `rounding::down()` or `rounding::up()` deterministically depending on which side should absorb. If you truly need half-even, compute it manually with `mul_div(..., rounding::down())` + a manual `if (remainder * 2 == divisor && quotient % 2 == 1) { quotient + 1 } else { quotient }` correction."
+    example_bad: |
+      // WRONG — comment claims banker's rounding, but `nearest` is half-up.
+      // Over many exact-tie fees this slowly favors the caller side.
+      /// Bankers-rounded fee quote.
+      public fun fee_quote(amount: u64): u64 {
+          u64::mul_div(amount, 25u64, 10_000u64, rounding::nearest())
+              .destroy_or!(abort EMathOverflow)
+      }
+    example_good: |
+      // RIGHT — pick a direction that matches who should absorb the half-tie.
+      // For a fee, the protocol typically absorbs → round UP.
+      public fun fee_quote(amount: u64): u64 {
+          u64::mul_div(amount, 25u64, 10_000u64, rounding::up())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: pattern-match-rounding-mode-variants
+    severity: low
+    description: "Pattern-match `RoundingMode::Down` / `RoundingMode::Up` / `RoundingMode::Nearest` outside the `rounding` module to switch behavior."
+    why_bad: "Couples your code to the enum's variant names. A future refactor that renames a variant or introduces a new one breaks every consumer that pattern-matched. The module's documented surface is the three constructors (`down()`, `up()`, `nearest()`), not the enum cases."
+    fix: "Take `RoundingMode` as an opaque value and forward it. If you need a switch, accept three separate functions, or compare `mode == rounding::down()` (relies on `copy` + structural equality) rather than destructuring."
+    example_bad: |
+      use openzeppelin_math::rounding::{Self, RoundingMode};
+
+      public fun describe(mode: RoundingMode): vector<u8> {
+          // WRONG — pattern-matches a non-public surface.
+          match (mode) {
+              RoundingMode::Down => b"floor",
+              RoundingMode::Up => b"ceiling",
+              RoundingMode::Nearest => b"half-up",
+          }
+      }
+    example_good: |
+      use openzeppelin_math::rounding::{Self, RoundingMode};
+
+      public fun describe(mode: RoundingMode): vector<u8> {
+          // RIGHT — compare against the documented constructors.
+          if (mode == rounding::down()) { b"floor" }
+          else if (mode == rounding::up()) { b"ceiling" }
+          else { b"half-up" }
+      }
+
+composes_with: []   # Empty — `rounding` is a leaf helper consumed by every sibling
+                    # arithmetic module (`u8`/`u16`/`u32`/`u64`/`u128`/`u256`/`u512`/
+                    # `decimal_scaling`). Those consumer relationships are NOT
+                    # compositions in the `composes_with[]` sense — they are the
+                    # module's only purpose, and the docs guide (math.mdx) is the
+                    # canonical reference. Picking between rounding directions
+                    # lives in decisions[]; sibling-module pointers live in
+                    # does_not_solve[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  # `rounding` has no dedicated test file. The three constructors are exercised
+  # transitively through every consumer test that passes `rounding::down()` /
+  # `up()` / `nearest()` into a width-module function. `u64_tests.move` is the
+  # representative consumer suite.
+  tests_count: 0
+
+  canonical_test:
+    file: math/core/tests/u64_tests.move
+    function: average_rounding_modes
+
+  precondition_proofs: []   # No preconditions to prove — module declares no errors.
+
+  do_not_demonstrations:
+    - do_not_id: hallucinated-rounding-mode
+      test_functions: []      # Consumer-side mistake; would be a compile error, not an in-tree test.
+    - do_not_id: wrong-direction-in-vault-roundtrip
+      test_functions: []      # Protocol-design issue demonstrated in the docs guide, not in math/core tests.
+    - do_not_id: assume-banker-rounding-from-nearest
+      test_functions:
+        - average_rounding_modes      # Asserts half-up tie behavior for Nearest.
+        - mul_div_rounding_modes      # Asserts Down/Up/Nearest divergence.
+    - do_not_id: pattern-match-rounding-mode-variants
+      test_functions: []      # Stylistic; no in-tree demonstration.
+
+  do_not_detection:
+    - do_not_id: hallucinated-rounding-mode
+      pattern: "call to a non-existent rounding constructor or enum variant"
+      heuristic: "match /rounding::(floor|ceil|ceiling|truncate|half_even|half_away_from_zero|bankers)\\(\\)/ or /RoundingMode::(Floor|Ceiling|Truncate|HalfEven|HalfAwayFromZero)/"
+    - do_not_id: wrong-direction-in-vault-roundtrip
+      pattern: "deposit-style mul_div with rounding::up(), or withdrawal-style mul_div with rounding::up() when the protocol owes the user value"
+      heuristic: "function name matches /^(deposit|mint|withdraw|redeem|burn)/ AND body contains rounding::up()"
+    - do_not_id: pattern-match-rounding-mode-variants
+      pattern: "match on RoundingMode variants outside the rounding module"
+      heuristic: "match /match\\s*\\([^)]*\\)\\s*\\{[^}]*RoundingMode::(Down|Up|Nearest)/ in any file other than rounding.move"
+
+  events: []   # Module emits no events.

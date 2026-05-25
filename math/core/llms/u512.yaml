@@ -1,0 +1,311 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::u512
+  package: openzeppelin_math
+  one_liner: |
+    Overflow-safe 512-bit unsigned integer used as an INTERMEDIATE in
+    high-precision `u256` arithmetic — full-width multiplication and
+    wide-by-narrow division that would otherwise silently overflow `u256`.
+    Implemented as a `{hi: u256, lo: u256}` struct (Sui Move has no native
+    `u512`), so every op is software-emulated cross-limb arithmetic: expect
+    2-3x the gas of a native `u256` operation. Reach for this only when you
+    need a `u256 * u256` product or `u512 / u256` quotient; otherwise stay
+    on the width-specific modules (`u64`, `u128`, `u256`, ...).
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Direct arithmetic on 512-bit operands — only `mul_u256` and `div_rem_u256` are exposed; addition, subtraction, and modular ops between two U512s are NOT public."
+  - "Signed wide integers — use the fixed-point `SD29x9` type for signed values."
+  - "Width-specific overflow-safe math on native types — use `openzeppelin_math::u8`/`u16`/`u32`/`u64`/`u128`/`u256` `mul_div` / `mul_shr` / `checked_shl` instead."
+  - "Decimal scaling between precisions — use `openzeppelin_math::decimal_scaling`."
+  - "Modular arithmetic on wide integers — `mul_mod` / `inv_mod` exist only on the width-specific modules."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/integer-math"     # Primary — Move Package Registry.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_math::u512::{Self, U512};
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
+  github_alternative: |                      # Secondary — direct git pin if MVR is unavailable.
+    [dependencies.openzeppelin_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/core"
+    rev = "<commit-sha-or-tag>"              # Agent fills in — see install.repo_ref for the
+                                              # commit this metadata was extracted from; prefer
+                                              # the latest release tag (e.g. v1.1.0) for stable builds.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  // No init / setup. `U512` is a plain value type (`copy, drop, store`) —
+  // construct it on demand inside any function. Typical usage is "lift,
+  // compute, reduce back to u256" within a single expression:
+  module my_sui_app::pricing;
+
+  use openzeppelin_math::u512::{Self, U512};
+
+  const EMathOverflow: u64 = 0;
+
+  /// Compute (a * b) / c without overflow, where `a` and `b` are full-range u256.
+  public fun mul_div_u256(a: u256, b: u256, c: u256): u256 {
+      let product: U512 = u512::mul_u256(a, b);          // full 512-bit product
+      let (overflow, quotient, _rem) = u512::div_rem_u256(product, c);
+      assert!(!overflow, EMathOverflow);
+      quotient
+  }
+
+quick_start: |
+  // Minimal happy path: lift, multiply, divide, reduce.
+  // Use this shape whenever a `u256 * u256` intermediate would overflow.
+
+  // 1. Multiply two u256 values into a 512-bit product.
+  let product: U512 = u512::mul_u256(amount_a, amount_b);
+
+  // 2. Inspect the wide value if needed (accessors are by reference).
+  let hi_limb: u256 = u512::hi(&product);
+  let lo_limb: u256 = u512::lo(&product);
+
+  // 3. Divide by a u256 divisor to reduce back to u256. The boolean
+  //    `overflow` flag tells you whether the exact quotient fit; when
+  //    true, `quotient == 0` and you decide how to handle it (abort,
+  //    saturate, return Option).
+  let (overflow, quotient, remainder) = u512::div_rem_u256(product, divisor);
+  assert!(!overflow, EMathOverflow);
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types:
+  - name: U512
+    type_params: ""
+    capabilities: [copy, drop, store]
+    role: "Plain 512-bit value: two `u256` limbs (`hi`, `lo`) packed in a struct. Construct with `new`, `zero`, `from_u256`, or as the return value of `mul_u256`. Pass by value into `div_rem_u256` (consumed) or by reference into the accessors and `ge`. No `key` ability — this is NOT a Sui object; do not try to `transfer` or `share` it."
+
+api:
+  - name: new
+    sig: "(hi: u256, lo: u256) -> U512"
+    role: "Construct a U512 from explicit high and low 256-bit limbs."
+    aborts: []
+
+  - name: zero
+    sig: "() -> U512"
+    role: "Return the all-zero U512."
+    aborts: []
+
+  - name: from_u256
+    sig: "(value: u256) -> U512"
+    role: "Lift a u256 into U512 with `hi = 0, lo = value`. Use before passing a u256 dividend into `div_rem_u256`."
+    aborts: []
+
+  - name: mul_u256
+    sig: "(a: u256, b: u256) -> U512"
+    role: "Full-width 512-bit product `a * b`. The canonical way to compute a u256*u256 intermediate without overflow."
+    aborts: [ECarryOverflow]
+    notes: |
+      Software-emulated: splits each operand into 128-bit halves and
+      accumulates four partial products diagonal-by-diagonal. Cost is
+      ~2-3x a native u256 multiply — fine for an admin or fee-quote
+      path, watch it on tight inner loops. `ECarryOverflow` is an
+      internal invariant check; mathematically it cannot fire for valid
+      u256 inputs and acts as a defense-in-depth assertion.
+
+  - name: div_rem_u256
+    sig: "(numerator: U512, divisor: u256) -> (bool, u256, u256)"
+    role: "Divide a 512-bit numerator by a non-zero u256 divisor. Returns `(overflow, quotient, remainder)`."
+    aborts: [EDivideByZero, EInvalidRemainder]
+    notes: |
+      `numerator` is CONSUMED (passed by value, no `&`) — bind the result
+      of `mul_u256` directly or `move` the U512 in. `overflow = true`
+      means the exact quotient does not fit in u256; in that case
+      `quotient = 0` is returned (NOT the truncated low bits) and
+      `remainder` is still correct. Check the flag before using the
+      quotient. Fast path: when `numerator.hi == 0`, the function falls
+      back to native `lo / divisor` — cost is one native u256 division.
+      `EInvalidRemainder` is an internal invariant assertion and should
+      not fire in well-formed callers.
+
+  - name: hi
+    sig: "(value: &U512) -> u256"
+    role: "Read the upper 256-bit limb."
+    aborts: []
+
+  - name: lo
+    sig: "(value: &U512) -> u256"
+    role: "Read the lower 256-bit limb."
+    aborts: []
+
+  - name: ge
+    sig: "(value: &U512, other: &U512) -> bool"
+    role: "Lexicographic `value >= other` over the two U512 operands."
+    aborts: []
+
+errors:
+  ECarryOverflow:
+    code: 0
+    message: "Cross-limb addition overflowed"
+  EUnderflow:
+    code: 1
+    message: "Borrow underflowed high limb"
+  EDivideByZero:
+    code: 2
+    message: "Divisor must be non-zero"
+  EInvalidRemainder:
+    code: 3
+    message: "High remainder bits must be zero"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I need an overflow-safe multiply-then-divide. Should I use u512 or the width-specific `mul_div`?"
+    options:
+      - use: "openzeppelin_math::u256::mul_div / u128::mul_div / u64::mul_div"
+        when: "Inputs and the final result fit in a single native width (the common case for fees, share math, price quotes)."
+        why: "Returns `Option<Int>` directly, handles rounding mode, ~2-3x cheaper than the u512 path. The library itself uses u512 internally only when the inputs are full u256."
+      - use: "u512::mul_u256 + u512::div_rem_u256"
+        when: "Both operands are full-range u256 AND you need the exact quotient (no rounding-mode knob) or need to inspect the 512-bit intermediate."
+        why: "Only public path that preserves the full 512-bit intermediate. No rounding control — truncating integer division — so do not use it where rounding direction is a protocol decision."
+
+  - question: "I have a (u256 * u256) / u256 expression. What's the canonical shape?"
+    options:
+      - use: "let p = u512::mul_u256(a, b); let (ovf, q, _) = u512::div_rem_u256(p, c); assert!(!ovf, EMyOverflow);"
+        when: "You want truncating (floor) division and to abort on quotient overflow."
+        why: "Single allocation, no intermediate u256, matches how `openzeppelin_math::u256::mul_div` is built internally."
+      - use: "Construct U512 manually with new(hi, lo)"
+        when: "You already have the wide numerator split into limbs (e.g. produced by another wide computation)."
+        why: "Skips the multiplication step. Most integrators will not need this — prefer `mul_u256` or `from_u256`."
+
+  - question: "div_rem_u256 returned `overflow = true`. What does my code do?"
+    options:
+      - use: "abort with a domain error"
+        when: "Default — the protocol cannot proceed when the quotient does not fit in u256."
+        why: "Matches the `Option::destroy_or!(abort EMathOverflow)` pattern used elsewhere in the package. Loud failures beat silently truncated quotients."
+      - use: "saturate to u256::MAX"
+        when: "Your protocol semantics treat overflow as a cap (rare — only for display / heuristic paths)."
+        why: "Acceptable only when downstream consumers understand the cap. NEVER do this for value-sensitive math (price, share, balance) — the saturation point is exploitable."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Pass a non-zero `divisor` to `div_rem_u256`."
+    fails_with: EDivideByZero
+    affects: [div_rem_u256]
+
+do_not:
+  - id: ignore-overflow-flag-from-div-rem
+    severity: high
+    description: "Use the `quotient` returned by `div_rem_u256` without first checking the `overflow` boolean."
+    why_bad: "When the exact quotient does not fit in u256, `div_rem_u256` returns `quotient = 0` (sentinel) — NOT the truncated low bits. Treating that zero as a real quotient silently corrupts the calculation and is exploitable in any value-sensitive path."
+    fix: "Always destructure the tuple and gate on `!overflow` before using `quotient`. If you wanted a saturating semantic, document it explicitly and saturate to `u256::MAX` on the overflow branch."
+    example_bad: |
+      // WRONG — assumes `quotient` is the truncated low 256 bits.
+      let product = u512::mul_u256(a, b);
+      let (_overflow, quotient, _rem) = u512::div_rem_u256(product, c);
+      pool.price = quotient; // silently zero when the real quotient > u256::MAX
+    example_good: |
+      // RIGHT — check the flag, abort or branch on overflow.
+      let product = u512::mul_u256(a, b);
+      let (overflow, quotient, _rem) = u512::div_rem_u256(product, c);
+      assert!(!overflow, EMathOverflow);
+      pool.price = quotient;
+
+  - id: u512-on-hot-path-when-native-fits
+    severity: medium
+    description: "Reach for `u512::mul_u256` + `div_rem_u256` when both operands and the final result fit in `u256` (or smaller) and `openzeppelin_math::u256::mul_div` would do."
+    why_bad: "`U512` operations are software-emulated cross-limb arithmetic — ~2-3x the cost of the equivalent native-width call. On user-frequency paths (swaps, deposits) this is wasted gas and a missed rounding-mode knob (u512 only does truncating division)."
+    fix: "Use the width-specific `mul_div` / `mul_shr` from `openzeppelin_math::u<W>`. They return `Option<Int>`, accept a `RoundingMode`, and use the u512 internals only when actually needed."
+    example_bad: |
+      // WRONG — u128-sized inputs going through the wide path.
+      let a256: u256 = (a as u256);
+      let b256: u256 = (b as u256);
+      let p = u512::mul_u256(a256, b256);
+      let (_ovf, q, _) = u512::div_rem_u256(p, (c as u256));
+      let result = (q as u128); // pays for u512 even though u128::mul_div would do.
+    example_good: |
+      // RIGHT — width-specific mul_div with explicit rounding.
+      use openzeppelin_math::{rounding, u128};
+      let result: u128 = u128::mul_div(a, b, c, rounding::down())
+          .destroy_or!(abort EMathOverflow);
+
+  - id: u512-as-stored-state
+    severity: medium
+    description: "Store a `U512` value in a Sui object field as protocol state."
+    why_bad: "`U512` is `copy, drop, store` but has NO `key` — it is a plain value, not an object. Embedding it in a struct works mechanically, but it doubles the storage footprint of what is almost always a `u256` value, and there is no public arithmetic between two stored `U512`s (no add, no sub, no mul_u512). The wide representation is an INTERMEDIATE, not state."
+    fix: "Compute the U512 inside a function, reduce it back to u256 via `div_rem_u256` or `lo()`/`hi()`, and store the u256. If you need to preserve full 512-bit state, keep two `u256` fields explicitly and document the invariant."
+    example_bad: |
+      public struct Vault has key, store {
+          id: UID,
+          accumulator: U512, // 64 bytes for what is conceptually a u256 sum.
+      }
+    example_good: |
+      public struct Vault has key, store {
+          id: UID,
+          accumulator: u256,
+      }
+
+      public fun add_product(v: &mut Vault, a: u256, b: u256) {
+          let product = u512::mul_u256(a, b);
+          // Reduce into the stored u256 (caller picks the reduction policy).
+          let (overflow, q, _) = u512::div_rem_u256(product, DENOMINATOR);
+          assert!(!overflow, EMathOverflow);
+          v.accumulator = v.accumulator + q;
+      }
+
+composes_with: []   # Empty — no compositions are source-cited. Sibling pointers
+                    # (u8/u16/.../u256, decimal_scaling, fixed_point) live in
+                    # does_not_solve[]; choosing between siblings lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  tests_count: 16
+
+  canonical_test:
+    file: math/core/tests/u512_tests.move
+    function: mul_u256_combines_high_bits_correctly
+
+  precondition_proofs:
+    - precondition_fails_with: EDivideByZero
+      test_file: math/core/tests/u512_tests.move
+      test_functions: [div_rem_rejects_zero_divisor]
+
+  do_not_demonstrations:
+    - do_not_id: ignore-overflow-flag-from-div-rem
+      test_functions: [div_rem_flags_overflow_when_quotient_exceeds_u256, div_rem_overflow_preserves_remainder, div_rem_large_operands_trigger_overflow_flag]
+    - do_not_id: u512-on-hot-path-when-native-fits
+      test_functions: []   # consumer-side performance pattern; not in-tree
+    - do_not_id: u512-as-stored-state
+      test_functions: []   # consumer-side modeling pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: ignore-overflow-flag-from-div-rem
+      pattern: "destructured tuple from u512::div_rem_u256 where the overflow flag is bound to `_` and the quotient is then used"
+      heuristic: "regex: u512::div_rem_u256[^;]*;\\s*(?:[^;]*\\b_(?:overflow|ovf|_)\\b[^;]*) followed by usage of the second tuple element"
+    - do_not_id: u512-on-hot-path-when-native-fits
+      pattern: "u512::mul_u256 used where both operands have a static `as u256` cast from a narrower type"
+      heuristic: "regex: u512::mul_u256\\(\\s*\\([^)]*as\\s+u256\\)\\s*,\\s*\\([^)]*as\\s+u256\\)"
+    - do_not_id: u512-as-stored-state
+      pattern: "struct field with type U512 in a `has key` or `has store` struct"
+      heuristic: "regex: public struct \\w+ has [^{]*(?:key|store)[^{]*\\{[^}]*:\\s*U512"
+
+  events: []

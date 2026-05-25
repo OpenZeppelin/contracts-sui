@@ -1,0 +1,406 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::u16
+  package: openzeppelin_math
+  one_liner: |
+    The `u16` variant of the OpenZeppelin per-width integer math API (sibling
+    of `u8`, `u32`, `u64`, `u128`, `u256`). Provides overflow-safe arithmetic
+    helpers — `mul_div`, `mul_shr`, `average`, `checked_shl/shr`, integer
+    logarithms, `sqrt`, `inv_mod`, `mul_mod` — with explicit `RoundingMode`
+    on every value-shifting call. Use this width when 16-bit storage is
+    deliberate (compact ticks, basis-point ranges, packed indices); for
+    general-purpose protocol math reach for `u64` or wider. Pure stateless
+    functions — no objects, no events, no authorization.
+
+domain: math
+frequency: mixed
+does_not_solve:
+  - "Fractional / signed values — use the openzeppelin_math fixed-point package (UD30x9 / SD29x9)."
+  - "Decimal-precision alignment across token systems — use openzeppelin_math::decimal_scaling."
+  - "Wider arithmetic — use openzeppelin_math::u32 / u64 / u128 / u256 when 16 bits cannot hold your domain values."
+  - "Implicit overflow behavior — every potentially-overflowing call returns Option<u16>; the caller must choose abort, fallback, or propagate."
+  - "Default rounding — every rounding-sensitive call requires a RoundingMode argument; there is no library default."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/integer-math"     # Primary — Move Package Registry.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_math::{rounding, u16};
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
+  github_alternative: |                      # Secondary — direct git pin if MVR is unavailable.
+    [dependencies.openzeppelin_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/core"
+    rev = "<commit-sha-or-tag>"              # Agent fills in — see install.repo_ref for the
+                                              # commit this metadata was extracted from; prefer
+                                              # the latest release tag (e.g., v1.1.0) for stable
+                                              # builds, pin a SHA for audited deployments.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_sui_app::tick_math;
+
+  use openzeppelin_math::{rounding, u16};
+
+  // No `init` needed — `u16` is a pure stateless free-function library.
+  // Import the module and call its functions directly. The example below
+  // wraps a couple of them in protocol-specific helpers, which is the
+  // canonical shape for math wrappers.
+
+  const EMathOverflow: u64 = 0;
+
+  /// Round-to-nearest fee quote in basis-point units (`u16` holds 0..=65535).
+  public fun quote_with_fee_bps(amount_bps: u16, fee_bps: u16): u16 {
+      u16::mul_div(amount_bps, fee_bps, 10_000u16, rounding::nearest())
+          .destroy_or!(abort EMathOverflow)
+  }
+
+  /// Tick midpoint with no overflow even when both endpoints are at `u16::MAX`.
+  public fun tick_midpoint(a: u16, b: u16): u16 {
+      u16::average(a, b, rounding::nearest())
+  }
+
+quick_start: |
+  // Minimal end-to-end happy path — no setup, no objects, no PTBs needed.
+  // Every function in this module is pure and callable from anywhere.
+
+  // 1. Overflow-safe average. Never aborts, never overflows.
+  let mid: u16 = u16::average(60_000u16, 65_000u16, rounding::down());
+  // mid == 62_500
+
+  // 2. mul_div with explicit rounding. Returns Option<u16> — handle it.
+  //    Aborts only if `denominator == 0` (EDivideByZero).
+  let scaled: Option<u16> = u16::mul_div(amt, 9_975u16, 10_000u16, rounding::down());
+  let safe_scaled: u16 = scaled.destroy_or!(abort EMathOverflow);
+
+  // 3. Checked left shift. Returns None if any non-zero bit would be lost.
+  //    For u16, shifts of 16 or more bits always return None.
+  let shifted: Option<u16> = u16::checked_shl(1u16, 8u8);
+  // shifted == option::some(256)
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # No structs, capabilities, or events — `u16` is a pure
+            # free-function library over the native `u16` primitive.
+
+api:
+  - name: average
+    sig: "(a: u16, b: u16, rounding_mode: RoundingMode) -> u16"
+    role: "Arithmetic mean of two u16 values with configurable rounding. Never overflows."
+    aborts: []
+    notes: |
+      `(a + b) / 2` overflows when both values approach `u16::MAX`. `average`
+      uses bit-manipulation to avoid the intermediate sum entirely and is
+      safe for the full input domain. Returns `u16` directly (no Option).
+
+  - name: checked_shl
+    sig: "(value: u16, shift: u8) -> Option<u16>"
+    role: "Lossless left shift. Returns `none()` when shifting would consume a non-zero bit."
+    aborts: []
+    notes: |
+      For `u16`, any `shift >= 16` on a non-zero value returns `none()`.
+      `value == 0` always returns `some(0)`. Use this instead of the native
+      `<<` operator anywhere the high bits are protocol-significant — native
+      `<<` discards them silently.
+
+  - name: checked_shr
+    sig: "(value: u16, shift: u8) -> Option<u16>"
+    role: "Lossless right shift. Returns `none()` when shifting would consume a non-zero bit."
+    aborts: []
+    notes: |
+      Symmetric to `checked_shl`: any `shift >= 16` on a non-zero value
+      returns `none()`. `value == 0` always returns `some(0)`. Detects
+      precision loss on the low side, which native `>>` silently drops.
+
+  - name: mul_div
+    sig: "(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode) -> Option<u16>"
+    role: "Compute `(a * b) / denominator` with configured rounding; returns `none()` if the rounded value does not fit in u16."
+    aborts: [EDivideByZero]
+    notes: |
+      The intermediate product is computed in a wider type so `a * b` does
+      not silently overflow before division — this is the load-bearing
+      safety property. Aborts only on `denominator == 0`. Prefer this over
+      manual `(a * b) / c` anywhere the intermediate product could exceed
+      `u16::MAX` (~65_535).
+
+  - name: mul_shr
+    sig: "(a: u16, b: u16, shift: u8, rounding_mode: RoundingMode) -> Option<u16>"
+    role: "Compute `(a * b) >> shift` with configured rounding; returns `none()` if the result does not fit in u16."
+    aborts: []
+    notes: |
+      Equivalent to `mul_div` with a power-of-two denominator but faster.
+      Use this for Q-notation fixed-point multiplication where the divisor
+      is a power of two. The Cetus exploit (May 2025) was a checked-shift
+      bug in this class of operation — relying on the library version
+      removes that whole footgun class.
+
+  - name: clz
+    sig: "(value: u16) -> u8"
+    role: "Count leading zero bits."
+    aborts: []
+    notes: "Returns `16` for `value == 0`; returns `0` when the top bit is set."
+
+  - name: msb
+    sig: "(value: u16) -> u8"
+    role: "Zero-based index of the most significant set bit."
+    aborts: []
+    notes: "Returns `0` for `value == 0` by convention (no separate Option). Use `clz` if you need to distinguish the zero case from a value with the lowest bit set."
+
+  - name: log2
+    sig: "(value: u16, rounding_mode: RoundingMode) -> u8"
+    role: "Base-2 logarithm with configurable rounding."
+    aborts: []
+    notes: "Returns `0` for `value == 0` by convention (no separate Option). Useful for tick-math and bit-width estimation."
+
+  - name: log256
+    sig: "(value: u16, rounding_mode: RoundingMode) -> u8"
+    role: "Base-256 logarithm with configurable rounding — i.e., the byte-length needed to encode the value."
+    aborts: []
+    notes: "Returns `0` for `value == 0`. Used to size encoders, serializers, and storage slots."
+
+  - name: log10
+    sig: "(value: u16, rounding_mode: RoundingMode) -> u8"
+    role: "Base-10 logarithm with configurable rounding — i.e., decimal-digit count."
+    aborts: []
+    notes: "Returns `0` for `value == 0`. Used for decimal-aware formatting and scale checks."
+
+  - name: sqrt
+    sig: "(value: u16, rounding_mode: RoundingMode) -> u16"
+    role: "Integer square root with configurable rounding."
+    aborts: []
+    notes: "Returns `0` for `value == 0`. Never overflows — the result always fits in `u16`."
+
+  - name: inv_mod
+    sig: "(value: u16, modulus: u16) -> Option<u16>"
+    role: "Modular multiplicative inverse of `value` in `Z / modulus`."
+    aborts: [EZeroModulus]
+    notes: |
+      Returns `some(x)` such that `value * x = 1 (mod modulus)` when
+      `gcd(value, modulus) == 1`. Returns `none()` when not coprime OR
+      when `modulus == 1`. Aborts on `modulus == 0`.
+
+  - name: mul_mod
+    sig: "(a: u16, b: u16, modulus: u16) -> u16"
+    role: "Compute `(a * b) mod modulus` without intermediate overflow."
+    aborts: [EZeroModulus]
+    notes: "Uses a wider intermediate to compute `a * b` so the product never silently overflows before the mod. Aborts on `modulus == 0`."
+
+  - name: is_power_of_ten
+    sig: "(n: u16) -> bool"
+    role: "Returns true iff `n` is a power of ten representable in u16."
+    aborts: []
+    notes: "Width-specific lookup — for `u16`, the valid values are exactly `{1, 10, 100, 1000, 10000}`. O(1), never aborts. Use for decimal-scale validation."
+
+errors:
+  # Both errors are defined in openzeppelin_math::internal::macros (the
+  # shared helpers the per-width modules wrap). They surface here whenever
+  # a u16 entry point delegates to a macro that performs the underlying
+  # assertion.
+  EDivideByZero:
+    code: 0
+    message: "Divisor must be non-zero"
+  EZeroModulus:
+    code: 1
+    message: "Modulus must be non-zero"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "What integer width should my protocol use for general-purpose math?"
+    options:
+      - use: "openzeppelin_math::u64"
+        when: "Default for almost all Sui protocol math — coin balances, timestamps, gas, generic counters. Matches the Sui framework's native width."
+        why: "u64 is the Sui-native width; using it minimizes conversions and matches existing framework patterns. Reach for u16 only when narrower storage is a deliberate, documented decision."
+      - use: "openzeppelin_math::u16"
+        when: "You have a documented need for 16-bit storage — compact tick indices, basis-point ranges (0..=10_000 fits), packed bit-fields, on-chain enums numbering > 256 variants."
+        why: "Saves storage / wire bytes when you have many small values. Comes with a narrow range (~65_535) so mul_div / mul_shr will frequently return `none()` — design for that."
+      - use: "openzeppelin_math::u128 / u256"
+        when: "High-precision fixed-point or cross-chain interop with 256-bit ecosystems."
+        why: "Wider intermediates eliminate most overflow handling at the cost of storage and gas. Use the narrowest width that holds your domain."
+
+  - question: "How do I handle the Option<u16> return from mul_div / mul_shr / checked_shl/shr / inv_mod?"
+    options:
+      - use: "destroy_or!(abort EMyError) — domain-specific abort"
+        when: "Overflow / failure is a true protocol error and the transaction should revert with a meaningful error code."
+        why: "Most common shape. Matches the docs guide. Keeps the abort path explicit and recoverable for the calling layer."
+      - use: "if (r.is_some()) r.destroy_some() else <cap or fallback>"
+        when: "Overflow means 'cap at maximum' or 'use a safe default' rather than 'this is an error'."
+        why: "Acceptable for capacity-limited paths (e.g., clamping a u16 throughput counter at `u16::MAX`). Document the fallback — silent caps can hide bugs."
+      - use: "Return Option<u16> all the way to the caller"
+        when: "Your function is itself a building block in a larger protocol."
+        why: "Lets the top-level caller pick abort vs cap vs propagate once. Avoids per-layer policy decisions."
+
+  - question: "When should I reach for mul_shr instead of mul_div?"
+    options:
+      - use: "mul_shr"
+        when: "The divisor is a power of two — Q-notation fixed-point, tick math, scaling by 2^k."
+        why: "Faster than mul_div for the same result. The library uses wider intermediates internally so neither path silently overflows."
+      - use: "mul_div"
+        when: "The divisor is anything else — fees expressed in basis points (10_000), share/asset ratios, decimal-precision scaling."
+        why: "Only path that handles arbitrary denominators. Aborts on `denominator == 0` (EDivideByZero) — never pass a zero."
+
+  - question: "I need an arithmetic mean of two near-u16::MAX values. What do I call?"
+    options:
+      - use: "u16::average(a, b, rounding_mode)"
+        when: "Always — for any two-value mean, regardless of magnitude."
+        why: "Native `(a + b) / 2` overflows when both are near `u16::MAX`. `average` uses bit manipulation to avoid the intermediate sum and is safe for the full input domain. No Option, no abort."
+      - use: "(a + b) / 2"
+        when: "Never. There is no input range where the native form is safer or faster."
+        why: "Silent overflow above ~32_768 + 32_768. Reviewers should flag this on sight."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "`denominator` passed to `mul_div` must be non-zero."
+    fails_with: EDivideByZero
+    affects: [mul_div]
+
+  - must: "`modulus` passed to `inv_mod` or `mul_mod` must be non-zero."
+    fails_with: EZeroModulus
+    affects: [inv_mod, mul_mod]
+
+do_not:
+  - id: native-arithmetic-on-u16
+    severity: high
+    description: "Use the native `+`, `*`, `<<`, `>>`, `/` operators on `u16` values whose magnitudes can approach `u16::MAX` without library wrappers."
+    why_bad: "Native Move arithmetic aborts on overflow and discards bits silently on shifts. `u16::MAX` is only `65_535`, so almost any multiplication of two non-trivial u16 values overflows. Silent bit loss on `<<` is the exact failure class that produced the Cetus exploit."
+    fix: "Use `u16::mul_div`, `u16::mul_shr`, `u16::checked_shl`, `u16::checked_shr` (and the rounding-aware logarithms / `sqrt` / `average`) anywhere either operand can exceed the safe range. The library returns `Option<u16>` precisely so the caller chooses the overflow policy explicitly."
+    example_bad: |
+      // WRONG — silently overflows for any `amt * fee_bps > 65_535`,
+      // which is true for almost all realistic inputs.
+      public fun fee_amount_bad(amt: u16, fee_bps: u16): u16 {
+          (amt * fee_bps) / 10_000u16
+      }
+    example_good: |
+      use openzeppelin_math::{rounding, u16};
+
+      const EMathOverflow: u64 = 0;
+
+      public fun fee_amount_good(amt: u16, fee_bps: u16): u16 {
+          u16::mul_div(amt, fee_bps, 10_000u16, rounding::nearest())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: unwrap-option-without-policy
+    severity: medium
+    description: "Call `.destroy_some()` (or pattern-match-and-trust) on the `Option<u16>` returned by `mul_div` / `mul_shr` / `checked_shl` / `checked_shr` / `inv_mod` without an explicit overflow policy."
+    why_bad: "`destroy_some()` aborts with a generic vector-extract error if the option is `none()`. Auditors and operators cannot tell that the failure is an overflow vs a malformed input vs a library bug. The transaction reverts opaquely."
+    fix: "Pick a policy and make it explicit: `destroy_or!(abort EMyDomainError)` for hard failure, `if (r.is_some()) r.destroy_some() else <fallback>` for capped behavior, or propagate `Option<u16>` upward for caller-chosen policy. The docs guide's 'Handling Option<T> at the boundary' section enumerates the three canonical shapes."
+    example_bad: |
+      // WRONG — opaque abort hides the cause. No domain error surfaced.
+      public fun scaled_bad(x: u16, k: u16): u16 {
+          u16::mul_div(x, k, 10u16, rounding::down()).destroy_some()
+      }
+    example_good: |
+      const EOutputOverflow: u64 = 42;
+
+      public fun scaled_good(x: u16, k: u16): u16 {
+          u16::mul_div(x, k, 10u16, rounding::down())
+              .destroy_or!(abort EOutputOverflow)
+      }
+
+  - id: wrong-rounding-for-protocol-side
+    severity: medium
+    description: "Pick a `RoundingMode` that rounds in favor of the user rather than the protocol on a function where the protocol absorbs the rounding remainder (deposits, withdrawals, fee quotes)."
+    why_bad: "Rounding direction decides who absorbs the fractional remainder. Round the wrong way and you create an exploitable round-trip — repeated deposit/withdraw cycles extract value one rounding unit at a time. The math docs guide spells this out with the vault example."
+    fix: "Pick rounding so the protocol keeps the remainder. Deposits and withdrawals both round DOWN (user receives fewer shares / fewer tokens). Fee quotes round UP (protocol gets at least the quoted fee). Use `rounding::nearest()` only for symmetric display / midpoint math where neither side absorbs systematically."
+    example_bad: |
+      // WRONG — depositors get extra shares each call.
+      public fun deposit_shares_bad(amount: u16, total_assets: u16, total_supply: u16): u16 {
+          u16::mul_div(amount, total_supply, total_assets, rounding::up())
+              .destroy_or!(abort EMathOverflow)
+      }
+    example_good: |
+      // RIGHT — protocol keeps the rounding remainder.
+      public fun deposit_shares_good(amount: u16, total_assets: u16, total_supply: u16): u16 {
+          u16::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: u16-for-general-protocol-math
+    severity: low
+    description: "Reach for `u16` as the default arithmetic width for protocol balances, prices, or timestamps."
+    why_bad: "`u16::MAX` is `65_535`. Real-world balances, prices, and timestamps blow past this range almost immediately, so `mul_div` / `mul_shr` will return `none()` on most inputs and the caller has to handle overflow on every call. The Sui framework uses `u64` for coin balances and `u64`/`u128` for time-related fields — picking `u16` adds noise and conversions for no storage benefit."
+    fix: "Default to `openzeppelin_math::u64` for general protocol math. Use `u16` only when the storage / wire compactness of a narrow integer is a deliberate design choice (compact tick indices, basis-point ranges, packed bit-fields)."
+    example_bad: |
+      // WRONG — u16 is too narrow for a real share balance.
+      public struct Pool has key { id: UID, total_supply: u16 }
+    example_good: |
+      // RIGHT — match the Sui-native width for balances.
+      public struct Pool has key { id: UID, total_supply: u64 }
+
+composes_with: []   # Empty — no compositions are source-cited. Sibling pointers
+                    # (use openzeppelin_math::u64 for general protocol math, the
+                    # fixed-point package for fractional values, decimal_scaling
+                    # for cross-precision conversion) live in does_not_solve[];
+                    # choosing between siblings lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  tests_count: 67
+
+  canonical_test: null   # No single end-to-end happy-path test exists — the
+                         # suite is sharded per-function (e.g.,
+                         # `average_rounding_modes`, `mul_div_exact_division`,
+                         # `sqrt_handles_perfect_squares`). Consult the per-
+                         # function tests when stuck.
+
+  precondition_proofs:
+    - precondition_fails_with: EDivideByZero
+      test_file: math/core/tests/u16_tests.move
+      test_functions:
+        - mul_div_rejects_zero_denominator
+    - precondition_fails_with: EZeroModulus
+      test_file: math/core/tests/u16_tests.move
+      test_functions:
+        - inv_mod_rejects_zero_modulus
+        - mul_mod_rejects_zero_modulus
+
+  do_not_demonstrations:
+    - do_not_id: native-arithmetic-on-u16
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: unwrap-option-without-policy
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: wrong-rounding-for-protocol-side
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: u16-for-general-protocol-math
+      test_functions: []   # consumer-side pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: native-arithmetic-on-u16
+      pattern: "Native `*`, `<<`, `>>`, or `(a + b) / 2` on u16 operands without a wrapping library call."
+      heuristic: "regex within a function body where any local is typed u16: /\\bu16\\b[\\s\\S]{0,200}([^=!<>]\\*|<<|>>)/ that does NOT also reference `u16::mul_div`, `u16::mul_shr`, `u16::checked_shl`, `u16::checked_shr`, or `u16::average`."
+    - do_not_id: unwrap-option-without-policy
+      pattern: "`.destroy_some()` called directly on the Option<u16> result of a u16 library function."
+      heuristic: "regex: `u16::(mul_div|mul_shr|checked_shl|checked_shr|inv_mod)\\([^)]*\\)[\\s\\.]*destroy_some\\(\\)`"
+    - do_not_id: wrong-rounding-for-protocol-side
+      pattern: "`mul_div` / `mul_shr` call in a `deposit*` / `withdraw*` function that uses `rounding::up()` for deposits or withdrawals."
+      heuristic: "function name matches /^(deposit|withdraw|redeem|mint_shares|burn_shares)/ AND body contains `rounding::up()` passed to a u16/u32/u64/u128/u256 mul_div or mul_shr call."
+    - do_not_id: u16-for-general-protocol-math
+      pattern: "Public struct field typed u16 for a balance / supply / price / timestamp / counter."
+      heuristic: "regex: `(balance|supply|total|amount|price|timestamp|deadline|count|nonce)\\s*:\\s*u16\\b` in a public struct declaration."
+
+  events: []   # No events declared by this module.

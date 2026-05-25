@@ -1,0 +1,311 @@
+schema_version: 2
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::decimal_scaling
+  package: openzeppelin_math
+  one_liner: |
+    Safe upcast / downcast between `u64` and `u256` token balances across
+    different decimal precisions (typical use: cross-chain alignment — 18-dec
+    EVM amounts <-> 6-9-dec Sui amounts). Scaling down TRUNCATES the
+    fractional residue (no rounding); decimals are capped at 24. Pure
+    stateless math — no objects, no events, no authorization.
+
+domain: math
+frequency: mixed
+does_not_solve:
+  - "Rounding modes other than truncation — use openzeppelin_math::u64 / u128 with rounding::up/nearest if you need rounded conversion."
+  - "Fractional / signed values — use the openzeppelin_math fixed-point package (UD30x9 / SD29x9)."
+  - "Decimal scales above 24 — by design, the package limit covers every production token standard with headroom."
+  - "Capturing the truncated remainder — the function discards it; capture it yourself before downcasting if your protocol must account for it."
+  - "Cross-chain bridging / message passing — this is the scaling primitive only; the bridge logic is your protocol's concern."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  mvr: "@openzeppelin-move/integer-math"     # Primary — Move Package Registry.
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  use_statement: |
+    use openzeppelin_math::decimal_scaling;
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
+  github_alternative: |                      # Secondary — direct git pin if MVR is unavailable.
+    [dependencies.openzeppelin_math]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "math/core"
+    rev = "<commit-sha-or-tag>"              # Agent fills in — see install.repo_ref for the
+                                              # commit this metadata was extracted from; prefer
+                                              # the latest release tag (e.g., v1.1.0) for stable
+                                              # builds, pin a SHA for audited deployments.
+
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_sui_app::scaling;
+
+  use openzeppelin_math::decimal_scaling;
+
+  // No `init` needed — `decimal_scaling` is a pure stateless library.
+  // Import the module and call the two functions directly. The example
+  // below wraps them in protocol-specific helpers, which is the canonical
+  // shape for bridge / cross-chain alignment modules.
+
+  /// Convert a 6-decimal incoming amount (e.g., USDC) to the 9-decimal
+  /// internal representation Sui protocols typically use.
+  public fun scale_up_6_to_9(amount: u64): u256 {
+      decimal_scaling::safe_upcast_balance(amount, 6u8, 9u8)
+  }
+
+  /// Convert a 9-decimal internal amount back to 6 decimals for an outgoing
+  /// transfer. Truncates fractional residue — capture it beforehand if you
+  /// need to account for it.
+  public fun scale_down_9_to_6(amount: u256): u64 {
+      decimal_scaling::safe_downcast_balance(amount, 9u8, 6u8)
+  }
+
+quick_start: |
+  // Minimal end-to-end happy path — no setup, no objects, no PTBs needed.
+  // Both functions are pure and can be called from any function.
+
+  // 1. Upcast a Sui-native u64 amount to a u256 for cross-chain math.
+  //    1 Sui-side token (9 decimals) -> 18-decimal EVM representation.
+  let eth_amount: u256 =
+      decimal_scaling::safe_upcast_balance(1_000_000_000u64, 9u8, 18u8);
+  // eth_amount == 1_000_000_000_000_000_000
+
+  // 2. Downcast an inbound u256 EVM amount back to a Sui u64.
+  //    Aborts ESafeDowncastOverflowedInt if the scaled value > u64::MAX.
+  let sui_amount: u64 =
+      decimal_scaling::safe_downcast_balance(eth_amount, 18u8, 9u8);
+  // sui_amount == 1_000_000_000
+
+  // 3. Downcasting with a smaller target truncates fractional residue
+  //    (no rounding). 1.999... -> 1, not 2.
+  let truncated: u64 =
+      decimal_scaling::safe_downcast_balance(1_999_999_999u256, 9u8, 0u8);
+  // truncated == 1
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # No structs, capabilities, or events — `decimal_scaling` is a
+            # pure free-function library over native `u64` / `u256`.
+
+api:
+  - name: safe_downcast_balance
+    sig: "(raw_amount: u256, source_decimals: u8, target_decimals: u8) -> u64"
+    role: "Scale a u256 balance from `source_decimals` to `target_decimals` and return as u64. Used for inbound cross-chain amounts (e.g., 18-dec EVM -> 9-dec Sui)."
+    aborts: [EInvalidDecimals, ESafeDowncastOverflowedInt]
+    notes: |
+      Scaling DOWN truncates the fractional residue — `1.999` becomes `1`,
+      not `2`; `0.999` becomes `0`. This is deliberate (prevents inflation
+      via rounding) but it means precision is permanently lost. Capture the
+      remainder yourself BEFORE the downcast if your protocol must account
+      for it.
+
+      Scaling UP can overflow u64 even when raw_amount fits in u256; the
+      function pre-checks `raw_amount <= u64::MAX / 10^diff` and aborts
+      ESafeDowncastOverflowedInt before the multiplication. The same error
+      is raised when the result of a down-scale is still above u64::MAX.
+
+      Both decimals must be <= 24 (MAX_DECIMALS) — anything larger aborts
+      EInvalidDecimals.
+
+  - name: safe_upcast_balance
+    sig: "(amount: u64, source_decimals: u8, target_decimals: u8) -> u256"
+    role: "Scale a u64 balance from `source_decimals` to `target_decimals` and return as u256. Used for outbound cross-chain amounts (e.g., 9-dec Sui -> 18-dec EVM) and for safely widening intermediate computations."
+    aborts: [EInvalidDecimals]
+    notes: |
+      Scaling UP preserves precision exactly — the result is `amount *
+      10^(target - source)` in u256, which cannot overflow for any
+      u64 input with decimal difference <= 24 (max product is roughly
+      2^64 * 10^24 << 2^256).
+
+      Scaling DOWN truncates (same behavior as `safe_downcast_balance`).
+      This path cannot abort `ESafeDowncastOverflowedInt` because the
+      result is u256, which is wide enough to hold any scaled value.
+
+      Both decimals must be <= 24 (MAX_DECIMALS) — anything larger aborts
+      EInvalidDecimals.
+
+errors:
+  ESafeDowncastOverflowedInt:
+    code: 0
+    message: "Value cannot be represented as u64"
+  EInvalidDecimals:
+    code: 1
+    message: "Decimals value is invalid (must be <= 24)"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I'm bridging a token amount between chains with different decimal precisions — which function do I call?"
+    options:
+      - use: "safe_upcast_balance"
+        when: "You have a u64 amount (typical Sui-side balance) and need a u256 amount (typical EVM-side balance). Scaling up never overflows; scaling down through this function still works but you can't hit the u64 cap because the return type is u256."
+        why: "Direction-matches the most common Sui-outbound flow. Cannot abort ESafeDowncastOverflowedInt — the only failure mode is EInvalidDecimals."
+      - use: "safe_downcast_balance"
+        when: "You have a u256 amount (typical EVM-side balance) and need a u64 amount (typical Sui-side balance)."
+        why: "Direction-matches the most common Sui-inbound flow. Aborts ESafeDowncastOverflowedInt if the scaled value exceeds u64::MAX — your bridge must surface this as a domain error or pre-validate the upstream amount."
+
+  - question: "I need to scale by a small fractional factor (e.g., apply a 0.25 % fee). Is `decimal_scaling` the right tool?"
+    options:
+      - use: "openzeppelin_math::u64::mul_div with rounding::down() / nearest() / up()"
+        when: "You want an EXPLICIT rounding mode (fees, share / asset accounting, price quotes). decimal_scaling only truncates; mul_div lets you pick."
+        why: "decimal_scaling is for cross-decimal alignment, not arbitrary ratios. Using it for fee math would silently round against one side of every trade."
+      - use: "decimal_scaling::safe_downcast_balance / safe_upcast_balance"
+        when: "You are converting between fixed decimal precisions for cross-chain or cross-token alignment AND truncation is the protocol-correct policy."
+        why: "Truncation is fixed in this module — you don't choose. The function does the precision shift atomically with the overflow check."
+
+  - question: "I downcast and lost the fractional remainder — how do I keep it?"
+    options:
+      - use: "Capture the residue BEFORE the downcast"
+        when: "Always, when your protocol accounting depends on the discarded units (refund logic, fee crediting, dust handling)."
+        why: "safe_downcast_balance discards the residue with no record. Compute `remainder = raw_amount - safe_upcast_balance(safe_downcast_balance(raw_amount, src, tgt), tgt, src)` (or the equivalent direct mod) and route it explicitly."
+      - use: "Accept the truncation"
+        when: "Your protocol intentionally treats the discarded units as protocol-owned dust (most bridges)."
+        why: "Standard blockchain behavior. The truncation is documented and tested; auditors recognize it."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Both `source_decimals` and `target_decimals` must be <= 24 (MAX_DECIMALS)."
+    fails_with: EInvalidDecimals
+    affects: [safe_downcast_balance, safe_upcast_balance]
+
+  - must: "When the call path involves a downcast, the scaled value must fit in u64 — for upscaling-then-downcasting, ensure `raw_amount <= u64::MAX / 10^(target - source)`; for downscaling, ensure the divided result is still <= u64::MAX."
+    fails_with: ESafeDowncastOverflowedInt
+    affects: [safe_downcast_balance]
+
+do_not:
+  - id: scale-then-divide-for-fees
+    severity: high
+    description: "Use safe_downcast_balance / safe_upcast_balance to apply a fractional factor (fees, ratios, share accounting) by first scaling up, multiplying, then scaling back."
+    why_bad: "decimal_scaling always truncates on the way down. Combining it with multiplication silently rounds against one side of every transaction, leaking value over time."
+    fix: "Use `openzeppelin_math::u64::mul_div` (or the appropriate width module) with an explicit `rounding::up() / nearest() / down()` policy. Reserve decimal_scaling for cross-decimal alignment only."
+    example_bad: |
+      // WRONG — uses decimal_scaling to apply a 0.25% fee. Truncation is
+      // implicit and asymmetric; the protocol leaks value over time.
+      public fun apply_fee_bad(amount: u64): u64 {
+          let widened = decimal_scaling::safe_upcast_balance(amount, 0, 4);
+          let after_fee = widened * 9975u256 / 10_000u256;     // silent truncation
+          decimal_scaling::safe_downcast_balance(after_fee, 4, 0)
+      }
+    example_good: |
+      // RIGHT — explicit rounding via mul_div on the protocol-native width.
+      use openzeppelin_math::{rounding, u64 as math_u64};
+
+      const EMathOverflow: u64 = 0;
+
+      public fun apply_fee_good(amount: u64): u64 {
+          math_u64::mul_div(amount, 9975u64, 10_000u64, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: discard-truncation-remainder-silently
+    severity: medium
+    description: "Downcast a balance across decimals and discard the truncated residue without accounting for it in your protocol state."
+    why_bad: "The residue is permanently lost. For bridges, withdrawals, or fee crediting, that residue is real value belonging to a user or to the protocol treasury. Discarding it silently is a recurring source of bridge dust bugs."
+    fix: "BEFORE calling safe_downcast_balance, compute the truncated remainder explicitly (or reconstruct it via safe_upcast_balance on the scaled value) and route it to the right account — user refund, protocol treasury, or accumulator."
+    example_bad: |
+      // WRONG — fractional units silently disappear on every withdrawal.
+      public fun withdraw_bad(amount_18_dec: u256): u64 {
+          decimal_scaling::safe_downcast_balance(amount_18_dec, 18, 9)
+      }
+    example_good: |
+      // RIGHT — capture and route the truncated residue.
+      public fun withdraw_good(amount_18_dec: u256): (u64, u256) {
+          let scaled = decimal_scaling::safe_downcast_balance(amount_18_dec, 18, 9);
+          // Reconstruct the lossy round-trip to find the discarded residue.
+          let echoed = decimal_scaling::safe_upcast_balance(scaled, 9, 18);
+          let residue = amount_18_dec - echoed;
+          (scaled, residue)
+      }
+
+  - id: unchecked-downcast-from-untrusted-source
+    severity: medium
+    description: "Pass an unbounded inbound u256 amount (e.g., from a foreign chain message) straight into safe_downcast_balance without pre-validating that it fits in u64 after scaling."
+    why_bad: "safe_downcast_balance aborts ESafeDowncastOverflowedInt — the user transaction reverts with a low-level error and the bridge appears broken. Worse, in a state-changing path the abort can leave external accounting (relayer state, refund tickets) inconsistent."
+    fix: "Pre-validate at the bridge boundary: surface `ESafeDowncastOverflowedInt` as a domain error (e.g., `EAmountTooLarge`) with a structured event, or cap inbound amounts before the call."
+    example_bad: |
+      // WRONG — abort surfaces as a raw decimal_scaling error to the relayer.
+      public fun receive_message_bad(payload: u256): u64 {
+          decimal_scaling::safe_downcast_balance(payload, 18, 9)
+      }
+    example_good: |
+      // RIGHT — pre-validate and translate to a domain error.
+      const EAmountTooLarge: u64 = 1;
+
+      public fun receive_message_good(payload: u256): u64 {
+          let limit = (std::u64::max_value!() as u256);   // 9-dec destination -> simple cap
+          assert!(payload <= limit, EAmountTooLarge);
+          decimal_scaling::safe_downcast_balance(payload, 18, 9)
+      }
+
+composes_with: []   # Empty — no compositions are source-cited. Sibling pointers
+                    # (use openzeppelin_math::u64 with rounding for fee math, fixed-point for
+                    # fractional values) live in does_not_solve[]; choosing between
+                    # decimal_scaling and mul_div lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+  tests_count: 69
+
+  canonical_test:
+    file: math/core/tests/decimal_scaling_tests.move
+    function: roundtrip_eth_to_sui_to_eth
+
+  precondition_proofs:
+    - precondition_fails_with: EInvalidDecimals
+      test_file: math/core/tests/decimal_scaling_tests.move
+      test_functions:
+        - downcast_raw_decimals_too_large
+        - downcast_scaled_decimals_too_large
+        - upcast_source_decimals_too_large
+        - upcast_target_decimals_too_large
+        - validate_decimals_both_too_large
+        - validate_decimals_first_invalid_second_valid
+        - validate_decimals_first_valid_second_invalid
+    - precondition_fails_with: ESafeDowncastOverflowedInt
+      test_file: math/core/tests/decimal_scaling_tests.move
+      test_functions:
+        - downcast_overflow_after_scaling_up
+        - downcast_u64_max_plus_one
+        - downcast_overflow_after_scaling_down
+
+  do_not_demonstrations:
+    - do_not_id: scale-then-divide-for-fees
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: discard-truncation-remainder-silently
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: unchecked-downcast-from-untrusted-source
+      test_functions: []   # consumer-side pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: scale-then-divide-for-fees
+      pattern: "safe_upcast_balance immediately followed by arithmetic (*, /, mul) and safe_downcast_balance on the result"
+      heuristic: "regex within same function body: /safe_upcast_balance[\\s\\S]{0,400}safe_downcast_balance/ where the intervening text contains a `*` or `/` operator outside of pow / decimal computations"
+    - do_not_id: discard-truncation-remainder-silently
+      pattern: "safe_downcast_balance call whose return is the sole output of a function, with source_decimals > target_decimals and no reverse-upcast in the same body"
+      heuristic: "regex: `safe_downcast_balance\\([^,]+,\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*\\)` where the first decimals literal exceeds the second AND no `safe_upcast_balance` appears in the same function"
+    - do_not_id: unchecked-downcast-from-untrusted-source
+      pattern: "safe_downcast_balance fed by a function parameter typed u256 with no preceding bounds assert"
+      heuristic: "first u256 parameter of a public fun reaches safe_downcast_balance without an intervening assert! on its value"
+
+  events: []   # No events declared by this module.
