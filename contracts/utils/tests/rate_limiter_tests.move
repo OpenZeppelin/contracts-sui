@@ -147,7 +147,7 @@ fun bucket_reconfigure_clamps_tokens_to_new_capacity() {
     assert_eq!(rl.available(&clk), 100);
 
     // Shrink capacity to 40; stored tokens must be clamped down.
-    rl.reconfigure_bucket(40, 10, 10, &clk);
+    rl.reconfigure_bucket(40, 10, 10, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
     assert_eq!(rl.available(&clk), 40);
 
     teardown(test, clk);
@@ -337,7 +337,7 @@ fun try_consume_with_zero_amount_aborts_cooldown() {
 fun reconfigure_bucket_on_non_bucket_aborts() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_cooldown(1, 50, 1);
-    rl.reconfigure_bucket(10, 1, 10, &clk);
+    rl.reconfigure_bucket(10, 1, 10, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -345,7 +345,7 @@ fun reconfigure_bucket_on_non_bucket_aborts() {
 fun reconfigure_fixed_window_on_non_fixed_window_aborts() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
-    rl.reconfigure_fixed_window(5, 100, &clk);
+    rl.reconfigure_fixed_window(5, 100, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -353,7 +353,7 @@ fun reconfigure_fixed_window_on_non_fixed_window_aborts() {
 fun reconfigure_cooldown_on_non_cooldown_aborts() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
-    rl.reconfigure_cooldown(1, 50, &clk);
+    rl.reconfigure_cooldown(1, 50, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -363,7 +363,7 @@ fun reconfigure_bucket_priority_variant_over_invalid_config() {
     let mut rl = rate_limiter::new_cooldown(1, 50, 1);
     // All-zero config would trip a config-validation error if the variant arm matched, but
     // the limiter is Cooldown, so EWrongVariant must fire first.
-    rl.reconfigure_bucket(0, 0, 0, &clk);
+    rl.reconfigure_bucket(0, 0, 0, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -371,7 +371,7 @@ fun reconfigure_bucket_priority_variant_over_invalid_config() {
 fun reconfigure_fixed_window_priority_variant_over_invalid_config() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_cooldown(1, 50, 1);
-    rl.reconfigure_fixed_window(0, 0, &clk);
+    rl.reconfigure_fixed_window(0, 0, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -379,7 +379,7 @@ fun reconfigure_fixed_window_priority_variant_over_invalid_config() {
 fun reconfigure_cooldown_priority_variant_over_invalid_config() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
-    rl.reconfigure_cooldown(0, 0, &clk);
+    rl.reconfigure_cooldown(0, 0, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -436,7 +436,7 @@ fun new_cooldown_rejects_zero_capacity() {
 fun reconfigure_bucket_rejects_zero_capacity() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
-    rl.reconfigure_bucket(0, 1, 1, &clk);
+    rl.reconfigure_bucket(0, 1, 1, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -444,7 +444,7 @@ fun reconfigure_bucket_rejects_zero_capacity() {
 fun reconfigure_fixed_window_rejects_zero_window_ms() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_fixed_window(10, 100, 10, &clk);
-    rl.reconfigure_fixed_window(10, 0, &clk);
+    rl.reconfigure_fixed_window(10, 0, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -452,7 +452,7 @@ fun reconfigure_fixed_window_rejects_zero_window_ms() {
 fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_cooldown(1, 50, 1);
-    rl.reconfigure_cooldown(1, 0, &clk);
+    rl.reconfigure_cooldown(1, 0, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -460,7 +460,7 @@ fun reconfigure_cooldown_rejects_zero_cooldown_ms() {
 fun reconfigure_bucket_rejects_zero_refill_amount() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
-    rl.reconfigure_bucket(10, 0, 10, &clk);
+    rl.reconfigure_bucket(10, 0, 10, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -468,7 +468,7 @@ fun reconfigure_bucket_rejects_zero_refill_amount() {
 fun reconfigure_bucket_rejects_zero_refill_interval_ms() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_bucket(10, 1, 10, 10, &clk);
-    rl.reconfigure_bucket(10, 1, 0, &clk);
+    rl.reconfigure_bucket(10, 1, 0, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -476,7 +476,7 @@ fun reconfigure_bucket_rejects_zero_refill_interval_ms() {
 fun reconfigure_fixed_window_rejects_zero_capacity() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_fixed_window(10, 100, 10, &clk);
-    rl.reconfigure_fixed_window(0, 100, &clk);
+    rl.reconfigure_fixed_window(0, 100, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -484,7 +484,7 @@ fun reconfigure_fixed_window_rejects_zero_capacity() {
 fun reconfigure_cooldown_rejects_zero_capacity() {
     let (_test, clk) = setup(0);
     let mut rl = rate_limiter::new_cooldown(1, 50, 1);
-    rl.reconfigure_cooldown(0, 50, &clk);
+    rl.reconfigure_cooldown(0, 50, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
     abort
 }
 
@@ -641,7 +641,7 @@ fun bucket_reconfigure_accrues_under_old_rate_first() {
 
     // 50 ms elapsed → under OLD rate, 5 steps × 10 = 50 tokens accrued.
     clk.set_for_testing(50);
-    rl.reconfigure_bucket(200, 100, 1, &clk);
+    rl.reconfigure_bucket(200, 100, 1, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
 
     // OLD rate must be applied to the prior 50 ms; 50 tokens - not the 200 we'd see
     // if the new rate (50 ms × 100/1 ms = 5000, capped at new cap 200) were applied
@@ -662,7 +662,7 @@ fun fixed_window_reconfigure_rolls_under_old_window_first() {
     // forward under the OLD `window_ms` first (resetting `used`) before installing
     // the new config.
     clk.set_for_testing(150);
-    rl.reconfigure_fixed_window(20, 300, &clk);
+    rl.reconfigure_fixed_window(20, 300, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
 
     // Without the OLD-window rollover, `used` would still be 7 (clamped to new cap 20),
     // making available = 13. With it, used = 0 and available = 20.
@@ -683,7 +683,7 @@ fun cooldown_reconfigure_resets_in_flight_deadline() {
     // Reconfigure mid-cooldown with a longer cooldown. The in-flight deadline does NOT
     // carry over; `cooldown_end_ms` is reset to `now + new_cooldown_ms = 20 + 100 = 120`.
     clk.set_for_testing(20);
-    rl.reconfigure_cooldown(1, 100, &clk);
+    rl.reconfigure_cooldown(1, 100, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
 
     // Past the OLD deadline of 50: still gated under the new schedule.
     clk.set_for_testing(50);
@@ -720,7 +720,7 @@ fun bucket_reconfigure_resets_refill_anchor() {
     // Reconfigure with the same config: under the new logic, `last_refill_ms` is reset
     // to `now = 5`, discarding the 5 ms of sub-interval remainder.
     clk.set_for_testing(5);
-    rl.reconfigure_bucket(100, 10, 10, &clk);
+    rl.reconfigure_bucket(100, 10, 10, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
     assert_eq!(rl.available(&clk), 0);
 
     // 10 ms after the reconfigure call - exactly one step under the new anchor. If the
@@ -746,7 +746,7 @@ fun bucket_reconfigure_to_faster_rate_discards_old_subinterval() {
     // Reconfigure to a much faster refill (1 token per 10 ms). Sub-interval (999 ms
     // of the old 1_000-ms step) is discarded: the new anchor is `now = 999`.
     clk.set_for_testing(999);
-    rl.reconfigure_bucket(1_000, 1, 10, &clk);
+    rl.reconfigure_bucket(1_000, 1, 10, rate_limiter::bucket_policy_project_and_reanchor(), &clk);
 
     // 1 ms after the reconfigure call - only 1 ms under the new 10-ms interval, so no
     // step has fired and no token has been credited. If the old sub-interval had been
@@ -776,7 +776,7 @@ fun fixed_window_reconfigure_resets_window_anchor() {
     // remaining `available` (5) is clamped to the new capacity (10), so it carries over.
     // The new anchor is `now = 50`, so the next window begins at t=150.
     clk.set_for_testing(50);
-    rl.reconfigure_fixed_window(10, 100, &clk);
+    rl.reconfigure_fixed_window(10, 100, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
     assert_eq!(rl.available(&clk), 5);
 
     // At t=100 the OLD anchor (window_start=0) would have rolled to a fresh window of 10.
@@ -984,7 +984,7 @@ fun cooldown_reconfigure_clamps_available_to_new_capacity() {
     assert_eq!(rl.available(&clk), 9);
 
     // Shrink capacity below current `available`; clamp keeps `available <= capacity`.
-    rl.reconfigure_cooldown(5, 100, &clk);
+    rl.reconfigure_cooldown(5, 100, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
     assert_eq!(rl.available(&clk), 5);
 
     teardown(test, clk);
@@ -1001,7 +1001,7 @@ fun cooldown_reconfigure_capacity_increase_preserves_available() {
     assert_eq!(rl.available(&clk), 3);
 
     // Increase capacity (3 <= 10 => min-clamp is a no-op). cooldown_ms also bumped.
-    rl.reconfigure_cooldown(10, 100, &clk);
+    rl.reconfigure_cooldown(10, 100, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
     assert_eq!(rl.available(&clk), 3);
 
     // Drain the current batch; gate arms under the NEW cooldown_ms (deadline = 0 + 100).
@@ -1037,7 +1037,7 @@ fun cooldown_reconfigure_realizes_released_gate_without_rearming() {
     // Reconfigure now: stored available is 0, but the prior deadline (50) has passed,
     // so projection realizes the release and `available` becomes the old capacity (3),
     // then clamps to the new capacity (5).
-    rl.reconfigure_cooldown(5, 100, &clk);
+    rl.reconfigure_cooldown(5, 100, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
     assert_eq!(rl.available(&clk), 3);
 
     // No fresh gate was armed: the next consume must succeed immediately.
@@ -1067,8 +1067,8 @@ fun cooldown_failed_try_consume_does_not_skew_reconfigure() {
 
     // Both reconfigure under a longer cooldown.
     clk.set_for_testing(201);
-    rl_probed.reconfigure_cooldown(10, 500, &clk);
-    rl_unprobed.reconfigure_cooldown(10, 500, &clk);
+    rl_probed.reconfigure_cooldown(10, 500, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
+    rl_unprobed.reconfigure_cooldown(10, 500, rate_limiter::cooldown_policy_project_and_reanchor(), &clk);
 
     // Both paths must agree: the prior gate had released, so `available` is realized to
     // the old capacity and no fresh gate is armed under the new cooldown.
@@ -1093,7 +1093,7 @@ fun fixed_window_reconfigure_clamps_available_to_new_capacity() {
     assert_eq!(rl.available(&clk), 8);
 
     // Shrinking capacity below current `available` must clamp `available` down.
-    rl.reconfigure_fixed_window(5, 100, &clk);
+    rl.reconfigure_fixed_window(5, 100, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
     assert_eq!(rl.available(&clk), 5);
 
     teardown(test, clk);
@@ -1120,13 +1120,323 @@ fun fixed_window_failed_try_consume_does_not_skew_reconfigure() {
 
     // Both reconfigure under the same new config.
     clk.set_for_testing(150);
-    rl_probed.reconfigure_fixed_window(10, 100, &clk);
-    rl_unprobed.reconfigure_fixed_window(10, 100, &clk);
+    rl_probed.reconfigure_fixed_window(10, 100, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
+    rl_unprobed.reconfigure_fixed_window(10, 100, rate_limiter::fixed_window_policy_project_and_reanchor(), &clk);
 
     // Both paths must agree: the prior window had crossed under the old window_ms,
     // so available is realized to the new capacity (fresh window).
     assert_eq!(rl_probed.available(&clk), 10);
     assert_eq!(rl_unprobed.available(&clk), 10);
+
+    teardown(test, clk);
+}
+
+// === Reconfigure policy variants ===
+
+// --- Bucket policies ---
+
+#[test]
+fun bucket_install_only_preserves_anchor() {
+    let (test, mut clk) = setup(0);
+
+    // Empty bucket, 1 token / 10 ms. At t=5, install a much faster refill (1 / 1 ms)
+    // without touching the anchor. The OLD anchor at t=0 is still in effect, so the new
+    // schedule retroactively credits 5 steps × 1 token on the next available() projection.
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, &clk);
+    clk.set_for_testing(5);
+    rl.reconfigure_bucket(10, 1, 1, rate_limiter::bucket_policy_install_only(), &clk);
+
+    // Stale anchor + new schedule: 5 / 1 = 5 steps credited under the new config.
+    assert_eq!(rl.available(&clk), 5);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun bucket_reset_clears_state_and_anchors_now() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, &clk);
+    clk.set_for_testing(5);
+    rl.reconfigure_bucket(20, 5, 100, rate_limiter::bucket_policy_reset(), &clk);
+
+    // Reset fills `available` to new capacity and anchors the refill counter at `now`.
+    assert_eq!(rl.available(&clk), 20);
+
+    // Anchor at 5; first tick under the new schedule lands at 5 + 100 = 105.
+    rl.consume_or_abort(20, &clk);
+    clk.set_for_testing(104);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(105);
+    assert_eq!(rl.available(&clk), 5);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun bucket_preserve_phase_keeps_old_anchor_phase() {
+    let (test, mut clk) = setup(0);
+
+    // 1 token / 10 ms, starts empty. 5 ms in, reconfigure with the SAME config under
+    // PreservePhase. ProjectAndReanchor would push the next tick to t=15. PreservePhase
+    // keeps the floor-aligned anchor at 0, so the next tick still lands at t=10.
+    let mut rl = rate_limiter::new_bucket(10, 1, 10, 0, &clk);
+    clk.set_for_testing(5);
+    rl.reconfigure_bucket(10, 1, 10, rate_limiter::bucket_policy_preserve_phase(), &clk);
+
+    clk.set_for_testing(9);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(10);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun bucket_proportional_scales_sub_interval_phase() {
+    let (test, mut clk) = setup(1000);
+
+    // 1 token / 100 ms, starts empty. Anchor at 1000. 50 ms in, 50% through the first
+    // interval. Reconfigure interval to 200 ms under Proportional: back-date the anchor
+    // so we're still 50% through under the new schedule.
+    //   elapsed_new = 50 * 200 / 100 = 100
+    //   last_refill_ms = 1050 - 100 = 950
+    //   next tick at 950 + 200 = 1150.
+    let mut rl = rate_limiter::new_bucket(10, 1, 100, 0, &clk);
+    clk.set_for_testing(1050);
+    rl.reconfigure_bucket(10, 1, 200, rate_limiter::bucket_policy_proportional(), &clk);
+
+    clk.set_for_testing(1149);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(1150);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+// --- FixedWindow policies ---
+
+#[test]
+fun fixed_window_install_only_preserves_anchor() {
+    let (test, mut clk) = setup(0);
+
+    // Capacity 10 per 100 ms window. Consume 5, then at t=50 install a 50 ms window
+    // without re-anchoring. Old anchor at 0 + new window=50: one full step has elapsed,
+    // so available() projects a rollover to the new capacity.
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 10, &clk);
+    rl.consume_or_abort(5, &clk);
+    clk.set_for_testing(50);
+    rl.reconfigure_fixed_window(10, 50, rate_limiter::fixed_window_policy_install_only(), &clk);
+
+    assert_eq!(rl.available(&clk), 10);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun fixed_window_reset_clears_anchor() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 10, &clk);
+    rl.consume_or_abort(7, &clk);
+    clk.set_for_testing(50);
+    rl.reconfigure_fixed_window(20, 100, rate_limiter::fixed_window_policy_reset(), &clk);
+
+    // Fresh state under new capacity; anchor at 50, next rollover at 150.
+    assert_eq!(rl.available(&clk), 20);
+    rl.consume_or_abort(20, &clk);
+    clk.set_for_testing(149);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(150);
+    assert_eq!(rl.available(&clk), 20);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun fixed_window_proportional_scales_phase_to_new_window() {
+    let (test, mut clk) = setup(1000);
+
+    // 10 units / 100 ms window. Consume 5; at t=1050 (50% through) reconfigure to a
+    // 200 ms window under Proportional.
+    //   elapsed_new = 50 * 200 / 100 = 100
+    //   window_start_ms = 1050 - 100 = 950
+    //   next rollover at 950 + 200 = 1150.
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 10, &clk);
+    rl.consume_or_abort(5, &clk);
+    clk.set_for_testing(1050);
+    rl.reconfigure_fixed_window(10, 200, rate_limiter::fixed_window_policy_proportional(), &clk);
+
+    // Same fraction remaining; clamp leaves available at 5.
+    assert_eq!(rl.available(&clk), 5);
+    clk.set_for_testing(1149);
+    assert_eq!(rl.available(&clk), 5);
+    clk.set_for_testing(1150);
+    assert_eq!(rl.available(&clk), 10);
+
+    teardown(test, clk);
+}
+
+// --- Cooldown policies ---
+
+#[test]
+fun cooldown_install_only_preserves_in_flight_deadline() {
+    let (test, mut clk) = setup(0);
+
+    // Drain to arm the gate at deadline=50.
+    let mut rl = rate_limiter::new_cooldown(1, 50, 1);
+    assert!(rl.try_consume(1, &clk));
+
+    // InstallOnly updates cooldown_ms to 200 but leaves the active deadline at 50.
+    clk.set_for_testing(20);
+    rl.reconfigure_cooldown(1, 200, rate_limiter::cooldown_policy_install_only(), &clk);
+
+    // Active wait uses the old deadline.
+    clk.set_for_testing(49);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(50);
+    assert_eq!(rl.available(&clk), 1);
+
+    // Next arm uses the new cooldown_ms = 200.
+    assert!(rl.try_consume(1, &clk));
+    clk.set_for_testing(249);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(250);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_reset_clears_active_gate() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(2, 50, 2);
+    assert!(rl.try_consume(2, &clk)); // gate armed, deadline = 50
+
+    clk.set_for_testing(20);
+    rl.reconfigure_cooldown(5, 100, rate_limiter::cooldown_policy_reset(), &clk);
+
+    // Reset wipes the gate and the available counter is replenished to new capacity.
+    assert_eq!(rl.available(&clk), 5);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_preserve_active_gate_locks_in_old_deadline() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(1, 50, 1);
+    assert!(rl.try_consume(1, &clk)); // deadline = 50
+
+    // Even a much longer new cooldown does not extend the active wait.
+    clk.set_for_testing(20);
+    rl.reconfigure_cooldown(
+        1,
+        1000,
+        rate_limiter::cooldown_policy_preserve_active_gate(),
+        &clk,
+    );
+
+    clk.set_for_testing(49);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(50);
+    assert_eq!(rl.available(&clk), 1);
+    assert!(rl.try_consume(1, &clk));
+
+    // Future arms pick up the new cooldown_ms = 1000.
+    clk.set_for_testing(1049);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(1050);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_rebase_active_gate_recomputes_deadline_under_new_cooldown() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(1, 50, 1);
+    assert!(rl.try_consume(1, &clk)); // arm_time = 0, deadline = 50
+
+    // Rebased deadline = arm_time + new_cooldown_ms = 0 + 200 = 200.
+    clk.set_for_testing(20);
+    rl.reconfigure_cooldown(1, 200, rate_limiter::cooldown_policy_rebase_active_gate(), &clk);
+
+    clk.set_for_testing(199);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(200);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_rebase_active_gate_no_extend_clamps_to_old_deadline_on_grow() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(1, 50, 1);
+    assert!(rl.try_consume(1, &clk)); // deadline = 50
+
+    // Grow cooldown to 200: rebased would be 200, clamped to old (50). No extension.
+    clk.set_for_testing(20);
+    rl.reconfigure_cooldown(
+        1,
+        200,
+        rate_limiter::cooldown_policy_rebase_active_gate_no_extend(),
+        &clk,
+    );
+
+    clk.set_for_testing(49);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(50);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_rebase_active_gate_no_extend_shortens_on_shrink() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(1, 1000, 1);
+    assert!(rl.try_consume(1, &clk)); // deadline = 1000
+
+    // Shrink cooldown to 500: rebased = 500 < old (1000), so the new deadline applies.
+    clk.set_for_testing(100);
+    rl.reconfigure_cooldown(
+        1,
+        500,
+        rate_limiter::cooldown_policy_rebase_active_gate_no_extend(),
+        &clk,
+    );
+
+    clk.set_for_testing(499);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(500);
+    assert_eq!(rl.available(&clk), 1);
+
+    teardown(test, clk);
+}
+
+#[test]
+fun cooldown_proportional_scales_remaining_wait() {
+    let (test, mut clk) = setup(0);
+
+    let mut rl = rate_limiter::new_cooldown(1, 100, 1);
+    assert!(rl.try_consume(1, &clk)); // deadline = 100
+
+    // 50% through (t=50). Reconfigure to cd=200.
+    // time_left_new = 50 * 200 / 100 = 100 ⇒ new deadline = 50 + 100 = 150.
+    clk.set_for_testing(50);
+    rl.reconfigure_cooldown(1, 200, rate_limiter::cooldown_policy_proportional(), &clk);
+
+    clk.set_for_testing(149);
+    assert_eq!(rl.available(&clk), 0);
+    clk.set_for_testing(150);
+    assert_eq!(rl.available(&clk), 1);
 
     teardown(test, clk);
 }

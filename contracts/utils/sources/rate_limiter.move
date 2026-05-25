@@ -127,7 +127,159 @@ public enum RateLimiter has drop, store {
     },
 }
 
+/// Choice of how `reconfigure_bucket` should treat in-flight state when installing a
+/// new configuration. Every variant validates the new config the same way; they differ
+/// only in what they do with the existing `available` balance and the refill anchor.
+public enum BucketReconfigurePolicy has copy, drop, store {
+    /// Accrue pending tokens under the old rate, install the new config, re-anchor the
+    /// refill counter at `now`, and clamp `available` to the new capacity. Any
+    /// sub-interval remainder accrued under the old anchor is discarded.
+    ProjectAndReanchor,
+    /// Overwrite config fields only; do not touch `last_refill_ms`. `available` is
+    /// clamped to the new capacity to preserve the limiter invariant, but no time
+    /// projection runs. The stale anchor may produce a surprising first tick under the
+    /// new schedule.
+    InstallOnly,
+    /// Reset the limiter as if freshly constructed: `available = capacity`,
+    /// `last_refill_ms = now`. Discards every trace of prior state.
+    Reset,
+    /// Accrue pending tokens under the old rate, install the new config, clamp
+    /// `available` to the new capacity, but keep the floor-aligned refill anchor from
+    /// the old schedule so future ticks stay phase-aligned with the original anchor.
+    PreservePhase,
+    /// Accrue pending tokens under the old rate, install the new config, clamp
+    /// `available`, then back-date `last_refill_ms` so the fraction of the refill
+    /// interval already elapsed under the old schedule equals the fraction elapsed
+    /// under the new one. Symmetric across shrink and grow.
+    Proportional,
+}
+
+/// Choice of how `reconfigure_fixed_window` should treat in-flight state when installing
+/// a new configuration.
+public enum FixedWindowReconfigurePolicy has copy, drop, store {
+    /// Roll forward under the old `window_ms` first (fresh capacity if a rollover
+    /// occurred, otherwise clamp `available`), then install the new config and
+    /// re-anchor `window_start_ms = now`.
+    ProjectAndReanchor,
+    /// Overwrite config fields only; do not touch `window_start_ms`. `available` is
+    /// clamped to the new capacity. The stale anchor may produce a surprising first
+    /// rollover under the new schedule.
+    InstallOnly,
+    /// Reset the limiter as if freshly constructed: `available = capacity`,
+    /// `window_start_ms = now`.
+    Reset,
+    /// Roll forward under the old `window_ms`, then back-date `window_start_ms` so the
+    /// fraction of the current window already elapsed under the old schedule equals
+    /// the fraction elapsed under the new one.
+    Proportional,
+}
+
+/// Choice of how `reconfigure_cooldown` should treat an in-flight cooldown gate when
+/// installing a new configuration. Variants only differ when the gate is armed
+/// (`available == 0`) and not yet elapsed at the time of reconfigure.
+public enum CooldownReconfigurePolicy has copy, drop, store {
+    /// Project the gate under the old config; if the gate is still in flight after the
+    /// new capacity is clamped, restart it at `now + new_cooldown_ms`. Active waits are
+    /// reset to a fresh deadline under the new policy.
+    ProjectAndReanchor,
+    /// Overwrite config fields only; do not touch `cooldown_end_ms`. `available` is
+    /// clamped to the new capacity. An in-flight deadline runs to completion under
+    /// whatever clock value it was originally set to.
+    InstallOnly,
+    /// Reset the limiter as if freshly constructed: `available = capacity`,
+    /// `cooldown_end_ms = 0`.
+    Reset,
+    /// Project the release if the gate has elapsed under the old config; otherwise
+    /// leave the in-flight `cooldown_end_ms` untouched. The new `cooldown_ms` only
+    /// applies to gates armed after this reconfigure - admin cannot affect an active wait.
+    PreserveActiveGate,
+    /// Project the release if the gate has elapsed; otherwise rebase the in-flight
+    /// deadline to `arm_time + new_cooldown_ms` (as if the new policy had been in
+    /// effect since the gate was armed). If the rebased deadline is `<= now`, release
+    /// immediately. Reconfiguring with identical `cooldown_ms` is a no-op for the
+    /// deadline.
+    RebaseActiveGate,
+    /// Same as `RebaseActiveGate`, but additionally clamp the rebased deadline to the
+    /// old deadline so reconfigure can shorten an active wait but never extend it.
+    RebaseActiveGateNoExtend,
+    /// Project the release if the gate has elapsed; otherwise scale the remaining
+    /// wait by the ratio of new to old `cooldown_ms`. If the scaled remainder is zero,
+    /// release immediately.
+    Proportional,
+}
+
 // === Public Functions ===
+
+// === Policy constructors ===
+//
+// Enum variants in Move can only be instantiated from inside the defining module, so
+// each policy variant exposes a trivial public constructor. Constructors return by value;
+// callers can hold the policy in a variable, pass it positionally, or build a default
+// per call site.
+
+public fun bucket_policy_project_and_reanchor(): BucketReconfigurePolicy {
+    BucketReconfigurePolicy::ProjectAndReanchor
+}
+
+public fun bucket_policy_install_only(): BucketReconfigurePolicy {
+    BucketReconfigurePolicy::InstallOnly
+}
+
+public fun bucket_policy_reset(): BucketReconfigurePolicy {
+    BucketReconfigurePolicy::Reset
+}
+
+public fun bucket_policy_preserve_phase(): BucketReconfigurePolicy {
+    BucketReconfigurePolicy::PreservePhase
+}
+
+public fun bucket_policy_proportional(): BucketReconfigurePolicy {
+    BucketReconfigurePolicy::Proportional
+}
+
+public fun fixed_window_policy_project_and_reanchor(): FixedWindowReconfigurePolicy {
+    FixedWindowReconfigurePolicy::ProjectAndReanchor
+}
+
+public fun fixed_window_policy_install_only(): FixedWindowReconfigurePolicy {
+    FixedWindowReconfigurePolicy::InstallOnly
+}
+
+public fun fixed_window_policy_reset(): FixedWindowReconfigurePolicy {
+    FixedWindowReconfigurePolicy::Reset
+}
+
+public fun fixed_window_policy_proportional(): FixedWindowReconfigurePolicy {
+    FixedWindowReconfigurePolicy::Proportional
+}
+
+public fun cooldown_policy_project_and_reanchor(): CooldownReconfigurePolicy {
+    CooldownReconfigurePolicy::ProjectAndReanchor
+}
+
+public fun cooldown_policy_install_only(): CooldownReconfigurePolicy {
+    CooldownReconfigurePolicy::InstallOnly
+}
+
+public fun cooldown_policy_reset(): CooldownReconfigurePolicy {
+    CooldownReconfigurePolicy::Reset
+}
+
+public fun cooldown_policy_preserve_active_gate(): CooldownReconfigurePolicy {
+    CooldownReconfigurePolicy::PreserveActiveGate
+}
+
+public fun cooldown_policy_rebase_active_gate(): CooldownReconfigurePolicy {
+    CooldownReconfigurePolicy::RebaseActiveGate
+}
+
+public fun cooldown_policy_rebase_active_gate_no_extend(): CooldownReconfigurePolicy {
+    CooldownReconfigurePolicy::RebaseActiveGateNoExtend
+}
+
+public fun cooldown_policy_proportional(): CooldownReconfigurePolicy {
+    CooldownReconfigurePolicy::Proportional
+}
 
 // === Constructors ===
 
@@ -388,19 +540,17 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
 
 // === Reconfigure ===
 
-/// Rewrite a `Bucket` limiter's configuration in place.
-///
-/// Accrues any tokens earned under the old rules first, then re-anchors the refill counter
-/// at `now`, installs the new configuration, and clamps the stored token balance to the new
-/// capacity. Any sub-interval remainder still pending under the old anchor is discarded -
-/// future refills accrue from `now` under the new configuration.
+/// Rewrite a `Bucket` limiter's configuration in place, with `policy` deciding how
+/// in-flight state is carried across the boundary. See `BucketReconfigurePolicy` for
+/// per-variant semantics.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
 /// - `capacity`: New maximum token balance.
 /// - `refill_amount`: New tokens credited per refill interval.
 /// - `refill_interval_ms`: New refill interval, in milliseconds.
-/// - `clock`: Reference to the Sui `Clock`, used to apply accrual under the old config.
+/// - `policy`: How to treat existing `available` and `last_refill_ms`.
+/// - `clock`: Reference to the Sui `Clock`, used by every policy except `InstallOnly`.
 ///
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not currently a `Bucket`.
@@ -412,6 +562,7 @@ public fun reconfigure_bucket(
     capacity: u64,
     refill_amount: u64,
     refill_interval_ms: u64,
+    policy: BucketReconfigurePolicy,
     clock: &Clock,
 ) {
     match (self) {
@@ -427,37 +578,91 @@ public fun reconfigure_bucket(
             assert!(refill_interval_ms > 0, EZeroRefillInterval);
 
             let now = clock.timestamp_ms();
-            let (_, new_available) = bucket_accrue(
-                *last_refill_ms,
-                *available,
-                *cap_field,
-                *refill_amount_field,
-                *refill_interval_field,
-                now,
-            );
-            *cap_field = capacity;
-            *refill_amount_field = refill_amount;
-            *refill_interval_field = refill_interval_ms;
-            *last_refill_ms = now;
-            *available = new_available.min(capacity);
+            match (policy) {
+                BucketReconfigurePolicy::InstallOnly => {
+                    *cap_field = capacity;
+                    *refill_amount_field = refill_amount;
+                    *refill_interval_field = refill_interval_ms;
+                    *available = (*available).min(capacity);
+                },
+                BucketReconfigurePolicy::Reset => {
+                    *cap_field = capacity;
+                    *refill_amount_field = refill_amount;
+                    *refill_interval_field = refill_interval_ms;
+                    *last_refill_ms = now;
+                    *available = capacity;
+                },
+                BucketReconfigurePolicy::ProjectAndReanchor => {
+                    let (_, new_available) = bucket_accrue(
+                        *last_refill_ms,
+                        *available,
+                        *cap_field,
+                        *refill_amount_field,
+                        *refill_interval_field,
+                        now,
+                    );
+                    *cap_field = capacity;
+                    *refill_amount_field = refill_amount;
+                    *refill_interval_field = refill_interval_ms;
+                    *last_refill_ms = now;
+                    *available = new_available.min(capacity);
+                },
+                BucketReconfigurePolicy::PreservePhase => {
+                    let (new_last, new_available) = bucket_accrue(
+                        *last_refill_ms,
+                        *available,
+                        *cap_field,
+                        *refill_amount_field,
+                        *refill_interval_field,
+                        now,
+                    );
+                    *cap_field = capacity;
+                    *refill_amount_field = refill_amount;
+                    *refill_interval_field = refill_interval_ms;
+                    *last_refill_ms = new_last;
+                    *available = new_available.min(capacity);
+                },
+                BucketReconfigurePolicy::Proportional => {
+                    let old_interval = *refill_interval_field;
+                    let (new_last, new_available) = bucket_accrue(
+                        *last_refill_ms,
+                        *available,
+                        *cap_field,
+                        *refill_amount_field,
+                        old_interval,
+                        now,
+                    );
+                    // `now - new_last` is the sub-interval remainder under the old
+                    // schedule (floor in `bucket_accrue`). Scale by `new / old` to
+                    // get the equivalent phase under the new schedule and back-date.
+                    // SAFETY: u128 widening keeps the product in range even when both
+                    // intervals approach u64::MAX. The result is `<= refill_interval_ms`
+                    // so the cast back to u64 is safe.
+                    let elapsed_old = (now - new_last) as u128;
+                    let elapsed_new =
+                        elapsed_old * (refill_interval_ms as u128) / (old_interval as u128);
+                    *cap_field = capacity;
+                    *refill_amount_field = refill_amount;
+                    *refill_interval_field = refill_interval_ms;
+                    *last_refill_ms = now - (elapsed_new as u64);
+                    *available = new_available.min(capacity);
+                },
+            };
         },
         _ => abort EWrongVariant,
     }
 }
 
-/// Rewrite a `FixedWindow` limiter's configuration in place.
-///
-/// Rolls the window forward under the old config if current time has crossed into a later
-/// window, then re-anchors the window at `now`, installs the new configuration, and clamps
-/// `available` to the new capacity. Future windows run for the new `window_ms` each,
-/// anchored at `now`. If a rollover occurred under the old config, the new window starts
-/// fully available under the new `capacity`.
+/// Rewrite a `FixedWindow` limiter's configuration in place, with `policy` deciding how
+/// in-flight state is carried across the boundary. See `FixedWindowReconfigurePolicy` for
+/// per-variant semantics.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
 /// - `capacity`: New maximum units consumable per window.
 /// - `window_ms`: New window length, in milliseconds.
-/// - `clock`: Reference to the Sui `Clock`, used to roll the anchor forward under the old config.
+/// - `policy`: How to treat existing `available` and `window_start_ms`.
+/// - `clock`: Reference to the Sui `Clock`, used by every policy except `InstallOnly`.
 ///
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not currently a `FixedWindow`.
@@ -467,6 +672,7 @@ public fun reconfigure_fixed_window(
     self: &mut RateLimiter,
     capacity: u64,
     window_ms: u64,
+    policy: FixedWindowReconfigurePolicy,
     clock: &Clock,
 ) {
     match (self) {
@@ -479,38 +685,69 @@ public fun reconfigure_fixed_window(
             assert!(capacity > 0, EZeroCapacity);
             assert!(window_ms > 0, EZeroWindow);
 
-            // Roll forward under the OLD `window_ms` first so the carried-over `available`
-            // reflects the old schedule; then re-anchor at `now` and install the new config.
-            // If a roll occurred, the new window starts with the NEW capacity available.
             let now = clock.timestamp_ms();
-            let steps = (now - *window_start_ms) / *window_field;
-            if (steps > 0) {
-                *available = capacity;
-            } else {
-                *available = (*available).min(capacity);
+            match (policy) {
+                FixedWindowReconfigurePolicy::InstallOnly => {
+                    *cap_field = capacity;
+                    *window_field = window_ms;
+                    *available = (*available).min(capacity);
+                },
+                FixedWindowReconfigurePolicy::Reset => {
+                    *cap_field = capacity;
+                    *window_field = window_ms;
+                    *window_start_ms = now;
+                    *available = capacity;
+                },
+                FixedWindowReconfigurePolicy::ProjectAndReanchor => {
+                    let steps = (now - *window_start_ms) / *window_field;
+                    if (steps > 0) {
+                        *available = capacity;
+                    } else {
+                        *available = (*available).min(capacity);
+                    };
+                    *window_start_ms = now;
+                    *cap_field = capacity;
+                    *window_field = window_ms;
+                },
+                FixedWindowReconfigurePolicy::Proportional => {
+                    let old_window = *window_field;
+                    let steps = (now - *window_start_ms) / old_window;
+                    if (steps > 0) {
+                        // SAFETY: `steps * old_window <= now - *window_start_ms`
+                        // (floor above), so the advanced anchor is `<= now`.
+                        *window_start_ms = *window_start_ms + steps * old_window;
+                        *available = capacity;
+                    } else {
+                        *available = (*available).min(capacity);
+                    };
+                    // `now - *window_start_ms` is the phase elapsed in the current
+                    // window under the old schedule (always `< old_window` after the
+                    // roll). Scale by `new / old` to get the equivalent phase under
+                    // the new schedule and back-date.
+                    // SAFETY: u128 widening keeps the product in range. The result
+                    // is `<= window_ms` so the cast back to u64 is safe.
+                    let elapsed_old = (now - *window_start_ms) as u128;
+                    let elapsed_new = elapsed_old * (window_ms as u128) / (old_window as u128);
+                    *window_start_ms = now - (elapsed_new as u64);
+                    *cap_field = capacity;
+                    *window_field = window_ms;
+                },
             };
-            *window_start_ms = now;
-            *cap_field = capacity;
-            *window_field = window_ms;
         },
         _ => abort EWrongVariant,
     }
 }
 
-/// Rewrite a `Cooldown` limiter's configuration in place.
-///
-/// Projects state forward under the old config first: if the gate has already elapsed,
-/// `available` is realized to the old capacity (mirroring what the next `try_consume` would
-/// have done). Then `available` is clamped to the new capacity. If after projection and
-/// clamping `available == 0`, the gate is still in flight - the deadline is restarted at
-/// `now + cooldown_ms` under the new `cooldown_ms`. An in-flight deadline armed under the
-/// old config does NOT carry over.
+/// Rewrite a `Cooldown` limiter's configuration in place, with `policy` deciding how an
+/// in-flight cooldown gate is carried across the boundary. See `CooldownReconfigurePolicy`
+/// for per-variant semantics.
 ///
 /// #### Parameters
 /// - `self`: Limiter to reconfigure.
 /// - `capacity`: New maximum units consumable per batch.
 /// - `cooldown_ms`: New wait between batches, in milliseconds.
-/// - `clock`: Reference to the Sui `Clock`, used to arm a fresh deadline if needed.
+/// - `policy`: How to treat the in-flight gate.
+/// - `clock`: Reference to the Sui `Clock`, used by every policy except `InstallOnly`.
 ///
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not currently a `Cooldown`.
@@ -520,6 +757,7 @@ public fun reconfigure_cooldown(
     self: &mut RateLimiter,
     capacity: u64,
     cooldown_ms: u64,
+    policy: CooldownReconfigurePolicy,
     clock: &Clock,
 ) {
     match (self) {
@@ -533,20 +771,106 @@ public fun reconfigure_cooldown(
             assert!(cooldown_ms > 0, EZeroCooldown);
 
             let now = clock.timestamp_ms();
-            // Project under the OLD config: if the gate has elapsed, realize the release
-            // to the old capacity. Otherwise `available` stays at its stored value (which
-            // already reflects either an in-flight gate at 0, or an unspent batch > 0).
-            if (*available == 0 && now >= *cooldown_end_ms) {
-                *available = *cap_field;
-            };
-            *cd_field = cooldown_ms;
-            *cap_field = capacity;
-            *available = (*available).min(capacity);
-
-            if (*available == 0) {
-                // SAFETY: `now + cooldown_ms` overflow is the operator's responsibility
-                // (see module-level "Operator responsibilities").
-                *cooldown_end_ms = now + cooldown_ms;
+            match (policy) {
+                CooldownReconfigurePolicy::InstallOnly => {
+                    *cap_field = capacity;
+                    *cd_field = cooldown_ms;
+                    *available = (*available).min(capacity);
+                },
+                CooldownReconfigurePolicy::Reset => {
+                    *cap_field = capacity;
+                    *cd_field = cooldown_ms;
+                    *cooldown_end_ms = 0;
+                    *available = capacity;
+                },
+                CooldownReconfigurePolicy::ProjectAndReanchor => {
+                    if (*available == 0 && now >= *cooldown_end_ms) {
+                        *available = *cap_field;
+                    };
+                    *cap_field = capacity;
+                    *cd_field = cooldown_ms;
+                    *available = (*available).min(capacity);
+                    if (*available == 0) {
+                        // SAFETY: `now + cooldown_ms` overflow is the operator's
+                        // responsibility (see module-level "Operator responsibilities").
+                        *cooldown_end_ms = now + cooldown_ms;
+                    };
+                },
+                CooldownReconfigurePolicy::PreserveActiveGate => {
+                    if (*available == 0 && now >= *cooldown_end_ms) {
+                        *available = *cap_field;
+                    };
+                    *cap_field = capacity;
+                    *cd_field = cooldown_ms;
+                    *available = (*available).min(capacity);
+                    // If the gate is still in flight, leave `cooldown_end_ms` as-is:
+                    // the new `cooldown_ms` only applies to gates armed after this call.
+                },
+                CooldownReconfigurePolicy::RebaseActiveGate => {
+                    if (*available == 0 && now >= *cooldown_end_ms) {
+                        *available = *cap_field;
+                    };
+                    *cap_field = capacity;
+                    *available = (*available).min(capacity);
+                    if (*available == 0) {
+                        // SAFETY: see safety notes in `RebaseActiveGateNoExtend`.
+                        let arm_time = *cooldown_end_ms - *cd_field;
+                        let new_deadline = arm_time + cooldown_ms;
+                        if (new_deadline <= now) {
+                            *available = capacity;
+                        } else {
+                            *cooldown_end_ms = new_deadline;
+                        };
+                    };
+                    *cd_field = cooldown_ms;
+                },
+                CooldownReconfigurePolicy::RebaseActiveGateNoExtend => {
+                    if (*available == 0 && now >= *cooldown_end_ms) {
+                        *available = *cap_field;
+                    };
+                    *cap_field = capacity;
+                    *available = (*available).min(capacity);
+                    if (*available == 0) {
+                        // SAFETY: `cooldown_end_ms >= *cd_field` because the gate was
+                        // armed as `now_at_arm + *cd_field`, so the subtraction does
+                        // not underflow. `arm_time + cooldown_ms` overflow is the
+                        // operator's responsibility (`arm_time <= now`, so any
+                        // policy-meaningful `cooldown_ms` stays well below u64::MAX).
+                        let arm_time = *cooldown_end_ms - *cd_field;
+                        let rebased = arm_time + cooldown_ms;
+                        let new_deadline = rebased.min(*cooldown_end_ms);
+                        if (new_deadline <= now) {
+                            *available = capacity;
+                        } else {
+                            *cooldown_end_ms = new_deadline;
+                        };
+                    };
+                    *cd_field = cooldown_ms;
+                },
+                CooldownReconfigurePolicy::Proportional => {
+                    if (*available == 0 && now >= *cooldown_end_ms) {
+                        *available = *cap_field;
+                    };
+                    *cap_field = capacity;
+                    *available = (*available).min(capacity);
+                    if (*available == 0) {
+                        // Gate is in flight: `now < *cooldown_end_ms`, so
+                        // `time_left_old > 0`.
+                        // SAFETY: u128 widening keeps the product in range. The result
+                        // is `<= cooldown_ms` so the cast back to u64 is safe.
+                        let time_left_old = (*cooldown_end_ms - now) as u128;
+                        let time_left_new =
+                            time_left_old * (cooldown_ms as u128) / (*cd_field as u128);
+                        if (time_left_new == 0) {
+                            *available = capacity;
+                        } else {
+                            // SAFETY: `now + time_left_new` overflow is the operator's
+                            // responsibility; `time_left_new <= cooldown_ms`.
+                            *cooldown_end_ms = now + (time_left_new as u64);
+                        };
+                    };
+                    *cd_field = cooldown_ms;
+                },
             };
         },
         _ => abort EWrongVariant,
