@@ -1,10 +1,14 @@
-name: llms metadata — schema validation
+name: llms metadata — validation
 
-# Validates that llms metadata YAMLs (per-module + per-package index) conform to
-# their JSON Schemas. Only runs on PRs that touch metadata, schema, validator,
-# or workflow files. Validates only the YAMLs the PR changed — unless the
-# schemas, the validator, or this workflow itself changed (anything that could
-# alter validation behavior), in which case every YAML is re-validated.
+# Validates llms metadata YAMLs at two layers:
+#   1. JSON Schema conformance (per-module + per-package index)
+#   2. Cross-field semantic integrity (api.aborts ⊆ errors, affects exhaustive,
+#      audit_grounding refs consistent — see scripts/validate-llms-semantics.py)
+#
+# Only runs on PRs that touch metadata, schemas, either validator, or this
+# workflow. Validates only the YAMLs the PR changed — unless the schemas,
+# either validator, or the workflow itself changed (anything that could alter
+# validation behavior), in which case every YAML is re-validated.
 
 on:
   pull_request:
@@ -13,6 +17,7 @@ on:
       - 'schemas/llms-metadata-v1.json'
       - 'schemas/llms-package-index-v1.json'
       - 'scripts/validate-llms-schema.py'
+      - 'scripts/validate-llms-semantics.py'
       - '.github/workflows/llms-schema-validation.yml'
 
 jobs:
@@ -43,7 +48,7 @@ jobs:
           # may have changed). In all three cases we want every YAML re-checked
           # on this PR.
           DIFF=$(git diff --name-only "$BASE"...HEAD)
-          if echo "$DIFF" | grep -qE '^(schemas/(llms-metadata-v1|llms-package-index-v1)\.json|scripts/validate-llms-schema\.py|\.github/workflows/llms-schema-validation\.yml)$'; then
+          if echo "$DIFF" | grep -qE '^(schemas/(llms-metadata-v1|llms-package-index-v1)\.json|scripts/validate-llms-(schema|semantics)\.py|\.github/workflows/llms-schema-validation\.yml)$'; then
             echo "scope=ALL (schemas / validator / workflow changed)"
             find . -type f -name '*.yaml' -path '*/llms/*' | sort > affected.txt
           else
@@ -58,10 +63,20 @@ jobs:
           count=$(wc -l < affected.txt | tr -d ' ')
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
-      - name: Validate
+      - name: Validate (schema + semantics)
         if: steps.scope.outputs.count != '0'
         run: |
+          set +e
+          rc=0
+          echo "::group::Schema validation"
           xargs -a affected.txt python3 scripts/validate-llms-schema.py
+          [ $? -ne 0 ] && rc=1
+          echo "::endgroup::"
+          echo "::group::Semantic validation (cross-field referential integrity)"
+          xargs -a affected.txt python3 scripts/validate-llms-semantics.py
+          [ $? -ne 0 ] && rc=1
+          echo "::endgroup::"
+          exit $rc
 
       - name: No YAMLs to validate
         if: steps.scope.outputs.count == '0'
