@@ -1,9 +1,10 @@
 name: llms metadata — schema validation
 
 # Validates that llms metadata YAMLs (per-module + per-package index) conform to
-# their JSON Schemas. Only runs on PRs that touch metadata or schema files, and
-# only validates the YAMLs that the PR actually changed — unless the schemas
-# themselves changed, in which case every YAML is re-validated.
+# their JSON Schemas. Only runs on PRs that touch metadata, schema, validator,
+# or workflow files. Validates only the YAMLs the PR changed — unless the
+# schemas, the validator, or this workflow itself changed (anything that could
+# alter validation behavior), in which case every YAML is re-validated.
 
 on:
   pull_request:
@@ -35,14 +36,19 @@ jobs:
           BASE="origin/${{ github.base_ref }}"
           git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
 
-          # Schema change → full re-validation (a stricter schema can retroactively
-          # invalidate previously-passing YAMLs; we must catch that on this PR).
-          if git diff --name-only "$BASE"...HEAD | grep -qE '^schemas/(llms-metadata-v1|llms-package-index-v1)\.json$'; then
-            echo "scope=ALL (schemas changed)"
+          # Full re-validation when anything that could change validation behavior
+          # is touched: the schemas themselves (a stricter schema can retroactively
+          # invalidate previously-passing YAMLs), the validator script (its
+          # behavior may have changed), or this workflow (scope-detection logic
+          # may have changed). In all three cases we want every YAML re-checked
+          # on this PR.
+          DIFF=$(git diff --name-only "$BASE"...HEAD)
+          if echo "$DIFF" | grep -qE '^(schemas/(llms-metadata-v1|llms-package-index-v1)\.json|scripts/validate-llms-schema\.py|\.github/workflows/llms-schema-validation\.yml)$'; then
+            echo "scope=ALL (schemas / validator / workflow changed)"
             find . -type f -name '*.yaml' -path '*/llms/*' | sort > affected.txt
           else
             echo "scope=DIFF"
-            git diff --name-only --diff-filter=ACMR "$BASE"...HEAD \
+            echo "$DIFF" \
               | grep -E '/llms/.*\.yaml$' \
               | sort > affected.txt || true
           fi
