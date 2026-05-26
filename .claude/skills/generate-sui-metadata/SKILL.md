@@ -260,7 +260,6 @@ Without the comment a future maintainer cannot tell whether the skill author fin
 #### Optional `_audit_grounding:`
 
 Always emit (it's where the structural data lives that auditors/maintainers consume):
-- `tests_count`: count of TEST lines from `extract_tests.sh`.
 - `canonical_test`: pointer to ONE happy-path test. Heuristic order:
    1. Test literally named `test_<core_fn>_happy_path` or `<core_fn>_happy_path` if it exists.
    2. Otherwise the test that exercises the **full canonical end-to-end choreography** of the module (e.g. wrap → initiate → accept for `two_step_transfer`; new → grant_role → new_auth → revoke for `access_control`; schedule → execute for `delayed_transfer`).

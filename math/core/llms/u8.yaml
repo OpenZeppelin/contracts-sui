@@ -361,7 +361,6 @@ composes_with: []   # Empty — no compositions are source-cited for `u8`. Sibli
 # ============================================================
 
 _audit_grounding:
-  tests_count: 66
 
   canonical_test:
     file: math/core/tests/u8_tests.move

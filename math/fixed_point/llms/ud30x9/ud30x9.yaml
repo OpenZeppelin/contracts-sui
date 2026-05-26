@@ -266,12 +266,6 @@ composes_with: []   # Empty — no compositions are source-cited. ud30x9 sits at
 # ============================================================
 
 _audit_grounding:
-  tests_count: 0   # ud30x9.move has no in-tree tests of its own — the type is exercised
-                   # exhaustively by sharded suites under tests/ud30x9_tests/ (abs, arithmetic,
-                   # bitwise, casting, ceil, comparison, conversion, div, floor, ln, log10, log2,
-                   # mul, pow, sqrt, unchecked, wrap). Construction (zero / one / max / wrap /
-                   # unwrap) is covered transitively by every test in those suites and directly
-                   # by wrap_tests.move.
 
   canonical_test: null   # No single happy-path test: ud30x9 is a pure-type wrapper with
                           # operation-by-operation sharded coverage. Consult the appropriate

@@ -311,7 +311,6 @@ _audit_grounding:
   # transitively through every consumer test that passes `rounding::down()` /
   # `up()` / `nearest()` into a width-module function. `u64_tests.move` is the
   # representative consumer suite.
-  tests_count: 0
 
   canonical_test:
     file: math/core/tests/u64_tests.move

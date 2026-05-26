@@ -383,7 +383,6 @@ composes_with: []   # Empty — no compositions are source-cited in u32.move, it
 # ============================================================
 
 _audit_grounding:
-  tests_count: 68
 
   canonical_test:
     file: math/core/tests/u32_tests.move

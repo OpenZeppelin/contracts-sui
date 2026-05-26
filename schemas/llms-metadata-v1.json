@@ -1,10 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/schemas/llms-metadata-v1.json",
-  "title": "OpenZeppelin Contracts for Sui — AI Integrator Module Metadata, v1.0",
+  "title": "OpenZeppelin Contracts for Sui \u2014 AI Integrator Module Metadata, v1.0",
   "description": "Schema for per-module YAML metadata files under `<package-path>/llms/<...>/<module>.yaml`. Designed to let AI integrator agents (Cursor, Claude Code, Cline, Copilot, Aider, Gemini CLI, etc.) ground code generation at the schema level rather than re-deriving structure from Move source on every call. See llms.txt at the repository root for the discovery convention.",
   "type": "object",
-  "required": ["schema_version", "module", "domain", "frequency", "install"],
+  "required": [
+    "schema_version",
+    "module",
+    "domain",
+    "frequency",
+    "install"
+  ],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
@@ -14,7 +20,11 @@
     },
     "module": {
       "type": "object",
-      "required": ["name", "package", "one_liner"],
+      "required": [
+        "name",
+        "package",
+        "one_liner"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -30,11 +40,11 @@
         "one_liner": {
           "type": "string",
           "maxLength": 240,
-          "description": "Single sentence (≤240 chars) capturing WHAT the module does and any load-bearing constraint. AI agents read this first to decide if the module fits the task at hand. Long-form prose belongs in `summary`."
+          "description": "Single sentence (\u2264240 chars) capturing WHAT the module does and any load-bearing constraint. AI agents read this first to decide if the module fits the task at hand. Long-form prose belongs in `summary`."
         },
         "summary": {
           "type": "string",
-          "description": "Optional multi-paragraph elaboration of the module — context that doesn't fit in `one_liner`. AI agents read this when the one_liner is not enough to decide whether and how to use the module."
+          "description": "Optional multi-paragraph elaboration of the module \u2014 context that doesn't fit in `one_liner`. AI agents read this when the one_liner is not enough to decide whether and how to use the module."
         }
       }
     },
@@ -45,17 +55,29 @@
     },
     "frequency": {
       "type": "string",
-      "enum": ["admin-frequency", "user-frequency", "mixed"],
+      "enum": [
+        "admin-frequency",
+        "user-frequency",
+        "mixed"
+      ],
       "description": "Call-frequency model. `admin-frequency` = invoked from governance / setup paths; shared-object writes acceptable. `user-frequency` = invoked from per-transaction hot paths; shared-object writes serialize the protocol and must be avoided. `mixed` = both, with case-by-case guidance in `decisions[]`."
     },
     "does_not_solve": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "One-line bullets stating what the module deliberately does NOT cover. Points integrators at sibling modules or alternative libraries."
     },
     "install": {
       "type": "object",
-      "required": ["mvr", "repo_ref", "use_statement", "move_toml_snippet", "github_alternative"],
+      "required": [
+        "mvr",
+        "repo_ref",
+        "use_statement",
+        "move_toml_snippet",
+        "github_alternative"
+      ],
       "additionalProperties": false,
       "properties": {
         "mvr": {
@@ -66,12 +88,17 @@
         "repo_ref": {
           "type": "string",
           "pattern": "^[0-9a-f]{40}$",
-          "description": "Full 40-character commit SHA in OpenZeppelin/contracts-sui that the YAML was extracted from. Never a branch name or tag — branch/tag refs are resolved to a SHA by the staging script."
+          "description": "Full 40-character commit SHA in OpenZeppelin/contracts-sui that the YAML was extracted from. Never a branch name or tag \u2014 branch/tag refs are resolved to a SHA by the staging script."
         },
         "release": {
           "oneOf": [
-            { "type": "null" },
-            { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$" }
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$"
+            }
           ],
           "description": "Release tag this YAML matches (semver-prefixed, e.g., `\"v1.2.0\"` or `\"v1.2.0-rc.1\"`) when extracted at a tagged release. `null` when extracted from main between tags. In either case, `install.repo_ref` is the actual reproducible pin."
         },
@@ -85,7 +112,7 @@
         },
         "github_alternative": {
           "type": "string",
-          "description": "Alternative `Move.toml` `[dependencies]` snippet pinning the package via direct git ref. The `<commit-sha-or-tag>` placeholder is the agent-fills-in slot — `install.repo_ref` documents which commit the YAML describes."
+          "description": "Alternative `Move.toml` `[dependencies]` snippet pinning the package via direct git ref. The `<commit-sha-or-tag>` placeholder is the agent-fills-in slot \u2014 `install.repo_ref` documents which commit the YAML describes."
         }
       }
     },
@@ -95,22 +122,41 @@
     },
     "quick_start": {
       "type": "string",
-      "description": "Minimal end-to-end happy-path Move code — 3-5 calls demonstrating the typical sequence after init."
+      "description": "Minimal end-to-end happy-path Move code \u2014 3-5 calls demonstrating the typical sequence after init."
     },
     "types": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "type_params", "capabilities", "role"],
+        "required": [
+          "name",
+          "type_params",
+          "capabilities",
+          "role"
+        ],
         "additionalProperties": false,
         "properties": {
-          "name": { "type": "string" },
-          "type_params": { "type": "string" },
+          "name": {
+            "type": "string"
+          },
+          "type_params": {
+            "type": "string"
+          },
           "capabilities": {
             "type": "array",
-            "items": { "type": "string", "enum": ["key", "store", "copy", "drop"] }
+            "items": {
+              "type": "string",
+              "enum": [
+                "key",
+                "store",
+                "copy",
+                "drop"
+              ]
+            }
           },
-          "role": { "type": "string" }
+          "role": {
+            "type": "string"
+          }
         }
       },
       "description": "Integrator-facing types the module introduces. Empty array means the module is stateless / introduces no new types."
@@ -119,16 +165,46 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "sig", "role"],
+        "required": [
+          "name",
+          "sig",
+          "role"
+        ],
         "additionalProperties": false,
         "properties": {
-          "name": { "type": "string" },
-          "kind": { "type": "string", "enum": ["read", "write", "macro", "init"] },
-          "sig": { "type": "string" },
-          "role": { "type": "string" },
-          "aborts": { "type": "array", "items": { "type": "string" } },
-          "emits": { "type": "array", "items": { "type": "string" } },
-          "notes": { "type": "string" }
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "macro",
+              "init"
+            ]
+          },
+          "sig": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "aborts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "emits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notes": {
+            "type": "string"
+          }
         }
       }
     },
@@ -136,11 +212,19 @@
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "additionalProperties": false,
         "properties": {
-          "code": { "type": "integer", "minimum": 0 },
-          "message": { "type": "string" }
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "message": {
+            "type": "string"
+          }
         }
       },
       "description": "Map of error constant names (e.g., `EUnauthorized`) to their abort code and message. Cross-module errors that surface to the caller through macro expansion (e.g., from `openzeppelin_math::macros`) are documented inline here."
@@ -149,33 +233,52 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["question", "options"],
+        "required": [
+          "question",
+          "options"
+        ],
         "additionalProperties": false,
         "properties": {
-          "question": { "type": "string" },
+          "question": {
+            "type": "string"
+          },
           "options": {
             "type": "array",
             "minItems": 1,
             "items": {
               "type": "object",
-              "required": ["use", "when", "why"],
+              "required": [
+                "use",
+                "when",
+                "why"
+              ],
               "additionalProperties": false,
               "properties": {
-                "use": { "type": "string" },
-                "when": { "type": "string" },
-                "why": { "type": "string" }
+                "use": {
+                  "type": "string"
+                },
+                "when": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
               }
             }
           }
         }
       },
-      "description": "Decision points an integrator faces when using the module. Each entry is a question with at least two options — gives the AI agent a structured branch instead of inferring from prose."
+      "description": "Decision points an integrator faces when using the module. Each entry is a question with at least two options \u2014 gives the AI agent a structured branch instead of inferring from prose."
     },
     "preconditions": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["must", "fails_with", "affects"],
+        "required": [
+          "must",
+          "fails_with",
+          "affects"
+        ],
         "additionalProperties": false,
         "properties": {
           "must": {
@@ -188,7 +291,9 @@
           },
           "affects": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Mechanical union of every `api[].name` whose `aborts` list references this error code."
           }
         }
@@ -198,45 +303,68 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "severity", "description", "why_bad", "fix"],
+        "required": [
+          "id",
+          "severity",
+          "description",
+          "why_bad",
+          "fix"
+        ],
         "additionalProperties": false,
         "properties": {
           "id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9-]*$"
           },
-          "severity": { "type": "string", "enum": ["high", "medium", "low"] },
-          "description": { "type": "string" },
-          "why_bad": { "type": "string" },
-          "fix": { "type": "string" },
-          "example_bad": { "type": "string" },
-          "example_good": { "type": "string" }
+          "severity": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "why_bad": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          },
+          "example_bad": {
+            "type": "string"
+          },
+          "example_good": {
+            "type": "string"
+          }
         }
       },
       "description": "Anti-patterns. Each entry documents an integration mistake the AI agent should not generate."
     },
     "composes_with": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Modules this one composes with in real protocols. Empty array is a valid value; populate as composition patterns are validated. Cross-module composability queries are the natural fit for an MCP server — see the project's MCP roadmap."
+      "items": {
+        "type": "string"
+      },
+      "description": "Modules this one composes with in real protocols. Empty array is a valid value; populate as composition patterns are validated. Cross-module composability queries are the natural fit for an MCP server \u2014 see the project's MCP roadmap."
     },
     "_audit_grounding": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "tests_count": {
-          "oneOf": [
-            { "type": "null" },
-            { "type": "integer", "minimum": 0 }
-          ],
-          "description": "Total test count for this module's tests file. `null` when tests are sharded across multiple files and a precise count is not maintained."
-        },
         "canonical_test": {
           "oneOf": [
-            { "type": "null" },
+            {
+              "type": "null"
+            },
             {
               "type": "object",
-              "required": ["file", "function"],
+              "required": [
+                "file",
+                "function"
+              ],
               "additionalProperties": false,
               "properties": {
                 "file": {
@@ -250,13 +378,16 @@
               }
             }
           ],
-          "description": "Pointer to a single end-to-end happy-path test for the module — the test an agent should read to ground its mental model of the module. `null` when no single test serves this role (e.g., per-function sharded suites)."
+          "description": "Pointer to a single end-to-end happy-path test for the module \u2014 the test an agent should read to ground its mental model of the module. `null` when no single test serves this role (e.g., per-function sharded suites)."
         },
         "precondition_proofs": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["precondition_fails_with", "test_functions"],
+            "required": [
+              "precondition_fails_with",
+              "test_functions"
+            ],
             "additionalProperties": false,
             "properties": {
               "precondition_fails_with": {
@@ -269,7 +400,9 @@
               },
               "test_functions": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Test function names that prove the precondition aborts when violated. Empty array for consumer-side preconditions with no in-tree proof."
               }
             }
@@ -280,11 +413,21 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["do_not_id", "test_functions"],
+            "required": [
+              "do_not_id",
+              "test_functions"
+            ],
             "additionalProperties": false,
             "properties": {
-              "do_not_id": { "type": "string" },
-              "test_functions": { "type": "array", "items": { "type": "string" } }
+              "do_not_id": {
+                "type": "string"
+              },
+              "test_functions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             }
           }
         },
@@ -292,12 +435,22 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["do_not_id", "pattern", "heuristic"],
+            "required": [
+              "do_not_id",
+              "pattern",
+              "heuristic"
+            ],
             "additionalProperties": false,
             "properties": {
-              "do_not_id": { "type": "string" },
-              "pattern": { "type": "string" },
-              "heuristic": { "type": "string" }
+              "do_not_id": {
+                "type": "string"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "heuristic": {
+                "type": "string"
+              }
             }
           }
         },
@@ -305,19 +458,28 @@
           "type": "array",
           "items": {
             "oneOf": [
-              { "type": "string" },
+              {
+                "type": "string"
+              },
               {
                 "type": "object",
                 "properties": {
-                  "name": { "type": "string" },
-                  "fields": { "type": "array", "items": { "type": "string" } }
+                  "name": {
+                    "type": "string"
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             ]
           }
         }
       },
-      "description": "Audit-grounding section — optional, opt-in for agents that want test-pinned proof of preconditions and anti-patterns. Generation-focused agents can skip the entire block."
+      "description": "Audit-grounding section \u2014 optional, opt-in for agents that want test-pinned proof of preconditions and anti-patterns. Generation-focused agents can skip the entire block."
     }
   }
 }

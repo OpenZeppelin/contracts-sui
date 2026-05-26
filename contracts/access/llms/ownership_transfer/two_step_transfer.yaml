@@ -355,7 +355,6 @@ composes_with: []   # Empty — no in-source / in-test / in-docs composition is 
 # ============================================================
 
 _audit_grounding:
-  tests_count: 18
 
   canonical_test:
     file: contracts/access/tests/two_step_tests.move

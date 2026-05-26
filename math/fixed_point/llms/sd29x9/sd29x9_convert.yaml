@@ -302,7 +302,6 @@ _audit_grounding:
   # had to hand-roll the 10^9 multiply / divide on top of sd29x9::wrap /
   # unwrap, which is exactly the class of bug `confuse-from-with-wrap` warns
   # about. Sibling module `ud30x9_convert` is the unsigned counterpart.
-  tests_count: 22
 
   canonical_test:
     file: math/fixed_point/tests/sd29x9_tests/conversion_tests.move

@@ -401,7 +401,6 @@ composes_with: []   # Empty — no compositions are source-cited. Sibling pointe
 # ============================================================
 
 _audit_grounding:
-  tests_count: 71
 
   canonical_test: null   # No end-to-end happy path — `u128` is a stateless
                          # library with sharded operation-by-operation tests.

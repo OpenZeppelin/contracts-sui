@@ -280,7 +280,6 @@ composes_with: []   # Empty — no compositions are source-cited. Sibling pointe
 # ============================================================
 
 _audit_grounding:
-  tests_count: 16
 
   canonical_test:
     file: math/core/tests/u512_tests.move

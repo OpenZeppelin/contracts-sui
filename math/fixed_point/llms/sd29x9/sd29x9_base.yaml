@@ -466,7 +466,6 @@ composes_with: []   # Empty — no compositions are cited from source / tests / 
 # ============================================================
 
 _audit_grounding:
-  tests_count: null   # Sharded across 16+ files in tests/sd29x9_tests/; total count not enumerated.
 
   canonical_test: null   # No single happy-path test; suite is sharded per-operation
                           # (arithmetic_tests, div_tests, mod_tests, rem_tests, pow_tests,

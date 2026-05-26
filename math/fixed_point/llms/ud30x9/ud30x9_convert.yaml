@@ -264,7 +264,6 @@ composes_with: []   # Empty — no compositions are source-cited. The README and
 # ============================================================
 
 _audit_grounding:
-  tests_count: 11
 
   canonical_test:
     file: math/fixed_point/tests/ud30x9_tests/conversion_tests.move

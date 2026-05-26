@@ -300,7 +300,6 @@ composes_with: []   # Empty — no compositions are source-cited. Sibling module
 # ============================================================
 
 _audit_grounding:
-  tests_count: 220    # Aggregated across tests/sd29x9_tests/{abs,arithmetic,casting,ceil,comparison,conversion,div,floor,ln,log10,log2,mod,mul,negate,pow,rem,sqrt,unchecked,wrap}_tests.move (excluding helpers.move). The 13 wrap_tests.move entries cover this module directly; the rest cover the sibling modules whose method-style calls are re-exported via `public use fun` in sd29x9.move.
 
   canonical_test: null   # No single canonical happy-path test; sd29x9 is a pure type wrapper.
                           # tests/sd29x9_tests/wrap_tests.move covers this module's surface

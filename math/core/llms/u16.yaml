@@ -362,7 +362,6 @@ composes_with: []   # Empty — no compositions are source-cited. Sibling pointe
 # ============================================================
 
 _audit_grounding:
-  tests_count: 67
 
   canonical_test: null   # No single end-to-end happy-path test exists — the
                          # suite is sharded per-function (e.g.,

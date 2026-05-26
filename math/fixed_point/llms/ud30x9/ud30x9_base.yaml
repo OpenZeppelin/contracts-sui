@@ -576,7 +576,6 @@ _audit_grounding:
   # sqrt_tests.move, ceil_tests.move, floor_tests.move, abs_tests.move, casting_tests.move,
   # unchecked_tests.move, conversion_tests.move, wrap_tests.move). No single
   # end-to-end happy-path test exists — each module exercises one operation in isolation.
-  tests_count: 0
   canonical_test: null
 
   precondition_proofs:

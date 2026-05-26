@@ -213,10 +213,6 @@ _audit_grounding:
   events:
     - name: EventName
       fields: [field1, field2, ...]
-
-  # Full test inventory — agents never iterate this; reviewer can use it
-  # to confirm coverage.
-  tests_count: <N>
 ```
 
 **No `audit:` field anywhere in the YAML.** Audit information (when it exists) lives in the repo's `audits/` directory at the ref pinned by `install.repo_ref`. Integrator navigates there if they care. Surfacing a binary status (audited / in-progress) in YAML invites either false claims or drift; just don't.

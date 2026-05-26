@@ -322,7 +322,6 @@ composes_with: []   # Empty — no compositions are source-cited. The module
 # ============================================================
 
 _audit_grounding:
-  tests_count: 59
 
   canonical_test:
     file: math/core/tests/macros/quick_sort.move
