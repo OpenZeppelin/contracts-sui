@@ -759,12 +759,12 @@ fun getters_return_constructor_values() {
     assert_eq!(b.capacity(), 30);
     assert_eq!(b.refill_amount(), 5);
     assert_eq!(b.refill_interval_ms(), 10);
-    assert_eq!(b.last_refill_ms(), clk.timestamp_ms());
+    assert_eq!(b.last_refill_ms(&clk), clk.timestamp_ms());
 
     let fw = rate_limiter::new_fixed_window(7, 100, 0, 7, &clk);
     assert_eq!(fw.capacity(), 7);
     assert_eq!(fw.window_ms(), 100);
-    assert_eq!(fw.window_start_ms(), 0);
+    assert_eq!(fw.window_start_ms(&clk), 0);
 
     let cd = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
     assert_eq!(cd.capacity(), 5);
@@ -809,7 +809,7 @@ fun refill_interval_ms_on_non_bucket_aborts() {
 fun last_refill_ms_on_non_bucket_aborts() {
     let (_test, clk) = setup(0);
     let cd = rate_limiter::new_cooldown(1, 50, 1, 0, &clk);
-    cd.last_refill_ms();
+    cd.last_refill_ms(&clk);
     abort
 }
 
@@ -817,7 +817,7 @@ fun last_refill_ms_on_non_bucket_aborts() {
 fun window_start_ms_on_non_fixed_window_aborts() {
     let (_test, clk) = setup(0);
     let b = rate_limiter::new_bucket(10, 1, 10, 10, clk.timestamp_ms(), &clk);
-    b.window_start_ms();
+    b.window_start_ms(&clk);
     abort
 }
 
@@ -856,7 +856,8 @@ fun bucket_with_past_anchor_credits_elapsed_time_on_first_read() {
 
     // Anchor 50 ms in the past, empty start, 1 token / 10 ms. 5 intervals already elapsed.
     let rl = rate_limiter::new_bucket(10, 1, 10, 0, 50, &clk);
-    assert_eq!(rl.last_refill_ms(), 50);
+    // Projected anchor advances by the 5 elapsed intervals: 50 + 5*10 = 100.
+    assert_eq!(rl.last_refill_ms(&clk), 100);
     assert_eq!(rl.available(&clk), 5);
 
     teardown(test, clk);
@@ -911,7 +912,7 @@ fun reconfigure_fixed_window_via_construct_fresh_preserve_anchor() {
     // Mid-window, shrink capacity to 4 while preserving the existing window anchor and
     // the projected `available` clamped to the new capacity.
     clk.set_for_testing(50);
-    let anchor = rl.window_start_ms();
+    let anchor = rl.window_start_ms(&clk);
     let projected = rl.available(&clk);
     let new_cap = 4;
     let initial = if (projected < new_cap) projected else new_cap;

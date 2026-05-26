@@ -438,8 +438,10 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
 // === Getters ===
 //
 // These expose the inner fields a caller needs to rebuild a limiter with adjusted state.
-// Raw `available` is intentionally NOT exposed: use `available(&self, clock)` for the
-// projected reading, which is the only semantically meaningful value at a point in time.
+// The bucket-shaped anchor getters (`last_refill_ms`, `window_start_ms`) take a `&Clock`
+// and return projected values, so they pair coherently with `available(&self, clock)` for
+// snapshotting state. `cooldown_end_ms` returns the stored value as-is (a cooldown deadline
+// does not evolve with time); it is only semantically meaningful when `available(clock) == 0`.
 
 /// Capacity of the limiter, regardless of variant.
 public fun capacity(self: &RateLimiter): u64 {
@@ -472,14 +474,18 @@ public fun refill_interval_ms(self: &RateLimiter): u64 {
     }
 }
 
-/// Timestamp of the last refill checkpoint. Exposed so callers can preserve the
-/// refill phase when reconstructing a bucket under a new configuration.
+/// Projected timestamp of the latest refill checkpoint at `now`: the stored anchor
+/// advanced by every whole `refill_interval_ms` that has elapsed since it was last
+/// committed. Pairs coherently with `available(clock)` for snapshotting state before
+/// reconstructing a bucket under a new configuration.
 ///
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not a `Bucket`.
-public fun last_refill_ms(self: &RateLimiter): u64 {
+public fun last_refill_ms(self: &RateLimiter, clock: &Clock): u64 {
     match (self) {
-        RateLimiter::Bucket { last_refill_ms, .. } => *last_refill_ms,
+        RateLimiter::Bucket { last_refill_ms, refill_interval_ms, .. } => {
+            project_anchor(*last_refill_ms, *refill_interval_ms, clock.timestamp_ms())
+        },
         _ => abort EWrongVariant,
     }
 }
@@ -495,13 +501,18 @@ public fun window_ms(self: &RateLimiter): u64 {
     }
 }
 
-/// Anchor timestamp of the current window.
+/// Projected anchor of the current window at `now`: the stored anchor advanced by
+/// every whole `window_ms` that has elapsed since it was last committed. Pairs
+/// coherently with `available(clock)` for snapshotting state before reconstructing
+/// under a new configuration.
 ///
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not a `FixedWindow`.
-public fun window_start_ms(self: &RateLimiter): u64 {
+public fun window_start_ms(self: &RateLimiter, clock: &Clock): u64 {
     match (self) {
-        RateLimiter::FixedWindow { window_start_ms, .. } => *window_start_ms,
+        RateLimiter::FixedWindow { window_start_ms, window_ms, .. } => {
+            project_anchor(*window_start_ms, *window_ms, clock.timestamp_ms())
+        },
         _ => abort EWrongVariant,
     }
 }
@@ -517,8 +528,10 @@ public fun cooldown_ms(self: &RateLimiter): u64 {
     }
 }
 
-/// Absolute deadline at which an armed cooldown gate releases. `0` means no gate is
-/// armed. Only consulted by the hot path when `available == 0`.
+/// Absolute deadline at which an armed cooldown gate releases. The hot path only
+/// consults this when `available == 0`, so the value is only semantically meaningful
+/// when `available(clock) == 0`; otherwise it is stale leftover from the last arm.
+/// Exposed so callers reconstructing mid-throttle can preserve the in-flight deadline.
 ///
 /// #### Aborts
 /// - `EWrongVariant` if the limiter is not a `Cooldown`.
@@ -530,6 +543,13 @@ public fun cooldown_end_ms(self: &RateLimiter): u64 {
 }
 
 // === Private Functions ===
+
+/// Advance a bucket-shaped anchor by every whole `interval_ms` that has elapsed since
+/// it was committed. `now` must be `>= anchor`; the constructors enforce this and the
+/// `Clock` is monotonic.
+fun project_anchor(anchor: u64, interval_ms: u64, now: u64): u64 {
+    anchor + ((now - anchor) / interval_ms) * interval_ms
+}
 
 /// Project bucket-shaped state forward and consume `amount` on success. Shared by `Bucket`
 /// and `FixedWindow` (the latter passes `refill_amount = capacity`, so one elapsed interval
