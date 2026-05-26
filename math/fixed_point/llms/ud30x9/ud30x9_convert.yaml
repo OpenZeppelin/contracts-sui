@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: "1.0"
 
 # ============================================================
 # STAGE 1 — SELECTION
@@ -7,7 +7,8 @@ schema_version: 2
 module:
   name: openzeppelin_fp_math::ud30x9_convert
   package: openzeppelin_fp_math
-  one_liner: |
+  one_liner: "Scale-aware conversions between whole unsigned integers (`u64`/`u128`) and `UD30x9` — applies/removes the `10^9` scale. Use when `42` should mean `42.0`, NOT raw fixed-point bits."
+  summary: |
     Scale-aware conversions between whole unsigned integers (`u64`, `u128`)
     and the `UD30x9` 9-decimal fixed-point type. Multiplies by `10^9` on the
     way in, truncates the fractional part on the way out. Reach for this
@@ -29,14 +30,15 @@ does_not_solve:
 # ============================================================
 
 install:
-  mvr: "@openzeppelin-move/fp_math"          # Primary — Move Package Registry.
+  mvr: "@openzeppelin-move/fixed-point-math"   # Primary — Move Package Registry.
   repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  release: null   # release tag this matches (null if extracted between tags); install.repo_ref is the actual pin
   use_statement: |
     use openzeppelin_fp_math::ud30x9_convert;
     use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
   move_toml_snippet: |
     [dependencies]
-    openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fp_math" }
+    openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
   github_alternative: |                      # Secondary — direct git pin if MVR is unavailable.
     [dependencies.openzeppelin_fp_math]
     git = "https://github.com/OpenZeppelin/contracts-sui.git"
@@ -229,7 +231,7 @@ do_not:
       // Only at the boundary where you must produce a u64 coin amount:
       let coin_amount = amount.to_u64_trunc();              // 42
 
-  - id: from_u128-on-untrusted-input
+  - id: from-u128-on-untrusted-input
     severity: medium
     description: "Pass user-supplied `u128` directly into `from_u128` and treat the resulting abort as a protocol invariant violation."
     why_bad: "`from_u128` aborts `EOverflow` for `x > floor(u128::MAX / 10^9)`. Aborting on caller-supplied input turns an input-validation problem into a transaction failure with a hard-to-debug error code; users see `EOverflow` and cannot recover."
@@ -288,7 +290,7 @@ _audit_grounding:
       test_functions: []   # consumer-side pattern; not in-tree
     - do_not_id: lossy-readback-assumed-roundtrip
       test_functions: []   # consumer-side pattern; not in-tree
-    - do_not_id: from_u128-on-untrusted-input
+    - do_not_id: from-u128-on-untrusted-input
       test_functions: []   # consumer-side pattern; not in-tree
 
   do_not_detection:
@@ -298,7 +300,7 @@ _audit_grounding:
     - do_not_id: lossy-readback-assumed-roundtrip
       pattern: "result of to_u64_trunc / to_u128_trunc piped straight back into from_u64 / from_u128 within the same function"
       heuristic: "AST: `from_u(64|128)(.*to_u(64|128)_trunc(.*).*)` in the same expression / let-binding"
-    - do_not_id: from_u128-on-untrusted-input
+    - do_not_id: from-u128-on-untrusted-input
       pattern: "from_u128 called with a parameter that flows from a public entry function argument without prior range check"
       heuristic: "taint: public-entry parameter -> ud30x9_convert::from_u128 with no intervening assert or try_from_u128"
 

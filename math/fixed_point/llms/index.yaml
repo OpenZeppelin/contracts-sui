@@ -12,27 +12,28 @@ schema_version: "1.0"
 package: openzeppelin_fp_math
 mvr: "@openzeppelin-move/fixed-point-math"
 repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+release: null   # release tag this matches (null if extracted between tags); repo_ref is the actual pin
 modules:
   - name: ud30x9
     path: ud30x9/ud30x9.yaml
-    summary: Unsigned decimal fixed-point type `UD30x9` (9 decimals, `u128`-backed) — constants, constructors, raw `wrap`/`unwrap` casts.
+    summary: "Unsigned decimal fixed-point type `UD30x9` (9 decimals, `u128`-backed) — constants, constructors, raw `wrap`/`unwrap` casts."
 
   - name: ud30x9_base
     path: ud30x9/ud30x9_base.yaml
-    summary: Arithmetic, comparison, bitwise, and logarithm operations on `UD30x9`.
+    summary: "Arithmetic, comparison, bitwise, and logarithm operations on `UD30x9`."
 
   - name: ud30x9_convert
     path: ud30x9/ud30x9_convert.yaml
-    summary: Scale-aware conversions between whole unsigned integers (`u8`–`u256`) and `UD30x9`.
+    summary: "Scale-aware conversions between whole unsigned integers (`u8`–`u256`) and `UD30x9`."
 
   - name: sd29x9
     path: sd29x9/sd29x9.yaml
-    summary: Signed decimal fixed-point type `SD29x9` (9 decimals, magnitude + sign-flag API) — constants, constructors, raw `wrap`/`unwrap` casts.
+    summary: "Signed decimal fixed-point type `SD29x9` (9 decimals, magnitude + sign-flag API) — constants, constructors, raw `wrap`/`unwrap` casts."
 
   - name: sd29x9_base
     path: sd29x9/sd29x9_base.yaml
-    summary: Arithmetic, transcendental, and comparison operations on `SD29x9`.
+    summary: "Arithmetic, transcendental, and comparison operations on `SD29x9`."
 
   - name: sd29x9_convert
     path: sd29x9/sd29x9_convert.yaml
-    summary: Scale-aware conversions between whole signed magnitudes and `SD29x9`.
+    summary: "Scale-aware conversions between whole signed magnitudes and `SD29x9`."

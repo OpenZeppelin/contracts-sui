@@ -1,11 +1,8 @@
-schema_version: 2
+schema_version: "1.0"
 
-# ⚠️ PARTIAL METADATA — math/fixed_point is a multi-module package.
-# This file documents the constructor/wrapper module `sd29x9.move`. The
-# actual arithmetic API surface lives in sibling modules:
-#   openzeppelin_fp_math::sd29x9_base    — add, sub, mul, div, pow, sqrt, ln, log2, log10, abs, negate, mod, rem, ceil, floor, into_UD30x9, try_into_UD30x9, etc.
-#   openzeppelin_fp_math::sd29x9_convert — SD29x9 <-> raw integer (with sign flag)
-# Each needs its own YAML. Pointers to siblings live in does_not_solve[] and decisions[].
+# This file documents the constructor/wrapper module `sd29x9.move`. The arithmetic and
+# conversion surfaces live in sibling modules — see `../index.yaml` for the full package
+# module set; pointers to specific siblings are in `does_not_solve[]` and `decisions[]`.
 
 # ============================================================
 # STAGE 1 — SELECTION
@@ -14,7 +11,8 @@ schema_version: 2
 module:
   name: openzeppelin_fp_math::sd29x9
   package: openzeppelin_fp_math
-  one_liner: |
+  one_liner: "Signed decimal fixed-point type `SD29x9` (two's complement `u128` scaled by 10^9; magnitude + sign-flag API) — owns the type, raw `wrap`/`unwrap` casts, and constants (`zero`/`one`/`max`/`min`)."
+  summary: |
     Constructor / wrapper module for the SIGNED decimal fixed-point type
     `SD29x9` (two's complement `u128` scaled by 10^9, matching Sui coin
     precision). Use for values that can be negative: balance deltas, signed
@@ -39,7 +37,8 @@ does_not_solve:
 
 install:
   mvr: "@openzeppelin-move/fixed-point-math"   # Primary — Move Package Registry (per docs guide).
-  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212    # OpenZeppelin/contracts-sui @ main (2026-05-25)
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  release: null   # release tag this matches (null if extracted between tags); install.repo_ref is the actual pin
   use_statement: |
     use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
     use openzeppelin_fp_math::sd29x9_base;       // for arithmetic / comparison / casts
@@ -337,7 +336,9 @@ _audit_grounding:
       heuristic: "sd29x9::wrap(<expr containing ^ std::u128::max_value or two_complement>, ...)"
     - do_not_id: forget-asymmetric-min-boundary
       pattern: "sd29x9_base::abs / negate called without a guard on sd29x9::min(); or sd29x9::wrap called with magnitude `1u128 << 127`"
+      heuristic: "method call `<x>.abs()` or `<x>.negate()` where `<x>` is SD29x9-typed and the value's range is not statically known to exclude `min()`; OR `sd29x9::wrap(<expr>, _)` where `<expr>` evaluates to `1u128 << 127`. Suggest a `if (x == sd29x9::min())` guard before `abs`/`negate`."
     - do_not_id: round-trip-unwrap-into-wrap
       pattern: "sd29x9::wrap(sd29x9::unwrap(...), ...) without going through sd29x9_convert::to_parts_trunc"
+      heuristic: "expression matches `sd29x9::wrap(sd29x9::unwrap(<x>), ...)` or method-style `<x>.unwrap().wrap(...)`. Suggest `sd29x9_convert::to_parts_trunc(<x>)` to get `(magnitude, is_negative)` then `sd29x9_convert::from_u128(magnitude, is_negative)` for a faithful round-trip."
 
   events: []   # No events emitted; pure value module.

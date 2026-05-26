@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/schemas/llms-package-index-v1.json",
+  "title": "OpenZeppelin Contracts for Sui — AI Integrator Package Index, v1.0",
+  "description": "Schema for per-package `index.yaml` files under `<package-path>/llms/index.yaml`. Each index enumerates every per-module YAML in the package, giving AI integrator agents single-fetch discovery of the package's module surface before drilling into individual per-module YAMLs (which conform to the sibling schema `llms-metadata-v1.json`).",
+  "type": "object",
+  "required": ["schema_version", "package", "mvr", "repo_ref", "modules"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version. v1.0 is the first public release of this format."
+    },
+    "package": {
+      "type": "string",
+      "pattern": "^openzeppelin_[a-z_0-9]+$",
+      "description": "Package name as it appears in `Move.toml`'s `[package].name` field."
+    },
+    "mvr": {
+      "type": "string",
+      "pattern": "^@openzeppelin-move/[a-z][a-z0-9-]*$",
+      "description": "Move Package Registry slug for this package."
+    },
+    "repo_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Full 40-character commit SHA in OpenZeppelin/contracts-sui that the per-module YAMLs in this package were extracted from. Every module YAML under this index carries the same `install.repo_ref`."
+    },
+    "release": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$" }
+      ],
+      "description": "Release tag this index (and the per-module YAMLs under it) matches (semver-prefixed). `null` when extracted from main between tags."
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z_][a-z_0-9]*$",
+            "description": "Module declaration name (e.g., `access_control`, `two_step_transfer`)."
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^[a-z_0-9/]+\\.yaml$",
+            "description": "Relative path from this index file to the module's YAML, mirroring the `sources/` subdirectory layout (e.g., `access_control.yaml`, `ownership_transfer/two_step_transfer.yaml`)."
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 240,
+            "description": "Single-sentence summary (≤240 chars) capturing what the module does. AI agents read this to pick which per-module YAML to fetch next."
+          }
+        }
+      },
+      "description": "Every public module in the package, with a one-line summary and a relative path to its per-module YAML."
+    }
+  }
+}

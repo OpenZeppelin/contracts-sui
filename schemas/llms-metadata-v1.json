@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/schemas/llms-metadata-v1.json",
+  "title": "OpenZeppelin Contracts for Sui — AI Integrator Module Metadata, v1.0",
+  "description": "Schema for per-module YAML metadata files under `<package-path>/llms/<...>/<module>.yaml`. Designed to let AI integrator agents (Cursor, Claude Code, Cline, Copilot, Aider, Gemini CLI, etc.) ground code generation at the schema level rather than re-deriving structure from Move source on every call. See llms.txt at the repository root for the discovery convention.",
+  "type": "object",
+  "required": ["schema_version", "module", "domain", "frequency", "install"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version. v1.0 is the first public release of this format."
+    },
+    "module": {
+      "type": "object",
+      "required": ["name", "package", "one_liner"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^openzeppelin_[a-z_0-9]+::[a-z_0-9]+$",
+          "description": "Fully-qualified Move module declaration name in the form `openzeppelin_<package>::<module>`."
+        },
+        "package": {
+          "type": "string",
+          "pattern": "^openzeppelin_[a-z_0-9]+$",
+          "description": "Package name as it appears in `Move.toml`'s `[package].name` field."
+        },
+        "one_liner": {
+          "type": "string",
+          "maxLength": 240,
+          "description": "Single sentence (≤240 chars) capturing WHAT the module does and any load-bearing constraint. AI agents read this first to decide if the module fits the task at hand. Long-form prose belongs in `summary`."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Optional multi-paragraph elaboration of the module — context that doesn't fit in `one_liner`. AI agents read this when the one_liner is not enough to decide whether and how to use the module."
+        }
+      }
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Top-level functional category of the module (kebab-case). Current categories in the library include `access-control`, `math`, and others as packages ship. The pattern is open so new categories don't require a schema bump."
+    },
+    "frequency": {
+      "type": "string",
+      "enum": ["admin-frequency", "user-frequency", "mixed"],
+      "description": "Call-frequency model. `admin-frequency` = invoked from governance / setup paths; shared-object writes acceptable. `user-frequency` = invoked from per-transaction hot paths; shared-object writes serialize the protocol and must be avoided. `mixed` = both, with case-by-case guidance in `decisions[]`."
+    },
+    "does_not_solve": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "One-line bullets stating what the module deliberately does NOT cover. Points integrators at sibling modules or alternative libraries."
+    },
+    "install": {
+      "type": "object",
+      "required": ["mvr", "repo_ref", "use_statement", "move_toml_snippet", "github_alternative"],
+      "additionalProperties": false,
+      "properties": {
+        "mvr": {
+          "type": "string",
+          "pattern": "^@openzeppelin-move/[a-z][a-z0-9-]*$",
+          "description": "Move Package Registry slug for this module's containing package."
+        },
+        "repo_ref": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "Full 40-character commit SHA in OpenZeppelin/contracts-sui that the YAML was extracted from. Never a branch name or tag — branch/tag refs are resolved to a SHA by the staging script."
+        },
+        "release": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$" }
+          ],
+          "description": "Release tag this YAML matches (semver-prefixed, e.g., `\"v1.2.0\"` or `\"v1.2.0-rc.1\"`) when extracted at a tagged release. `null` when extracted from main between tags. In either case, `install.repo_ref` is the actual reproducible pin."
+        },
+        "use_statement": {
+          "type": "string",
+          "description": "Move `use` statement(s) the integrator copies into their consumer module."
+        },
+        "move_toml_snippet": {
+          "type": "string",
+          "description": "`Move.toml` `[dependencies]` snippet pinning the module's package via MVR."
+        },
+        "github_alternative": {
+          "type": "string",
+          "description": "Alternative `Move.toml` `[dependencies]` snippet pinning the package via direct git ref. The `<commit-sha-or-tag>` placeholder is the agent-fills-in slot — `install.repo_ref` documents which commit the YAML describes."
+        }
+      }
+    },
+    "setup_snippet": {
+      "type": "string",
+      "description": "Move code block showing the minimal scaffold an integrator copies to start using the module (e.g., the consumer module declaration plus first integration calls)."
+    },
+    "quick_start": {
+      "type": "string",
+      "description": "Minimal end-to-end happy-path Move code — 3-5 calls demonstrating the typical sequence after init."
+    },
+    "types": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type_params", "capabilities", "role"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "type_params": { "type": "string" },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["key", "store", "copy", "drop"] }
+          },
+          "role": { "type": "string" }
+        }
+      },
+      "description": "Integrator-facing types the module introduces. Empty array means the module is stateless / introduces no new types."
+    },
+    "api": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "sig", "role"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "kind": { "type": "string", "enum": ["read", "write", "macro", "init"] },
+          "sig": { "type": "string" },
+          "role": { "type": "string" },
+          "aborts": { "type": "array", "items": { "type": "string" } },
+          "emits": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "errors": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["code", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "code": { "type": "integer", "minimum": 0 },
+          "message": { "type": "string" }
+        }
+      },
+      "description": "Map of error constant names (e.g., `EUnauthorized`) to their abort code and message. Cross-module errors that surface to the caller through macro expansion (e.g., from `openzeppelin_math::macros`) are documented inline here."
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["question", "options"],
+        "additionalProperties": false,
+        "properties": {
+          "question": { "type": "string" },
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["use", "when", "why"],
+              "additionalProperties": false,
+              "properties": {
+                "use": { "type": "string" },
+                "when": { "type": "string" },
+                "why": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "description": "Decision points an integrator faces when using the module. Each entry is a question with at least two options — gives the AI agent a structured branch instead of inferring from prose."
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["must", "fails_with", "affects"],
+        "additionalProperties": false,
+        "properties": {
+          "must": {
+            "type": "string",
+            "description": "Natural-language requirement the caller must satisfy. Written as an imperative statement (e.g., \"Pass a non-zero `denominator` to `mul_div`.\")."
+          },
+          "fails_with": {
+            "type": "string",
+            "description": "Error constant name (e.g., `EDivideByZero`) that aborts when the precondition is violated. Must match a key in `errors:`."
+          },
+          "affects": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Mechanical union of every `api[].name` whose `aborts` list references this error code."
+          }
+        }
+      }
+    },
+    "do_not": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "description", "why_bad", "fix"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+          "description": { "type": "string" },
+          "why_bad": { "type": "string" },
+          "fix": { "type": "string" },
+          "example_bad": { "type": "string" },
+          "example_good": { "type": "string" }
+        }
+      },
+      "description": "Anti-patterns. Each entry documents an integration mistake the AI agent should not generate."
+    },
+    "composes_with": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Modules this one composes with in real protocols. Empty array is a valid value; populate as composition patterns are validated. Cross-module composability queries are the natural fit for an MCP server — see the project's MCP roadmap."
+    },
+    "_audit_grounding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tests_count": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 0 }
+          ],
+          "description": "Total test count for this module's tests file. `null` when tests are sharded across multiple files and a precise count is not maintained."
+        },
+        "canonical_test": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["file", "function"],
+              "additionalProperties": false,
+              "properties": {
+                "file": {
+                  "type": "string",
+                  "description": "Repo-relative path to the test file containing the canonical happy-path test."
+                },
+                "function": {
+                  "type": "string",
+                  "description": "Test function name to load as the canonical end-to-end example."
+                }
+              }
+            }
+          ],
+          "description": "Pointer to a single end-to-end happy-path test for the module — the test an agent should read to ground its mental model of the module. `null` when no single test serves this role (e.g., per-function sharded suites)."
+        },
+        "precondition_proofs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["precondition_fails_with", "test_functions"],
+            "additionalProperties": false,
+            "properties": {
+              "precondition_fails_with": {
+                "type": "string",
+                "description": "Error constant name (matching one of the `fails_with` values in `preconditions[]`)."
+              },
+              "test_file": {
+                "type": "string",
+                "description": "Repo-relative path to the test file containing the proof tests."
+              },
+              "test_functions": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Test function names that prove the precondition aborts when violated. Empty array for consumer-side preconditions with no in-tree proof."
+              }
+            }
+          },
+          "description": "Test-grounded proofs that each precondition actually triggers its abort code."
+        },
+        "do_not_demonstrations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["do_not_id", "test_functions"],
+            "additionalProperties": false,
+            "properties": {
+              "do_not_id": { "type": "string" },
+              "test_functions": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "do_not_detection": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["do_not_id", "pattern", "heuristic"],
+            "additionalProperties": false,
+            "properties": {
+              "do_not_id": { "type": "string" },
+              "pattern": { "type": "string" },
+              "heuristic": { "type": "string" }
+            }
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "fields": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "description": "Audit-grounding section — optional, opt-in for agents that want test-pinned proof of preconditions and anti-patterns. Generation-focused agents can skip the entire block."
+    }
+  }
+}

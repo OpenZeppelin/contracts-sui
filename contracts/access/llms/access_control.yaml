@@ -1,4 +1,3 @@
-# WARN: Notion R&D not consulted — MCP tool unavailable in this env
 schema_version: 2
 
 # ============================================================
@@ -34,6 +33,7 @@ does_not_solve:
 install:
   mvr: "@openzeppelin-move/access"
   repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  release: null   # between v1.1.0 and the next release; install.repo_ref is the actual pin
   use_statement: |
     use openzeppelin_access::access_control::{Self, AccessControl, Auth};
   move_toml_snippet: |

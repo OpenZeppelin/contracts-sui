@@ -12,6 +12,7 @@ schema_version: "1.0"
 package: openzeppelin_access
 mvr: "@openzeppelin-move/access"
 repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+release: null   # between v1.1.0 and the next release; repo_ref is the actual pin
 modules:
   - name: access_control
     path: access_control.yaml
