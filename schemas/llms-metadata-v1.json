@@ -82,49 +82,16 @@
     "install": {
       "type": "object",
       "required": [
-        "mvr",
-        "repo_ref",
-        "use_statement",
-        "move_toml_snippet",
-        "github_alternative"
+        "use_statement"
       ],
       "additionalProperties": false,
       "properties": {
-        "mvr": {
-          "type": "string",
-          "pattern": "^@openzeppelin-move/[a-z][a-z0-9-]*$",
-          "description": "Move Package Registry slug for this module's containing package."
-        },
-        "repo_ref": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{40}$",
-          "description": "Full 40-character commit SHA in OpenZeppelin/contracts-sui that the YAML was extracted from. Never a branch name or tag \u2014 branch/tag refs are resolved to a SHA by the staging script."
-        },
-        "release": {
-          "oneOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "string",
-              "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$"
-            }
-          ],
-          "description": "Release tag this YAML matches (semver-prefixed, e.g., `\"v1.2.0\"` or `\"v1.2.0-rc.1\"`) when extracted at a tagged release. `null` when extracted from main between tags. In either case, `install.repo_ref` is the actual reproducible pin."
-        },
         "use_statement": {
           "type": "string",
-          "description": "Move `use` statement(s) the integrator copies into their consumer module."
-        },
-        "move_toml_snippet": {
-          "type": "string",
-          "description": "`Move.toml` `[dependencies]` snippet pinning the module's package via MVR."
-        },
-        "github_alternative": {
-          "type": "string",
-          "description": "Alternative `Move.toml` `[dependencies]` snippet pinning the package via direct git ref. The `<commit-sha-or-tag>` placeholder is the agent-fills-in slot \u2014 `install.repo_ref` documents which commit the YAML describes."
+          "description": "Move `use` statement(s) the integrator copies into their consumer module. The only module-specific install field \u2014 package-level install metadata (MVR slug, commit pin, Move.toml snippets, github alternative) lives in the package's `index.yaml` `install:` block to avoid duplication and drift across modules in the same package."
         }
-      }
+      },
+      "description": "Module-scoped install info. The single field is the per-module `use` statement; everything package-level is hoisted to the package's `index.yaml`."
     },
     "setup_snippet": {
       "type": "string",

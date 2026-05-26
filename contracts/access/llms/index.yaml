@@ -10,9 +10,25 @@
 
 schema_version: "1.0"
 package: openzeppelin_access
-mvr: "@openzeppelin-move/access"
-repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
-release: null   # release tag this matches (null if extracted between tags); repo_ref is the actual pin
+install:
+  mvr: "@openzeppelin-move/access"
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  release: null   # release tag this matches (null if extracted between tags); install.repo_ref is the actual pin
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_access = { r.mvr = "@openzeppelin-move/access" }
+  github_alternative: |
+    # Uses TOML table-heading form (`[dependencies.name]`) — inline tables
+    # cannot span multiple lines in TOML, so the heading form is the only
+    # readable option with inline comments.
+    [dependencies.openzeppelin_access]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "contracts/access"
+    rev = "<commit-sha-or-tag>"   # Agent fills in. Prefer the latest release tag for stable
+                                  # builds; pin a SHA for audits; use a branch only during
+                                  # active development. See `install.repo_ref` above for the
+                                  # commit this metadata was extracted from.
+
 modules:
   - name: access_control
     path: access_control.yaml

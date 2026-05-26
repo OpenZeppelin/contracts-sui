@@ -47,24 +47,12 @@ does_not_solve:
 # ============================================================
 
 install:
-  mvr: "@openzeppelin-move/<pkg>"            # Primary install path — Move Package Registry pin.
-  repo_ref: <full-commit-sha>                # The commit this metadata was extracted from. ALWAYS a full SHA — never a branch or tag.
-  release: <"v1.2.0" | null>                 # Release tag this YAML matches (semver-prefixed) when extracted at a tagged release. `null` when extracted from main between tags. Schema-enforced semver pattern when non-null. install.repo_ref is the actual reproducible pin.
   use_statement: |
     use openzeppelin_<pkg>::<module>::{Self, <Types>};
-  move_toml_snippet: |
-    [dependencies]
-    openzeppelin_<pkg> = { r.mvr = "@openzeppelin-move/<pkg>" }
-  github_alternative: |                      # Secondary path — for envs without MVR.
-    # Uses TOML table-heading form (`[dependencies.name]`) — inline tables
-    # cannot span multiple lines in TOML, so the heading form is the only
-    # readable option with inline comments.
-    [dependencies.openzeppelin_<pkg>]
-    git = "https://github.com/OpenZeppelin/contracts-sui.git"
-    subdir = "<path-to-pkg-from-repo-root>"     # e.g., contracts/access or math/fixed_point
-    rev = "<commit-sha-or-tag>"                  # Agent fills in: prefer the latest release tag
-                                                  # (e.g., v1.1.0); pin a SHA for audited builds;
-                                                  # use a branch (main) only for active development.
+  # NOTE: the per-module `install:` block holds ONLY `use_statement`. All package-level
+  # install metadata (MVR slug, commit pin, Move.toml snippets, github alternative) lives
+  # in the package's `<pkg>/llms/index.yaml` under its own `install:` block. This avoids
+  # duplication and drift across modules in the same package — see the index sample below.
 
 # ============================================================
 # STAGE 3 — BOOTSTRAP
@@ -216,13 +204,52 @@ _audit_grounding:
       fields: [field1, field2, ...]
 ```
 
-**No `audit:` field anywhere in the YAML.** Audit information (when it exists) lives in the repo's `audits/` directory at the ref pinned by `install.repo_ref`. Integrator navigates there if they care. Surfacing a binary status (audited / in-progress) in YAML invites either false claims or drift; just don't.
+**No `audit:` field anywhere in the YAML.** Audit information (when it exists) lives in the repo's `audits/` directory at the ref pinned by the package's `index.yaml` `install.repo_ref`. Integrator navigates there if they care. Surfacing a binary status (audited / in-progress) in YAML invites either false claims or drift; just don't.
+
+## Index schema (per-package `index.yaml`)
+
+Each package owns one `<pkg>/llms/index.yaml`. It enumerates every per-module YAML in the package AND owns the **package-level install metadata** that used to be duplicated across every module YAML (hoisted in v1.0). Module YAMLs reference it implicitly: they keep only `install.use_statement`; everything else lives here.
+
+```yaml
+schema_version: "1.0"
+package: openzeppelin_<pkg>
+install:
+  mvr: "@openzeppelin-move/<slug>"            # Primary install path — Move Package Registry pin.
+  repo_ref: <full-commit-sha>                 # Single source of truth — the commit every module YAML in this package was extracted from. ALWAYS a full 40-char SHA — never a branch or tag.
+  release: <"v1.2.0" | null>                  # Release tag this index (and the per-module YAMLs under it) matches (semver-prefixed) when extracted at a tagged release. `null` when extracted from main between tags. install.repo_ref is the actual reproducible pin.
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_<pkg> = { r.mvr = "@openzeppelin-move/<slug>" }
+  github_alternative: |
+    # Uses TOML table-heading form (`[dependencies.name]`) — inline tables
+    # cannot span multiple lines in TOML, so the heading form is the only
+    # readable option with inline comments.
+    [dependencies.openzeppelin_<pkg>]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "<path-to-pkg-from-repo-root>"   # e.g., contracts/access or math/fixed_point
+    rev = "<commit-sha-or-tag>"   # Agent fills in. Prefer the latest release tag for stable
+                                  # builds; pin a SHA for audits; use a branch only during
+                                  # active development. See `install.repo_ref` above for the
+                                  # commit this metadata was extracted from.
+
+modules:
+  - name: <module_name>                       # Module declaration name (e.g., access_control). Pattern: ^[a-z_][a-z_0-9]*$.
+    path: <relative-path-to-yaml>             # e.g., access_control.yaml or ownership_transfer/two_step_transfer.yaml. Mirrors the package's sources/ layout.
+    summary: "One-line summary (≤240 chars) — what the module does."
+  - name: ...
+```
+
+**No `repo_ref` at the module level.** The package's `index.yaml` is the single source of truth for the commit pin; module YAMLs only carry their `use_statement`. This eliminates the drift surface where a per-module `repo_ref` could diverge from the index's.
+
+**`github_alternative` comment is canonical and package-agnostic.** All three pinning strategies (release tag / SHA / branch) are spelled out; the `rev = "<commit-sha-or-tag>"` is the agent-fills-in slot. Do NOT bake a concrete version number (e.g. `v1.1.0`) into the comment — it goes stale on every release.
 
 ## Internal evolution (development-time history)
 
 Internal-only naming context for skill maintainers. The PUBLIC schema released to integrators is **v1.0** (see top of file). What's tracked below is the development-time evolution from skill `v1` (initial draft) → `v2.0/2.1/2.2` (internal iterations) → public v1.0 (today). External integrators never see the internal `v2.x` numbering; their JSON Schema and every YAML they fetch carry `schema_version: "1.0"`.
 
-Public v1.0 also adds two fields beyond internal v2.2: `module.summary` (multi-paragraph elaboration when one_liner can't carry context) and `install.release` (semver tag this YAML matches, or null between tags).
+Public v1.0 also adds two fields beyond internal v2.2: `module.summary` (multi-paragraph elaboration when one_liner can't carry context) and `install.release` (semver tag the package matches, or null between tags).
+
+Public v1.0 also **hoists package-level install fields out of per-module YAMLs into the per-package `index.yaml`**: `mvr`, `repo_ref`, `release`, `move_toml_snippet`, and `github_alternative` now live in the index's `install:` block. Per-module `install:` shrinks to a single field, `use_statement`. This eliminates ~300 lines of duplication and the cross-file drift surface where a module's `repo_ref` could diverge from the index's.
 
 | v1 field | v2 status | Where it went |
 |---|---|---|

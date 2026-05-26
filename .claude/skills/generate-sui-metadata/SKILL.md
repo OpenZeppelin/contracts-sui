@@ -133,17 +133,28 @@ Always emit `schema_version: "1.0"` (string, not integer — schema enforces `co
 
 #### Stage 2 — Install
 
-**`install.mvr`** — from staged `Move.toml` or README import line. Primary install path; always emit it.
-**`install.repo_ref`** — from `stage_sources.sh` `SOURCE_REF|<full commit SHA>` output. ALWAYS a full 40-char commit SHA — the staging script resolves branch refs (e.g. `main`) and tags to a SHA before emitting, so the YAML carries a reproducible pin. Never write a branch name here; if `SOURCE_REF` looks like a branch, the staging script has a bug — surface it rather than copying the value verbatim. Schema-enforced pattern: `^[0-9a-f]{40}$`.
+**Hoist rule (v1.0).** All package-level install fields (`mvr`, `repo_ref`, `release`, `move_toml_snippet`, `github_alternative`) live in the per-package `<pkg>/llms/index.yaml` under its own `install:` block — emitted ONCE per package, not per module. The per-module YAML's `install:` block holds only `use_statement`. This eliminates the duplicate-across-modules drift surface that previously let a module's `repo_ref` diverge from the index's.
 
-**`install.release`** — semver-prefixed release tag (e.g. `"v1.2.0"`) when the YAML was extracted at a tagged release, OR `null` when extracted from main between tags. Schema enforces `^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.-]+)?$` for the non-null case. Determine by comparing `install.repo_ref` against `git tag --contains <sha>` results from `gh api repos/$OWNER/$REPO/commits/<sha>/tags` — if exactly one release tag points at the SHA, emit that tag; if none or multiple non-release tags, emit `null`. Inline comment must clarify: `# release tag this matches (null if extracted between tags); install.repo_ref is the actual pin`.
+**Per-module YAML (`install:` block — one field):**
 
-**`install.use_statement`** — verbatim from the docs guide "Import" section, OR from the README, OR template-generated.
+**`install.use_statement`** — verbatim from the docs guide "Import" section, OR from the README, OR template-generated. The only module-specific install field; everything else is at the package index.
+
+**Per-package index YAML (`<pkg>/llms/index.yaml` `install:` block):**
+
+**`install.mvr`** — from staged `Move.toml` or README import line. Primary install path. Schema pattern: `^@openzeppelin-move/[a-z][a-z0-9-]*$` — hyphens only, no underscores (e.g., `fixed-point-math`, NOT `fp_math`).
+
+**`install.repo_ref`** — from `stage_sources.sh` `SOURCE_REF|<full commit SHA>` output. ALWAYS a full 40-char commit SHA — the staging script resolves branch refs (e.g. `main`) and tags to a SHA before emitting, so the index carries a reproducible pin for every module under it. Never write a branch name here; if `SOURCE_REF` looks like a branch, the staging script has a bug — surface it rather than copying the value verbatim. Schema-enforced pattern: `^[0-9a-f]{40}$`. Single source of truth — every module YAML in the package is described by this commit.
+
+**`install.release`** — semver-prefixed release tag (e.g. `"v1.2.0"`) when the index was extracted at a tagged release, OR `null` when extracted from main between tags. Schema enforces `^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.-]+)?$` for the non-null case. Determine by comparing `install.repo_ref` against `git tag --contains <sha>` results from `gh api repos/$OWNER/$REPO/commits/<sha>/tags` — if exactly one release tag points at the SHA, emit that tag; if none or multiple non-release tags, emit `null`. Inline comment must clarify: `# release tag this matches (null if extracted between tags); install.repo_ref is the actual pin`.
+
 **`install.move_toml_snippet`** — assemble from `package` name + MVR pin.
-**`install.github_alternative`** — secondary install path for environments where MVR is not configured (CI, forks, audits pinning an exact commit). Assemble from:
-- `git`: always `https://github.com/<SOURCE_OWNER>/<SOURCE_REPO>.git` (from `stage_sources.sh`)
-- `subdir`: path from the repo root to the package directory. Derive from the staged `MODULE_FILE` path — strip everything from `/sources/` onward. e.g. `contracts/access/sources/access_control.move` → `contracts/access`; `math/fixed_point/sources/ud30x9/ud30x9.move` → `math/fixed_point`
+
+**`install.github_alternative`** — secondary install path for environments where MVR is not configured (CI, forks, audits pinning an exact commit). Use the canonical form (don't re-author per package):
+- Open with a comment block explaining the TOML table-heading form (`[dependencies.name]`) is required because inline tables cannot span multiple lines with inline comments.
+- `git`: always `https://github.com/<SOURCE_OWNER>/<SOURCE_REPO>.git` (from `stage_sources.sh`).
+- `subdir`: path from the repo root to the package directory. Derive from the staged `MODULE_FILE` path — strip everything from `/sources/` onward. e.g. `contracts/access/sources/access_control.move` → `contracts/access`; `math/fixed_point/sources/ud30x9/ud30x9.move` → `math/fixed_point`.
 - `rev`: emit the literal placeholder `<commit-sha-or-tag>` (NOT a concrete SHA, NOT a branch). The integrator agent picks the right ref at code-generation time based on user intent — latest stable tag for production builds, audited release SHA for audits, a branch for active development. The recorded `install.repo_ref` field tells the agent which commit the documented API describes; the agent should warn the user if their chosen `rev` diverges.
+- Trailing comment on the `rev` line: spell out all three pinning strategies (latest release tag for stable builds; pin a SHA for audits; branch only for active development) and reference `install.repo_ref` above. Do NOT bake a concrete version tag (e.g. `v1.1.0`) into the comment — it goes stale on every release.
 
 #### Stage 3 — Bootstrap
 
@@ -299,7 +310,7 @@ Address any `ERR|` lines from (a) AND any `SCHEMA_FAIL` from (b). `WARN|` from (
 **Critical schema constraints that fail silently in cross-ref check:**
 - `module.one_liner` MUST be ≤240 chars (schema `maxLength: 240`).
 - `schema_version` MUST be the string `"1.0"`, not the integer `2`.
-- `install.mvr` MUST match `^@openzeppelin-move/[a-z][a-z0-9-]*$` — note hyphens only, no underscores (e.g., `fixed-point-math`, NOT `fp_math`).
+- The package index's `install.mvr` MUST match `^@openzeppelin-move/[a-z][a-z0-9-]*$` — note hyphens only, no underscores (e.g., `fixed-point-math`, NOT `fp_math`). Module YAMLs no longer carry `install.mvr` (hoisted in v1.0); they only carry `install.use_statement`, so this check is per-index, not per-module.
 - `do_not[].id` MUST be kebab-case (`^[a-z][a-z0-9-]*$`) — no underscores even when the underlying Move function uses one (rename `from_u128-on-untrusted-input` → `from-u128-on-untrusted-input`).
 - Top-level `additionalProperties: false` — typos like `summay:` instead of `summary:` will fail. Triple-check field names.
 

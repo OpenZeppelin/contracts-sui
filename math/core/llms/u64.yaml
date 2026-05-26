@@ -32,22 +32,8 @@ does_not_solve:
 # ============================================================
 
 install:
-  mvr: "@openzeppelin-move/integer-math"        # Primary — Move Package Registry.
-  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
-  release: null   # release tag this matches (null if extracted between tags); install.repo_ref is the actual pin
   use_statement: |
     use openzeppelin_math::{rounding, u64};
-  move_toml_snippet: |
-    [dependencies]
-    openzeppelin_math = { r.mvr = "@openzeppelin-move/integer-math" }
-  github_alternative: |                         # Secondary — direct git pin if MVR is unavailable.
-    [dependencies.openzeppelin_math]
-    git = "https://github.com/OpenZeppelin/contracts-sui.git"
-    subdir = "math/core"
-    rev = "<commit-sha-or-tag>"                 # Agent fills in — see install.repo_ref for the
-                                                # commit this metadata was extracted from; prefer
-                                                # the latest release tag for stable builds.
-
 # ============================================================
 # STAGE 3 — BOOTSTRAP
 # ============================================================

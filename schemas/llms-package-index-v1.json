@@ -4,7 +4,7 @@
   "title": "OpenZeppelin Contracts for Sui — AI Integrator Package Index, v1.0",
   "description": "Schema for per-package `index.yaml` files under `<package-path>/llms/index.yaml`. Each index enumerates every per-module YAML in the package, giving AI integrator agents single-fetch discovery of the package's module surface before drilling into individual per-module YAMLs (which conform to the sibling schema `llms-metadata-v1.json`).",
   "type": "object",
-  "required": ["schema_version", "package", "mvr", "repo_ref", "modules"],
+  "required": ["schema_version", "package", "install", "modules"],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
@@ -17,22 +17,38 @@
       "pattern": "^openzeppelin_[a-z_0-9]+$",
       "description": "Package name as it appears in `Move.toml`'s `[package].name` field."
     },
-    "mvr": {
-      "type": "string",
-      "pattern": "^@openzeppelin-move/[a-z][a-z0-9-]*$",
-      "description": "Move Package Registry slug for this package."
-    },
-    "repo_ref": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{40}$",
-      "description": "Full 40-character commit SHA in OpenZeppelin/contracts-sui that the per-module YAMLs in this package were extracted from. Every module YAML under this index carries the same `install.repo_ref`."
-    },
-    "release": {
-      "oneOf": [
-        { "type": "null" },
-        { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$" }
-      ],
-      "description": "Release tag this index (and the per-module YAMLs under it) matches (semver-prefixed). `null` when extracted from main between tags."
+    "install": {
+      "type": "object",
+      "required": ["mvr", "repo_ref", "move_toml_snippet", "github_alternative"],
+      "additionalProperties": false,
+      "properties": {
+        "mvr": {
+          "type": "string",
+          "pattern": "^@openzeppelin-move/[a-z][a-z0-9-]*$",
+          "description": "Move Package Registry slug for this package."
+        },
+        "repo_ref": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "Full 40-character commit SHA in OpenZeppelin/contracts-sui that the per-module YAMLs in this package were extracted from. Single source of truth — module YAMLs no longer carry their own `repo_ref`."
+        },
+        "release": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$" }
+          ],
+          "description": "Release tag this index (and the per-module YAMLs under it) matches (semver-prefixed). `null` when extracted from main between tags. In either case, `install.repo_ref` is the actual reproducible pin."
+        },
+        "move_toml_snippet": {
+          "type": "string",
+          "description": "`Move.toml` `[dependencies]` snippet pinning the package via MVR. Package-level — applies to every module in the package."
+        },
+        "github_alternative": {
+          "type": "string",
+          "description": "Alternative `Move.toml` `[dependencies]` snippet pinning the package via direct git ref — used when MVR is unavailable. The snippet's `rev = \"<commit-sha-or-tag>\"` is the agent-fills-in slot; `install.repo_ref` above documents the commit this metadata was extracted from."
+        }
+      },
+      "description": "Package-level install metadata, hoisted from per-module YAMLs to avoid duplication and drift. The per-module YAML's `install:` block holds only its `use_statement`."
     },
     "modules": {
       "type": "array",
