@@ -272,7 +272,13 @@ Without the comment a future maintainer cannot tell whether the skill author fin
 #### Optional `_audit_grounding:`
 
 Always emit (it's where the structural data lives that auditors/maintainers consume):
-- `canonical_test`: pointer to ONE happy-path test. Heuristic order:
+- `canonical_test`: pointer to ONE happy-path test. **Shape: `{file, function}` object OR `null` — NEVER a bare function name.** Schema-enforced: `null` or `{file: <repo-relative test path>, function: <test function name>}`. Example:
+   ```yaml
+   canonical_test:
+     file: contracts/access/tests/access_control_tests.move
+     function: test_grant_role_happy_path
+   ```
+   Heuristic order for picking the function:
    1. Test literally named `test_<core_fn>_happy_path` or `<core_fn>_happy_path` if it exists.
    2. Otherwise the test that exercises the **full canonical end-to-end choreography** of the module (e.g. wrap → initiate → accept for `two_step_transfer`; new → grant_role → new_auth → revoke for `access_control`; schedule → execute for `delayed_transfer`).
    3. Otherwise pick the longest test that exercises >=3 public functions in sequence.
@@ -286,7 +292,13 @@ Always emit (it's where the structural data lives that auditors/maintainers cons
      - do_not_id: rbac-via-late-added-module
        test_functions: []
    ```
-- `do_not_detection[]`: detection heuristics (regex/rule) for static analyzers.
+- `do_not_detection[]`: detection heuristics for static analyzers. **Shape: each entry is `{do_not_id, pattern, heuristic}` — NOT `{id, rule}`.** Schema-enforced; the `do_not_id` MUST match a key from `do_not[].id`. Example:
+   ```yaml
+   do_not_detection:
+     - do_not_id: user-frequency-rbac
+       pattern: "function with &Auth<Role> parameter on a user-call path"
+       heuristic: "function name matches /^(swap|trade|deposit|withdraw|transfer|mint|burn|claim)$/"
+   ```
 - `events[]`: from extractor `EVENT|` lines.
 
 ### 4. Validate cross-references AND schema conformance

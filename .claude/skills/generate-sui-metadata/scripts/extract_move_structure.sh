@@ -64,14 +64,16 @@ awk '
   # `#[test_only]`: mark the next public fun to be skipped.
   /^#\[test_only\]/ { skip_next_pub = 1; in_aborts = 0; next }
 
-  # `public fun ...`: gather signature, emit ENTRY_POINT and ABORTS.
-  /^public fun / {
+  # `public fun ...` OR `public macro fun ...`: gather signature, emit ENTRY_POINT.
+  /^public (macro )?fun / {
     if (skip_next_pub) {
       skip_next_pub = 0
       in_aborts = 0
       aborts = ""
       next
     }
+
+    is_macro = ($0 ~ /^public macro fun /)
 
     sig = $0
     while (sig !~ /[{;]/ && (getline next_line) > 0) {
@@ -80,18 +82,18 @@ awk '
     sub(/[{;].*$/, "", sig)
 
     name = sig
-    sub(/^public fun /, "", name)
+    sub(/^public (macro )?fun /, "", name)
     sub(/[<(].*$/, "", name)
 
-    # Kind classification: name-based patterns first, signature-based fallback.
-    kind = "read"
-    if (name == "new" && sig ~ /<[[:space:]]*RootRole[[:space:]]*:[[:space:]]*drop/) kind = "constructor"
-    else if (name ~ /^begin_/)                      kind = "schedule"
-    else if (name ~ /^accept_/)                     kind = "finalize"
-    else if (name ~ /^cancel_/)                     kind = "cancel"
-    else if (sig ~ /:[[:space:]]*Auth</)            kind = "mint"
-    else if (sig ~ /&mut[[:space:]]+AccessControl/) kind = "write"
-    else if (sig ~ /&[^m].*AccessControl/)          kind = "read"
+    # Kind classification — schema-compliant values only (read | write | macro | init).
+    # `kind` is optional per schema; extractor emits a best-guess hint, sub-agents may
+    # refine or omit at synthesis time.
+    if (is_macro) kind = "macro"
+    else if (name == "new" && sig ~ /<[[:space:]]*RootRole[[:space:]]*:[[:space:]]*drop/) kind = "init"
+    else if (name ~ /^(begin_|accept_|cancel_)/)    kind = "write"   # scheduled lifecycle ops mutate state
+    else if (sig ~ /:[[:space:]]*Auth</)            kind = "write"   # mints proof, conceptually a write
+    else if (sig ~ /&mut /)                         kind = "write"   # any &mut argument => write
+    else                                            kind = "read"    # default
 
     print "ENTRY_POINT|" name "|" kind "|" clean_sig(sig)
     if (length(aborts) > 0) print "ABORTS|" name "|" aborts
@@ -220,7 +222,7 @@ awk '
         field_name = next_line
         gsub(/^[[:space:]]+/, "", field_name)
         gsub(/:.*$/, "", field_name)
-        if (length(field_name) > 0 && field_name !~ /^[/][/]/) {
+        if (length(field_name) > 0 && field_name !~ /^\/\//) {
           fields = fields (length(fields) > 0 ? "," : "") field_name
         }
       }

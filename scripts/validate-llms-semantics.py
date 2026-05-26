@@ -182,7 +182,10 @@ def main(argv: list[str]) -> int:
             continue
         if path.name == "index.yaml":
             continue
-        rel = path.relative_to(REPO_ROOT) if path.is_absolute() else path
+        try:
+            rel = path.relative_to(REPO_ROOT) if path.is_absolute() else path
+        except ValueError:
+            rel = path  # path is outside REPO_ROOT (e.g. /tmp/...) — print absolute
         failures = validate_one(path)
         checked += 1
         if not failures:

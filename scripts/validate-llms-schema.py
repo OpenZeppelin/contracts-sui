@@ -81,7 +81,10 @@ def main(argv: list[str]) -> int:
     for path in targets:
         if not path.exists():
             continue
-        rel = path.relative_to(REPO_ROOT) if path.is_absolute() else path
+        try:
+            rel = path.relative_to(REPO_ROOT) if path.is_absolute() else path
+        except ValueError:
+            rel = path  # path is outside REPO_ROOT (e.g. /tmp/...) — print absolute
         schema = schema_for(path, module_schema, index_schema)
         err = validate_one(path, schema)
         checked += 1

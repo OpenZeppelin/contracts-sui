@@ -155,7 +155,12 @@ MODULE_FILE_BASENAME="$(basename "$TARGET" .move)"
 PACKAGE_DIR_IN_REPO="${TARGET%%/sources/*}"               # contracts/<pkg>
 PACKAGE_NAME="$(basename "$PACKAGE_DIR_IN_REPO")"
 
-STAGE_DIR="$(mktemp -d -t sui-meta-XXXXXX)"
+# Stage files under /tmp/ by default. macOS's `$TMPDIR` (`/var/folders/.../T/`) is
+# unreachable for downstream tools running in sandboxed environments (e.g., Claude
+# Code agents that can only Read paths in the allowlist), so we bypass `$TMPDIR`
+# entirely. Override with `SUI_META_STAGE_ROOT=<dir>` if /tmp is unsuitable.
+STAGE_ROOT="${SUI_META_STAGE_ROOT:-/tmp}"
+STAGE_DIR="$(mktemp -d "${STAGE_ROOT}/sui-meta.XXXXXX")"
 mkdir -p "$STAGE_DIR/$PACKAGE_DIR_IN_REPO/sources"
 mkdir -p "$STAGE_DIR/$PACKAGE_DIR_IN_REPO/tests"
 
