@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: "1.0"
 
 # ============================================================
 # STAGE 1 — SELECTION
@@ -7,7 +7,8 @@ schema_version: 2
 module:
   name: openzeppelin_access::access_control
   package: openzeppelin_access
-  one_liner: |
+  one_liner: "Role-based authorization with typed `Auth<Role>` proofs minted in PTBs. Admin-frequency only — gating user-frequency calls on the shared `AccessControl<RootRole>` serializes the hot path."
+  summary: |
     Role-based authorization for Sui Move protocols with more than one
     privileged actor (admins, treasurers, guardians, pausers, operators,
     governance executors). Mints typed `Auth<Role>` proofs that protected
@@ -33,7 +34,7 @@ does_not_solve:
 install:
   mvr: "@openzeppelin-move/access"
   repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
-  release: null   # between v1.1.0 and the next release; install.repo_ref is the actual pin
+  release: null   # release tag this matches (null if extracted between tags); install.repo_ref is the actual pin
   use_statement: |
     use openzeppelin_access::access_control::{Self, AccessControl, Auth};
   move_toml_snippet: |

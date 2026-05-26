@@ -12,44 +12,44 @@ schema_version: "1.0"
 package: openzeppelin_math
 mvr: "@openzeppelin-move/integer-math"
 repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
-release: null   # between v1.1.0 and the next release; repo_ref is the actual pin
+release: null   # release tag this matches (null if extracted between tags); repo_ref is the actual pin
 modules:
   - name: rounding
     path: rounding.yaml
-    summary: Shared `RoundingMode` enum (`Down`, `Up`, `Nearest`) consumed by the integer math modules.
+    summary: "Shared `RoundingMode` enum (`Down`, `Up`, `Nearest`) consumed by the integer math modules."
 
   - name: decimal_scaling
     path: decimal_scaling.yaml
-    summary: Safe upcast/downcast between `u64` and `u256` token balances across decimal precisions (up to 24 decimals).
+    summary: "Safe upcast/downcast between `u64` and `u256` token balances across decimal precisions (up to 24 decimals)."
 
   - name: u8
     path: u8.yaml
-    summary: Overflow-safe arithmetic on `u8` values with explicit rounding (`mul_div`, `mul_shr`, `sqrt`, `log2`/`log10`/`log256`, `inv_mod`, `mul_mod`, etc.).
+    summary: "Overflow-safe arithmetic on `u8` values with explicit rounding (`mul_div`, `mul_shr`, `sqrt`, `log2`/`log10`/`log256`, `inv_mod`, `mul_mod`, etc.)."
 
   - name: u16
     path: u16.yaml
-    summary: Overflow-safe arithmetic on `u16` values with explicit rounding.
+    summary: "Overflow-safe arithmetic on `u16` values with explicit rounding."
 
   - name: u32
     path: u32.yaml
-    summary: Overflow-safe arithmetic on `u32` values with explicit rounding.
+    summary: "Overflow-safe arithmetic on `u32` values with explicit rounding."
 
   - name: u64
     path: u64.yaml
-    summary: Overflow-safe arithmetic on `u64` values with explicit rounding — Sui-native coin balance width.
+    summary: "Overflow-safe arithmetic on `u64` values with explicit rounding — Sui-native coin balance width."
 
   - name: u128
     path: u128.yaml
-    summary: Overflow-safe arithmetic on `u128` values with explicit rounding — used for intermediate products in `u64`-domain math.
+    summary: "Overflow-safe arithmetic on `u128` values with explicit rounding — used for intermediate products in `u64`-domain math."
 
   - name: u256
     path: u256.yaml
-    summary: Overflow-safe arithmetic on `u256` values with explicit rounding.
+    summary: "Overflow-safe arithmetic on `u256` values with explicit rounding."
 
   - name: u512
     path: u512.yaml
-    summary: Overflow-safe arithmetic on a software-emulated 512-bit unsigned integer; intermediate-only, ~2-3x cost of native ops.
+    summary: "Overflow-safe arithmetic on a software-emulated 512-bit unsigned integer; intermediate-only, ~2-3x cost of native ops."
 
   - name: vector
     path: vector.yaml
-    summary: Generic in-place sorting macros for Move vectors (`quick_sort!`, `quick_sort_by!`).
+    summary: "Generic in-place sorting macros for Move vectors (`quick_sort!`, `quick_sort_by!`)."

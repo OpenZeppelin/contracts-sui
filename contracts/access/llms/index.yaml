@@ -12,16 +12,16 @@ schema_version: "1.0"
 package: openzeppelin_access
 mvr: "@openzeppelin-move/access"
 repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
-release: null   # between v1.1.0 and the next release; repo_ref is the actual pin
+release: null   # release tag this matches (null if extracted between tags); repo_ref is the actual pin
 modules:
   - name: access_control
     path: access_control.yaml
-    summary: Role-based access control with typed `Auth<Role>` proofs minted in PTBs.
+    summary: "Role-based access control with typed `Auth<Role>` proofs minted in PTBs."
 
   - name: two_step_transfer
     path: ownership_transfer/two_step_transfer.yaml
-    summary: Two-step ownership wrapper for `T: key + store` objects requiring recipient acceptance via transfer-to-object.
+    summary: "Two-step ownership wrapper for `T: key + store` objects requiring recipient acceptance via transfer-to-object."
 
   - name: delayed_transfer
     path: ownership_transfer/delayed_transfer.yaml
-    summary: Time-locked ownership wrapper enforcing `min_delay_ms` on the shared `Clock` before transfer or unwrap.
+    summary: "Time-locked ownership wrapper enforcing `min_delay_ms` on the shared `Clock` before transfer or unwrap."

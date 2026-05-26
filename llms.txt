@@ -21,6 +21,8 @@ For single-fetch discovery of "what modules exist in a package", each package's 
 
 Every public module in this library ships a YAML. Private helpers under each package's `sources/internal/` directory are intentionally not documented at the schema level — they are not part of the integrator-facing API.
 
+The YAML format is governed by a public JSON Schema at [`schemas/llms-metadata-v1.json`](schemas/llms-metadata-v1.json) (`$id`: `https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/schemas/llms-metadata-v1.json`). Integrators and tooling can validate any YAML in this directory tree against it, and external libraries can adopt the same schema to publish their own AI integrator metadata.
+
 ## Depending on a package from your project
 
 **Stable releases (recommended).** Audited stable releases of each package are published to the [Move Package Registry (MVR)](https://www.moveregistry.com/) under the `@openzeppelin-move` namespace — for example, [@openzeppelin-move/fixed-point-math](https://www.moveregistry.com/package/@openzeppelin-move/fixed-point-math). This is the right pin for production code. To depend on a package, add it to your `Move.toml`:

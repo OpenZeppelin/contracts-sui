@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: "1.0"
 
 # ============================================================
 # STAGE 1 — SELECTION
@@ -7,7 +7,8 @@ schema_version: 2
 module:
   name: openzeppelin_math::u32
   package: openzeppelin_math
-  one_liner: |
+  one_liner: "Overflow-safe arithmetic on `u32` with explicit `RoundingMode` — the 32-bit variant of the openzeppelin_math primitive family. Use for compact counters, tick indices, packed encodings; not Sui balance widths (those are `u64`)."
+  summary: |
     Overflow-safe arithmetic for 32-bit unsigned integers with explicit
     rounding. The `u32` variant of the per-width openzeppelin_math primitive
     family — siblings `u8`, `u16`, `u64`, `u128`, `u256` expose the IDENTICAL
@@ -34,7 +35,7 @@ does_not_solve:
 install:
   mvr: "@openzeppelin-move/integer-math"     # Primary — Move Package Registry.
   repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
-  release: null   # between v1.1.0 and the next release; install.repo_ref is the actual pin
+  release: null   # release tag this matches (null if extracted between tags); install.repo_ref is the actual pin
   use_statement: |
     use openzeppelin_math::{rounding, u32};
   move_toml_snippet: |

@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: "1.0"
 
 # ============================================================
 # STAGE 1 — SELECTION
@@ -7,7 +7,8 @@ schema_version: 2
 module:
   name: openzeppelin_access::two_step_transfer
   package: openzeppelin_access
-  one_liner: |
+  one_liner: "Two-step ownership wrapper for `T: key + store` objects; recipient must accept before custody moves. Admin-frequency only — cancel authority is `ctx.sender()` at `initiate_transfer`."
+  summary: |
     Ownership-transfer wrapper for a single-owned privileged `T: key + store`
     object (admin cap, treasury cap, etc.). The current owner initiates a
     transfer and the recipient must explicitly accept before ownership moves,
@@ -30,8 +31,8 @@ does_not_solve:
 
 install:
   mvr: "@openzeppelin-move/access"          # Primary — Move Package Registry.
-  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212   # Full commit SHA this metadata was extracted from.
-  release: null   # between v1.1.0 and the next release; install.repo_ref is the actual pin
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  release: null   # release tag this matches (null if extracted between tags); install.repo_ref is the actual pin
   use_statement: |
     use openzeppelin_access::two_step_transfer;
   move_toml_snippet: |
