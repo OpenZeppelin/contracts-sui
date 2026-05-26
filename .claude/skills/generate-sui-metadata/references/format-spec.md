@@ -29,6 +29,7 @@ schema_version: "1.0"
 module:
   name: <fully-qualified module name, e.g., openzeppelin_access::access_control>
   package: <package name from Move.toml>
+  re_exports_from: [sibling_module_a, sibling_module_b]   # OPTIONAL — emit only when this module re-exports APIs from sibling modules via `public use fun`. Signals to agents that the FULL reachable surface includes the listed siblings' YAMLs too (e.g., `sd29x9.move` re-exports method-style calls from `sd29x9_base` and `sd29x9_convert`). Omit the field entirely when there are no re-exports.
   one_liner: "Single sentence (≤240 chars). What the module does + the dominant load-bearing gotcha (e.g., frequency-class warning). First thing the agent reads; schema-enforced length cap keeps it agent-classifiable in one token."
   summary: |
     OPTIONAL multi-paragraph elaboration that doesn't fit in one_liner.

@@ -119,6 +119,7 @@ Always emit `schema_version: "1.0"` (string, not integer — schema enforces `co
 
 **`module.name`** — from `MODULE=` extractor line.
 **`module.package`** — from staged `Move.toml` `[package].name`.
+**`module.re_exports_from`** — OPTIONAL list of sibling module names (no package prefix) whose APIs this module re-exports via `public use fun`. Emit when `grep "^public use fun" <module>.move` finds entries pointing at OTHER modules in the same package (e.g., `sd29x9.move` line `public use fun openzeppelin_fp_math::sd29x9_base::add as SD29x9.add;` → `re_exports_from: [sd29x9_base]`). Omit the field entirely when there are no re-exports — schema enforces `minItems: 1`. Signals to integrators that the module's reachable surface extends beyond its own YAML; agents should also fetch the listed siblings' YAMLs to see the full method-style API.
 **`module.one_liner`** — single sentence, **≤240 characters** (schema-enforced `maxLength: 240`). What the module does + the dominant load-bearing constraint (e.g., frequency-class warning when `frequency: admin-frequency`). This is the FIRST thing the agent reads — make it agent-classifiable in one token.
 **`module.summary`** — optional multi-paragraph elaboration. If the one_liner can't carry the necessary context (history, layering, sibling pointers, performance model), put the prose here. No length cap, no required field. Default path: condense Notion "Problem" + README intro + Move source first doc-comment block. Fallback: condense README intro + Move source first doc-comment block.
 

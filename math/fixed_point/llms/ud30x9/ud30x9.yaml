@@ -7,6 +7,7 @@ schema_version: "1.0"
 module:
   name: openzeppelin_fp_math::ud30x9
   package: openzeppelin_fp_math
+  re_exports_from: [ud30x9_base, ud30x9_convert]
   one_liner: "Unsigned decimal fixed-point type `UD30x9` (`u128` scaled by 10^9, Sui coin precision) — owns the type, raw cast helpers (`wrap`/`unwrap`), and constants (`zero`/`one`/`max`)."
   summary: |
     Unsigned decimal fixed-point type `UD30x9` — a `u128` scaled by `10^9`

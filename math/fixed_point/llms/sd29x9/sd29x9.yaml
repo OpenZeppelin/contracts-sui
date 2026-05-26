@@ -11,6 +11,7 @@ schema_version: "1.0"
 module:
   name: openzeppelin_fp_math::sd29x9
   package: openzeppelin_fp_math
+  re_exports_from: [sd29x9_base, sd29x9_convert]
   one_liner: "Signed decimal fixed-point type `SD29x9` (two's complement `u128` scaled by 10^9; magnitude + sign-flag API) — owns the type, raw `wrap`/`unwrap` casts, and constants (`zero`/`one`/`max`/`min`)."
   summary: |
     Constructor / wrapper module for the SIGNED decimal fixed-point type

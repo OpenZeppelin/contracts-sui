@@ -45,6 +45,16 @@
         "summary": {
           "type": "string",
           "description": "Optional multi-paragraph elaboration of the module \u2014 context that doesn't fit in `one_liner`. AI agents read this when the one_liner is not enough to decide whether and how to use the module."
+        },
+        "re_exports_from": {
+          "type": "array",
+          "description": "Module names (within the same package, no package prefix) whose APIs this module re-exports via `public use fun`. Optional \u2014 emit only when re-exports exist; agents reading the module surface should also consult these YAMLs to see the full reachable API.",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
         }
       }
     },
