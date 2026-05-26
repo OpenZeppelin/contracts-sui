@@ -385,9 +385,9 @@ preconditions:
     fails_with: EDelayTooLarge
     affects: [new, begin_default_admin_delay_change]
 
-  - must: "To call grant_role / revoke_role / set_role_admin / new_auth on Role R, the caller must currently hold the admin role of R (defaults to RootRole). Root-role flows require the current root holder."
+  - must: "To call grant_role / revoke_role / set_role_admin / new_auth on Role R, the caller must currently hold the admin role of R (defaults to RootRole). Root-role flows require the current root holder. assert_has_role checks membership of an arbitrary address and aborts EUnauthorized when that address does not hold the queried role."
     fails_with: EUnauthorized
-    affects: [grant_role, revoke_role, set_role_admin, new_auth, begin_default_admin_transfer, begin_default_admin_renounce, cancel_default_admin_transfer, accept_default_admin_renounce, begin_default_admin_delay_change, cancel_default_admin_delay_change]
+    affects: [grant_role, revoke_role, set_role_admin, new_auth, assert_has_role, begin_default_admin_transfer, begin_default_admin_renounce, cancel_default_admin_transfer, accept_default_admin_renounce, begin_default_admin_delay_change, cancel_default_admin_delay_change]
 
 do_not:
   - id: user-frequency-rbac
@@ -524,6 +524,7 @@ _audit_grounding:
         - test_revoke_role_rejects_non_admin
         - test_set_role_admin_rejects_non_admin
         - test_new_auth_aborts_for_non_member
+        - test_assert_has_role_aborts_for_non_member
         - test_begin_admin_transfer_rejects_non_root
         - test_begin_admin_renounce_rejects_non_root
         - test_cancel_admin_transfer_rejects_non_root
