@@ -7,25 +7,28 @@ schema_version: "1.0"
 module:
   name: openzeppelin_access::access_control
   package: openzeppelin_access
-  one_liner: "Role-based authorization with typed `Auth<Role>` proofs minted in PTBs. Admin-frequency only — gating user-frequency calls on the shared `AccessControl<RootRole>` serializes the hot path."
+  one_liner: "Role-based authorization with typed `Auth<Role>` proofs for protocols with multiple privileged actors (admins, treasurers, pausers). Admin-frequency ONLY — gating user-frequency calls on the shared registry serializes the hot path."
   summary: |
     Role-based authorization for Sui Move protocols with more than one
     privileged actor (admins, treasurers, guardians, pausers, operators,
     governance executors). Mints typed `Auth<Role>` proofs that protected
-    functions accept in their signatures. Admin-frequency ONLY — gating
-    user-frequency calls (swap, deposit, transfer) on the shared
-    `AccessControl<RootRole>` serializes the hot path.
+    functions accept in their signatures — no body check, no registry-ID
+    comparison, because two library invariants (singleton OTW-keyed
+    registry + home-module role check) make every proof self-validating.
+    Admin-frequency ONLY — gating user-frequency calls (swap, deposit,
+    transfer) on the shared `AccessControl<RootRole>` serializes the hot path.
 
 domain: access-control
 frequency: admin-frequency
 does_not_solve:
   - "User-frequency access control — use capability objects on the hot path."
   - "Hand-over of owned admin capabilities — use openzeppelin_access::two_step_transfer."
-  - "Time-windowed admin actions — use openzeppelin_access::delayed_transfer."
-  - "Enumerating role members (AccessControlEnumerable) — not implemented."
-  - "Multi-instance deployment from one publish — publish multiple packages."
+  - "Time-windowed admin actions on owned caps — use openzeppelin_access::delayed_transfer."
+  - "Enumerating role members (AccessControlEnumerable) — not implemented; storage supports it, deferred."
+  - "Multi-instance deployment from one publish — publish multiple integration packages."
   - "Role types defined outside the root role's home module."
   - "Adding RBAC to an already-published package via an upgrade — publish a new package."
+  - "Package-upgrade safety of the registry itself — out of scope for this release."
 
 # ============================================================
 # STAGE 2 — INSTALL
@@ -34,6 +37,7 @@ does_not_solve:
 install:
   use_statement: |
     use openzeppelin_access::access_control::{Self, AccessControl, Auth};
+
 # ============================================================
 # STAGE 3 — BOOTSTRAP
 # ============================================================
@@ -70,7 +74,8 @@ quick_start: |
   //    new_auth aborts EUnauthorized if the sender does not hold the role.
   let auth = access_control::new_auth<ROLES, OperatorRole>(&access, ctx);
 
-  // 2. Pass &Auth<Role> into your protected function. No body check needed.
+  // 2. Pass &Auth<Role> into your protected function. No body check needed —
+  //    Auth<Role> is self-validating (singleton registry + home-module check).
   my_protocol::protected_action(&mut treasury, &auth);
 
   // 3. (Optional) Grant the role to a new operator from an admin tx.
@@ -90,8 +95,8 @@ types:
       type (`RootRole`). `RootRole` is a CONSTRAINT — pass YOUR module's
       One-Time Witness type directly; do NOT introduce a generic on your
       own struct to satisfy it. Instantiate concretely as
-      `AccessControl<ROLES>` where `ROLES` is your OTW struct.
-      Store with `transfer::public_share_object` from `init`.
+      `AccessControl<ROLES>` where `ROLES` is your OTW struct. Store with
+      `transfer::public_share_object` from `init`.
 
   - name: Auth
     type_params: "phantom Role"
@@ -154,28 +159,11 @@ api:
     aborts: [EForeignRole, EUnauthorized]
     notes: |
       The default authorization path. Protected functions take `&Auth<Role>`
-      directly — no body check, no registry ID comparison. Prefer this over
-      `assert_has_role` for any new function whose signature you control.
-      One auth value can be reused across multiple calls in the same PTB.
-
-  - name: has_role
-    sig: "<RootRole, Role>(ac: &AccessControl<RootRole>, account: address) -> bool"
-    role: "Check whether account holds Role. Returns false for unregistered roles."
-    aborts: []
-
-  - name: assert_has_role
-    sig: "<RootRole, Role>(ac: &AccessControl<RootRole>, account: address)"
-    role: "Aborts EUnauthorized if account does not hold Role."
-    aborts: [EUnauthorized]
-    notes: |
-      Retrofit tool for existing public functions you cannot change. For
-      new code, use `new_auth` + `&Auth<Role>` in the function signature
-      instead — stronger and reusable across calls in the same PTB.
-
-  - name: get_role_admin
-    sig: "<RootRole, Role>(ac: &AccessControl<RootRole>) -> TypeName"
-    role: "Return the TypeName of Role's admin role (defaults to RootRole)."
-    aborts: [EForeignRole]
+      directly — no body check, no registry ID comparison, because the proof
+      is minted from the singleton registry for that role's home module.
+      Prefer this over `assert_has_role` for any new function whose signature
+      you control. One auth value can be reused across multiple calls in the
+      same PTB.
 
   - name: begin_default_admin_transfer
     sig: "<RootRole>(ac: &mut AccessControl<RootRole>, new_admin: address, clock: &Clock, ctx: &mut TxContext)"
@@ -230,6 +218,26 @@ api:
     aborts: [ENoPendingDelayChange, EUnauthorized]
     emits: [DefaultAdminDelayChangeCancelled]
 
+  - name: has_role
+    sig: "<RootRole, Role>(ac: &AccessControl<RootRole>, account: address) -> bool"
+    role: "Check whether account holds Role. Returns false for unregistered roles."
+    aborts: []
+
+  - name: assert_has_role
+    sig: "<RootRole, Role>(ac: &AccessControl<RootRole>, account: address)"
+    role: "Aborts EUnauthorized if account does not hold Role."
+    aborts: [EUnauthorized]
+    notes: |
+      Retrofit tool for existing public functions whose signature you cannot
+      change (legacy API, package-upgrade compatibility). For new code, use
+      `new_auth` + `&Auth<Role>` in the function signature instead — stronger
+      and reusable across calls in the same PTB.
+
+  - name: get_role_admin
+    sig: "<RootRole, Role>(ac: &AccessControl<RootRole>) -> TypeName"
+    role: "Return the TypeName of Role's admin role (defaults to RootRole)."
+    aborts: [EForeignRole]
+
   - name: auth_addr
     sig: "<Role>(auth: &Auth<Role>) -> address"
     role: "Return the address recorded in an Auth proof (the minting sender)."
@@ -240,14 +248,14 @@ api:
     role: "Return the TypeName of the registry's root role."
     aborts: []
 
-  - name: max_default_admin_delay_ms
-    sig: "() -> u64"
-    role: "Return the upper bound on `default_admin_delay_ms` (60 days, in ms)."
-    aborts: []
-
   - name: default_admin_delay_ms
     sig: "<RootRole>(ac: &AccessControl<RootRole>) -> u64"
     role: "Return the current root-role timelock (ms)."
+    aborts: []
+
+  - name: max_default_admin_delay_ms
+    sig: "() -> u64"
+    role: "Return the upper bound on `default_admin_delay_ms` (60 days, in ms)."
     aborts: []
 
   - name: max_delay_increase_wait_ms
@@ -305,7 +313,7 @@ decisions:
     options:
       - use: "&Auth<Role> parameter + new_auth"
         when: "The function signature is yours to design — any new code."
-        why: "Typed proof; reusable across the same PTB; no body check; cheaper at call site."
+        why: "Typed proof; reusable across the same PTB; no body check; no registry-ID comparison; cheaper at call site."
       - use: "assert_has_role inside the function body"
         when: "The function signature is fixed (legacy public API, upgrade-compat) and you cannot add an Auth parameter."
         why: "Retrofit-only. Each call re-checks the registry; pay a runtime cost per use. Refactor to Auth<Role> when the API allows it."
@@ -313,7 +321,7 @@ decisions:
   - question: "How do I change the root-role holder?"
     options:
       - use: "begin_default_admin_transfer + accept_default_admin_transfer"
-        when: "Handing the root role to a new address."
+        when: "Handing the root role to a new address (governance, multisig)."
         why: "Two-step + timelock enforced by the registry. `grant_role` aborts ECannotManageRootRole for the root."
       - use: "begin_default_admin_renounce + accept_default_admin_renounce"
         when: "Permanently giving up the root role (intentional lock-in)."
@@ -329,7 +337,7 @@ decisions:
         why: "Default in the RBAC docs guide. Long enough for off-chain alerting, short enough for legitimate ops."
       - use: "> 24h, up to 60 days"
         when: "High-value treasury or governance-critical role."
-        why: "Bounded by `max_default_admin_delay_ms()` (60 days). Change via `begin_default_admin_delay_change`, not by re-calling `new`."
+        why: "Bounded by `max_default_admin_delay_ms()` (60 days). Change later via `begin_default_admin_delay_change`, not by re-calling `new`."
 
   - question: "Should this role gate user-frequency calls (swap, deposit, transfer)?"
     options:
@@ -465,7 +473,6 @@ composes_with: []   # Empty — no compositions are source-cited. Sibling pointe
 # ============================================================
 
 _audit_grounding:
-
   canonical_test:
     file: contracts/access/tests/access_control_tests.move
     function: test_grant_role_happy_path
@@ -509,11 +516,6 @@ _audit_grounding:
         - test_new_auth_aborts_for_non_member
         - test_assert_has_role_aborts_for_non_member
         - test_begin_admin_transfer_rejects_non_root
-        - test_begin_admin_renounce_rejects_non_root
-        - test_cancel_admin_transfer_rejects_non_root
-        - test_accept_admin_renounce_rejects_non_root
-        - test_begin_delay_change_rejects_non_root
-        - test_cancel_delay_change_rejects_non_root
 
   do_not_demonstrations:
     - do_not_id: user-frequency-rbac
