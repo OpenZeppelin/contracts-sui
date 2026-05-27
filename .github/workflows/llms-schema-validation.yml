@@ -1,23 +1,27 @@
 name: llms metadata — validation
 
-# Validates llms metadata YAMLs at two layers:
-#   1. JSON Schema conformance (per-module + per-package index)
+# Validates llms metadata YAMLs at three layers:
+#   1. JSON Schema conformance (per-module + per-package index + root catalog)
 #   2. Cross-field semantic integrity (api.aborts ⊆ errors, affects exhaustive,
 #      audit_grounding refs consistent — see scripts/validate-llms-semantics.py)
+#   3. Completeness: every public source module has a YAML + index entry, no
+#      orphan YAMLs, all index paths resolve (scripts/validate-llms-completeness.py)
 #
-# Only runs on PRs that touch metadata, schemas, either validator, or this
-# workflow. Validates only the YAMLs the PR changed — unless the schemas,
-# either validator, or the workflow itself changed (anything that could alter
-# validation behavior), in which case every YAML is re-validated.
+# Layers 1–2 validate only the YAMLs the PR changed (unless schemas/validators/
+# workflow changed → full re-validation). Layer 3 is a whole-tree source↔metadata
+# check that always runs — it must fire on `sources/**` changes too, since adding
+# a module without its YAML produces no YAML diff but is exactly the gap to catch.
 
 on:
   pull_request:
     paths:
       - '**/llms/**/*.yaml'
+      - '**/sources/**/*.move'
       - 'schemas/llms-metadata-v1.json'
       - 'schemas/llms-package-index-v1.json'
       - 'scripts/validate-llms-schema.py'
       - 'scripts/validate-llms-semantics.py'
+      - 'scripts/validate-llms-completeness.py'
       - '.github/workflows/llms-schema-validation.yml'
 
 jobs:
@@ -48,7 +52,7 @@ jobs:
           # may have changed). In all three cases we want every YAML re-checked
           # on this PR.
           DIFF=$(git diff --name-only "$BASE"...HEAD)
-          if echo "$DIFF" | grep -qE '^(schemas/(llms-metadata-v1|llms-package-index-v1)\.json|scripts/validate-llms-(schema|semantics)\.py|\.github/workflows/llms-schema-validation\.yml)$'; then
+          if echo "$DIFF" | grep -qE '^(schemas/(llms-metadata-v1|llms-package-index-v1)\.json|scripts/validate-llms-(schema|semantics|completeness)\.py|\.github/workflows/llms-schema-validation\.yml)$'; then
             echo "scope=ALL (schemas / validator / workflow changed)"
             find . -type f -name '*.yaml' -path '*/llms/*' | sort > affected.txt
           else
@@ -78,6 +82,16 @@ jobs:
           echo "::endgroup::"
           exit $rc
 
-      - name: No YAMLs to validate
+      - name: No YAMLs to schema/semantics-validate
         if: steps.scope.outputs.count == '0'
-        run: echo "PR touched files in the path filter but no llms YAMLs in the diff. Nothing to validate."
+        run: echo "No changed llms YAMLs in the diff — schema/semantics layers have nothing to scope. Completeness still runs below."
+
+      # Layer 3 — whole-tree source↔metadata completeness. Always runs (even when
+      # the YAML diff is empty), because a sources-only change can add a public
+      # module with no YAML — which produces zero YAML diff but is the gap to catch.
+      - name: Completeness check (source ↔ metadata)
+        if: ${{ !cancelled() }}
+        run: |
+          echo "::group::Completeness (every public module → YAML + index entry; no orphans; index paths resolve)"
+          python3 scripts/validate-llms-completeness.py
+          echo "::endgroup::"
