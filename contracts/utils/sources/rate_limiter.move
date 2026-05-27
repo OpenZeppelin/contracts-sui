@@ -7,7 +7,7 @@
 ///
 /// Three strategies are provided in one enum, all sharing the same API:
 /// - `Bucket` - continuously refilling token bucket with a configurable refill schedule,
-/// - `FixedWindow` - up to `capacity` units per fixed-length window anchored at creation,
+/// - `FixedWindow` - up to `capacity` units per fixed-length window anchored at a chosen start,
 /// - `Cooldown` - up to `capacity` units before requiring a `cooldown_ms` wait.
 ///
 /// Typical lifecycle:
@@ -118,8 +118,9 @@ public enum RateLimiter has drop, store {
         last_refill_ms: u64,
         available: u64,
     },
-    /// Up to `capacity` units per window of length `window_ms`, anchored at the limiter's
-    /// creation time. `available` resets to `capacity` when current time crosses into a
+    /// Up to `capacity` units per window of length `window_ms`, anchored at `window_start_ms`
+    /// (defaults to creation time, but may be backdated to preserve window phase across a
+    /// reconstruction). `available` resets to `capacity` when current time crosses into a
     /// later window boundary.
     FixedWindow {
         capacity: u64,
@@ -449,6 +450,48 @@ public fun capacity(self: &RateLimiter): u64 {
         RateLimiter::Bucket { capacity, .. } => *capacity,
         RateLimiter::FixedWindow { capacity, .. } => *capacity,
         RateLimiter::Cooldown { capacity, .. } => *capacity,
+    }
+}
+
+/// Returns `true` if the limiter is a `Bucket`.
+///
+/// Variant-agnostic and never aborts. Use it (or its `is_fixed_window` / `is_cooldown`
+/// siblings) to branch before calling a variant-typed getter, which would otherwise abort
+/// with `EWrongVariant` on a mismatch. Intended for code that holds a limiter of unknown
+/// variant - e.g. a `Table` mixing variants, or generic tooling - and cannot otherwise
+/// introspect it.
+public fun is_bucket(self: &RateLimiter): bool {
+    match (self) {
+        RateLimiter::Bucket { .. } => true,
+        _ => false,
+    }
+}
+
+/// Returns `true` if the limiter is a `FixedWindow`.
+///
+/// Variant-agnostic and never aborts. Use it (or its `is_bucket` / `is_cooldown`
+/// siblings) to branch before calling a variant-typed getter, which would otherwise abort
+/// with `EWrongVariant` on a mismatch. Intended for code that holds a limiter of unknown
+/// variant - e.g. a `Table` mixing variants, or generic tooling - and cannot otherwise
+/// introspect it.
+public fun is_fixed_window(self: &RateLimiter): bool {
+    match (self) {
+        RateLimiter::FixedWindow { .. } => true,
+        _ => false,
+    }
+}
+
+/// Returns `true` if the limiter is a `Cooldown`.
+///
+/// Variant-agnostic and never aborts. Use it (or its `is_bucket` / `is_fixed_window`
+/// siblings) to branch before calling a variant-typed getter, which would otherwise abort
+/// with `EWrongVariant` on a mismatch. Intended for code that holds a limiter of unknown
+/// variant - e.g. a `Table` mixing variants, or generic tooling - and cannot otherwise
+/// introspect it.
+public fun is_cooldown(self: &RateLimiter): bool {
+    match (self) {
+        RateLimiter::Cooldown { .. } => true,
+        _ => false,
     }
 }
 

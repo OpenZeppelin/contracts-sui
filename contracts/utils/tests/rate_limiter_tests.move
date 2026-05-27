@@ -789,6 +789,44 @@ fun cooldown_end_ms_getter_observes_arm_after_drain() {
     teardown(test, clk);
 }
 
+#[test]
+fun is_variant_predicates_are_exclusive_and_correct() {
+    let (test, clk) = setup(0);
+
+    // Each predicate is true for its own variant and false for the other two; none abort.
+    let b = rate_limiter::new_bucket(10, 1, 10, 10, clk.timestamp_ms(), &clk);
+    assert!(b.is_bucket());
+    assert!(!b.is_fixed_window());
+    assert!(!b.is_cooldown());
+
+    let fw = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    assert!(!fw.is_bucket());
+    assert!(fw.is_fixed_window());
+    assert!(!fw.is_cooldown());
+
+    let cd = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
+    assert!(!cd.is_bucket());
+    assert!(!cd.is_fixed_window());
+    assert!(cd.is_cooldown());
+
+    teardown(test, clk);
+}
+
+#[test]
+fun is_variant_predicate_guards_variant_typed_getter() {
+    // The intended use: branch on the predicate before calling a variant-typed getter that
+    // would otherwise abort EWrongVariant on a mismatch.
+    let (test, clk) = setup(0);
+
+    let rl = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
+    let v = if (rl.is_bucket()) rl.refill_amount()
+        else if (rl.is_cooldown()) rl.cooldown_ms()
+        else rl.window_ms();
+    assert_eq!(v, 50); // resolved via is_cooldown() -> cooldown_ms(), no abort
+
+    teardown(test, clk);
+}
+
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun refill_amount_on_non_bucket_aborts() {
     let (_test, clk) = setup(0);
