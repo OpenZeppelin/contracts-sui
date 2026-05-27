@@ -87,13 +87,13 @@ const EInitialAboveCapacity: vector<u8> = "Initial available amount must not exc
 /// `FixedWindow` anchor strictly in the future would underflow the next projection.
 #[error(code = 9)]
 const EWindowAnchorInFuture: vector<u8> = "Window start must not be in the future";
-/// `Bucket` refill anchor strictly in the future would underflow the next projection.
 /// `Cooldown` with both `initial_available > 0` and a future `cooldown_end_ms` is
 /// self-contradictory: the hot path ignores the gate while `available > 0`, so the
 /// seeded deadline would be silently dropped the next time the batch drains.
 #[error(code = 10)]
 const ECooldownArmedWithTokens: vector<u8> =
     "An active cooldown deadline cannot be set together with an initial available amount";
+/// `Bucket` refill anchor strictly in the future would underflow the next projection.
 #[error(code = 11)]
 const EBucketAnchorInFuture: vector<u8> = "Last refill time must not be in the future";
 
