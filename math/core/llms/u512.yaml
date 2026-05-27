@@ -46,7 +46,8 @@ setup_snippet: |
 
   use openzeppelin_math::u512::{Self, U512};
 
-  const EMathOverflow: u64 = 0;
+  #[error(code = 0)]
+  const EMathOverflow: vector<u8> = "arithmetic overflow";
 
   /// Compute (a * b) / c without overflow, where `a` and `b` are full-range u256.
   public fun mul_div_u256(a: u256, b: u256, c: u256): u256 {

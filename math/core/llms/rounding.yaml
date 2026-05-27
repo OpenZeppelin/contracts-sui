@@ -47,7 +47,8 @@ setup_snippet: |
 
   use openzeppelin_math::{rounding, u64};
 
-  const EMathOverflow: u64 = 0;
+  #[error(code = 0)]
+  const EMathOverflow: vector<u8> = "arithmetic overflow";
 
   public fun quote_with_fee(amount: u64): u64 {
       // Pass a RoundingMode as the LAST argument to every divide / shift /

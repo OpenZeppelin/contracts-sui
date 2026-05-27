@@ -51,7 +51,8 @@ setup_snippet: |
   // below wraps `mul_div` in a protocol-specific helper, which is the
   // canonical shape for a fee / share / pricing utility.
 
-  const EMathOverflow: u64 = 0;
+  #[error(code = 0)]
+  const EMathOverflow: vector<u8> = "arithmetic overflow";
 
   /// Apply a 0.25% fee to a u128 amount, rounding DOWN (caller absorbs
   /// the remainder — the safe direction for protocol-to-user calculations).
@@ -284,7 +285,8 @@ do_not:
       // RIGHT — let the audited helper do the round-trip check.
       use openzeppelin_math::u128;
 
-      const EOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EOverflow: vector<u8> = "arithmetic overflow";
 
       public fun scale_q64(value: u128, shift: u8): u128 {
           u128::checked_shl(value, shift).destroy_or!(abort EOverflow)
@@ -304,7 +306,8 @@ do_not:
       // RIGHT — widened intermediate, explicit rounding policy.
       use openzeppelin_math::{rounding, u128};
 
-      const EMathOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
 
       public fun shares_for_assets_good(
           assets: u128, total_shares: u128, total_assets: u128,
@@ -346,7 +349,8 @@ do_not:
       }
     example_good: |
       // RIGHT — abort with a domain error the caller can map.
-      const EMathOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
 
       public fun fee_quote(amount: u128): u128 {
           u128::mul_div(amount, 1025u128, 1000u128, rounding::nearest())

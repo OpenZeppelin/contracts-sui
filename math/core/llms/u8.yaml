@@ -263,7 +263,8 @@ do_not:
       // RIGHT — widened intermediate, explicit rounding, Option handling.
       use openzeppelin_math::{u8, rounding};
 
-      const EMathOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
 
       public fun fee(amount: u8, fee_bps: u8, denom: u8): u8 {
           u8::mul_div(amount, fee_bps, denom, rounding::up())
@@ -284,7 +285,8 @@ do_not:
       // RIGHT — explicit none() on data loss.
       use openzeppelin_math::u8;
 
-      const EOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EOverflow: vector<u8> = "arithmetic overflow";
 
       public fun scale(value: u8, shift: u8): u8 {
           u8::checked_shl(value, shift).destroy_or!(abort EOverflow)
@@ -304,7 +306,8 @@ do_not:
       // RIGHT — round down so the vault never gives away more than it holds.
       use openzeppelin_math::{u8, rounding};
 
-      const EOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EOverflow: vector<u8> = "arithmetic overflow";
 
       public fun shares(amount: u8, total_assets: u8, total_supply: u8): u8 {
           u8::mul_div(amount, total_supply, total_assets, rounding::down())

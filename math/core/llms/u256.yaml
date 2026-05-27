@@ -46,7 +46,8 @@ setup_snippet: |
 
   use openzeppelin_math::{rounding, u256};
 
-  const EMathOverflow: u64 = 0;
+  #[error(code = 0)]
+  const EMathOverflow: vector<u8> = "arithmetic overflow";
 
   public fun quote_with_fee(amount: u256): u256 {
       u256::mul_div(amount, 1025u256, 1000u256, rounding::nearest())

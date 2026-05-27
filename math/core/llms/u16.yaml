@@ -48,7 +48,8 @@ setup_snippet: |
   // wraps a couple of them in protocol-specific helpers, which is the
   // canonical shape for math wrappers.
 
-  const EMathOverflow: u64 = 0;
+  #[error(code = 0)]
+  const EMathOverflow: vector<u8> = "arithmetic overflow";
 
   /// Round-to-nearest fee quote in basis-point units (`u16` holds 0..=65535).
   public fun quote_with_fee_bps(amount_bps: u16, fee_bps: u16): u16 {
@@ -281,7 +282,8 @@ do_not:
     example_good: |
       use openzeppelin_math::{rounding, u16};
 
-      const EMathOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
 
       public fun fee_amount_good(amt: u16, fee_bps: u16): u16 {
           u16::mul_div(amt, fee_bps, 10_000u16, rounding::nearest())
@@ -299,7 +301,8 @@ do_not:
           u16::mul_div(x, k, 10u16, rounding::down()).destroy_some()
       }
     example_good: |
-      const EOutputOverflow: u64 = 42;
+      #[error(code = 42)]
+      const EOutputOverflow: vector<u8> = "result overflows the output type";
 
       public fun scaled_good(x: u16, k: u16): u16 {
           u16::mul_div(x, k, 10u16, rounding::down())

@@ -165,6 +165,8 @@ Always emit `schema_version: "1.0"` (string, not integer — schema enforces `co
 
 For pure-type-wrapper modules (e.g., `ud30x9` constructors only) `quick_start` MAY be omitted — the API surface IS the quick start.
 
+**Error consts in ALL snippets (`setup_snippet`, `quick_start`, `do_not[].example_*`) use the Move 2024 idiom:** `#[error(code = N)] const EName: vector<u8> = "message";` — NOT the bare `const EName: u64 = N;` form, even if a source doc block shows the bare form. Integrator agents copy these snippets verbatim, so they propagate whatever idiom the snippet models; the `#[error]` form matches the library's own convention and the move-quality checklist, and compiles cleanly with `.destroy_or!(abort EName)` / `abort EName`. Verified: the `#[error]` vector<u8> const aborts correctly inside macro-expanded `destroy_or!` contexts.
+
 #### Stage 4 — Integration
 
 **`types[]`** — one entry per `TYPE|<name>|<type-params>|<caps>|<fields>` line from the extractor.

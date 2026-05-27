@@ -44,7 +44,8 @@ setup_snippet: |
 
   use openzeppelin_math::{rounding, u32};
 
-  const EMathOverflow: u64 = 0;
+  #[error(code = 0)]
+  const EMathOverflow: vector<u8> = "arithmetic overflow";
 
   // No init required — `u32` is a stateless functional module.
   // Call functions directly with literal or stored values.
@@ -277,7 +278,8 @@ do_not:
       let scaled = u32::mul_div(amount, num, den, rounding::down()).destroy_some();
     example_good: |
       // RIGHT — attach a domain-specific error code, OR fall back deliberately.
-      const EMathOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
 
       let scaled = u32::mul_div(amount, num, den, rounding::down())
           .destroy_or!(abort EMathOverflow);
@@ -300,7 +302,8 @@ do_not:
       // RIGHT — widened intermediate; rounding is explicit; Option handles overflow.
       use openzeppelin_math::{rounding, u32};
 
-      const EMathOverflow: u64 = 0;
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
 
       public fun good_quote(amount: u32, num: u32, den: u32): u32 {
           u32::mul_div(amount, num, den, rounding::down())
@@ -317,7 +320,8 @@ do_not:
       let scaled = value << 12;
     example_good: |
       // RIGHT — None if any non-zero bit would be lost.
-      const EShiftOverflow: u64 = 1;
+      #[error(code = 1)]
+      const EShiftOverflow: vector<u8> = "shift would discard non-zero bits";
 
       let scaled = u32::checked_shl(value, 12)
           .destroy_or!(abort EShiftOverflow);
