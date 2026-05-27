@@ -46,6 +46,9 @@ def load_schema(path: Path) -> dict:
 
 
 def schema_for(yaml_path: Path, module_schema: dict, index_schema: dict) -> dict:
+    # `index.yaml` covers both the root catalog (llms/index.yaml) and the
+    # per-package index (<pkg>/llms/index.yaml) — the index schema is a oneOf
+    # over the two forms.
     return index_schema if yaml_path.name == "index.yaml" else module_schema
 
 

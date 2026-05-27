@@ -54,7 +54,7 @@ jobs:
           else
             echo "scope=DIFF"
             echo "$DIFF" \
-              | grep -E '/llms/.*\.yaml$' \
+              | grep -E '(^|/)llms/.*\.yaml$' \
               | sort > affected.txt || true
           fi
 
