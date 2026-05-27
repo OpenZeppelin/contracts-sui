@@ -98,6 +98,7 @@ emits:
 - `ERROR|<name>|<code>|<message>` — feeds `errors:` map: `EXxx: { code: N, message: "..." }`. `<code>` may be empty for legacy `#[error]` form
 - `TYPE|<name>|<type-params>|<capabilities>|<fields>` — feeds top-level `types:` block. Excludes event structs (those carry only `copy,drop`)
 - `EVENT|<name>|<comma-fields>` — feeds `_audit_grounding.events`
+- `DOC_GUIDANCE|<heading>|<text>` — narrative `/// #### Security* / Misuse* / *Warning / *Guidance / Invariant / Tradeoff` doc blocks (module-level AND function-level). These are the source-of-truth for consumer-side anti-patterns. **Every `DOC_GUIDANCE` block whose heading signals a hazard (`Security Model`, `Misuse Paths`, `Security Warning`, `Security Note`, `Tradeoff`) MUST map to a `do_not[]` entry** (one bullet → one entry, or a tight cluster → one entry). `Integration Guidance` blocks feed `decisions[]`. This makes anti-pattern COVERAGE deterministic from source even without Notion. When the extractor emits zero `DOC_GUIDANCE` lines, the module has no source-stated hazards — fall back to Notion "Tradeoffs introduced" and the mandatory `user-frequency-<shortname>` entry for admin-frequency modules.
 
 If `TESTS_FILE` is non-empty:
 
@@ -233,9 +234,22 @@ Source: docs guide "Choosing X" / "Authorization styles" / comparison tables; No
 **Silent-failure constraints** (mistakes that compile and run but produce wrong / unrecoverable state — e.g., sending a wrapper to an object's address via TTO causes permanent lock with no abort) do NOT belong in `preconditions[]`. They live exclusively in `do_not[]`, where the `example_bad` / `example_good` pattern is the right educational surface.
 
 **`do_not[]`** — one entry per consumer-side mistake mined from:
-1. Notion "Tradeoffs introduced" (default path)
-2. Move source module-level doc comment "DO NOT" warnings + "Misuse Paths" / "Security Model" sections
-3. Docs guide "Authorization styles" or comparison sections
+1. **Extractor `DOC_GUIDANCE|` lines (MANDATORY when present).** Every hazard-heading block (`Security Model`, `Misuse Paths`, `Security Warning`, `Security Note`, `Tradeoff`) MUST be covered by `do_not[]`. This is the deterministic, source-grounded path — it does NOT depend on Notion. Derive the `description` / `why_bad` / `fix` from the block text; synthesize `example_bad` / `example_good` Move snippets naming concrete types from the module. Do not silently drop a hazard block.
+2. **Type-capability inference (deterministic from `TYPE|` lines).** Inspect the wrapper/proof types the module introduces and emit the matching anti-pattern even when no doc block states it:
+   - A wrapper struct with `key` but NOT `store` → `assume-wrapper-publicly-transferable` (caller cannot `transfer::public_transfer` it or nest it; must move it only through the module's API).
+   - A no-ability hot-potato guard returned by a `*_val` / `borrow_*` function → `drop-<guard>-hot-potato` (the guard must be consumed in the same PTB).
+   - A `drop`-only typed proof (e.g. `Auth<Role>`) stored in a struct → `store-ephemeral-proof` (it has no `store`; cannot be persisted).
+3. Notion "Tradeoffs introduced" (adds sharper severity calibration + anti-patterns not stated in source — e.g. clock-source or immutability hazards that have no `#### Security` block).
+4. Docs guide "Authorization styles" / comparison sections + the `<Callout type="warn">` blocks in the staged MDX.
+5. The mandatory `user-frequency-<shortname>` entry for `frequency: admin-frequency` modules (synthesize even if no source/Notion bullet states it).
+
+**Cluster by operation, not by block — one entry per distinct mistake (id stability).** Group mined hazard signals (DOC_GUIDANCE blocks, prose doc-comments, docs `<Callout>`s) into `do_not[]` entries by the **operation / code-path** the mistake targets:
+- **Cluster** multiple signals about the SAME operation into ONE entry. Example: `two_step_transfer`'s `Misuse Paths` + `Security Warning` + `Security Note` all describe one hazard — "cancel authority binds to `ctx.sender()` at `initiate_transfer`, so shared-object executor flows misassign it" → ONE entry `shared-object-executor-init`, not three.
+- **Keep separate** mistakes that target DIFFERENT operations, even when they share a theme. Example: in `ud30x9`, the scale theme splits by operation — `wrap` on input (`wrap-vs-from-u128-confusion`), `unwrap` on output (`unwrap-treated-as-whole-integer`), and bit-ops as arithmetic (`bitwise-as-arithmetic`) are THREE distinct caller mistakes → three entries, NOT one collapsed `wrap-unwrap-scale-confusion`.
+
+The test: would a caller make these mistakes independently, on different functions? If yes → separate entries. If they're the same misuse seen from different doc angles → one entry. Do not over-cluster a theme spanning multiple operations into a single vague entry; do not over-split one operation's hazard documented in several blocks.
+
+Use a stable kebab id for recurring patterns so regenerations converge: `user-frequency-<module-shortname>`, `wrapper-tto-lock` (sending a wrapper to an object address via TTO), `drop-<guard>-hot-potato` (forgetting to consume a no-ability guard), `assume-wrapper-publicly-transferable` (key-without-store wrapper), `shared-object-executor-init` (cancel/owner authority bound to an arbitrary signer). Derive any other id from the hazard's subject, not its doc-block heading.
 
 For each:
 - `description`: one-sentence "what NOT to do".

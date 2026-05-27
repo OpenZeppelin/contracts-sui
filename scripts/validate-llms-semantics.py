@@ -7,7 +7,7 @@ references between fields within a single module YAML stay consistent
 (e.g., every error name cited in api[].aborts actually exists in errors,
 every precondition cited in audit grounding actually exists, etc.).
 
-Six checks per module YAML:
+Seven checks per module YAML:
   1. api[].aborts                                              ⊆ errors.keys()
   2. preconditions[].fails_with                                ⊆ errors.keys()
   3. preconditions[E].affects                                  = {api.name where E in api.aborts}
@@ -15,9 +15,12 @@ Six checks per module YAML:
                                                                ⊆ preconditions[].fails_with
   5. _audit_grounding.do_not_demonstrations[].do_not_id        ⊆ do_not[].id
   6. _audit_grounding.do_not_detection[].do_not_id             ⊆ do_not[].id
+  7. _audit_grounding.canonical_test (when non-null)           points at a real {file, function}
 
 Check #3 is strict set equality (catches both omissions and invented entries).
-The other five are subset checks.
+Checks #1, #2, #4, #5, #6 are subset checks. Check #7 reads the referenced
+Move test file from disk and confirms the named `fun` is declared there —
+closing the gap where a fabricated canonical_test function name passes silently.
 
 index.yaml files are skipped — they have no api/errors/preconditions to check.
 
@@ -34,6 +37,7 @@ Exit codes:
   1 — at least one file failed validation
   2 — usage error / missing dependencies
 """
+import re
 import sys
 from pathlib import Path
 
@@ -141,6 +145,39 @@ def check_do_not_id_references(doc: dict, field: str) -> list[str]:
     return failures
 
 
+def _move_fn_exists(file_path: Path, fn_name: str) -> bool:
+    """True if `fun <fn_name>` is declared in the Move file (any visibility/attributes)."""
+    text = file_path.read_text()
+    return re.search(rf"\bfun\s+{re.escape(fn_name)}\s*[(<]", text) is not None
+
+
+def check_canonical_test_exists(doc: dict) -> list[str]:
+    """7. _audit_grounding.canonical_test, when non-null, must point at a real
+    {file, function}: the file must exist and declare `fun <function>`.
+
+    Closes the gap where a fabricated canonical_test function name passes
+    silently (the other checks never read the test file). canonical_test: null
+    is valid (sharded suites / pure-type wrappers) and skipped.
+    """
+    ct = (doc.get("_audit_grounding") or {}).get("canonical_test")
+    if not ct:  # null or absent — valid, nothing to verify
+        return []
+    if not isinstance(ct, dict):
+        return [f"canonical_test must be null or a {{file, function}} object (got {type(ct).__name__})"]
+    file_rel = ct.get("file")
+    fn_name = ct.get("function")
+    failures = []
+    if not file_rel or not fn_name:
+        return [f"canonical_test must carry both file and function (got file={file_rel!r}, function={fn_name!r})"]
+    test_path = REPO_ROOT / file_rel
+    if not test_path.is_file():
+        failures.append(f"canonical_test.file {file_rel!r} does not exist in the repo")
+        return failures
+    if not _move_fn_exists(test_path, fn_name):
+        failures.append(f"canonical_test.function {fn_name!r} not found as a `fun` in {file_rel}")
+    return failures
+
+
 CHECKS = [
     ("api.aborts ⊆ errors", check_aborts_in_errors),
     ("preconditions.fails_with ⊆ errors", check_precondition_fails_with_in_errors),
@@ -150,6 +187,7 @@ CHECKS = [
      lambda d: check_do_not_id_references(d, "do_not_demonstrations")),
     ("audit_grounding.do_not_detection ⊆ do_not.id",
      lambda d: check_do_not_id_references(d, "do_not_detection")),
+    ("audit_grounding.canonical_test points at a real fun", check_canonical_test_exists),
 ]
 
 

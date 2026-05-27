@@ -13,6 +13,8 @@
 #   ERROR|<name>|<code>|<message>     # <code> empty if no #[error(code=N)]
 #   TYPE|<name>|<type-params>|<capabilities>|<fields>   # non-event integrator types
 #   EVENT|<name>|<fields-comma-separated>
+#   DOC_GUIDANCE|<heading>|<text>     # `/// #### <Security|Misuse|Warning|Guidance|...>`
+#                                       doc blocks — feed do_not[] / decisions[] synthesis
 
 set -euo pipefail
 
@@ -229,4 +231,34 @@ awk '
       print "EVENT|" name "|" fields
     }
   }
+' "$SRC"
+
+# --- Doc-comment guidance blocks (#### Security / Misuse / Warning / Guidance / ...) ---
+# These narrative `///` blocks carry the consumer-side anti-patterns and integration
+# constraints that drive do_not[] / decisions[] synthesis. Mechanical per-function
+# sections (Parameters / Returns / Aborts) are NOT emitted — they are already covered
+# by ENTRY_POINT / ABORTS. Both module-level and function-level guidance blocks surface.
+awk '
+  function is_guidance(h) { return (h ~ /[Ss]ecurity|[Mm]isuse|[Dd]anger|[Cc]aution|[Ww]arning|[Gg]uidance|[Ii]nvariant|[Tt]radeoff/) }
+  /^[[:space:]]*\/\/\/[[:space:]]*####[[:space:]]/ {
+    if (heading != "" && is_guidance(heading)) print "DOC_GUIDANCE|" heading "|" body
+    line = $0
+    sub(/^[[:space:]]*\/\/\/[[:space:]]*####[[:space:]]*/, "", line)
+    heading = line
+    body = ""
+    next
+  }
+  heading != "" {
+    if ($0 ~ /^[[:space:]]*\/\/\//) {
+      line = $0
+      sub(/^[[:space:]]*\/\/\/[[:space:]]?/, "", line)
+      gsub(/\|/, " ", line)
+      if (line != "") body = (body == "" ? line : body " " line)
+    } else {
+      if (is_guidance(heading)) print "DOC_GUIDANCE|" heading "|" body
+      heading = ""
+      body = ""
+    }
+  }
+  END { if (heading != "" && is_guidance(heading)) print "DOC_GUIDANCE|" heading "|" body }
 ' "$SRC"
