@@ -955,3 +955,56 @@ fun reconfigure_cooldown_via_construct_fresh_preserve_in_flight_gate() {
 
     teardown(test, clk);
 }
+
+// INV-A1 (fail-closed under clock regression) is intentionally not tested here: the only
+// way to set the test clock is `clock::set_for_testing`, which itself asserts
+// `timestamp_ms >= current`, refusing to move the clock backward. The regression scenario
+// the invariant guards against (a non-monotonic clock underflowing `now - anchor`) is
+// therefore unreachable through the test framework, mirroring the real `Clock`'s
+// monotonicity guarantee. The fail-closed posture rests on Move's native u64 underflow
+// abort, which cannot be exercised without violating that guarantee.
+
+// === Fail-closed on cooldown deadline overflow (INV-A3) ===
+//
+// Arming the gate computes `cooldown_end_ms = now + cooldown_ms`. A `cooldown_ms` near
+// `u64::MAX` overflows this addition at any nonzero clock. The module enforces only
+// positivity on `cooldown_ms` (INV-R3) and trusts the operator to pick a policy-reasonable
+// value; overflow is fail-closed (abort), never a wrapped backward deadline.
+
+#[test, expected_failure(arithmetic_error, location = openzeppelin_utils::rate_limiter)]
+fun cooldown_arming_aborts_on_deadline_overflow() {
+    // cooldown_ms = u64::MAX, clock at 1. Draining `available` to 0 arms the gate and
+    // computes `1 + u64::MAX`, which overflows.
+    let (_test, clk) = setup(1);
+    let mut rl = rate_limiter::new_cooldown(5, std::u64::max_value!(), 5, 0, &clk);
+    rl.try_consume(5, &clk);
+    abort
+}
+
+// === PTB composability (INV-C2) ===
+//
+// Multiple consumes within a single PTB compose identically to the same calls split across
+// separate PTBs, modulo the shared clock reading: there is no transaction-scoped accumulator
+// and no PTB-local hidden accounting. Equivalently, at a fixed `now`, splitting a total
+// consume into several calls yields the same committed state as one call for the sum.
+
+#[test]
+fun consumes_at_one_timestamp_have_no_txn_scoped_accumulator() {
+    let (test, clk) = setup(0);
+
+    // Two identical buckets; long refill interval keeps accrual out of the picture.
+    let mut split = rate_limiter::new_bucket(10, 1, 1_000_000, 10, clk.timestamp_ms(), &clk);
+    let mut whole = rate_limiter::new_bucket(10, 1, 1_000_000, 10, clk.timestamp_ms(), &clk);
+
+    // `split` drains 6 via three calls at the same `now`; `whole` drains 6 in one call.
+    assert!(split.try_consume(1, &clk));
+    assert!(split.try_consume(2, &clk));
+    assert!(split.try_consume(3, &clk));
+    assert!(whole.try_consume(6, &clk));
+
+    // Identical committed state — the per-call decomposition leaves no residue.
+    assert_eq!(split.available(&clk), whole.available(&clk));
+    assert_eq!(split.available(&clk), 4);
+
+    teardown(test, clk);
+}
