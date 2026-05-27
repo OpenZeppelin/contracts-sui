@@ -21,7 +21,7 @@ inputs:
     required: false
   output_path:
     type: text
-    prompt: "Where to write the YAML (optional; defaults to /workspace/generated/sui-metadata/<module-name>.yaml)"
+    prompt: "Where to write the YAML (optional; defaults to the canonical in-repo location <pkg>/llms/<subdir>/<module-decl>.yaml emitted by stage_sources.sh as METADATA_PATH_IN_REPO)"
     required: false
 ---
 
@@ -344,7 +344,7 @@ Address any `ERR|` lines from (a) AND any `SCHEMA_FAIL` from (b). `WARN|` from (
 
 ### 5. Write the YAML
 
-Resolve `output_path`. Default: `/workspace/generated/sui-metadata/<MODULE_NAME>.yaml`. Create the parent directory if needed. Write the YAML.
+Resolve `output_path`. Default: the `METADATA_PATH_IN_REPO` value emitted by `stage_sources.sh` — the canonical in-repo destination `<pkg>/llms/<subdir>/<module-decl>.yaml` (mirrors the source layout; basename is the module DECLARATION name, so `two_step.move` → `.../llms/ownership_transfer/two_step_transfer.yaml`). This is repo-root-relative and assumes the run context is inside the contracts-sui checkout, so the YAML lands directly in its committed location. Only fall back to an explicit `output_path` when the caller passed one. Create the parent directory if needed. Write the YAML.
 
 ### 6. Print provenance report
 

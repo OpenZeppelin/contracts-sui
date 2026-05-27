@@ -211,6 +211,21 @@ MOVE_TOML_STAGED=$(stage_optional "$PACKAGE_DIR_IN_REPO/Move.toml")
 MODULE_DECL_NAME=$(grep -m1 -E '^module\s+[a-z_0-9]+::[a-z_0-9]+\s*[;{]' "$MODULE_STAGED" \
   | sed -E 's/^module\s+[a-z_0-9]+::([a-z_0-9]+)\s*[;{].*/\1/')
 
+# Canonical in-repo destination for the generated metadata YAML. Mirrors the
+# source layout: <pkg>/sources/<subdir>/<file>.move → <pkg>/llms/<subdir>/<module-decl>.yaml.
+# The basename is the MODULE DECLARATION name (not the file basename), so
+# `two_step.move` declaring `two_step_transfer` lands at .../llms/.../two_step_transfer.yaml.
+# This is repo-root-relative; the canonical run context is inside the contracts-sui
+# checkout, so writing here drops the YAML in its final committed location.
+SOURCE_SUBPATH="${TARGET#*/sources/}"                     # ownership_transfer/two_step.move  (or  access_control.move)
+SOURCE_SUBDIR="$(dirname "$SOURCE_SUBPATH")"              # ownership_transfer  (or  .)
+DECL_NAME_FOR_PATH="${MODULE_DECL_NAME:-$MODULE_FILE_BASENAME}"
+if [ "$SOURCE_SUBDIR" = "." ]; then
+  METADATA_PATH_IN_REPO="$PACKAGE_DIR_IN_REPO/llms/${DECL_NAME_FOR_PATH}.yaml"
+else
+  METADATA_PATH_IN_REPO="$PACKAGE_DIR_IN_REPO/llms/$SOURCE_SUBDIR/${DECL_NAME_FOR_PATH}.yaml"
+fi
+
 echo "SOURCE_TYPE|$SOURCE_TYPE"
 echo "STAGE_DIR|$STAGE_DIR"
 echo "SOURCE_OWNER|$SOURCE_OWNER"
@@ -227,3 +242,4 @@ echo "MOVE_TOML_FILE|${MOVE_TOML_STAGED:-}"
 echo "MODULE_NAME|$MODULE_FILE_BASENAME"
 echo "MODULE_DECL_NAME|${MODULE_DECL_NAME:-$MODULE_FILE_BASENAME}"
 echo "PACKAGE_NAME|$PACKAGE_NAME"
+echo "METADATA_PATH_IN_REPO|$METADATA_PATH_IN_REPO"
