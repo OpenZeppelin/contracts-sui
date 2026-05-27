@@ -1,0 +1,479 @@
+schema_version: "1.0"
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_access::delayed_transfer
+  package: openzeppelin_access
+  one_liner: "Time-locked ownership wrapper for `T: key + store` objects; transfers and self-unwraps are gated on the shared `Clock` by `min_delay_ms`. Do not substitute `tx_context::epoch_timestamp_ms` for `Clock`."
+  summary: |
+    Time-locked ownership wrapper for any `T: key + store` object — typically
+    admin caps, treasury caps, and other privileged single-owned objects.
+    Wrap, then schedule a transfer or unwrap; execution is gated on
+    `clock.timestamp_ms() + min_delay_ms`, giving monitors, governance, and
+    users an on-chain window to react before authority changes hands.
+    Single-owned wrapper — `Clock` is the time oracle; do NOT confuse it
+    with `tx_context::epoch_timestamp_ms`.
+
+domain: access-control
+frequency: admin-frequency
+does_not_solve:
+  - "Role-based authorization with multiple actors — use openzeppelin_access::access_control."
+  - "Immediate two-step handover with explicit recipient acceptance — use openzeppelin_access::two_step_transfer."
+  - "Shared-object delayed actions (the wrapper is single-owned)."
+  - "Pre-execution preview of the scheduled action by third parties (no built-in queue introspection beyond `pending`)."
+  - "Recovery from transfer-to-object (TTO) — wrappers sent to an object address are permanently locked."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  use_statement: |
+    use openzeppelin_access::delayed_transfer;
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_sui_app::treasury;
+
+  use openzeppelin_access::delayed_transfer;
+
+  public struct TreasuryCap has key, store { id: UID }
+
+  const MIN_DELAY_MS: u64 = 86_400_000; // 24 hours
+
+  /// Creates the wrapper and transfers it to ctx.sender() internally.
+  /// `wrap` has no return value — the wrapper is transferred inside the call.
+  public fun wrap_treasury_cap(cap: TreasuryCap, ctx: &mut TxContext) {
+      delayed_transfer::wrap(cap, MIN_DELAY_MS, ctx.sender(), ctx);
+  }
+
+quick_start: |
+  // Delayed transfer end-to-end — minimal happy path after wrapping.
+  // Assumes `wrap_treasury_cap` (see setup_snippet) already ran and the
+  // owner now holds the DelayedTransferWrapper<TreasuryCap>.
+
+  // 1. Owner schedules a transfer to a new address. Stores execute_after_ms
+  //    = clock.timestamp_ms() + min_delay_ms. Emits TransferScheduled.
+  wrapper.schedule_transfer(new_owner, &clock, ctx);
+
+  // 2. Off-chain monitors observe TransferScheduled and have until
+  //    execute_after_ms to react. Owner can call cancel_schedule() at any
+  //    time before execution to abort.
+
+  // 3. After min_delay_ms elapses, anyone (typically the new owner) calls
+  //    execute_transfer. Consumes the wrapper and transfers it to new_owner.
+  //    Aborts EDelayNotElapsed if called too early.
+  wrapper.execute_transfer(&clock, ctx);
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types:
+  - name: DelayedTransferWrapper
+    type_params: "phantom T: key + store"
+    capabilities: [key]
+    role: |
+      Owned wrapper object that holds the protected object as a dynamic
+      object field and enforces a `min_delay_ms` window before any
+      transfer or unwrap can execute. `wrap` transfers it to the chosen
+      `recipient` internally; the recipient becomes the owner of record.
+
+      The `phantom T: key + store` constraint means `T` is a TYPE
+      CONSTRAINT, not something you re-declare on your own cap type.
+      Instantiate concretely as `DelayedTransferWrapper<MyCap>` where
+      `MyCap` is your existing non-generic `key + store` struct (e.g.
+      `TreasuryCap`, an admin cap). Common mistake: writing
+      `struct TreasuryCap<phantom T>` to "match" the wrapper — DO NOT.
+      The wrapper takes any concrete `key + store`; your cap stays simple.
+
+  - name: PendingTransfer
+    type_params: ""
+    capabilities: [drop, store]
+    role: |
+      Internal record of a scheduled action stored inside the wrapper's
+      `pending` slot. `recipient = Some(addr)` means a transfer is
+      pending; `recipient = None` means an unwrap is pending. You
+      typically do not construct or read this directly — interact via
+      `schedule_transfer` / `schedule_unwrap` / `cancel_schedule`.
+
+  - name: Borrow
+    type_params: ""
+    capabilities: []
+    role: |
+      Hot-potato guard returned by `borrow_val`. Has no abilities — must
+      be consumed by `return_val` on the SAME wrapper before the PTB
+      ends, or the transaction fails to type-check. Cannot be stored,
+      transferred, or dropped. Holds the wrapper ID and borrowed object
+      ID, both verified at return time.
+
+api:
+  - name: wrap
+    sig: "<T: key + store>(obj: T, min_delay_ms: u64, recipient: address, ctx: &mut TxContext)"
+    role: "Wrap an object in a delayed-transfer wrapper and transfer the wrapper to `recipient`. No return value — the transfer happens inside the call."
+    aborts: []
+    emits: [WrapExecuted]
+    notes: |
+      Unlike `two_step_transfer::wrap`, this function does NOT return the
+      wrapper — it calls `transfer::transfer` internally. The wrapped
+      object is stored under a dynamic object field so its ID remains
+      discoverable for indexers. `min_delay_ms` is fixed at wrap time and
+      cannot be changed afterwards — pick deliberately.
+
+  - name: schedule_transfer
+    sig: "<T: key + store>(self: &mut DelayedTransferWrapper<T>, new_owner: address, clock: &Clock, ctx: &mut TxContext)"
+    role: "Schedule a delayed transfer of the wrapper to `new_owner`. Deadline is computed from the shared Clock."
+    aborts: [ETransferAlreadyScheduled]
+    emits: [TransferScheduled]
+    notes: |
+      `execute_after_ms = clock.timestamp_ms() + min_delay_ms`. Only one
+      action can be pending at a time — call `cancel_schedule` first if
+      you need to change recipients. `new_owner` MUST be a wallet
+      address; sending to an object address via TTO permanently locks
+      the wrapper (see do_not[wrapper-tto-lock]).
+
+  - name: schedule_unwrap
+    sig: "<T: key + store>(self: &mut DelayedTransferWrapper<T>, clock: &Clock, ctx: &mut TxContext)"
+    role: "Schedule a delayed self-recovery (unwrap) of the wrapped object."
+    aborts: [ETransferAlreadyScheduled]
+    emits: [UnwrapScheduled]
+    notes: |
+      Shares the SAME `pending` slot as `schedule_transfer` — scheduling
+      one while the other is pending aborts ETransferAlreadyScheduled.
+      Cancel first via `cancel_schedule` if you need to swap action
+      types. `execute_after_ms = clock.timestamp_ms() + min_delay_ms`.
+
+  - name: execute_transfer
+    sig: "<T: key + store>(self: DelayedTransferWrapper<T>, clock: &Clock, ctx: &mut TxContext)"
+    role: "Execute the previously scheduled transfer once the delay has elapsed. Consumes the wrapper."
+    aborts: [ENoPendingTransfer, EWrongPendingAction, EDelayNotElapsed]
+    emits: [OwnershipTransferred]
+    notes: |
+      Consumes `self` by value — after this call the wrapper is gone
+      from the caller's scope and now lives at the scheduled recipient.
+      EWrongPendingAction fires if the pending action is an unwrap;
+      callers must match the action type to the scheduled action.
+
+  - name: unwrap
+    sig: "<T: key + store>(self: DelayedTransferWrapper<T>, clock: &Clock, ctx: &mut TxContext) -> T"
+    role: "Execute the previously scheduled unwrap once the delay has elapsed. Returns the wrapped object and deletes the wrapper."
+    aborts: [ENoPendingTransfer, EWrongPendingAction, EDelayNotElapsed]
+    emits: [UnwrapExecuted]
+    notes: |
+      Consumes `self` by value and deletes the wrapper UID. The caller
+      regains direct ownership of the inner object. EWrongPendingAction
+      fires if the pending action is a transfer.
+
+  - name: cancel_schedule
+    sig: "<T: key + store>(self: &mut DelayedTransferWrapper<T>)"
+    role: "Cancel the currently pending transfer or unwrap."
+    aborts: [ENoPendingTransfer]
+    emits: [PendingTransferCancelled]
+    notes: |
+      Frees the `pending` slot. After cancellation a new action of
+      either type can be scheduled. Anyone in possession of the wrapper
+      (i.e., the current owner) can cancel — there is no separate cancel
+      authority field like in `two_step_transfer`.
+
+  - name: borrow
+    sig: "<T: key + store>(self: &DelayedTransferWrapper<T>) -> &T"
+    role: "Read-only access to the wrapped object without affecting any pending schedule."
+    aborts: []
+
+  - name: borrow_mut
+    sig: "<T: key + store>(self: &mut DelayedTransferWrapper<T>) -> &mut T"
+    role: "Mutable access to the wrapped object without affecting any pending schedule."
+    aborts: []
+
+  - name: borrow_val
+    sig: "<T: key + store>(self: &mut DelayedTransferWrapper<T>) -> (T, Borrow)"
+    role: "Temporarily take the wrapped object out of the wrapper, returning a hot-potato `Borrow` guard."
+    aborts: []
+    notes: |
+      The returned `Borrow` has NO abilities — it must be consumed by
+      `return_val` on the SAME wrapper before the PTB ends, otherwise
+      the transaction fails to type-check. The wrapper itself remains
+      shared-state-free; you do not need to schedule anything to
+      borrow-by-value.
+
+  - name: return_val
+    sig: "<T: key + store>(self: &mut DelayedTransferWrapper<T>, obj: T, borrow: Borrow)"
+    role: "Return a value taken by `borrow_val`, consuming the `Borrow` hot potato."
+    aborts: [EWrongDelayedTransferWrapper, EWrongDelayedTransferObject]
+    notes: |
+      Verifies BOTH wrapper identity and object identity at runtime.
+      You cannot swap in a different object of the same type and you
+      cannot return into a different wrapper instance — both are
+      explicit guards against silent state corruption.
+
+errors:
+  ETransferAlreadyScheduled:
+    code: 0
+    message: "Transfer already scheduled"
+  ENoPendingTransfer:
+    code: 1
+    message: "No pending transfer"
+  EDelayNotElapsed:
+    code: 2
+    message: "Delay has not elapsed"
+  EWrongPendingAction:
+    code: 3
+    message: "Pending action mismatch"
+  EWrongDelayedTransferWrapper:
+    code: 4
+    message: "Wrong delayed transfer wrapper"
+  EWrongDelayedTransferObject:
+    code: 5
+    message: "Wrong delayed transfer object"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I need to hand off an admin/treasury cap. Which transfer module do I use?"
+    options:
+      - use: "delayed_transfer"
+        when: "Off-chain monitors, governance dashboards, or users need a visible window to detect and react to the transfer before it executes."
+        why: "Enforces a fixed minimum delay between scheduling and execution; both sides see the same on-chain commitment."
+      - use: "two_step_transfer"
+        when: "You want the recipient to explicitly opt in but do not need a time-based delay."
+        why: "Transfers complete when the recipient accepts, with no delay; faster but no visible reaction window."
+      - use: "access_control"
+        when: "Multiple actors hold the privilege and you authorize by role, not by holding a single cap."
+        why: "Different model entirely — role registry, not capability handoff."
+
+  - question: "I'm holding the wrapper and want my key/cap back. Do I schedule_unwrap or cancel_schedule?"
+    options:
+      - use: "schedule_unwrap then unwrap"
+        when: "You want the raw object out of the wrapper — the wrapper is deleted at the end."
+        why: "Subject to the same `min_delay_ms` window. Use this for self-recovery of the wrapped cap."
+      - use: "cancel_schedule"
+        when: "A transfer or unwrap is already pending and you want to abort it (NOT recover the wrapped object)."
+        why: "Only clears the `pending` slot; the wrapper and its contents stay put. Sequence as cancel → schedule_unwrap → unwrap if you also want to recover."
+
+  - question: "How long should min_delay_ms be?"
+    options:
+      - use: "86_400_000 (24h)"
+        when: "Standard protocol — humans need a window to react to a hostile or accidental schedule."
+        why: "Default in the docs guide. Long enough for off-chain alerting, short enough for legitimate ops."
+      - use: "Longer (e.g., 7-30 days)"
+        when: "High-value treasury cap or governance-critical role; matches your incident-response SLA."
+        why: "Pick deliberately — `min_delay_ms` is FIXED at `wrap` time and CANNOT be changed afterwards. Re-wrap (schedule_unwrap → unwrap → wrap again) if you need to change it."
+      - use: "Very short (< minutes)"
+        when: "Almost never — defeats the purpose of the module."
+        why: "If you do not need a delay, do not use this module — use `two_step_transfer` or direct `transfer::transfer`."
+
+  - question: "I need to inspect the wrapped object — borrow, borrow_mut, or borrow_val?"
+    options:
+      - use: "borrow"
+        when: "Read-only inspection (e.g., reading a TreasuryCap's supply)."
+        why: "Cheapest; just a `&T`. No hot potato to manage."
+      - use: "borrow_mut"
+        when: "Mutating the wrapped object's fields without removing it from the wrapper."
+        why: "`&mut T`; still no hot potato. Safe inside a single PTB."
+      - use: "borrow_val + return_val"
+        when: "You need to pass the wrapped object by value to a function that consumes it (e.g., `&mut`-only APIs that demand ownership)."
+        why: "Returns a `Borrow` hot potato that MUST be consumed by `return_val` before the PTB ends — the Move VM enforces it at type-check time."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Do not schedule a new action while another transfer or unwrap is pending. Call `cancel_schedule` first if you need to swap."
+    fails_with: ETransferAlreadyScheduled
+    affects: [schedule_transfer, schedule_unwrap]
+
+  - must: "Call `execute_transfer` / `unwrap` / `cancel_schedule` only when an action is currently pending."
+    fails_with: ENoPendingTransfer
+    affects: [execute_transfer, unwrap, cancel_schedule]
+
+  - must: "Wait until `clock.timestamp_ms() >= execute_after_ms` before calling `execute_transfer` or `unwrap`."
+    fails_with: EDelayNotElapsed
+    affects: [execute_transfer, unwrap]
+
+  - must: "Match the execution call to the pending action — `execute_transfer` only when a transfer is scheduled, `unwrap` only when an unwrap is scheduled."
+    fails_with: EWrongPendingAction
+    affects: [execute_transfer, unwrap]
+
+  - must: "Return values taken by `borrow_val` to the SAME wrapper instance they were taken from."
+    fails_with: EWrongDelayedTransferWrapper
+    affects: [return_val]
+
+  - must: "Return the SAME object instance taken by `borrow_val` — you cannot substitute a different object even of the same type."
+    fails_with: EWrongDelayedTransferObject
+    affects: [return_val]
+
+do_not:
+  - id: wrapper-tto-lock
+    severity: high
+    description: "Pass an object ID (not a wallet address) as `recipient` to `wrap` or `new_owner` to `schedule_transfer`."
+    why_bad: "Sui's transfer-to-object (TTO) mechanism allows transferring to any address, including object IDs. The wrapper does NOT implement `Receiving`-based retrieval, so a wrapper sent to an object address is permanently locked — together with the capability inside. There is no abort to catch this at runtime."
+    fix: "Always pass a wallet address. If your protocol genuinely needs object-addressed custody, do not use this module — design a `Receiving`-aware custody pattern instead."
+    example_bad: |
+      // WRONG — sending the wrapper to an object address permanently locks it.
+      let treasury_id = object::id(&treasury); // an object ID, not a wallet
+      delayed_transfer::wrap(cap, MIN_DELAY_MS, treasury_id.to_address(), ctx);
+      // Or, equivalently, after wrapping:
+      // wrapper.schedule_transfer(treasury_id.to_address(), &clock, ctx);
+    example_good: |
+      // RIGHT — pass a wallet address (multisig, EOA, sponsored account).
+      delayed_transfer::wrap(cap, MIN_DELAY_MS, ctx.sender(), ctx);
+      // Later, if you transfer:
+      // wrapper.schedule_transfer(@multisig_wallet_address, &clock, ctx);
+
+  - id: clock-source-mismatch
+    severity: high
+    description: "Use `tx_context::epoch_timestamp_ms` or off-chain wall-clock time when computing or interpreting `execute_after_ms`."
+    why_bad: "`schedule_*` and `execute_*` derive their timestamps from `sui::clock::Clock` (the shared `0x6` clock object). `tx_context::epoch_timestamp_ms` is the epoch's start time and updates roughly every ~24h, so it is monotonically far behind `clock::timestamp_ms`. Mixing the two leads to either premature execution (if your off-chain logic computes the deadline from epoch time and assumes the chain agrees) or perpetual `EDelayNotElapsed`."
+    fix: "Pass `&clock` (the shared `Clock` at `0x6`) to every schedule/execute call. When predicting `execute_after_ms` off-chain, query `clock::timestamp_ms` via the JSON-RPC node, not the epoch timestamp."
+    example_bad: |
+      // WRONG — comparing against epoch time instead of Clock time.
+      let now_epoch = tx_context::epoch_timestamp_ms(ctx);
+      assert!(now_epoch >= predicted_execute_after_ms, EDelayNotElapsed);
+      wrapper.execute_transfer(&clock, ctx); // module uses clock, not epoch
+    example_good: |
+      // RIGHT — the module's check uses clock.timestamp_ms() internally.
+      // Off-chain monitoring should query Clock state, not epoch time.
+      wrapper.execute_transfer(&clock, ctx);
+
+  - id: ptb-single-clock-read
+    severity: medium
+    description: "Schedule and execute in the same PTB and expect the delay to be enforced by a second Clock read."
+    why_bad: "A PTB sees a SINGLE `clock.timestamp_ms()` value across all commands (the consensus-determined time at the point the PTB is sequenced). Scheduling and then executing in the same PTB still uses the same timestamp — `now < execute_after_ms` so the execute aborts EDelayNotElapsed. Worse, an integrator who has not internalized this may write a `schedule → wait via off-chain sleep → execute` loop and notice it never works, then \"fix\" it by setting `min_delay_ms = 0`, which makes the module useless."
+    fix: "Always schedule in one transaction and execute in a SEPARATE later transaction. Treat `min_delay_ms` as the real-world wall-clock window between txs."
+    example_bad: |
+      // WRONG — same PTB, single Clock reading, cannot satisfy the delay.
+      // PTB command 1:
+      wrapper.schedule_transfer(new_owner, &clock, ctx);
+      // PTB command 2 — same tx, same clock.timestamp_ms() — ALWAYS aborts.
+      wrapper.execute_transfer(&clock, ctx); // EDelayNotElapsed
+    example_good: |
+      // RIGHT — two distinct transactions separated by at least min_delay_ms
+      // of real wall-clock time.
+
+      // Tx 1 — schedule.
+      wrapper.schedule_transfer(new_owner, &clock, ctx);
+
+      // ... wall-clock time passes (at least min_delay_ms) ...
+
+      // Tx 2 — execute (typically signed by the new owner).
+      wrapper.execute_transfer(&clock, ctx);
+
+  - id: user-frequency-delayed-transfer
+    severity: high
+    description: "Wrap a hot-path object (something users interact with per-tx, like a Pool, Vault, or per-user position) in `DelayedTransferWrapper`."
+    why_bad: "Every `borrow_mut` of a user-traffic object would funnel through a single-owned wrapper, serializing every transaction on the same owner. Even reads via `borrow` are fine, but the typical motivation — gating mutations — defeats throughput. The module is designed for admin-frequency capability handoffs, not for high-throughput state."
+    fix: "Wrap CAPABILITY objects (admin caps, treasury caps, upgrade caps), not the protocol's user-facing shared state. For high-traffic objects use shared objects + role-based gating (`access_control`) or capability-object patterns."
+    example_bad: |
+      // WRONG — wrapping a user-traffic shared object behind a single-owned wrapper.
+      public struct Pool has key, store { id: UID, /* hot user state */ }
+      delayed_transfer::wrap(pool, MIN_DELAY_MS, admin, ctx);
+      // Every user trade now needs the admin to borrow_mut the pool. Throughput dies.
+    example_good: |
+      // RIGHT — wrap the CAPABILITY that governs the pool, not the pool itself.
+      public struct PoolAdminCap has key, store { id: UID }
+      transfer::public_share_object(Pool { id: object::new(ctx), /* ... */ });
+      delayed_transfer::wrap(PoolAdminCap { id: object::new(ctx) }, MIN_DELAY_MS, admin, ctx);
+      // Users hit the shared Pool directly; admin actions go through the delayed cap.
+
+  - id: changing-min-delay-after-wrap
+    severity: medium
+    description: "Expect `min_delay_ms` to be tunable after `wrap` — there is no setter."
+    why_bad: "`min_delay_ms` is stored inside the `DelayedTransferWrapper` at construction and the module exposes no API to mutate it. Integrators who design migration paths assuming a delay can be tightened or relaxed in place will hit a wall."
+    fix: "If the delay must change, schedule an unwrap, complete it after the OLD delay elapses, then `wrap` the recovered object again with the new `min_delay_ms`."
+    example_bad: |
+      // WRONG — there is no `set_min_delay` or `update_delay` API.
+      wrapper.set_min_delay(new_delay_ms); // does not exist; will not compile
+    example_good: |
+      // RIGHT — recover and re-wrap (subject to the OLD delay).
+      wrapper.schedule_unwrap(&clock, ctx);
+      // ... wait at least OLD min_delay_ms ...
+      let cap = wrapper.unwrap(&clock, ctx);
+      delayed_transfer::wrap(cap, NEW_MIN_DELAY_MS, ctx.sender(), ctx);
+
+composes_with: []   # Empty — no compositions are source-cited. Sibling pointers
+                    # ("use access_control for RBAC", "use two_step_transfer for
+                    # immediate accept") live in does_not_solve[]; choosing
+                    # between siblings lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+
+  canonical_test:
+    file: contracts/access/tests/delayed_tests.move
+    function: schedule_and_execute_transfer
+
+  precondition_proofs:
+    - precondition_fails_with: ETransferAlreadyScheduled
+      test_file: contracts/access/tests/delayed_tests.move
+      test_functions:
+        - schedule_transfer_rejects_duplicate
+        - schedule_unwrap_rejects_duplicate
+    - precondition_fails_with: ENoPendingTransfer
+      test_file: contracts/access/tests/delayed_tests.move
+      test_functions:
+        - cancel_schedule_without_pending_fails
+        - execute_transfer_without_pending_fails
+        - unwrap_without_pending_fails
+    - precondition_fails_with: EDelayNotElapsed
+      test_file: contracts/access/tests/delayed_tests.move
+      test_functions:
+        - execute_transfer_before_delay_fails
+        - unwrap_before_delay_fails
+    - precondition_fails_with: EWrongPendingAction
+      test_file: contracts/access/tests/delayed_tests.move
+      test_functions:
+        - execute_transfer_wrong_action_fails
+        - unwrap_wrong_action_fails
+    - precondition_fails_with: EWrongDelayedTransferWrapper
+      test_file: contracts/access/tests/delayed_tests.move
+      test_functions:
+        - return_val_rejects_wrong_wrapper
+    - precondition_fails_with: EWrongDelayedTransferObject
+      test_file: contracts/access/tests/delayed_tests.move
+      test_functions:
+        - return_val_rejects_wrong_object
+
+  do_not_demonstrations:
+    - do_not_id: wrapper-tto-lock
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: clock-source-mismatch
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: ptb-single-clock-read
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: user-frequency-delayed-transfer
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: changing-min-delay-after-wrap
+      test_functions: []   # consumer-side pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: wrapper-tto-lock
+      pattern: "delayed_transfer::wrap or schedule_transfer called with an address derived from object::id(...).to_address()"
+      heuristic: "argument to `recipient:` / `new_owner:` flows from `object::id` or `uid_to_address` on a non-wallet object"
+    - do_not_id: clock-source-mismatch
+      pattern: "execute_transfer / unwrap reasoning uses tx_context::epoch_timestamp_ms instead of clock::timestamp_ms"
+      heuristic: "function body computes a deadline from `tx_context::epoch_timestamp_ms` AND passes a `&Clock` to a delayed_transfer call"
+    - do_not_id: ptb-single-clock-read
+      pattern: "schedule_* and execute_*/unwrap in the same PTB block with the same &Clock"
+      heuristic: "same caller invokes `schedule_transfer|schedule_unwrap` and `execute_transfer|unwrap` within the same transaction script"
+    - do_not_id: user-frequency-delayed-transfer
+      pattern: "delayed_transfer::wrap applied to a struct also referenced from user-frequency public functions (e.g., swap/deposit/trade)"
+      heuristic: "wrapped type T appears as a parameter of any function whose name matches /^(swap|trade|deposit|withdraw|transfer|mint|burn|claim)$/"
+
+  events:
+    - { name: WrapExecuted, fields: [wrapper_id, object_id, owner] }
+    - { name: TransferScheduled, fields: [wrapper_id, current_owner, new_owner, execute_after_ms] }
+    - { name: UnwrapScheduled, fields: [wrapper_id, current_owner, execute_after_ms] }
+    - { name: OwnershipTransferred, fields: [wrapper_id, previous_owner, new_owner] }
+    - { name: PendingTransferCancelled, fields: [wrapper_id] }
+    - { name: UnwrapExecuted, fields: [wrapper_id, object_id, owner] }

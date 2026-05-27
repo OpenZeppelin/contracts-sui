@@ -1,0 +1,330 @@
+schema_version: "1.0"
+
+# This file documents the constructor/wrapper module `sd29x9.move`. The arithmetic and
+# conversion surfaces live in sibling modules — see `../index.yaml` for the full package
+# module set; pointers to specific siblings are in `does_not_solve[]` and `decisions[]`.
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_fp_math::sd29x9
+  package: openzeppelin_fp_math
+  re_exports_from: [sd29x9_base, sd29x9_convert]
+  one_liner: "Signed decimal fixed-point type `SD29x9` (two's complement `u128` scaled by 10^9; magnitude + sign-flag API) — owns the type, raw `wrap`/`unwrap` casts, and constants (`zero`/`one`/`max`/`min`)."
+  summary: |
+    Constructor / wrapper module for the SIGNED decimal fixed-point type
+    `SD29x9` (two's complement `u128` scaled by 10^9, matching Sui coin
+    precision). Use for values that can be negative: balance deltas, signed
+    price moves, P&L, position sides. SD29x9 is the signed counterpart to
+    `UD30x9` — one fewer integer digit (29 vs 30) is the sign bit. Pair with
+    `openzeppelin_fp_math::sd29x9_base` for arithmetic — this module is only
+    constants and raw wrap/unwrap.
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Arithmetic, comparison, logarithms, abs/negate — those live in openzeppelin_fp_math::sd29x9_base."
+  - "Whole-number conversions with a sign flag — use openzeppelin_fp_math::sd29x9_convert."
+  - "Bitwise operations on signed two's complement — intentionally absent; use UD30x9 raw bits and cast if you really need bit-twiddling."
+  - "Unsigned values — use openzeppelin_fp_math::ud30x9 (one more integer digit, no abort on positive overflow up to 2^128)."
+  - "u256-precision math — SD29x9 is u128-backed."
+  - "Constructing the minimum value via wrap — wrap cannot produce min; use sd29x9::min() directly."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  use_statement: |
+    use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
+    use openzeppelin_fp_math::sd29x9_base;       // for arithmetic / comparison / casts
+    use openzeppelin_fp_math::sd29x9_convert;    // for whole-integer (+ sign flag) conversions
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_protocol::ledger;
+
+  use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
+  use openzeppelin_fp_math::sd29x9_base;
+  use openzeppelin_fp_math::sd29x9_convert;
+
+  /// Build a signed balance from a magnitude + sign flag.
+  public fun signed_balance(magnitude: u128, is_negative: bool): SD29x9 {
+      sd29x9_convert::from_u128(magnitude, is_negative)
+  }
+
+  /// Apply a signed adjustment.
+  public fun apply_delta(balance: SD29x9, delta: SD29x9): SD29x9 {
+      sd29x9_base::add(balance, delta)
+  }
+
+quick_start: |
+  // Signed fixed-point end-to-end — the minimal happy path.
+
+  // 1. Construct from a whole-integer magnitude + sign flag. Applies 10^9 scale.
+  let balance = sd29x9_convert::from_u128(10, false);  // +10.0
+  let charge  = sd29x9_convert::from_u128(3, true);    //  -3.0
+
+  // 2. Arithmetic via method-style calls (exported by `public use fun` from sd29x9_base).
+  let new_balance = balance.add(charge);               // +7.0
+
+  // 3. Read it back as (magnitude, is_negative) — never produces "negative zero".
+  let (mag, neg) = new_balance.to_parts_trunc();       // (7, false)
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types:
+  - name: SD29x9
+    type_params: ""
+    capabilities: [copy, drop, store]
+    role: "Signed decimal fixed-point number, two's complement u128 scaled by 10^9 (matching Sui coin precision). Pass by value — `copy + drop + store` make it as ergonomic as a primitive integer. Range is asymmetric: `-2^127` to `2^127 - 1`, i.e. one more negative value than positive — `abs(min())` and `negate(min())` BOTH abort with `EOverflow`."
+
+api:
+  - name: zero
+    sig: "() -> SD29x9"
+    role: "Zero constant (0.0). Canonical representation — wrap normalizes `(0, true)` and `(0, false)` to the same bits, so there is no negative zero."
+    aborts: []
+
+  - name: one
+    sig: "() -> SD29x9"
+    role: "One constant (1.0 = raw bits 1_000_000_000)."
+    aborts: []
+
+  - name: min
+    sig: "() -> SD29x9"
+    role: "Minimum representable value (-2^127). The only way to obtain it — `wrap` cannot produce it."
+    aborts: []
+    notes: |
+      The asymmetric boundary: there is one more negative value than
+      positive (range is `-2^127` to `2^127 - 1`). Several operations
+      ABORT on `min()` because their result is unrepresentable:
+      `abs(min())`, `negate(min())`. Plan for it explicitly if your
+      computation can drift to the signed-integer boundary.
+
+  - name: max
+    sig: "() -> SD29x9"
+    role: "Maximum representable positive value (2^127 - 1)."
+    aborts: []
+
+  - name: wrap
+    sig: "(x: u128, is_negative: bool) -> SD29x9"
+    role: "Cast a u128 magnitude plus a sign flag into SD29x9 — preserves the existing 10^9 scale; does NOT multiply by 10^9. `x` must be a PURE MAGNITUDE (non-negative); the sign is supplied separately."
+    aborts: [EOverflow]
+    notes: |
+      CRITICAL: `wrap` is a CAST, not a CONVERT. It does not scale.
+      Use this when the u128 is already in fixed-point form (e.g., a raw
+      value previously produced by `unwrap`, or a hand-encoded constant
+      like `500_000_000` meaning `0.5`). For starting from a whole integer
+      like `42` meaning `42.0`, use `openzeppelin_fp_math::sd29x9_convert::from_u128`.
+
+      `x` MUST be the unsigned magnitude — do NOT pre-encode a sign bit
+      into it. The function does the two's complement encoding for you
+      when `is_negative` is true.
+
+      Aborts `EOverflow` if `x > 2^127 - 1`. Note this means `wrap` cannot
+      construct `min()` (whose magnitude is `2^127`, one above the limit)
+      — use `sd29x9::min()` directly.
+
+      Normalizes negative zero: `wrap(0, true) == wrap(0, false) == zero()`.
+
+  - name: unwrap
+    sig: "(x: SD29x9) -> u128"
+    role: "Return the raw u128 two's complement bit pattern (10^9 scale preserved). Negative values appear as large bit patterns near `u128::MAX` — do NOT interpret as an unsigned magnitude."
+    aborts: []
+    notes: |
+      The output is RAW BITS, not a magnitude. For a `(magnitude, is_negative)`
+      pair use `sd29x9_convert::to_parts_trunc(x)` instead. Feeding `unwrap`'s
+      output back into `wrap` requires the value to be non-negative — round-trip
+      only works through `from_bits` (which is `public(package)`, not part of
+      the integrator surface).
+
+errors:
+  EOverflow:
+    code: 0
+    message: "Value overflows SD29x9 (must fit in 2^127 signed range)"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "How do I get an SD29x9 from a whole-number integer like `-5`?"
+    options:
+      - use: "openzeppelin_fp_math::sd29x9_convert::from_u128(5, true)"
+        when: "Starting from a Sui integer magnitude + sign flag (the canonical signed-input shape). Applies the 10^9 scale."
+        why: "Required path for almost every protocol input. Returns -5.0 (raw bits = two's complement of 5_000_000_000)."
+      - use: "sd29x9::wrap(5, true)"
+        when: "The magnitude is ALREADY in 10^9-scaled form (e.g., raw value previously produced by `unwrap`)."
+        why: "Pure cast — no scaling. `wrap(5, true)` produces -0.000_000_005, NOT -5.0. See do_not[confuse-cast-with-convert]."
+
+  - question: "I need the minimum signed value (-2^127) — what do I use?"
+    options:
+      - use: "sd29x9::min()"
+        when: "Always — this is the only way to obtain `min()`."
+        why: "`wrap` aborts EOverflow when called with magnitude `2^127` (one above the wrap limit) regardless of the sign flag."
+      - use: "sd29x9::wrap(2^127 - 1, true)"
+        when: "Never — you wanted `min` (`-2^127`) and got `-(2^127 - 1)` (one ULP off)."
+        why: "Common bug. The minimum's magnitude (`2^127`) is unrepresentable as a positive SD29x9, so the API exposes it via `min()` only."
+
+  - question: "I need a value that is guaranteed non-negative — should I stay on SD29x9 or switch to UD30x9?"
+    options:
+      - use: "openzeppelin_fp_math::ud30x9"
+        when: "The value is provably non-negative for the lifetime of the computation."
+        why: "Cheaper — no sign-bit handling, no two's complement, one MORE integer digit of headroom (30 vs 29)."
+      - use: "Stay on SD29x9"
+        when: "The value can dip below zero, even transiently, in any intermediate step."
+        why: "UD30x9 subtraction aborts on underflow. SD29x9 carries the sign through naturally."
+
+  - question: "How do I read an SD29x9 back as an integer?"
+    options:
+      - use: "openzeppelin_fp_math::sd29x9_convert::to_parts_trunc(x)"
+        when: "Default. Returns `(magnitude: u128, is_negative: bool)` — the canonical signed-output shape. Never reports negative zero."
+        why: "Removes the 10^9 scale and surfaces the sign explicitly. No abort path for negative input."
+      - use: "sd29x9_convert::to_u128_trunc(x) / to_u64_trunc(x)"
+        when: "You know the value is non-negative and want a single unsigned result."
+        why: "Aborts on negative input. Use the `try_*` variants for untrusted input."
+      - use: "sd29x9::unwrap(x)"
+        when: "You explicitly want the raw two's complement bit pattern (rare — typically only for storage/serialization)."
+        why: "Returns raw bits — negative values appear as large unsigned numbers. Do NOT interpret as a magnitude."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Pass a pure non-negative magnitude as `x` to `wrap`; the sign goes in `is_negative`. `x` must satisfy `x <= 2^127 - 1`."
+    fails_with: EOverflow
+    affects: [wrap]
+
+do_not:
+  - id: confuse-cast-with-convert
+    severity: high
+    description: "Use `wrap` / `unwrap` (cast) when you mean to convert between whole-number and fixed-point semantics."
+    why_bad: "Cast preserves the 10^9 scale; convert applies or removes it. Mixing them up makes every downstream computation off by a factor of 10^9 — no abort, just silently wrong numbers. The same pitfall as UD30x9, doubled by the sign flag."
+    fix: "Use `wrap` only when the source u128 is already in 10^9 scale. When starting from a whole integer like `-5` meaning `-5.0`, use `sd29x9_convert::from_u128(5, true)`."
+    example_bad: |
+      // WRONG — interprets `5` as raw SD29x9 bits, producing 0.000000005, not 5.0.
+      let bal: SD29x9 = sd29x9::wrap(5, false);
+
+      // WRONG (signed variant) — produces -0.000000005, not -5.0.
+      let neg: SD29x9 = sd29x9::wrap(5, true);
+    example_good: |
+      // RIGHT — converts the integer 5 into fixed-point 5.0 (or -5.0).
+      use openzeppelin_fp_math::sd29x9_convert;
+      let bal: SD29x9 = sd29x9_convert::from_u128(5, false);  // +5.0
+      let neg: SD29x9 = sd29x9_convert::from_u128(5, true);   // -5.0
+
+  - id: signed-magnitude-with-pre-encoded-sign
+    severity: high
+    description: "Pass a u128 that already encodes a sign (e.g., two's complement bits, or a negated u128) as `x` to `wrap`."
+    why_bad: "`wrap` expects a PURE non-negative magnitude — it applies the two's complement itself when `is_negative` is true. Pre-encoding a sign turns `x` into a huge magnitude that aborts `EOverflow`, or worse, slips under the limit and silently encodes the wrong value."
+    fix: "Decompose to (magnitude, sign) before calling `wrap`. If you have raw two's complement bits, use the package-internal `from_bits` (not on the public integrator API) or round-trip through `sd29x9_convert::to_parts_trunc` + `from_u128`."
+    example_bad: |
+      // WRONG — pre-encoding the sign as two's complement bits then passing
+      // them as the magnitude. Either aborts EOverflow (if bits > 2^127 - 1)
+      // or silently produces a value with the wrong sign.
+      let twos = (5u128 ^ std::u128::max_value!()) + 1; // raw two's complement of 5
+      let bad = sd29x9::wrap(twos, false);
+    example_good: |
+      // RIGHT — supply the magnitude unsigned, let `wrap` (or convert) handle the sign.
+      let good = sd29x9::wrap(5, true);                      // -0.000000005 (cast)
+      let nicer = sd29x9_convert::from_u128(5, true);        // -5.0 (convert)
+
+  - id: forget-asymmetric-min-boundary
+    severity: medium
+    description: "Call `abs(x)`, `negate(x)`, or `wrap(2^127, _)` without considering that `min() = -2^127` has no positive counterpart."
+    why_bad: "The signed range is `-2^127` to `2^127 - 1` — one more negative value than positive. `abs(min())` and `negate(min())` abort `EOverflow` in `sd29x9_base`. `wrap(2^127, true)` also aborts because `wrap`'s magnitude check is `<= 2^127 - 1`, so `min` cannot be constructed via `wrap` at all — use `sd29x9::min()`."
+    fix: "Guard against `min()` explicitly when your computation can drift to the signed boundary, OR keep your operating range inside `[-(2^127 - 1), 2^127 - 1]`."
+    example_bad: |
+      // WRONG — abort path on min().
+      let m = sd29x9::min();
+      let positive = sd29x9_base::abs(m); // aborts EOverflow
+
+      // WRONG — cannot construct min via wrap.
+      let also_bad = sd29x9::wrap(1u128 << 127, true); // aborts EOverflow
+    example_good: |
+      // RIGHT — guard, or just use min() directly.
+      public fun safe_negate(x: SD29x9): SD29x9 {
+          if (x.eq(sd29x9::min())) {
+              // Domain decision: clamp, saturate, or abort with a domain error.
+              sd29x9::max()
+          } else {
+              sd29x9_base::negate(x)
+          }
+      }
+      let m = sd29x9::min(); // never via wrap
+
+  - id: round-trip-unwrap-into-wrap
+    severity: medium
+    description: "Call `wrap(unwrap(x), false)` (or with a guessed sign) expecting to round-trip a signed value."
+    why_bad: "`unwrap` returns RAW two's complement bits, not a magnitude. For negative `x` the bits are near `u128::MAX`, so feeding them back into `wrap(..., false)` aborts `EOverflow` (bits exceed `2^127 - 1`) — or, with `is_negative=true`, produces a doubly-negated wrong value. Round-trip only works through `from_bits` (which is `public(package)` and not on the integrator surface)."
+    fix: "Round-trip through `sd29x9_convert::to_parts_trunc` + `sd29x9_convert::from_u128`, OR keep the SD29x9 value and skip the round trip."
+    example_bad: |
+      // WRONG — raw bits, not magnitude. Aborts EOverflow for any negative x.
+      let bits = sd29x9::unwrap(x);
+      let roundtripped = sd29x9::wrap(bits, false);
+    example_good: |
+      // RIGHT — go through the convert module which understands sign.
+      let (mag, neg) = sd29x9_convert::to_parts_trunc(x);
+      let roundtripped = sd29x9_convert::from_u128(mag, neg);
+
+composes_with: []   # Empty — no compositions are source-cited. Sibling modules in the
+                    # same package (sd29x9_base for arithmetic, sd29x9_convert for whole-number
+                    # conversions, ud30x9 for the unsigned counterpart) are pointed at from
+                    # does_not_solve[] and decisions[] above; load their own YAML for the
+                    # actual call shape. The package's README and docs guide cite usage but
+                    # the sd29x9 module itself only constructs the type — composition lives
+                    # in the sibling modules.
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+
+  canonical_test: null   # No single canonical happy-path test; sd29x9 is a pure type wrapper.
+                          # tests/sd29x9_tests/wrap_tests.move covers this module's surface
+                          # (wrap, unwrap, min boundary, negative-zero normalization, from_bits);
+                          # the rest of sd29x9_tests/ covers the sibling arithmetic / conversion modules.
+
+  precondition_proofs:
+    - precondition_fails_with: EOverflow
+      test_file: math/fixed_point/tests/sd29x9_tests/wrap_tests.move
+      test_functions: [wrap_cannot_produce_min_value]
+      # Additional negative tests for `wrap` magnitude overflow exist in the same
+      # file; this is the canonical one demonstrating the asymmetric boundary
+      # (you cannot wrap `min`'s magnitude `2^127`).
+
+  do_not_demonstrations:
+    - do_not_id: confuse-cast-with-convert
+      test_functions: []   # Consumer-side pattern; not directly in-tree.
+    - do_not_id: signed-magnitude-with-pre-encoded-sign
+      test_functions: []   # Consumer-side pattern; not directly in-tree.
+    - do_not_id: forget-asymmetric-min-boundary
+      # In-tree demonstrations of the asymmetric-boundary aborts live in sibling tests
+      # (abs/negate of min in sd29x9_tests/abs_tests.move and negate_tests.move).
+      test_functions: [wrap_cannot_produce_min_value]
+    - do_not_id: round-trip-unwrap-into-wrap
+      test_functions: []   # Consumer-side pattern; not directly in-tree.
+
+  do_not_detection:
+    - do_not_id: confuse-cast-with-convert
+      pattern: "sd29x9::wrap called on a u128 value that came from a whole-number computation (not already in 10^9 scale)"
+      heuristic: "sd29x9::wrap(<small literal or whole-number variable>, ...)"
+    - do_not_id: signed-magnitude-with-pre-encoded-sign
+      pattern: "sd29x9::wrap called with a magnitude argument that has been pre-negated, XOR-ed with u128::max_value, or otherwise sign-encoded"
+      heuristic: "sd29x9::wrap(<expr containing ^ std::u128::max_value or two_complement>, ...)"
+    - do_not_id: forget-asymmetric-min-boundary
+      pattern: "sd29x9_base::abs / negate called without a guard on sd29x9::min(); or sd29x9::wrap called with magnitude `1u128 << 127`"
+      heuristic: "method call `<x>.abs()` or `<x>.negate()` where `<x>` is SD29x9-typed and the value's range is not statically known to exclude `min()`; OR `sd29x9::wrap(<expr>, _)` where `<expr>` evaluates to `1u128 << 127`. Suggest a `if (x == sd29x9::min())` guard before `abs`/`negate`."
+    - do_not_id: round-trip-unwrap-into-wrap
+      pattern: "sd29x9::wrap(sd29x9::unwrap(...), ...) without going through sd29x9_convert::to_parts_trunc"
+      heuristic: "expression matches `sd29x9::wrap(sd29x9::unwrap(<x>), ...)` or method-style `<x>.unwrap().wrap(...)`. Suggest `sd29x9_convert::to_parts_trunc(<x>)` to get `(magnitude, is_negative)` then `sd29x9_convert::from_u128(magnitude, is_negative)` for a faithful round-trip."
+
+  events: []   # No events emitted; pure value module.

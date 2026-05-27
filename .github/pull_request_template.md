@@ -17,3 +17,4 @@ Resolves #??? <!-- Fill in with issue number -->
 - [ ] Tests
 - [ ] Documentation
 - [ ] Changelog
+- [ ] AI integrator metadata — if a module's public surface changed (functions, signatures, errors, types), re-ran `generate-sui-metadata` for it so `<pkg>/llms/<module>.yaml` stays in sync (CI checks structure/completeness but not content drift — see CONTRIBUTING).

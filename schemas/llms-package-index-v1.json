@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/schemas/llms-package-index-v1.json",
+  "title": "OpenZeppelin Contracts for Sui — AI Integrator Index, v1.0",
+  "description": "Schema for the `index.yaml` discovery files, in two forms distinguished by their keys: (1) the repository-root catalog at `llms/index.yaml`, which enumerates every package (key: `packages`); (2) the per-package index at `<package-path>/llms/index.yaml`, which enumerates a package's modules (key: `modules`). An AI integrator agent / MCP server fetches the root catalog first to discover all packages, then each package index for its module surface, then per-module YAMLs (schema `llms-metadata-v1.json`). The narrative `llms.txt` at the repo root is the human-facing convention entry; these index files are its structured siblings.",
+  "oneOf": [
+    {
+      "title": "Root catalog (llms/index.yaml)",
+      "type": "object",
+      "required": ["schema_version", "repo", "packages"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1.0",
+          "description": "Schema version. v1.0 is the first public release of this format."
+        },
+        "repo": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+          "description": "GitHub `owner/repo` slug the catalog describes (e.g. `OpenZeppelin/contracts-sui`)."
+        },
+        "repo_ref": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "Full 40-character commit SHA the catalog entries were generated at. Provenance only — each package index's `install.repo_ref` is the authoritative per-package pin."
+        },
+        "release": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$" }
+          ],
+          "description": "Release tag this catalog matches (semver-prefixed), or `null` when generated from main between tags."
+        },
+        "packages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "group", "mvr", "index", "summary"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^openzeppelin_[a-z_0-9]+$",
+                "description": "Package name as it appears in `Move.toml`'s `[package].name` field."
+              },
+              "group": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "description": "Top-level repository group the package lives under (e.g. `contracts`, `math`)."
+              },
+              "mvr": {
+                "type": "string",
+                "pattern": "^@openzeppelin-move/[a-z][a-z0-9-]*$",
+                "description": "Move Package Registry slug for the package."
+              },
+              "index": {
+                "type": "string",
+                "pattern": "^[a-z_0-9/]+/llms/index\\.yaml$",
+                "description": "Repo-root-relative path to the package's per-package index.yaml (e.g. `contracts/access/llms/index.yaml`)."
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 240,
+                "description": "Single-sentence summary (≤240 chars). AI agents read this to decide which package index to fetch next."
+              }
+            }
+          },
+          "description": "Every package in the repository that ships AI integrator metadata, with a one-line summary and a relative path to its index.yaml."
+        }
+      }
+    },
+    {
+      "title": "Per-package index (<package-path>/llms/index.yaml)",
+      "type": "object",
+      "required": ["schema_version", "package", "install", "modules"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1.0",
+          "description": "Schema version. v1.0 is the first public release of this format."
+        },
+        "package": {
+          "type": "string",
+          "pattern": "^openzeppelin_[a-z_0-9]+$",
+          "description": "Package name as it appears in `Move.toml`'s `[package].name` field."
+        },
+        "install": {
+          "type": "object",
+          "required": ["mvr", "repo_ref", "move_toml_snippet", "github_alternative"],
+          "additionalProperties": false,
+          "properties": {
+            "mvr": {
+              "type": "string",
+              "pattern": "^@openzeppelin-move/[a-z][a-z0-9-]*$",
+              "description": "Move Package Registry slug for this package."
+            },
+            "repo_ref": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$",
+              "description": "Full 40-character commit SHA in OpenZeppelin/contracts-sui that the per-module YAMLs in this package were extracted from. Single source of truth — module YAMLs no longer carry their own `repo_ref`."
+            },
+            "release": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.-]+)?$" }
+              ],
+              "description": "Release tag this index (and the per-module YAMLs under it) matches (semver-prefixed). `null` when extracted from main between tags. In either case, `install.repo_ref` is the actual reproducible pin."
+            },
+            "move_toml_snippet": {
+              "type": "string",
+              "description": "`Move.toml` `[dependencies]` snippet pinning the package via MVR. Package-level — applies to every module in the package."
+            },
+            "github_alternative": {
+              "type": "string",
+              "description": "Alternative `Move.toml` `[dependencies]` snippet pinning the package via direct git ref — used when MVR is unavailable. The snippet's `rev = \"<commit-sha-or-tag>\"` is the agent-fills-in slot; `install.repo_ref` above documents the commit this metadata was extracted from."
+            }
+          },
+          "description": "Package-level install metadata, hoisted from per-module YAMLs to avoid duplication and drift. The per-module YAML's `install:` block holds only its `use_statement`."
+        },
+        "modules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "path", "summary"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z_][a-z_0-9]*$",
+                "description": "Module declaration name (e.g., `access_control`, `two_step_transfer`)."
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^[a-z_0-9/]+\\.yaml$",
+                "description": "Relative path from this index file to the module's YAML, mirroring the `sources/` subdirectory layout (e.g., `access_control.yaml`, `ownership_transfer/two_step_transfer.yaml`)."
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 240,
+                "description": "Single-sentence summary (≤240 chars) capturing what the module does. AI agents read this to pick which per-module YAML to fetch next."
+              }
+            }
+          },
+          "description": "Every public module in the package, with a one-line summary and a relative path to its per-module YAML."
+        }
+      }
+    }
+  ]
+}

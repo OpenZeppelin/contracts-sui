@@ -1,0 +1,54 @@
+# OpenZeppelin Contracts for Sui
+
+> Secure smart contract libraries written in Move for the Sui blockchain. OpenZeppelin's Web3 standards brought to Sui — a growing collection of audited Move building blocks for decentralized application development.
+
+This file follows the [llms.txt convention](https://llmstxt.org/) to help AI integrator agents (Cursor, Claude Code, Cline, GitHub Copilot, Aider, Gemini CLI, and similar) **use this library in downstream Sui Move projects**. It points to maintained catalogs and per-package documentation rather than enumerating individual modules or hard-coding the current package layout — the library is actively growing, and the per-folder catalogs are always current.
+
+## What this library gives you
+
+The library is organized into top-level package groups, and each group has its own catalog README. **Browse these to discover what packages are available** before drilling into source. New top-level groups may be added as the library expands; the pattern (group folder + `README.md` catalog + per-package directories) stays the same.
+
+- [contracts/](contracts/README.md): Application-level packages.
+- [math/](math/README.md): Math primitive packages.
+
+Each package within a group is a self-contained Move package with its own `Move.toml`, `Published.toml`, `sources/`, `tests/`, and `README.md`. The package's README is the authoritative documentation for what that package provides and how to use it.
+
+## Machine-readable module metadata
+
+Each package's `llms/` directory contains per-module YAML files describing APIs, error codes, integration patterns, and anti-patterns — designed for AI agents to ground code generation at the schema level rather than re-deriving structure from source. A module declared as `openzeppelin_<pkg>::<module>` is documented at `<package-path>/llms/<module>.yaml`, with subdirectories mirroring the package's `sources/` organization where applicable.
+
+For machine-readable discovery, the repository root carries a structured catalog at `llms/index.yaml` enumerating every package (name, MVR slug, group, and the path to each package's own index). Fetch it first to discover all packages in one request — this is the structured sibling of this `llms.txt`, intended for MCP servers and agents that prefer schema-validated YAML over prose.
+
+Then, for "what modules exist in a package", each package's `llms/` directory contains its own `index.yaml` enumerating every module YAML with a one-line summary plus the package's MVR slug and the commit SHA the YAMLs were extracted from. The URL pattern is `<package-path>/llms/index.yaml` — for the packages shipped today: `contracts/access/llms/index.yaml`, `math/core/llms/index.yaml`, `math/fixed_point/llms/index.yaml`. Fetch a package's `index.yaml` to learn its full module set in one request before drilling into individual per-module YAMLs. Both the root catalog and the per-package indexes validate against `schemas/llms-package-index-v1.json` (a `oneOf` over the two forms).
+
+Every public module in this library ships a YAML. Private helpers under each package's `sources/internal/` directory are intentionally not documented at the schema level — they are not part of the integrator-facing API.
+
+The YAML format is governed by a public JSON Schema at [`schemas/llms-metadata-v1.json`](schemas/llms-metadata-v1.json) (`$id`: `https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/schemas/llms-metadata-v1.json`). Integrators and tooling can validate any YAML in this directory tree against it, and external libraries can adopt the same schema to publish their own AI integrator metadata.
+
+## Depending on a package from your project
+
+**Stable releases (recommended).** Audited stable releases of each package are published to the [Move Package Registry (MVR)](https://www.moveregistry.com/) under the `@openzeppelin-move` namespace — for example, [@openzeppelin-move/fixed-point-math](https://www.moveregistry.com/package/@openzeppelin-move/fixed-point-math). This is the right pin for production code. To depend on a package, add it to your `Move.toml`:
+
+```toml
+[dependencies]
+openzeppelin_<pkg> = { r.mvr = "@openzeppelin-move/<pkg>" }
+```
+
+**Pre-release or unreleased work.** If you need to depend on a release tag, branch, or commit that is not yet on MVR (for example, to track an unreleased fix or run against `main`), point at this repository directly:
+
+```toml
+[dependencies.openzeppelin_<pkg>]
+git = "https://github.com/OpenZeppelin/contracts-sui.git"
+subdir = "<path-to-pkg>"
+rev = "<release-tag-or-commit-sha>"
+```
+
+Available release tags are listed under [Releases](https://github.com/OpenZeppelin/contracts-sui/releases). The `subdir` is the package's path inside this repo (e.g., `contracts/access`). Each package's own `Move.toml` is the canonical reference for the exact dependency shape — including any transitive dependencies you would need to mirror.
+
+The library's overall installation prerequisites — including the required Sui CLI version — are documented in the top-level [README](README.md).
+
+## Security awareness
+
+- [audits/](audits/): **Authoritative source for all audit information.** No audit summaries are duplicated elsewhere in this repo — if you want to know whether a specific module has been audited and what reviewers found, look here.
+- [SECURITY.md](SECURITY.md): Vulnerability disclosure policy.
+- [CHANGELOG](CHANGELOG.md): What changed across releases — read this when deciding whether to bump the version you have pinned.

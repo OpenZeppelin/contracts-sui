@@ -1,0 +1,283 @@
+schema_version: "1.0"
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_fp_math::ud30x9
+  package: openzeppelin_fp_math
+  re_exports_from: [ud30x9_base, ud30x9_convert]
+  one_liner: "Unsigned decimal fixed-point type `UD30x9` (`u128` scaled by 10^9, Sui coin precision) — owns the type, raw cast helpers (`wrap`/`unwrap`), and constants (`zero`/`one`/`max`)."
+  summary: |
+    Unsigned decimal fixed-point type `UD30x9` — a `u128` scaled by `10^9`
+    that matches Sui's native coin precision. This module owns the type,
+    its raw cast helpers (`wrap` / `unwrap`), and constant constructors
+    (`zero`, `one`, `max`). Arithmetic, comparison, and bitwise operations
+    live in sibling module `ud30x9_base`; whole-integer conversions live in
+    `ud30x9_convert`. Always pick this type (not raw `u128`) for any
+    non-negative real-valued quantity: prices, fees, rates, balances.
+
+domain: math
+frequency: mixed
+does_not_solve:
+  - "Signed values that can dip below zero — use openzeppelin_fp_math::sd29x9."
+  - "Whole-integer ↔ fixed-point conversion (apply / remove the 10^9 scale) — use openzeppelin_fp_math::ud30x9_convert."
+  - "Arithmetic, comparison, bitwise, logarithms, cross-type casts — use openzeppelin_fp_math::ud30x9_base."
+  - "Integer-only arithmetic without a fractional component — use openzeppelin_math."
+  - "Higher-precision intermediates (e.g., u256-backed Q-notation) — fits in u128 by design."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  use_statement: |
+    use openzeppelin_fp_math::ud30x9;
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  // No `init` is required — `ud30x9` is a pure value type, not a shared object.
+  // Bring the modules you need into scope and start constructing values.
+  module my_sui_app::pricing;
+
+  use openzeppelin_fp_math::{ud30x9, ud30x9_convert};
+  use openzeppelin_fp_math::ud30x9::UD30x9;
+
+  /// Build the canonical "1.5" UD30x9 value.
+  public fun reference_price(): UD30x9 {
+      // 1.0 (via convert) + 0.500_000_000 (via raw wrap) = 1.5
+      ud30x9_convert::from_u128(1).add(ud30x9::wrap(500_000_000))
+  }
+
+quick_start: |
+  // ud30x9 is a pure type module. The API surface IS the quick start:
+  //   - `zero()`, `one()`, `max()` for constant values.
+  //   - `wrap(x: u128)` to lift raw fixed-point bits into UD30x9.
+  //     `42` wrapped is 0.000_000_042, NOT 42.0. Use ud30x9_convert::from_u128
+  //     when 42 means 42.0.
+  //   - `unwrap(x: UD30x9): u128` to drop back to raw bits.
+  //
+  // For arithmetic, comparison, bitwise, or logarithms, reach for
+  // `openzeppelin_fp_math::ud30x9_base`. All `ud30x9_base` functions are
+  // exposed as methods on `UD30x9` via `public use fun`, so `x.add(y)` and
+  // `ud30x9_base::add(x, y)` are equivalent. The same applies to
+  // `ud30x9_convert::to_u128_trunc` / `to_u64_trunc` / `try_to_u64_trunc`.
+  //
+  // For whole-integer ↔ fixed-point conversion, reach for
+  // `openzeppelin_fp_math::ud30x9_convert`.
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types:
+  - name: UD30x9
+    type_params: ""
+    capabilities: [copy, drop, store]
+    role: |
+      Unsigned decimal fixed-point value. Internally `u128` scaled by `10^9`:
+      `1.0` is `1_000_000_000`, `0.000_000_001` is `1`. Decimal range
+      `0` to ~`3.4 × 10^29`. Has `copy + drop + store`, so it behaves like a
+      primitive — pass it by value, store it inside structs, copy freely.
+      It is NOT a shared object and does NOT need `init`. Construct via
+      `zero()` / `one()` / `max()` / `wrap(raw)` here, or via
+      `ud30x9_convert::from_u64` / `from_u128` when you want the integer
+      semantics (multiplied by `10^9`).
+
+api:
+  - name: zero
+    kind: read
+    sig: "() -> UD30x9"
+    role: "Returns the UD30x9 representation of 0. Use as an additive identity / sentinel initial balance."
+    aborts: []
+
+  - name: one
+    kind: read
+    sig: "() -> UD30x9"
+    role: "Returns the UD30x9 representation of 1.0 (raw bits 10^9). Use as a multiplicative identity / scale anchor."
+    aborts: []
+
+  - name: max
+    kind: read
+    sig: "() -> UD30x9"
+    role: "Returns the largest representable UD30x9 value (raw bits u128::MAX, decimal ~3.4e29). Use as a saturating sentinel; reaching it in arithmetic typically means EOverflow is one operation away."
+    aborts: []
+
+  - name: wrap
+    kind: read
+    sig: "(x: u128) -> UD30x9"
+    role: "Wraps raw u128 bits into a UD30x9 value WITHOUT applying the 10^9 scale. `wrap(42)` is 0.000_000_042, not 42.0."
+    aborts: []
+    notes: |
+      Use `wrap` when the input is already in fixed-point form (e.g., loaded
+      from storage, returned by another fixed-point function, or hand-encoded
+      as a literal scaled value like `500_000_000` for `0.5`). If `42`
+      means `42.0` in your domain, call `ud30x9_convert::from_u128(42)`
+      instead — that path multiplies by `10^9`. Mixing the two collapses to
+      a `10^9`-sized bug downstream, usually far from the call site.
+
+  - name: unwrap
+    kind: read
+    sig: "(x: UD30x9) -> u128"
+    role: "Returns the raw u128 bits of a UD30x9 value, preserving the 10^9 scale. Inverse of `wrap`."
+    aborts: []
+    notes: |
+      `unwrap` is a raw cast, not a conversion to a whole integer. The
+      returned `u128` is still scaled by `10^9`. To get the whole-integer
+      representation (dividing out the scale), use
+      `ud30x9_convert::to_u128_trunc` / `to_u64_trunc` /
+      `try_to_u64_trunc` instead.
+
+errors: {}   # ud30x9 itself defines no error codes — all aborts originate in ud30x9_base / ud30x9_convert.
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I have a whole number like `42`. How do I get a UD30x9 representing `42.0`?"
+    options:
+      - use: "ud30x9_convert::from_u128(42)"
+        when: "The input represents the whole-number value 42 in your domain (a token count, a percentage point, a basis-points figure)."
+        why: "Multiplies by 10^9 to apply the fixed-point scale. Result is `42.0`."
+      - use: "ud30x9::wrap(42)"
+        when: "The input is already in fixed-point bits (e.g., read from storage, returned by another fixed-point function)."
+        why: "Preserves raw scale. `wrap(42)` is `0.000_000_042`, not `42.0`. Picking the wrong helper here is the most common `10^9`-sized bug in fixed-point code."
+
+  - question: "I have a UD30x9 and need the whole-integer value (e.g., to settle a token amount). Which function?"
+    options:
+      - use: "x.to_u64_trunc() (from ud30x9_convert)"
+        when: "You want a `u64` token amount — divides by 10^9 and truncates the fractional part."
+        why: "Right shape for settlements onto Sui coin balances. Aborts EOverflow if the integer part exceeds u64::MAX."
+      - use: "x.to_u128_trunc() (from ud30x9_convert)"
+        when: "You need the full u128 integer part (rare — values above u64::MAX integers are unusual onchain)."
+        why: "Same truncation behavior as `to_u64_trunc` but wider target."
+      - use: "x.try_to_u64_trunc() (from ud30x9_convert)"
+        when: "Input may exceed u64::MAX integer part and you want `Option<u64>` instead of an abort."
+        why: "Safer for external / untrusted input."
+      - use: "ud30x9::unwrap(x)"
+        when: "You want the raw scaled `u128` bits — for bit manipulation, serialization, or passing to a low-level helper that already expects scaled bits."
+        why: "NOT a whole-integer conversion. The returned u128 is still scaled by 10^9. Choosing this when you wanted whole-integer semantics is the same `10^9` bug as wrap vs from_u128."
+
+  - question: "Should I use ud30x9 (unsigned) or sd29x9 (signed) for this value?"
+    options:
+      - use: "ud30x9"
+        when: "The value is non-negative by domain rule: token balances, prices, fees, exchange rates, supply totals."
+        why: "Strictly larger non-negative range (`0` to ~3.4e29 vs ~1.7e29 for SD29x9). Subtraction aborts EUnderflow instead of producing a negative — bugs surface loudly."
+      - use: "sd29x9"
+        when: "The value can legitimately dip below zero: balance deltas, signed adjustments, P&L, position sides."
+        why: "Two's-complement representation, half the positive range. Comes with a `min()` gotcha (`abs(min())` and `negate(min())` abort EOverflow)."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions: []   # ud30x9 itself has no caller-side abort rules — all 5 public functions are
+                    # total over their domains. Preconditions on operations originating in
+                    # ud30x9_base / ud30x9_convert (EOverflow, EUnderflow, EDivideByZero, etc.)
+                    # belong in those modules' YAMLs, not here.
+
+do_not:
+  - id: wrap-vs-from-u128-confusion
+    severity: high
+    description: "Use `ud30x9::wrap(n)` when `n` is a whole-number value (e.g., 42 meaning 42.0)."
+    why_bad: "`wrap` preserves raw fixed-point bits — it does NOT multiply by 10^9. `wrap(42)` is `0.000_000_042`, not `42.0`. The resulting value is 10^9 times smaller than intended, and the bug compounds through downstream arithmetic. Typically detected only at integration boundaries (e.g., settlement to a token amount) far from the original call site."
+    fix: "If `n` means a whole-integer quantity in your domain, call `ud30x9_convert::from_u128(n)` — that path applies the `10^9` scale. Use `wrap` only when the input is already a scaled u128 (e.g., the literal `500_000_000` for `0.5`, or a value previously produced by another fixed-point function)."
+    example_bad: |
+      use openzeppelin_fp_math::ud30x9;
+
+      // WRONG — user typed `42` meaning `42.0`, but `wrap` skips the scale.
+      let amount = ud30x9::wrap(42);             // actually 0.000_000_042
+      let fee   = ud30x9::wrap(3_000_000_000);   // 3.0 — correct, this WAS raw bits
+      let total = amount.add(fee);               // ≈ 3.0, NOT 45.0
+    example_good: |
+      use openzeppelin_fp_math::{ud30x9, ud30x9_convert};
+
+      // RIGHT — convert applies the 10^9 scale; wrap is for already-scaled bits.
+      let amount = ud30x9_convert::from_u128(42);   // 42.0
+      let fee    = ud30x9_convert::from_u128(3);    // 3.0
+      let total  = amount.add(fee);                 // 45.0
+
+      // wrap is the right tool when the bits ARE already scaled:
+      let half   = ud30x9::wrap(500_000_000);       // 0.5
+
+  - id: unwrap-treated-as-whole-integer
+    severity: high
+    description: "Treat the `u128` returned by `ud30x9::unwrap` as the whole-integer value of the UD30x9."
+    why_bad: "`unwrap` returns raw scaled bits — divided by `10^9` they are the decimal value. Using the unwrap result directly as a token amount, a percentage, or any integer-meaning quantity inflates the value by `10^9`."
+    fix: "Use `ud30x9_convert::to_u128_trunc(x)` / `to_u64_trunc(x)` / `try_to_u64_trunc(x)` when you want the whole-integer representation. Reserve `unwrap` for bit manipulation, serialization, or passing into another function that already expects fixed-point bits."
+    example_bad: |
+      use openzeppelin_fp_math::{ud30x9, ud30x9_convert};
+
+      let amount = ud30x9_convert::from_u128(42);   // 42.0
+      // WRONG — unwrap returns 42_000_000_000, NOT 42.
+      let token_amount: u128 = ud30x9::unwrap(amount);
+    example_good: |
+      use openzeppelin_fp_math::{ud30x9, ud30x9_convert};
+
+      let amount = ud30x9_convert::from_u128(42);   // 42.0
+      // RIGHT — to_u64_trunc divides out the 10^9 scale.
+      let token_amount: u64 = amount.to_u64_trunc(); // 42
+
+  - id: bitwise-as-arithmetic
+    severity: medium
+    description: "Use `lshift` / `rshift` on a UD30x9 expecting a `* 2` or `/ 2` (or `* 10^9` / `/ 10^9`) operation."
+    why_bad: "Bitwise operators (in `ud30x9_base`) work on the raw u128 bits, not on the decimal value. `x.lshift(1)` doubles the underlying integer, which doubles the decimal value, but `x.lshift(9)` does NOT divide or multiply by `10^9` — `2^9 != 10^9`. Reaching for shifts to apply or remove the fixed-point scale silently produces wrong values."
+    fix: "Use arithmetic — `x.add(x)` for `* 2`, `x.div_trunc(ud30x9_convert::from_u128(2))` for `/ 2`. Use `ud30x9_convert::from_u128 / to_u*_trunc` to apply or remove the `10^9` scale. Reserve bitwise helpers for explicit bit manipulation (packing flags, masking raw representations)."
+    example_bad: |
+      use openzeppelin_fp_math::ud30x9;
+
+      let x = ud30x9::wrap(1_000_000_000); // 1.0
+      // WRONG — trying to "divide by the fixed-point scale" via right-shift.
+      let bad = x.rshift(9);               // bits: 1_000_000_000 >> 9 = 1_953_125
+                                            // decimal: ~0.001_953_125, NOT 1.0 / 10^9.
+    example_good: |
+      use openzeppelin_fp_math::{ud30x9, ud30x9_convert};
+
+      let x = ud30x9::wrap(1_000_000_000); // 1.0
+      // RIGHT — use convert to drop the scale; use arithmetic to do arithmetic.
+      let as_int: u128 = x.to_u128_trunc();             // 1
+      let halved        = x.div_trunc(ud30x9_convert::from_u128(2)); // 0.5
+
+composes_with: []   # Empty — no compositions are source-cited. ud30x9 sits at the bottom of the
+                    # fixed-point stack and is composed BY sibling modules (ud30x9_base,
+                    # ud30x9_convert, sd29x9 via cross-type casts) rather than composing other
+                    # modules itself. Sibling pointers live in does_not_solve[]; choosing among
+                    # them lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+
+  canonical_test: null   # No single happy-path test: ud30x9 is a pure-type wrapper with
+                          # operation-by-operation sharded coverage. Consult the appropriate
+                          # tests/ud30x9_tests/<op>_tests.move file when verifying a specific
+                          # operation; wrap_tests.move is the entry point for wrap / unwrap.
+
+  precondition_proofs: []   # No preconditions in this module.
+
+  do_not_demonstrations:
+    - do_not_id: wrap-vs-from-u128-confusion
+      test_functions: []   # Consumer-side semantic mistake; not in-tree.
+    - do_not_id: unwrap-treated-as-whole-integer
+      test_functions: []   # Consumer-side semantic mistake; not in-tree.
+    - do_not_id: bitwise-as-arithmetic
+      test_functions: []   # Consumer-side semantic mistake; not in-tree.
+
+  do_not_detection:
+    - do_not_id: wrap-vs-from-u128-confusion
+      pattern: "direct call `ud30x9::wrap(<literal>)` with a small unscaled integer literal that looks like a whole-number quantity"
+      heuristic: "literal value is in `1..=1_000_000` AND not a recognizable scaled constant (e.g., not a multiple of 10^9, not powers of 10 between 10^6 and 10^9). Suggest `ud30x9_convert::from_u128` instead."
+    - do_not_id: unwrap-treated-as-whole-integer
+      pattern: "result of `ud30x9::unwrap(_)` (or method-style `_.unwrap()` on UD30x9) bound to or passed to a name suggesting a whole-integer quantity"
+      heuristic: "binding/parameter name matches /^(amount|count|balance|bps|tokens|quantity)/i. Suggest `ud30x9_convert::to_u128_trunc` / `to_u64_trunc` / `try_to_u64_trunc` instead."
+    - do_not_id: bitwise-as-arithmetic
+      pattern: "shift-by-9 (`lshift(9)` / `rshift(9)` / `unchecked_lshift(9)` / `unchecked_rshift(9)`) on UD30x9 as a stand-in for applying or removing the 10^9 scale"
+      heuristic: "method call `<x>.lshift(9)` / `<x>.rshift(9)` / `<x>.unchecked_lshift(9)` / `<x>.unchecked_rshift(9)` where `<x>` is UD30x9-typed. Suggest `ud30x9_convert::from_u128` / `to_u*_trunc` instead."
+
+  events: []   # ud30x9 emits no events. It's a pure value type.

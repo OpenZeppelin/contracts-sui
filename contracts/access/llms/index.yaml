@@ -1,0 +1,43 @@
+# Per-package index of AI integrator metadata for `openzeppelin_access`.
+# Lists every module YAML in this package's `llms/` directory. AI agents
+# reading this can discover the package's full integrator-facing module
+# surface in a single fetch, then drill into <path> for per-module schema
+# metadata (APIs, errors, preconditions, integration patterns, anti-patterns,
+# decision points).
+#
+# Private/internal helpers under `sources/internal/` are intentionally not
+# listed — they are not part of the integrator-facing API.
+
+schema_version: "1.0"
+package: openzeppelin_access
+install:
+  mvr: "@openzeppelin-move/access"
+  repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+  release: null   # release tag this matches (null if extracted between tags); install.repo_ref is the actual pin
+  move_toml_snippet: |
+    [dependencies]
+    openzeppelin_access = { r.mvr = "@openzeppelin-move/access" }
+  github_alternative: |
+    # Uses TOML table-heading form (`[dependencies.name]`) — inline tables
+    # cannot span multiple lines in TOML, so the heading form is the only
+    # readable option with inline comments.
+    [dependencies.openzeppelin_access]
+    git = "https://github.com/OpenZeppelin/contracts-sui.git"
+    subdir = "contracts/access"
+    rev = "<commit-sha-or-tag>"   # Agent fills in. Prefer the latest release tag for stable
+                                  # builds; pin a SHA for audits; use a branch only during
+                                  # active development. See `install.repo_ref` above for the
+                                  # commit this metadata was extracted from.
+
+modules:
+  - name: access_control
+    path: access_control.yaml
+    summary: "Role-based access control with typed `Auth<Role>` proofs minted in PTBs."
+
+  - name: two_step_transfer
+    path: ownership_transfer/two_step_transfer.yaml
+    summary: "Two-step ownership wrapper for `T: key + store` objects requiring recipient acceptance via transfer-to-object."
+
+  - name: delayed_transfer
+    path: ownership_transfer/delayed_transfer.yaml
+    summary: "Time-locked ownership wrapper enforcing `min_delay_ms` on the shared `Clock` before transfer or unwrap."

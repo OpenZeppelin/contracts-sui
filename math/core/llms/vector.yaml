@@ -1,0 +1,337 @@
+schema_version: "1.0"
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::vector
+  package: openzeppelin_math
+  one_liner: "Generic in-place sorting macros for Move vectors — `quick_sort!` for unsigned integer vectors, `quick_sort_by!` for arbitrary types with a caller-supplied non-strict comparator. NOT a substitute for `std::vector`."
+  summary: |
+    Generic in-place sorting macros for Move vectors — `quick_sort!` for
+    unsigned integer vectors (u8..u256), `quick_sort_by!` for arbitrary
+    element types with a caller-supplied non-strict comparator. Iterative
+    quicksort with median-of-three pivot selection, three-way (Dutch
+    National Flag) partitioning, and an insertion-sort fallback for sub-
+    partitions of <= 10 elements. Pure stateless library — no objects, no
+    events, no errors, no authorization. NOT a substitute for `std::vector`:
+    this module ONLY adds sorting macros; element access, push/pop, length,
+    etc. still come from the standard library.
+
+domain: math
+frequency: mixed
+does_not_solve:
+  - "Stable sort — `quick_sort!` / `quick_sort_by!` are explicitly unstable; equal-key relative order is not preserved."
+  - "Allocating sort (returns a new sorted vector) — both macros mutate in place. Clone the input first if you need to keep the unsorted vector."
+  - "Sorted insert / sorted set semantics — sort the whole vector when you need order; this module has no incremental data structure."
+  - "Binary search / lookup over the sorted vector — implement with `std::vector::borrow` plus your own bounds; not provided here."
+  - "Dedup / set-union / set-difference / unique-count helpers — sort first, then walk the vector in your own code."
+  - "Sorting `std::vector` elements via a Move-stdlib free function — these are MACROS (`!` at the call site); they cannot be passed as first-class functions."
+  - "Sorting signed-integer or fixed-point vectors with `quick_sort!` — that macro is constrained to unsigned widths; use `quick_sort_by!` with an explicit comparator instead."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  use_statement: |
+    // NOTE: `openzeppelin_math::vector` is a SEPARATE module from
+    // Move's built-in `std::vector`. Always alias one of them or import
+    // by fully-qualified name to keep the two visually distinct.
+    use openzeppelin_math::vector as oz_vector;
+    // Standard library `vector` continues to provide push/pop/length/etc.
+    // — this module only adds sorting macros on top.
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_sui_app::sorting;
+
+  // Alias to avoid visual confusion with Move's built-in `std::vector`.
+  use openzeppelin_math::vector as oz_vector;
+
+  // No `init` needed — `openzeppelin_math::vector` is a pure stateless
+  // library of MACROS. There are no objects to publish, no shared state,
+  // and no capabilities to mint. Import the module and call the macros
+  // (note the `!` suffix at every call site).
+
+  /// Wrapper that sorts a u64 fee schedule in place.
+  public fun sort_fee_tiers(tiers: &mut vector<u64>) {
+      oz_vector::quick_sort!(tiers);
+  }
+
+  /// Wrapper that sorts a vector of bids by price descending using a
+  /// custom comparator. Note the non-strict `>=` — using strict `>`
+  /// would defeat three-way partitioning on ties.
+  public fun sort_bids_descending(bids: &mut vector<u128>) {
+      oz_vector::quick_sort_by!(bids, |a: &u128, b: &u128| *a >= *b);
+  }
+
+quick_start: |
+  // Minimal end-to-end happy path. No setup, no objects, no PTBs.
+  // Both macros mutate the vector in place — there is no return value.
+
+  use openzeppelin_math::vector as oz_vector;
+
+  // 1. Ascending sort of an unsigned integer vector. Works for any of
+  //    u8 / u16 / u32 / u64 / u128 / u256.
+  let mut amounts = vector[5u64, 2, 8, 1, 9, 3, 7, 4, 6];
+  oz_vector::quick_sort!(&mut amounts);
+  // amounts is now [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+  // 2. Descending sort via a custom comparator (note non-strict `>=`).
+  let mut amounts_desc = vector[5u64, 2, 8, 1, 9, 3, 7, 4, 6];
+  oz_vector::quick_sort_by!(&mut amounts_desc, |a: &u64, b: &u64| *a >= *b);
+  // amounts_desc is now [9, 8, 7, 6, 5, 4, 3, 2, 1]
+
+  // 3. Sort a vector of caller-defined structs by a field. The element
+  //    type does not need to be a primitive — just provide a comparator
+  //    that returns bool from two `&T` references.
+  public struct Order has drop { price: u64, size: u64 }
+  let mut book = vector[
+      Order { price: 30, size: 1 },
+      Order { price: 10, size: 5 },
+      Order { price: 20, size: 3 },
+  ];
+  oz_vector::quick_sort_by!(&mut book, |a: &Order, b: &Order| a.price <= b.price);
+  // book is now ordered by ascending price.
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # No structs, capabilities, or events — `openzeppelin_math::vector`
+            # is a pure macro library over `vector<$T>` from `std::vector`.
+
+api:
+  - name: quick_sort
+    kind: macro
+    sig: "<$Int>($vec: &mut vector<$Int>)"
+    role: "Sort an unsigned integer vector ascending, in place. Macro — call with a trailing `!`: `vector::quick_sort!(&mut v)`."
+    aborts: []
+    notes: |
+      Constrained to unsigned integer element types only — `u8`, `u16`,
+      `u32`, `u64`, `u128`, `u256`. For any other element type, or any
+      non-ascending ordering, use `quick_sort_by!` with an explicit
+      comparator instead. Unstable sort: equal keys may reorder.
+
+      Algorithmic characteristics (so an integrator agent does NOT need
+      to re-derive performance from source):
+        - Iterative quicksort (explicit stack, no recursion limit).
+        - Median-of-three pivot selection over (start, mid, end-1).
+        - Three-way (Dutch National Flag) partitioning — handles
+          duplicate-heavy inputs in linear time on the equal region.
+        - Insertion-sort fallback for sub-partitions of size <= 10.
+        - Average O(n log n); theoretical worst case O(n²) on
+          adversarial inputs.
+        - In-place: zero auxiliary heap beyond a small stack of
+          partition bounds (logarithmic in the vector length).
+
+  - name: quick_sort_by
+    kind: macro
+    sig: "<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> bool)"
+    role: "Sort a vector of any type in place using a caller-supplied non-strict comparator. Macro — call with a trailing `!`: `vector::quick_sort_by!(&mut v, |a, b| ...)`."
+    aborts: []
+    notes: |
+      `$le` MUST implement NON-STRICT ordering: return `true` when the
+      first element is ordered BEFORE-OR-EQUAL to the second
+      (`<=` for ascending, `>=` for descending). A strict comparator
+      (`<` or `>`) compiles and produces a sorted result, but it
+      defeats three-way partitioning on ties — performance degrades to
+      O(n²) when many duplicates are present. This is the most common
+      misuse of this macro; see do_not[strict-comparator-quick-sort-by].
+
+      Same algorithmic profile as `quick_sort!`: iterative, median-of-
+      three, three-way partitioning, insertion-sort fallback at
+      sub-partition size <= 10, in-place, unstable.
+
+      Comparator is invoked many times during the sort — keep it pure
+      and side-effect-free. The macro borrows `$vec` mutably; the
+      comparator must NOT try to mutate the same vector or any aliased
+      cell, or the borrow checker will reject the compile.
+
+errors: {}    # No `#[error]` constants — neither macro aborts under any input.
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I need to sort a vector of unsigned integers ascending — which macro do I call?"
+    options:
+      - use: "quick_sort!"
+        when: "Element type is one of u8 / u16 / u32 / u64 / u128 / u256 AND you want plain ascending order."
+        why: "Default ascending path; the macro inlines the natural `<=` comparator so you write less code at the call site. Mechanically identical to `quick_sort_by!(&mut v, |x, y| *x <= *y)`."
+      - use: "quick_sort_by!"
+        when: "Element type is not an unsigned integer (struct, address, custom value) OR you need any ordering other than the natural ascending one."
+        why: "Generic over `$T`; you supply the comparator. Required for descending sorts, sort-by-field, address sorts, etc."
+
+  - question: "I want a descending sort. How do I write the comparator?"
+    options:
+      - use: "quick_sort_by!(&mut v, |a, b| *a >= *b)"
+        when: "Always — non-strict `>=` is the only correct form for descending order with this macro."
+        why: "Non-strict (`>=`) preserves three-way partitioning on duplicates. The Dutch National Flag scheme groups equal elements in a single pass; a strict comparator collapses that region and pushes equal elements into the recursive partitions, degrading runtime."
+      - use: "quick_sort_by!(&mut v, |a, b| *a > *b)"
+        when: "NEVER — included only so the agent recognizes and rejects this shape if generated from intuition."
+        why: "Compiles and produces a correctly sorted vector, but performance falls to O(n²) on duplicate-heavy inputs. See do_not[strict-comparator-quick-sort-by]."
+
+  - question: "I need a sorted COPY of a vector but want to keep the original — what's the pattern?"
+    options:
+      - use: "Clone the source, then sort the clone in place"
+        when: "Element type has the `copy` ability (e.g., primitives, simple value structs)."
+        why: "Both macros mutate in place; there is no allocating variant. Cloning is the canonical immutable-input pattern."
+      - use: "Re-think whether you really need the original"
+        when: "Element type lacks `copy` (Move resource / object types). You cannot duplicate it cheaply."
+        why: "For non-copy types, sorting in place is the only option — design your data flow so the source vector is logically consumed by the sort."
+
+  - question: "My vector has a few hundred thousand elements — will I hit a stack limit?"
+    options:
+      - use: "quick_sort! / quick_sort_by!"
+        when: "Always. The implementation is intentionally non-recursive."
+        why: "Both macros use an explicit `vector<u64>` stack of partition bounds rather than Move-macro recursion. Macro recursion depth is otherwise the limiting factor in Move; the iterative implementation removes that ceiling. Stack memory grows logarithmically in vector length."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions: []   # Both macros are total over their input domain: every
+                    # vector of any supported length sorts correctly. There
+                    # are no abort paths and therefore no caller-side rules
+                    # that, if violated, produce a runtime error. All
+                    # mistakes against this module are silent-failure
+                    # patterns and live under do_not[].
+
+do_not:
+  - id: strict-comparator-quick-sort-by
+    severity: medium
+    description: "Pass a strict comparator (`<` or `>`) to `quick_sort_by!` instead of the required non-strict (`<=` / `>=`) form."
+    why_bad: "The macro is built on Dutch National Flag (three-way) partitioning, which uses `$le(a, b) && $le(b, a)` to detect equality. A strict comparator can never return both directions true, so equality is never recognized — the equal region collapses, duplicates are pushed into the recursive sub-partitions, and worst-case behavior degrades to O(n²) on duplicate-heavy inputs. The sort still compiles and the output is still correctly ordered, so the bug is silent in tests with unique keys."
+    fix: "Always use `<=` for ascending order and `>=` for descending order in the comparator. This is documented inline in the macro's `#### Parameters` block on the `$le` argument."
+    example_bad: |
+      // WRONG — strict `<` defeats three-way partitioning on ties.
+      // Output is sorted, but runtime is O(n^2) when duplicates exist.
+      let mut amounts = vector[5u64, 2, 5, 1, 5, 2, 3, 5, 1];
+      oz_vector::quick_sort_by!(&mut amounts, |a: &u64, b: &u64| *a < *b);
+    example_good: |
+      // RIGHT — non-strict `<=` preserves Dutch National Flag partitioning.
+      let mut amounts = vector[5u64, 2, 5, 1, 5, 2, 3, 5, 1];
+      oz_vector::quick_sort_by!(&mut amounts, |a: &u64, b: &u64| *a <= *b);
+
+  - id: confuse-with-std-vector
+    severity: medium
+    description: "`use openzeppelin_math::vector;` alongside calls to `vector::push_back`, `vector::length`, `vector::borrow` and friends, assuming this module supersedes `std::vector`."
+    why_bad: "`openzeppelin_math::vector` is a SEPARATE module that only adds sorting macros. It does NOT re-export `std::vector`'s API. With an unaliased `use`, the local name `vector` shadows the standard library, and any call to a non-existent function (`vector::push_back`) becomes a confusing compile error pointing at the wrong module."
+    fix: "Alias the OpenZeppelin module on import (`use openzeppelin_math::vector as oz_vector;`) and continue to use `std::vector` for push/pop/length/etc., or call fully-qualified names everywhere."
+    example_bad: |
+      // WRONG — shadows std::vector with the OZ module that lacks push_back.
+      use openzeppelin_math::vector;
+
+      public fun build_and_sort(): vector<u64> {
+          let mut v = vector::empty<u64>();        // ERROR: function does not exist in openzeppelin_math::vector
+          vector::push_back(&mut v, 3);            // ERROR: same
+          vector::quick_sort!(&mut v);
+          v
+      }
+    example_good: |
+      // RIGHT — alias the OZ module; std::vector continues to work unchanged.
+      use openzeppelin_math::vector as oz_vector;
+
+      public fun build_and_sort(): vector<u64> {
+          let mut v = vector::empty<u64>();        // std::vector — unchanged
+          vector::push_back(&mut v, 3);            // std::vector — unchanged
+          oz_vector::quick_sort!(&mut v);          // OZ sorting macro
+          v
+      }
+
+  - id: rely-on-sort-stability
+    severity: medium
+    description: "Sort a vector of records by ONE field and assume records with equal keys retain their original relative order (e.g., insertion-order tie-breaking for fair ordering)."
+    why_bad: "Both macros are explicitly UNSTABLE. Three-way partitioning groups equal-key elements but does not preserve their relative positions within that group — and the median-of-three pivot rotation can reorder equal elements before partitioning even runs. Protocols that depend on stability for fairness, FIFO matching, or deterministic tie-breaking get unpredictable order across compiler versions and input shapes."
+    fix: "When stability matters, augment each record with a secondary tie-break key (the original index, a timestamp, an object ID) and sort on the lexicographic pair `(primary, secondary)` via `quick_sort_by!`."
+    example_bad: |
+      // WRONG — assumes orders with the same price stay in insertion order
+      // for fairness. Unstable sort breaks this silently.
+      public struct Order has drop { price: u64, submitted_at: u64 }
+      public fun match_orders(orders: &mut vector<Order>) {
+          oz_vector::quick_sort_by!(orders, |a: &Order, b: &Order| a.price <= b.price);
+          // Subsequent matching logic assumes FIFO within a price level.
+      }
+    example_good: |
+      // RIGHT — include the secondary key in the comparator. Equal-price
+      // orders are now tie-broken by submission time.
+      public struct Order has drop { price: u64, submitted_at: u64 }
+      public fun match_orders(orders: &mut vector<Order>) {
+          oz_vector::quick_sort_by!(orders, |a: &Order, b: &Order| {
+              if (a.price != b.price) { a.price <= b.price }
+              else { a.submitted_at <= b.submitted_at }
+          });
+      }
+
+  - id: sort-then-discard-original-needed-later
+    severity: low
+    description: "Pass a vector you still need in its original order to `quick_sort!` / `quick_sort_by!` without cloning first."
+    why_bad: "Both macros mutate the vector in place. After the call, the original order is lost. If a later code path depends on the original (provenance trail, FIFO audit log), the data is unrecoverable."
+    fix: "Clone the vector before sorting when the element type supports `copy`. For non-copy element types, restructure the flow so the unsorted vector is logically consumed."
+    example_bad: |
+      // WRONG — original order is destroyed; downstream code now sees a
+      // sorted history that was supposed to be chronological.
+      public fun audit_top_n(history: &mut vector<u64>, n: u64): vector<u64> {
+          oz_vector::quick_sort!(history);
+          let mut out = vector[];
+          let mut i = 0;
+          while (i < n) { out.push_back(history[i]); i = i + 1; };
+          out
+      }
+    example_good: |
+      // RIGHT — sort a clone, leave the audit-relevant original intact.
+      public fun audit_top_n(history: &vector<u64>, n: u64): vector<u64> {
+          let mut working = *history;          // copy (vector<u64> is copy)
+          oz_vector::quick_sort!(&mut working);
+          let mut out = vector[];
+          let mut i = 0;
+          while (i < n) { out.push_back(working[i]); i = i + 1; };
+          out
+      }
+
+composes_with: []   # Empty — no compositions are source-cited. The module
+                    # has no objects, no events, no errors, and no sibling
+                    # in the package that documents a joint usage pattern.
+                    # Sibling pointers (e.g., binary search, dedup) live in
+                    # does_not_solve[]; choosing between quick_sort! and
+                    # quick_sort_by! lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+
+  canonical_test:
+    file: math/core/tests/macros/quick_sort.move
+    function: quick_sort_random_small_vector
+
+  precondition_proofs: []   # No preconditions[] entries — both macros are
+                            # total over their input domain and have no
+                            # abort paths to ground.
+
+  do_not_demonstrations:
+    - do_not_id: strict-comparator-quick-sort-by
+      test_functions: []   # consumer-side perf pattern; not in-tree
+    - do_not_id: confuse-with-std-vector
+      test_functions: []   # consumer-side import-shadowing pattern; not in-tree
+    - do_not_id: rely-on-sort-stability
+      test_functions: []   # consumer-side semantic pattern; not in-tree
+    - do_not_id: sort-then-discard-original-needed-later
+      test_functions: []   # consumer-side data-flow pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: strict-comparator-quick-sort-by
+      pattern: "quick_sort_by! invoked with a strict comparator (`<` or `>`) instead of non-strict (`<=` / `>=`)"
+      heuristic: "regex on call site — `quick_sort_by!\\s*\\([^)]*\\|[^|]*\\|[^)]*[<>][^=][^)]*\\)`; flag any `|...,...| *a < *b` / `*a > *b` shape"
+    - do_not_id: confuse-with-std-vector
+      pattern: "`use openzeppelin_math::vector;` without an alias, followed by calls to `vector::push_back` / `vector::length` / `vector::borrow` / `vector::empty`"
+      heuristic: "AST rule — when `openzeppelin_math::vector` is imported unaliased, any `vector::<name>` call where `<name>` is not `quick_sort` / `quick_sort_by` is suspect"
+
+  events: []   # The module emits no events.

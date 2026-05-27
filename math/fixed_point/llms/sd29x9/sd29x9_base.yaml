@@ -1,0 +1,529 @@
+schema_version: "1.0"
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_fp_math::sd29x9_base
+  package: openzeppelin_fp_math
+  one_liner: "Arithmetic, transcendental, comparison, and cross-type cast operations on the signed `SD29x9` fixed-point type — the operations layer (the type and its raw casts live in `openzeppelin_fp_math::sd29x9`)."
+  summary: |
+    Low-level arithmetic, transcendental, comparison, and cross-type cast
+    primitive for the signed fixed-point type `SD29x9` (u128-backed two's
+    complement, 10^9 scale, decimal range ~-1.7e29 .. 1.7e29). `sd29x9_base`
+    operates on the WRAPPED `SD29x9` value type defined in sibling module
+    `openzeppelin_fp_math::sd29x9`; on-chain storage is the raw u128 two's
+    complement bit pattern, but callers never see those bits — they pass
+    `SD29x9` values and the module decomposes / re-wraps internally. Reach
+    for it for any signed fractional math on Sui (balance deltas, P&L,
+    signed adjustments). All entries are re-exported as method-style calls
+    on `SD29x9` via `public use fun` in `sd29x9`, so `x.add(y)` and
+    `sd29x9_base::add(x, y)` are equivalent.
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Storing or constructing an `SD29x9` from raw `(magnitude, is_negative)` parts — use `openzeppelin_fp_math::sd29x9::wrap` (or `min` / `max` / `zero` / `one` constants)."
+  - "Building an `SD29x9` from a whole integer like `-7` — use `openzeppelin_fp_math::sd29x9_convert::from_u128(mag, is_negative)`."
+  - "Extracting `(magnitude, sign)` parts back out — use `openzeppelin_fp_math::sd29x9_convert::to_parts_trunc`."
+  - "Unsigned-only math (token balances, supplies, prices that cannot dip below zero) — use `openzeppelin_fp_math::ud30x9_base` for cheaper / wider-range arithmetic."
+  - "Bitwise operations (`and`, `or`, `xor`, `lshift`, `rshift`) — intentionally NOT exposed on `SD29x9`; bit-twiddling on two's complement is rarely what protocol authors mean. If you need them, work on `UD30x9`."
+  - "Returning `Option<SD29x9>` on overflow — every checked operation aborts; use `unchecked_add` / `unchecked_sub` only when the bound is proven, or implement a `try_*` helper locally over `unwrap` + u256."
+  - "Integer-only arithmetic — use sibling package `openzeppelin_math`."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  use_statement: |
+    use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
+    use openzeppelin_fp_math::sd29x9_base;
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_protocol::ledger;
+
+  use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
+  use openzeppelin_fp_math::sd29x9_base;
+  use openzeppelin_fp_math::sd29x9_convert;
+
+  /// Apply a signed adjustment to a running balance. `magnitude` is the
+  /// absolute value; `is_negative` carries the sign because Move has no
+  /// native signed int.
+  public fun apply_delta(
+      balance: SD29x9,
+      magnitude: u128,
+      is_negative: bool,
+  ): SD29x9 {
+      let delta = sd29x9_convert::from_u128(magnitude, is_negative);
+      balance.add(delta)                       // aborts EOverflow if it doesn't fit
+  }
+
+quick_start: |
+  // Three idioms an integrator typically reaches for, in increasing complexity.
+
+  use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
+  use openzeppelin_fp_math::sd29x9_base;
+  use openzeppelin_fp_math::sd29x9_convert;
+
+  // 1. Build a value from an integer + arithmetic + safe negate.
+  let principal: SD29x9 = sd29x9_convert::from_u128(1_000, false);  // 1000.0
+  let loss: SD29x9 = sd29x9::wrap(250_000_000, true);               // -0.25 (raw scale)
+  let net = principal.add(loss);                                     // aborts EOverflow if OOB
+
+  // 2. Euclidean modulo — prefer over `rem` when you want a non-negative residue.
+  let residue = signed_value.mod(modulus);                           // always 0 <= r < |modulus|
+
+  // 3. Cast back to unsigned when the value is guaranteed non-negative.
+  let unsigned = positive_signed.into_UD30x9();                      // aborts ECannotBeConvertedToUD30x9 if negative
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types:
+  # The integrator-facing value type `SD29x9` lives in sibling module
+  # `openzeppelin_fp_math::sd29x9` (see sd29x9.yaml). `sd29x9_base` does not
+  # define a new wrapper; the one type it does declare is `Components`,
+  # surfaced publicly so downstream tooling can pattern-match on the
+  # `(sign, magnitude)` decomposition used internally to bridge between
+  # two's complement bits and signed arithmetic.
+  - name: Components
+    type_params: ""
+    capabilities: [copy, drop]
+    role: |
+      Plain-data `{ neg: bool, mag: u256 }` representing the
+      sign-magnitude decomposition of an `SD29x9`'s underlying u128
+      two's complement bit pattern. The module decomposes inputs into
+      this shape, performs unsigned arithmetic on `mag` (in u256 to
+      absorb intermediate doubling), and re-wraps via the internal
+      `wrap_components` helper which enforces the `EOverflow` boundary
+      and re-encodes negative values as two's complement.
+      You almost never construct `Components` yourself — it is exposed
+      so static analyzers and adjacent modules can reason about the
+      sign-magnitude layer without re-deriving it. If you need the
+      `(magnitude, is_negative)` shape at the public boundary, prefer
+      `sd29x9_convert::to_parts_trunc` (returns `(u128, bool)`).
+
+api:
+  # --- Cross-type casts (first — typical entry point from UD30x9 world) ---
+  - name: into_UD30x9
+    sig: "(x: SD29x9) -> UD30x9"
+    role: "Cast a non-negative `SD29x9` to `UD30x9`, preserving the scaled numeric meaning."
+    aborts: [ECannotBeConvertedToUD30x9]
+    notes: "Cast = preserves the 10^9 scale; does NOT multiply or divide. Aborts if `x` is negative. Use `try_into_UD30x9` if the input may be negative."
+
+  - name: try_into_UD30x9
+    sig: "(x: SD29x9) -> Option<UD30x9>"
+    role: "Same as `into_UD30x9`, returns `none()` when `x` is negative instead of aborting."
+    aborts: []
+
+  # --- Arithmetic ---
+  - name: add
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Signed addition. Aborts on overflow at the `SD29x9` boundary."
+    aborts: [EOverflow]
+    notes: "Use `unchecked_add` only when the bound is provably safe — see decisions[]."
+
+  - name: sub
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Signed subtraction `x - y`. Aborts on overflow at the `SD29x9` boundary."
+    aborts: [EOverflow]
+    notes: "Internally implemented as `x + negate(y)` — so `sub(_, min())` aborts EOverflow because `negate(min())` does."
+
+  - name: mul
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Signed multiply with fixed-point scaling, rounded toward zero. Alias for `mul_trunc`."
+    aborts: [EOverflow]
+    notes: "Pick `mul_away` for protocol-side fees; `mul_trunc` for vault math; `mul` when rounding direction does not matter — see decisions[]."
+
+  - name: mul_trunc
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Signed multiply, round toward zero. Explicit name."
+    aborts: [EOverflow]
+    notes: "Round-toward-zero on signed values: `-1.000000001 * 1.000000001` truncates to `-1.000000001`, not `-1.000000003`."
+
+  - name: mul_away
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Signed multiply, round away from zero when inexact (sign-preserving away-from-zero, NOT round-half-up)."
+    aborts: [EOverflow]
+    notes: "`1.000000001 * 1.000000001` returns `1.000000003`; `-1.000000001 * 1.000000001` returns `-1.000000003`. Use for fees and slippage caps."
+
+  - name: div
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Signed divide, round toward zero. Alias for `div_trunc`."
+    aborts: [EDivideByZero, EOverflow]
+
+  - name: div_trunc
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Signed divide, round toward zero. Explicit name."
+    aborts: [EDivideByZero, EOverflow]
+
+  - name: div_away
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Signed divide, round away from zero when inexact."
+    aborts: [EDivideByZero, EOverflow]
+    notes: "`1.0 / 3.0` = `0.333333334`; `-1.0 / 3.0` = `-0.333333334`."
+
+  - name: rem
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Truncating remainder. Magnitude is `abs(x) % abs(y)`; sign follows the DIVIDEND `x`."
+    aborts: [EDivideByZero]
+    notes: "`rem(-7, 3) = -1`. Use `mod` (Euclidean) unless your protocol specifically wants the truncating semantics — see decisions[]."
+
+  - name: mod
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Euclidean remainder. Always non-negative; satisfies `0 <= result < abs(y)`."
+    aborts: [EDivideByZero]
+    notes: "`mod(-7, 3) = 2`. Default choice for residue-class arithmetic."
+
+  - name: pow
+    sig: "(x: SD29x9, exp: u8) -> SD29x9"
+    role: "Integer-exponent power via binary exponentiation."
+    aborts: [EOverflow]
+    notes: "Approximate — each intermediate multiply applies fixed-point truncation, biasing magnitude toward zero. Not associative under truncation. Sign of the result is `neg(x) AND (exp is odd)` — even powers of a negative base are positive. For `0 < |x| < 1` intermediate values can hit zero before the mathematical limit. Verify behavior at your protocol's typical exponent and operand magnitudes."
+
+  - name: sqrt
+    sig: "(x: SD29x9) -> SD29x9"
+    role: "Square root. Returns the largest non-negative `SD29x9` `r` such that `r * r <= x`."
+    aborts: [ENegativeSqrt]
+    notes: "Aborts on negative input; consider `try_into_UD30x9` followed by `ud30x9_base::sqrt` if your input is already non-negative and you want to avoid the lift cost."
+
+  - name: ln
+    sig: "(x: SD29x9) -> SD29x9"
+    role: "Natural logarithm, rounded toward zero."
+    aborts: [ELogUndefined]
+    notes: "Defined for strictly positive `x`. Result is negative for `0 < x < 1`. Rounding is toward zero (matching `mul_trunc`/`div_trunc`); for negative results this is normally 1 ulp closer to zero than the true value, but in narrow boundary cases may instead be 1 ulp further from zero — see the `log2` source comment."
+
+  - name: log2
+    sig: "(x: SD29x9) -> SD29x9"
+    role: "Base-2 logarithm, rounded toward zero."
+    aborts: [ELogUndefined]
+    notes: "Same domain (`x > 0`) and rounding (toward zero) as `ln`. `log2(0.5) = -1.0`."
+
+  - name: log10
+    sig: "(x: SD29x9) -> SD29x9"
+    role: "Base-10 logarithm, rounded toward zero."
+    aborts: [ELogUndefined]
+
+  # --- Comparison ---
+  - name: eq
+    sig: "(x: SD29x9, y: SD29x9) -> bool"
+    role: "Equality by raw underlying bits. `wrap` normalizes `(0, true)` and `(0, false)` to the same encoding so zero-equality behaves as expected."
+    aborts: []
+  - name: neq
+    sig: "(x: SD29x9, y: SD29x9) -> bool"
+    role: "Inequality."
+    aborts: []
+  - name: gt
+    sig: "(x: SD29x9, y: SD29x9) -> bool"
+    role: "Strict signed greater-than. Decomposes both sides into `(sign, magnitude)` rather than comparing raw u128 bits."
+    aborts: []
+    notes: "Do NOT compare `x.unwrap()` and `y.unwrap()` directly — the raw bits are two's complement and would sort negatives ABOVE positives. Always use this function (or `lt`/`gte`/`lte`)."
+  - name: gte
+    sig: "(x: SD29x9, y: SD29x9) -> bool"
+    role: "Signed greater-than-or-equal."
+    aborts: []
+  - name: lt
+    sig: "(x: SD29x9, y: SD29x9) -> bool"
+    role: "Strict signed less-than."
+    aborts: []
+  - name: lte
+    sig: "(x: SD29x9, y: SD29x9) -> bool"
+    role: "Signed less-than-or-equal."
+    aborts: []
+  - name: is_zero
+    sig: "(x: SD29x9) -> bool"
+    role: "Test against the zero value."
+    aborts: []
+
+  # --- Rounding helpers ---
+  - name: floor
+    sig: "(x: SD29x9) -> SD29x9"
+    role: "Round toward negative infinity to the nearest whole-integer-equivalent SD29x9."
+    aborts: [EOverflow]
+    notes: "Negative non-integers move AWAY from zero (e.g. floor(-1.5) = -2.0). Can abort if the rounded negative result exceeds the representable range."
+
+  - name: ceil
+    sig: "(x: SD29x9) -> SD29x9"
+    role: "Round toward positive infinity to the nearest whole-integer-equivalent SD29x9."
+    aborts: [EOverflow]
+    notes: "Positive non-integers move AWAY from zero (e.g. ceil(1.5) = 2.0). Can abort on the positive boundary."
+
+  - name: abs
+    sig: "(x: SD29x9) -> SD29x9"
+    role: "Absolute value (non-negative result)."
+    aborts: [EOverflow]
+    notes: "Aborts on `min()` because `+2^127` is not representable. Wrap with an `is_min` check if your design naturally produces values near the signed-integer boundary — see do_not[min-without-guard]."
+
+  - name: negate
+    sig: "(x: SD29x9) -> SD29x9"
+    role: "Arithmetic negation `-x`."
+    aborts: [EOverflow]
+    notes: "Aborts on `min()` for the same reason as `abs`. Used internally by `sub`."
+
+  # --- Unchecked escape hatches ---
+  - name: unchecked_add
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Wrapping addition of the raw bit patterns modulo `2^128`. Does not abort on overflow."
+    aborts: []
+    notes: "Use ONLY when bounds are proven externally — the wrap is silent and operates on raw bits, so the resulting `SD29x9` may flip sign without any signal."
+  - name: unchecked_sub
+    sig: "(x: SD29x9, y: SD29x9) -> SD29x9"
+    role: "Wrapping subtraction of the raw bit patterns modulo `2^128`. Does not abort on underflow."
+    aborts: []
+    notes: "Same caveat as `unchecked_add` — silent two's complement wrap; sign may flip without any signal."
+
+errors:
+  EOverflow:
+    code: 0
+    message: "Value overflows SD29x9 (must fit in 2^127 signed range)"
+  ECannotBeConvertedToUD30x9:
+    code: 1
+    message: "Value cannot be converted to UD30x9"
+  EDivideByZero:
+    code: 2
+    message: "Divisor must be non-zero"
+  ENegativeSqrt:
+    code: 3
+    message: "Cannot compute square root of a negative value"
+  ELogUndefined:
+    code: 4
+    message: "Logarithm is undefined: input must be strictly positive"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I have a value that can dip below zero — UD30x9 or SD29x9?"
+    options:
+      - use: "SD29x9 (this module / sibling `sd29x9`)"
+        when: "Balance deltas, P&L, signed adjustments, position sides, anything that can legitimately go negative."
+        why: "Avoids the EUnderflow trap on `ud30x9_base::sub` and avoids encoding 'sign' out-of-band. ~30% range tradeoff (2^127 vs 2^128) is irrelevant for almost all protocol math."
+      - use: "UD30x9 + `ud30x9_base`"
+        when: "Token balances, supplies, prices, fees, any quantity that is unsigned by domain."
+        why: "Cheaper (no decompose/re-wrap on the hot path), wider positive range, and exposes bitwise ops (and/or/xor/shifts) that SD29x9 deliberately does not."
+
+  - question: "I want the remainder of x / y on SD29x9 — `rem` or `mod`?"
+    options:
+      - use: "mod (Euclidean)"
+        when: "Default. You want a stable residue-class representative regardless of dividend sign."
+        why: "Result is always non-negative and satisfies `0 <= mod(x, y) < abs(y)`. `mod(-7, 3) = 2`. The right shape for hashing-by-residue, periodic indexing, ring-buffer arithmetic."
+      - use: "rem (truncating)"
+        when: "You specifically want the remainder to preserve the sign of the dividend (e.g., to thread sign through a pipeline of signed adjustments)."
+        why: "Magnitude is `abs(x) % abs(y)` and sign follows `x`. `rem(-7, 3) = -1`. Surprises most callers — name it loudly at the call site."
+
+  - question: "Which rounding direction should I pick for `mul` and `div` on signed values?"
+    options:
+      - use: "mul_away / div_away"
+        when: "The protocol charges or owes the user — fees, slippage caps, premium calculations on signed flows."
+        why: "Rounding away from zero ensures the protocol never under-charges or under-reserves. For signed inputs, 'away from zero' means BOTH positive and negative results are pushed to the larger-magnitude representable value."
+      - use: "mul_trunc / div_trunc (or alias mul / div)"
+        when: "Internal bookkeeping, vault math, or any flow where the protocol should never give away fractional remainders."
+        why: "Round toward zero on both signs — protocol keeps the dust on positive flows, user keeps the dust on negative flows. Asymmetric rounding across a single accounting flow is the round-trip extraction vector — pick ONE direction per flow."
+      - use: "Mix: mul_trunc on one direction, mul_away on the other"
+        when: "Never — within a single round-trip flow."
+        why: "Asymmetric rounding is the classic vault-extraction vector. Holds doubly on signed values where the dust accumulates on both sides of zero."
+
+  - question: "I might call `abs` or `negate` on a value that could be `min()` (i.e. `-2^127`) — what do I do?"
+    options:
+      - use: "Guard with `eq(sd29x9::min())` and define a domain-specific policy (clamp to `max`, abort with your own domain error, saturate)."
+        when: "Always, when your protocol can structurally produce values near `min()`."
+        why: "`+2^127` is not representable in `SD29x9` two's complement, so `abs(min())` and `negate(min())` both abort `EOverflow` and the call site dies on a value that may have been domain-legal upstream."
+      - use: "`abs(x)` / `negate(x)` without a guard"
+        when: "You can prove the value is not `min()` (e.g., it's the result of `add(positive, anything)` or a freshly-converted `from_u128`)."
+        why: "Fine — but write the proof down in a comment so the next reader does not have to re-derive it."
+
+  - question: "I want log_b(x) on SD29x9 for an arbitrary base b."
+    options:
+      - use: "log2 / log10 / ln directly"
+        when: "Your base is 2, 10, or e."
+        why: "Native, single-call. Cheaper than change-of-base and applies the round-toward-zero rule once."
+      - use: "Change of base: `ln(x).div(ln(b))`"
+        when: "Other bases."
+        why: "Standard identity. Adds two divisions of rounding error; bound your tolerance accordingly. Both `ln` calls abort `ELogUndefined` on non-positive operands."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Pass a non-zero divisor to div / div_trunc / div_away / rem / mod."
+    fails_with: EDivideByZero
+    affects: [div, div_trunc, div_away, rem, mod]
+
+  - must: "Pass `x > 0` to ln / log2 / log10 (strictly positive — zero and negatives are undefined)."
+    fails_with: ELogUndefined
+    affects: [ln, log2, log10]
+
+  - must: "Pass `x >= 0` to sqrt."
+    fails_with: ENegativeSqrt
+    affects: [sqrt]
+
+  - must: "Ensure the SD29x9 value is non-negative before calling into_UD30x9, or use try_into_UD30x9."
+    fails_with: ECannotBeConvertedToUD30x9
+    affects: [into_UD30x9]
+
+  - must: "Bound inputs so that results stay within the SD29x9 signed range (-2^127 .. 2^127 - 1). Holds for add, sub, mul/mul_trunc/mul_away, div/div_trunc/div_away, pow, abs, negate, floor, ceil — the latter four because `abs(min())` / `negate(min())` / `floor`-of-near-`min` / `ceil`-of-near-`max` cross the boundary."
+    fails_with: EOverflow
+    affects: [add, sub, mul, mul_trunc, mul_away, div, div_trunc, div_away, pow, abs, negate, floor, ceil]
+
+do_not:
+  - id: confuse-rem-with-mod
+    severity: high
+    description: "Use `rem` thinking it returns a non-negative Euclidean remainder."
+    why_bad: "`rem` follows the sign of the dividend, so `rem(-7, 3) = -1`, not `2`. Code that hashes by residue, indexes a ring buffer, or computes a periodic schedule will silently produce negative indices and either abort downstream or land in the wrong bucket."
+    fix: "Use `mod` for any residue-class arithmetic. Reserve `rem` for flows where the sign of the dividend MUST be preserved (rare in practice). If you mean `((-7) mod 3) = 2`, write `mod`."
+    example_bad: |
+      // WRONG — rem returns -1, not 2; downstream index is negative.
+      let dividend = sd29x9_convert::from_u128(7, true);    // -7
+      let divisor  = sd29x9_convert::from_u128(3, false);   // 3
+      let bucket   = dividend.rem(divisor);                  // -1.0
+    example_good: |
+      // RIGHT — mod returns 2, always non-negative.
+      let dividend = sd29x9_convert::from_u128(7, true);    // -7
+      let divisor  = sd29x9_convert::from_u128(3, false);   // 3
+      let bucket   = dividend.mod(divisor);                  // 2.0
+
+  - id: min-without-guard
+    severity: high
+    description: "Call `abs`, `negate`, or `sub(_, min())` on a value that can equal `sd29x9::min()` without a guard."
+    why_bad: "`SD29x9::min()` is `-2^127`, and `+2^127` is not representable, so `abs(min())` and `negate(min())` both abort `EOverflow`. `sub(x, min())` is internally `add(x, negate(min()))` and aborts for the same reason. Code that handles arbitrary user-supplied or oracle-supplied signed values will hit this at the boundary."
+    fix: "Branch on `x.eq(sd29x9::min())` before the negation. Decide a domain-specific policy: clamp to `max()`, abort with your own protocol error, or saturate. Document the choice."
+    example_bad: |
+      // WRONG — aborts EOverflow if x happens to be min().
+      public fun flip_sign(x: SD29x9): SD29x9 {
+          x.negate()
+      }
+    example_good: |
+      // RIGHT — guard the boundary explicitly.
+      public fun flip_sign(x: SD29x9): SD29x9 {
+          if (x.eq(sd29x9::min())) {
+              // Domain decision: clamp to max. Could equally well abort, or saturate.
+              sd29x9::max()
+          } else {
+              x.negate()
+          }
+      }
+
+  - id: raw-bit-comparison
+    severity: high
+    description: "Compare two SD29x9 values by unwrapping to u128 and using `<` / `>` on the raw bits."
+    why_bad: "The underlying u128 is two's complement. Raw-bit comparison sorts negatives ABOVE positives — every negative SD29x9 has its sign bit set, which is the high bit of the u128, making it numerically larger than any non-negative value. Any 'pick the larger / smaller' logic written this way silently inverts on signed inputs."
+    fix: "Always use the signed comparison functions: `gt`, `gte`, `lt`, `lte`. They internally decompose both sides into `(sign, magnitude)` and compare semantically. There is no scenario where `x.unwrap() > y.unwrap()` is the right shape for two `SD29x9` values."
+    example_bad: |
+      // WRONG — compares two's complement bits; a negative x ranks ABOVE a positive y.
+      public fun pick_larger(x: SD29x9, y: SD29x9): SD29x9 {
+          if (x.unwrap() > y.unwrap()) { x } else { y }
+      }
+    example_good: |
+      // RIGHT — semantic signed comparison.
+      public fun pick_larger(x: SD29x9, y: SD29x9): SD29x9 {
+          if (x.gt(y)) { x } else { y }
+      }
+
+  - id: unchecked-without-bound-proof
+    severity: medium
+    description: "Reach for `unchecked_add` / `unchecked_sub` for gas savings without a written proof that the operation is bounded."
+    why_bad: "The wrap operates on raw two's complement bits modulo `2^128`. A reasonable-looking computation can silently flip sign (positive overflows wrap to large-magnitude negative; negative underflows wrap to large-magnitude positive) and propagate downstream without any signal. Far harder to debug than the abort case, and on signed values the sign flip is the dangerous failure mode."
+    fix: "Stay on the abort path (`add`, `sub`) unless you have an explicit, written bound. The marginal gas cost of the checked variant is dwarfed by the cost of a sign-flip bug in production."
+    example_bad: |
+      public fun fast_sum(a: SD29x9, b: SD29x9): SD29x9 {
+          a.unchecked_add(b)                  // sign-flip on overflow is silent
+      }
+    example_good: |
+      public fun safe_sum(a: SD29x9, b: SD29x9): SD29x9 {
+          a.add(b)                            // aborts EOverflow at the boundary
+      }
+
+composes_with: []   # Empty — no compositions are cited from source / tests / docs / Notion.
+                    # Sibling pointers ("use sd29x9_convert for whole-integer conversion",
+                    # "use ud30x9_base for unsigned math") live in does_not_solve[].
+                    # Picking between sd29x9_base siblings (rem vs mod, mul_trunc vs mul_away)
+                    # lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+
+  canonical_test: null   # No single happy-path test; suite is sharded per-operation
+                          # (arithmetic_tests, div_tests, mod_tests, rem_tests, pow_tests,
+                     # sqrt_tests, ln_tests, log2_tests, log10_tests, ceil_tests,
+                     # floor_tests, comparison_tests, conversion_tests, casting_tests,
+                     # abs_tests, negate_tests, unchecked_tests).
+
+  precondition_proofs:
+    - precondition_fails_with: EDivideByZero
+      test_file: math/fixed_point/tests/sd29x9_tests/div_tests.move
+      test_functions: []   # Located via `#[expected_failure(abort_code = 2, ...)]` in div_tests.move and mod_tests.move
+    - precondition_fails_with: ELogUndefined
+      test_file: math/fixed_point/tests/sd29x9_tests/ln_tests.move
+      test_functions: []   # Mirror entries in log2_tests.move and log10_tests.move
+    - precondition_fails_with: ENegativeSqrt
+      test_file: math/fixed_point/tests/sd29x9_tests/sqrt_tests.move
+      test_functions: []
+    - precondition_fails_with: ECannotBeConvertedToUD30x9
+      test_file: math/fixed_point/tests/sd29x9_tests/casting_tests.move
+      test_functions: []
+    - precondition_fails_with: EOverflow
+      test_file: math/fixed_point/tests/sd29x9_tests/arithmetic_tests.move
+      test_functions: []   # Also in abs_tests.move, negate_tests.move, pow_tests.move,
+                            # ceil_tests.move, floor_tests.move at the min()/max() boundary.
+
+  do_not_demonstrations:
+    - do_not_id: confuse-rem-with-mod
+      test_functions: []   # Behavioral distinction covered by per-operation suites
+                            # (rem_tests.move and mod_tests.move); not a single demonstrating test.
+    - do_not_id: min-without-guard
+      test_functions: []   # EOverflow on negate(min()) / abs(min()) lives in
+                            # negate_tests.move and abs_tests.move under expected_failure attributes.
+    - do_not_id: raw-bit-comparison
+      test_functions: []   # Consumer-side pattern — no in-tree demonstration; covered
+                            # implicitly by comparison_tests.move asserting the semantic
+                            # ordering across mixed-sign inputs.
+    - do_not_id: unchecked-without-bound-proof
+      test_functions: []   # Consumer-side pattern; not in-tree.
+
+  do_not_detection:
+    - do_not_id: confuse-rem-with-mod
+      pattern: "Call to `sd29x9_base::rem` (or `<SD29x9>.rem`) in a context that hashes / indexes by residue (variable named `bucket`, `index`, `slot`, modular arithmetic), where the dividend is not provably non-negative."
+      heuristic: "grep -nE '\\.rem\\(.*\\)' on .move files; flag if the surrounding 10 lines mention `index`, `bucket`, `slot`, `key`, `hash`."
+    - do_not_id: min-without-guard
+      pattern: "`abs` / `negate` / `sub` on an `SD29x9` value that is not freshly constructed via `from_u128` / `wrap(_, false)` and is not guarded by `eq(sd29x9::min())`."
+      heuristic: "grep -nE '\\.(abs|negate)\\(\\)' on .move files; flag absence of a preceding `if (x.eq(sd29x9::min()))` branch on the same value."
+    - do_not_id: raw-bit-comparison
+      pattern: "Comparison operator (`<`, `>`, `<=`, `>=`) applied to expressions of the form `<sd29x9_value>.unwrap()`."
+      heuristic: "grep -nE '\\.unwrap\\(\\).*(<|>|<=|>=)' on .move files; flag any match where both sides ultimately resolve to an SD29x9."
+    - do_not_id: unchecked-without-bound-proof
+      pattern: "`unchecked_add` / `unchecked_sub` on SD29x9 without a preceding `assert!` or range-check that bounds both operands."
+      heuristic: "grep -nE '\\.(unchecked_add|unchecked_sub)\\(' on .move files; flag absence of `assert!` within the preceding 5 lines."
+
+  events: []   # sd29x9_base emits no events. The `Components` struct has `copy, drop` only
+                # (no `key` / `store`), so it is a value type, not an event — extractor's
+                # EVENT|Components|neg,mag line is a false positive of the heuristic
+                # (`public struct ... has copy, drop` matches the event regex).
+
+  # ============================================================
+  # Audit cross-reference — M2 of contracts-sui covered fp_math.
+  # ============================================================
+  # M-02 (callers see SD29x9 values, NOT raw u128 two's complement bits): the
+  #   wrapping abstraction is preserved end-to-end in the public API. Every
+  #   function above takes `SD29x9` (or `Option<SD29x9>`) and returns
+  #   `SD29x9`. Raw `u128` bits only surface inside the private `decompose`
+  #   and `wrapping_*_bits` helpers and via `sd29x9::from_bits` /
+  #   `sd29x9::unwrap` (escape hatches documented in the wrapper module).
+  #   Integrators MUST NOT compare `unwrap()`ed bits directly — see
+  #   do_not[raw-bit-comparison].
+  # H-01 (`u256::is_power_of_ten`) and L-04 (linear pow) — both findings
+  #   apply to OTHER modules (`openzeppelin_math::u256` and the `pow`
+  #   implementation respectively). `sd29x9_base::pow` delegates rounding
+  #   semantics to fixed-point truncation per intermediate multiply and is
+  #   discussed in its `notes:` block above (truncation bias, non-
+  #   associativity, sign of result is `neg AND (exp odd)`).

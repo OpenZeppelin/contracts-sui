@@ -1,0 +1,415 @@
+schema_version: "1.0"
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::u32
+  package: openzeppelin_math
+  one_liner: "Overflow-safe arithmetic on `u32` with explicit `RoundingMode` — the 32-bit variant of the openzeppelin_math primitive family. Use for compact counters, tick indices, packed encodings; not Sui balance widths (those are `u64`)."
+  summary: |
+    Overflow-safe arithmetic for 32-bit unsigned integers with explicit
+    rounding. The `u32` variant of the per-width openzeppelin_math primitive
+    family — siblings `u8`, `u16`, `u64`, `u128`, `u256` expose the IDENTICAL
+    API surface, so pick the width that matches your domain (Sui balances /
+    timestamps are `u64`; `u32` fits compact counters, decimal scales, tick
+    indices, bit-packed encodings). Wraps shared macros with `u32`-specific
+    downcasting so intermediate products do not silently overflow before the
+    final value is checked.
+
+domain: math
+frequency: user-frequency
+does_not_solve:
+  - "Fractional values, prices, or signed deltas — use openzeppelin_math::fixed_point (UD30x9 / SD29x9)."
+  - "Sui balances, timestamps, or gas accounting — those are `u64`; use openzeppelin_math::u64."
+  - "Cross-chain / high-precision wide arithmetic — use openzeppelin_math::u128 or u256."
+  - "Direct use of the 512-bit intermediate — `u512` exists for internal widening, not application code."
+  - "Decimal-precision conversion between token systems — use openzeppelin_math::decimal_scaling."
+  - "In-place sorting of integer vectors — use openzeppelin_math::vector."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  use_statement: |
+    use openzeppelin_math::{rounding, u32};
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_sui_app::compact_counters;
+
+  use openzeppelin_math::{rounding, u32};
+
+  #[error(code = 0)]
+  const EMathOverflow: vector<u8> = "arithmetic overflow";
+
+  // No init required — `u32` is a stateless functional module.
+  // Call functions directly with literal or stored values.
+
+  public fun midpoint(a: u32, b: u32): u32 {
+      u32::average(a, b, rounding::nearest())
+  }
+
+quick_start: |
+  // u32 happy path — three canonical shapes an integrator reaches for.
+
+  // 1. Overflow-checked multiply-then-divide. Returns Option<u32>.
+  //    Aborts EDivideByZero if denominator is zero.
+  let scaled = u32::mul_div(amount, num, den, rounding::down())
+      .destroy_or!(abort EMathOverflow);
+
+  // 2. Total operation: average never overflows, never returns Option.
+  let mid = u32::average(price_a, price_b, rounding::nearest());
+
+  // 3. Safe bit shift — returns None if a non-zero bit would be lost.
+  let shifted_opt = u32::checked_shl(value, 12);  // Option<u32>
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # Empty — `u32` is a stateless functional module that operates on
+            # the native `u32` primitive. No structs, no objects, no capabilities.
+
+api:
+  - name: average
+    sig: "(a: u32, b: u32, rounding_mode: RoundingMode) -> u32"
+    role: "Arithmetic mean of `a` and `b` with configurable rounding. Never overflows; always representable in u32."
+    aborts: []
+    notes: |
+      Total over its domain — does NOT return Option. Use this instead of
+      `(a + b) / 2`, which overflows when both values are near u32::MAX.
+
+  - name: checked_shl
+    sig: "(value: u32, shift: u8) -> Option<u32>"
+    role: "Left-shift `value` by `shift` bits, returning None if any non-zero bit would be lost."
+    aborts: []
+    notes: |
+      Returns `option::some(0)` when value is zero (any shift). Returns
+      `option::none()` when `shift >= 32` and value is non-zero, OR when the
+      shift would push a non-zero bit out of the u32 range. Use this anywhere
+      Move's `<<` would silently discard bits — bit-packed encodings, Q-notation
+      fixed-point scaling, tick math.
+
+  - name: checked_shr
+    sig: "(value: u32, shift: u8) -> Option<u32>"
+    role: "Right-shift `value` by `shift` bits, returning None if any set bit would be discarded."
+    aborts: []
+    notes: |
+      Mirror of `checked_shl`. Returns `option::some(0)` for zero input.
+      Returns `option::none()` when `shift >= 32` and value is non-zero, OR
+      when shifting would discard a set bit.
+
+  - name: mul_div
+    sig: "(a: u32, b: u32, denominator: u32, rounding_mode: RoundingMode) -> Option<u32>"
+    role: "Compute `(a * b) / denominator` with explicit rounding. Intermediate product is widened so it never silently overflows."
+    aborts: [EDivideByZero]
+    notes: |
+      Returns `option::none()` when the rounded quotient cannot fit in u32.
+      Use this instead of `(a * b) / c` — the manual form overflows when
+      `a * b` exceeds u32::MAX even if the final quotient fits. Rounding
+      direction is a protocol decision; choose deliberately (see the vault
+      example in the docs guide).
+
+  - name: mul_shr
+    sig: "(a: u32, b: u32, shift: u8, rounding_mode: RoundingMode) -> Option<u32>"
+    role: "Compute `(a * b) >> shift` with explicit rounding. Faster than `mul_div` when the denominator is a power of two."
+    aborts: []
+    notes: |
+      Equivalent to `mul_div(a, b, 1 << shift, ...)` but cheaper. Use in
+      Q-notation fixed-point math. Returns `option::none()` when the rounded
+      value cannot be represented in u32. (The Cetus exploit involved exactly
+      this class of operation — bit-shift overflow checks with off-by-one.)
+
+  - name: clz
+    sig: "(value: u32) -> u8"
+    role: "Count leading zero bits in `value`."
+    aborts: []
+    notes: "Returns 32 for `value == 0`. Use for minimum-bit-width calculations, encoding, and packing."
+
+  - name: msb
+    sig: "(value: u32) -> u8"
+    role: "Position of the most significant set bit (zero-based)."
+    aborts: []
+    notes: "Returns 0 for `value == 0` — caller must distinguish the zero case from `value == 1` if it matters."
+
+  - name: log2
+    sig: "(value: u32, rounding_mode: RoundingMode) -> u8"
+    role: "Integer base-2 logarithm with configurable rounding."
+    aborts: []
+    notes: "Returns 0 for `value == 0`. Used in tick-math for concentrated-liquidity AMMs."
+
+  - name: log256
+    sig: "(value: u32, rounding_mode: RoundingMode) -> u8"
+    role: "Integer base-256 logarithm with configurable rounding. Determines byte-length for encoding."
+    aborts: []
+    notes: "Returns 0 for `value == 0`."
+
+  - name: log10
+    sig: "(value: u32, rounding_mode: RoundingMode) -> u8"
+    role: "Integer base-10 logarithm with configurable rounding. Used in decimal-aware scaling and display formatting."
+    aborts: []
+    notes: "Returns 0 for `value == 0`."
+
+  - name: sqrt
+    sig: "(value: u32, rounding_mode: RoundingMode) -> u32"
+    role: "Integer square root with configurable rounding."
+    aborts: []
+    notes: "Returns 0 for `value == 0`. Rounding direction matters for price math — rounding the wrong way creates exploitable discrepancies."
+
+  - name: inv_mod
+    sig: "(value: u32, modulus: u32) -> Option<u32>"
+    role: "Modular multiplicative inverse of `value` mod `modulus`."
+    aborts: [EZeroModulus]
+    notes: |
+      Returns `option::some(inverse)` when `value` and `modulus` are coprime.
+      Returns `option::none()` when not coprime, OR when `modulus == 1`.
+      Aborts when `modulus == 0`.
+
+  - name: mul_mod
+    sig: "(a: u32, b: u32, modulus: u32) -> u32"
+    role: "Compute `(a * b) mod modulus` without intermediate overflow."
+    aborts: [EZeroModulus]
+    notes: "Uses widened intermediate so the product never overflows before the modulo. Aborts when `modulus == 0`."
+
+  - name: is_power_of_ten
+    sig: "(n: u32) -> bool"
+    role: "Check whether `n` is a power of ten within the u32 range (1, 10, 100, ..., 10^9)."
+    aborts: []
+    notes: "Constant-time enumeration of the 10 valid powers. Use for decimal-scale validation."
+
+errors:
+  # Errors are defined in `openzeppelin_math::internal::macros` and propagated
+  # by the macro-based helpers `mul_div`, `mul_shr`, `inv_mod`, `mul_mod`.
+  EDivideByZero:
+    code: 0
+    message: "Divisor must be non-zero"
+  EZeroModulus:
+    code: 1
+    message: "Modulus must be non-zero"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "Which width module should I use — u8, u16, u32, u64, u128, u256?"
+    options:
+      - use: "openzeppelin_math::u64"
+        when: "Default. Sui balances, timestamps, gas, and most protocol amounts are u64. If unsure, this is the answer."
+        why: "Matches the Sui framework's own integer width. No upcasting / downcasting at framework boundaries."
+      - use: "openzeppelin_math::u32 (this module)"
+        when: "Compact counters, decimal-scale fields, tick indices, packed encodings, or any domain value that genuinely fits in 32 bits."
+        why: "Halves storage cost vs u64 in bit-packed structs. Carries IDENTICAL API surface so swap is mechanical."
+      - use: "openzeppelin_math::u128 / u256"
+        when: "High-precision fixed-point, cross-chain values, or domains needing >64-bit range."
+        why: "Pay the wider storage / gas cost only when the range demands it."
+      - use: "openzeppelin_math::u8 / u16"
+        when: "Truly small enumerations (decimals byte, bit indices, role tags). Rare."
+        why: "Same API; saves bytes in packed encodings."
+
+  - question: "Which rounding mode for `mul_div` / `mul_shr` / `sqrt` / `log*`?"
+    options:
+      - use: "rounding::down()"
+        when: "Protocol-to-user calculations where the user should absorb the remainder (deposits, withdrawals from a vault)."
+        why: "Safe default — the protocol never gives away more than it holds. Wrong direction here is a value-leak attack surface."
+      - use: "rounding::up()"
+        when: "Protocol absorbs the remainder (fees charged to the user, conservative upper bounds)."
+        why: "Mirror of `down()`. Makes the protocol the rounding beneficiary."
+      - use: "rounding::nearest()"
+        when: "Display, fee quotes, midpoints — values where rounding against either party on non-tie is undesirable."
+        why: "Round-half-up on ties. Avoids systematic bias in either direction."
+
+  - question: "I need `(a * b) / denominator` — what should I call?"
+    options:
+      - use: "u32::mul_div(a, b, denominator, rounding_mode)"
+        when: "`denominator` is not a power of two, OR not known at compile time."
+        why: "Widened intermediate prevents `a * b` overflow before the divide. Returns Option<u32> for the rounded-quotient overflow case; aborts EDivideByZero on zero denominator."
+      - use: "u32::mul_shr(a, b, shift, rounding_mode)"
+        when: "`denominator == 1 << shift` for a constant `shift` (Q-notation fixed-point, power-of-two scaling)."
+        why: "Cheaper than `mul_div`. Same overflow guarantees and rounding semantics."
+      - use: "Native Move `(a * b) / c`"
+        when: "Never on `u32` for values that could plausibly multiply above u32::MAX."
+        why: "Silent overflow + truncation. This is precisely the class of bug `mul_div` exists to prevent."
+
+  - question: "I need a bit shift — should I use Move's `<<` / `>>`?"
+    options:
+      - use: "u32::checked_shl / u32::checked_shr"
+        when: "Whenever the shifted-out bits MUST be zero (scaling, encoding, fixed-point conversion)."
+        why: "Returns None when a non-zero bit would be silently discarded — the Cetus exploit class of bug."
+      - use: "Native `<<` / `>>`"
+        when: "You can prove statically that no significant bit is lost (e.g., shifting a constant by a constant)."
+        why: "Cheaper, but unchecked. Wrong choice = silent corruption."
+
+  - question: "When does `inv_mod` return None vs abort?"
+    options:
+      - use: "Check `is_some()` on the result"
+        when: "Always — for inputs that are not coprime, OR when `modulus == 1`."
+        why: "Soft failure path. Lets the caller fall back without aborting the transaction."
+      - use: "Catch the abort case"
+        when: "Pass `modulus == 0` — but you should validate `modulus != 0` upstream rather than rely on this."
+        why: "Hard failure (EZeroModulus). Aborts the entire transaction."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Pass a non-zero `denominator` to `mul_div`. Validate upstream if the value can be user-controlled."
+    fails_with: EDivideByZero
+    affects: [mul_div]
+
+  - must: "Pass a non-zero `modulus` to `inv_mod` and `mul_mod`. Validate upstream if the value can be user-controlled."
+    fails_with: EZeroModulus
+    affects: [inv_mod, mul_mod]
+
+do_not:
+  - id: ignore-option-from-mul-div
+    severity: high
+    description: "Call `mul_div` / `mul_shr` / `checked_shl` / `checked_shr` / `inv_mod` and `destroy_some()` the result without checking `is_some()`."
+    why_bad: "Aborts the transaction with a generic destroy_some error and no domain-specific message. Worse, masks an overflow path the caller should be handling deliberately."
+    fix: "Use `.destroy_or!(abort EMyDomainError)` to attach a meaningful error, OR pattern-match on the Option to fall back to a safe default."
+    example_bad: |
+      // WRONG — silent abort with no domain context if the math overflows.
+      let scaled = u32::mul_div(amount, num, den, rounding::down()).destroy_some();
+    example_good: |
+      // RIGHT — attach a domain-specific error code, OR fall back deliberately.
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
+
+      let scaled = u32::mul_div(amount, num, den, rounding::down())
+          .destroy_or!(abort EMathOverflow);
+
+      // Alternative: cap at MAX.
+      let result = u32::mul_div(value, mult, 1_000u32, rounding::down());
+      let capped = if (result.is_some()) result.destroy_some() else 4_294_967_295u32;
+
+  - id: manual-mul-then-div
+    severity: high
+    description: "Compute `(a * b) / c` with Move's native operators instead of `u32::mul_div`."
+    why_bad: "`a * b` overflows when the product exceeds u32::MAX even if the final quotient fits in u32. The transaction aborts on the multiply, before the divide can rescue it."
+    fix: "Use `u32::mul_div(a, b, c, rounding_mode)`. Its intermediate is computed in a wider type so the product never overflows before division."
+    example_bad: |
+      // WRONG — aborts on overflow of `a * b` even though `(a * b) / c` fits.
+      public fun bad_quote(amount: u32, num: u32, den: u32): u32 {
+          (amount * num) / den
+      }
+    example_good: |
+      // RIGHT — widened intermediate; rounding is explicit; Option handles overflow.
+      use openzeppelin_math::{rounding, u32};
+
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
+
+      public fun good_quote(amount: u32, num: u32, den: u32): u32 {
+          u32::mul_div(amount, num, den, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: native-shift-instead-of-checked
+    severity: high
+    description: "Use Move's native `<<` / `>>` on values where a non-zero bit could be silently discarded."
+    why_bad: "Native shifts truncate without warning. This is exactly the class of bug behind the Cetus exploit — an off-by-one threshold let a corrupted value through a shift check."
+    fix: "Use `u32::checked_shl` / `u32::checked_shr`. They return `Option<u32>` so the caller must handle the lossy case explicitly."
+    example_bad: |
+      // WRONG — silently discards bits when value is large.
+      let scaled = value << 12;
+    example_good: |
+      // RIGHT — None if any non-zero bit would be lost.
+      #[error(code = 1)]
+      const EShiftOverflow: vector<u8> = "shift would discard non-zero bits";
+
+      let scaled = u32::checked_shl(value, 12)
+          .destroy_or!(abort EShiftOverflow);
+
+  - id: wrong-width-for-sui-balance
+    severity: medium
+    description: "Use `openzeppelin_math::u32` for Sui coin balances, timestamps, or gas accounting."
+    why_bad: "Those domains are `u64` in the Sui framework. Using `u32` forces lossy downcasts and creates overflow boundaries the framework does not expect."
+    fix: "Use `openzeppelin_math::u64` for any value that crosses a Sui framework boundary. Reach for `u32` only when the domain truly fits — compact counters, decimal scales, tick indices, packed encodings."
+    example_bad: |
+      // WRONG — Sui coin balances are u64; downcast loses precision.
+      public fun deposit_share(amount: u32, ts: u32, supply: u32): u32 {
+          u32::mul_div(amount, supply, ts, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+    example_good: |
+      // RIGHT — u64 matches the Sui framework boundary.
+      use openzeppelin_math::{rounding, u64};
+
+      public fun deposit_share(amount: u64, total_assets: u64, total_supply: u64): u64 {
+          u64::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: default-rounding-without-thinking
+    severity: medium
+    description: "Pass `rounding::nearest()` (or any single mode) to every `mul_div` / `sqrt` / `log*` call without considering who absorbs the remainder."
+    why_bad: "Rounding direction determines which side of the transaction wins on fractional remainders. A protocol that rounds up on deposits and up on withdrawals leaks value on every round-trip — exploitable by repeated small operations."
+    fix: "Pick rounding per call. Round AGAINST the user on deposits-into-vault and FOR the user on withdrawals-from-vault, so the protocol always keeps the remainder. Make the choice visible in code review."
+    example_bad: |
+      // WRONG — same rounding mode everywhere; depositors win on remainder.
+      let shares = u32::mul_div(amount, total_supply, total_assets, rounding::up());
+      let assets = u32::mul_div(shares, total_assets, total_supply, rounding::up());
+    example_good: |
+      // RIGHT — round down both ways so the vault keeps the remainder.
+      let shares = u32::mul_div(amount, total_supply, total_assets, rounding::down())
+          .destroy_or!(abort EMathOverflow);
+      let assets = u32::mul_div(shares, total_assets, total_supply, rounding::down())
+          .destroy_or!(abort EMathOverflow);
+
+composes_with: []   # Empty — no compositions are source-cited in u32.move, its
+                    # tests, or the math docs guide. Sibling width pointers
+                    # (use u64 for balances, u128 for high precision, fixed_point
+                    # for fractional) live in does_not_solve[]; choosing between
+                    # widths and between rounding modes lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+
+  canonical_test:
+    file: math/core/tests/u32_tests.move
+    function: mul_div_rounding_modes
+
+  precondition_proofs:
+    - precondition_fails_with: EDivideByZero
+      test_file: math/core/tests/u32_tests.move
+      test_functions: [mul_div_rejects_zero_denominator]
+    - precondition_fails_with: EZeroModulus
+      test_file: math/core/tests/u32_tests.move
+      test_functions: [inv_mod_rejects_zero_modulus, mul_mod_rejects_zero_modulus]
+
+  do_not_demonstrations:
+    - do_not_id: ignore-option-from-mul-div
+      test_functions: []        # consumer-side pattern; not in-tree
+    - do_not_id: manual-mul-then-div
+      test_functions: []        # consumer-side pattern; not in-tree
+    - do_not_id: native-shift-instead-of-checked
+      test_functions: []        # consumer-side pattern; not in-tree
+    - do_not_id: wrong-width-for-sui-balance
+      test_functions: []        # consumer-side pattern; not in-tree
+    - do_not_id: default-rounding-without-thinking
+      test_functions: []        # consumer-side pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: ignore-option-from-mul-div
+      pattern: "Option<u32> result of mul_div / mul_shr / checked_shl / checked_shr / inv_mod consumed via destroy_some() instead of destroy_or!"
+      heuristic: "regex: u32::(mul_div|mul_shr|checked_shl|checked_shr|inv_mod)\\([^)]*\\)\\.destroy_some\\(\\)"
+    - do_not_id: manual-mul-then-div
+      pattern: "Pattern `(a * b) / c` on u32 inputs where a or b can exceed sqrt(u32::MAX)"
+      heuristic: "regex on u32 expressions of the form `\\b\\w+\\s*\\*\\s*\\w+\\s*/\\s*\\w+\\b` outside of constant contexts"
+    - do_not_id: native-shift-instead-of-checked
+      pattern: "Native << or >> applied to a u32 value carrying domain semantics (scale, tick, encoding)"
+      heuristic: "regex: \\b(u32|amount|scale|tick|encoded)\\b\\s*(<<|>>)\\s*\\w+"
+    - do_not_id: wrong-width-for-sui-balance
+      pattern: "u32 used in a function signature carrying Sui Coin / Balance / Clock timestamp values"
+      heuristic: "function param named (amount|balance|timestamp|ts|gas) typed u32 instead of u64"
+
+  events: []

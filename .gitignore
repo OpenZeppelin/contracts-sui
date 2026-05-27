@@ -26,6 +26,7 @@ temp/
 # Everyone uses their own local dev environment config, so we should not force specific VS Code configs
 .vscode/
 
-# Claude Code
-.claude/
+# Claude Code — personal config stays local, shared skills ship with the repo
+.claude/*
+!.claude/skills/
 .gitmodules

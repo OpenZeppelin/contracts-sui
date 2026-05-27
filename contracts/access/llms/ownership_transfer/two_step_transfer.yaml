@@ -1,0 +1,399 @@
+schema_version: "1.0"
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_access::two_step_transfer
+  package: openzeppelin_access
+  one_liner: "Two-step ownership wrapper for `T: key + store` objects; recipient must accept before custody moves. Admin-frequency only — cancel authority is `ctx.sender()` at `initiate_transfer`."
+  summary: |
+    Ownership-transfer wrapper for a single-owned privileged `T: key + store`
+    object (admin cap, treasury cap, etc.). The current owner initiates a
+    transfer and the recipient must explicitly accept before ownership moves,
+    so a misdirected handoff cannot silently lock the object away. Admin-
+    frequency only — `ctx.sender()` at `initiate_transfer` becomes the cancel
+    authority, so do NOT wire this into shared-object executor flows.
+
+domain: access-control
+frequency: admin-frequency
+does_not_solve:
+  - "Time-locked transfers with a visible delay — use openzeppelin_access::delayed_transfer."
+  - "Role-based authorization across multiple actors — use openzeppelin_access::access_control."
+  - "Shared-object custody where arbitrary executors trigger initiation — cancel authority would bind to the wrong principal."
+  - "Wrapping objects that lack `key + store` — the generic constraint is mandatory."
+  - "Recovery after the wrapper itself is sent to a wrong address — only the underlying object is protected."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  use_statement: |
+    use openzeppelin_access::two_step_transfer;
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_sui_app::admin;
+
+  use openzeppelin_access::two_step_transfer;
+
+  public struct AdminCap has key, store { id: UID }
+
+  /// Wrap and immediately initiate a transfer to `new_admin`.
+  /// The wrapper is consumed by `initiate_transfer` and held inside
+  /// the shared `PendingOwnershipTransfer` until the recipient
+  /// accepts or the initiator cancels.
+  public fun wrap_and_transfer(cap: AdminCap, new_admin: address, ctx: &mut TxContext) {
+      let wrapper = two_step_transfer::wrap(cap, ctx);
+      // Emits WrapExecuted
+
+      wrapper.initiate_transfer(new_admin, ctx);
+      // Emits TransferInitiated
+  }
+
+quick_start: |
+  // Two-step transfer end-to-end — three calls across two principals.
+  // Assumes you already have an owned `AdminCap: key + store`.
+
+  // 1. Current owner: wrap + initiate. Wrapper is consumed by initiate_transfer
+  //    and parked inside a shared PendingOwnershipTransfer<AdminCap>.
+  //    `ctx.sender()` is recorded as `from` (cancel authority).
+  let wrapper = two_step_transfer::wrap(admin_cap, ctx);
+  wrapper.initiate_transfer(new_admin_address, ctx);
+
+  // 2. Recipient (signs with new_admin_address): accept_transfer claims
+  //    the wrapper via the TTO Receiving ticket and transfers it to `to`.
+  //    Aborts ENotNewOwner if the wrong principal signs.
+  two_step_transfer::accept_transfer(request, wrapper_ticket, ctx);
+
+  // 3. (Alternative branch) Original owner aborts the handoff before accept.
+  //    cancel_transfer returns the wrapper to `from` (= original sender).
+  // two_step_transfer::cancel_transfer(request, wrapper_ticket, ctx);
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types:
+  - name: WrappedKey
+    type_params: ""
+    capabilities: [copy, drop, store]
+    role: "Internal dynamic-field key used to store the wrapped object under the wrapper. You never construct it; module-internal only."
+
+  - name: TwoStepTransferWrapper
+    type_params: "phantom T: key + store"
+    capabilities: [key]
+    role: |
+      Wrapper object that custody-locks an underlying `T`. The wrapper has `key` but NOT `store`,
+      so transfer paths stay constrained to this module (no `transfer::public_transfer`). `T`
+      is a CONSTRAINT — instantiate concretely as `TwoStepTransferWrapper<AdminCap>`; your
+      `AdminCap` is a non-generic `key + store` struct, NOT generic itself. Common mistake:
+      mirroring `<phantom T>` onto your own cap type and breaking compile.
+
+  - name: PendingOwnershipTransfer
+    type_params: "phantom T: key + store"
+    capabilities: [key]
+    role: |
+      Shared pending-transfer object created by `initiate_transfer`. Holds wrapper custody via
+      transfer-to-object (TTO) plus the recorded `from` (cancel authority) and `to` (prospective
+      owner). Consumed by `accept_transfer` or `cancel_transfer`. Stored as a shared object —
+      both parties can see and operate on it.
+
+  - name: Borrow
+    type_params: ""
+    capabilities: []
+    role: "Hot-potato guard returned by `borrow_val`. No abilities — MUST be consumed by `return_val` before the PTB ends, cannot be stored or dropped."
+
+  - name: RequestBorrow
+    type_params: ""
+    capabilities: []
+    role: "Hot-potato guard returned by `request_borrow_val`. No abilities — MUST be consumed by `request_return_val` before the PTB ends, cannot be stored or dropped."
+
+api:
+  - name: wrap
+    sig: "<T: key + store>(obj: T, ctx: &mut TxContext) -> TwoStepTransferWrapper<T>"
+    role: "Constructor — wrap an owned object inside a new transfer wrapper. The underlying object is stored as a dynamic object field so off-chain indexers can still discover it."
+    aborts: []
+    emits: [WrapExecuted]
+
+  - name: initiate_transfer
+    sig: "<T: key + store>(self: TwoStepTransferWrapper<T>, new_owner: address, ctx: &mut TxContext)"
+    role: "Start an ownership handoff. Consumes the wrapper by value, creates a shared PendingOwnershipTransfer, and parks the wrapper inside it via TTO."
+    aborts: []
+    emits: [TransferInitiated]
+    notes: |
+      `ctx.sender()` is recorded as `from` and becomes the ONLY principal allowed to
+      `cancel_transfer`. Only call this when the signer is intentionally the logical
+      owner / cancel authority. Unsafe in shared-object executor flows where an
+      arbitrary signer could call this on behalf of the protocol and steal cancel
+      rights via cancel_transfer.
+
+  - name: accept_transfer
+    sig: "<T: key + store>(request: PendingOwnershipTransfer<T>, wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>, ctx: &mut TxContext)"
+    role: "Finalize — designated new owner claims the wrapper via TTO and ownership moves to them. Consumes the request object."
+    aborts: [ENotNewOwner, EInvalidTransferRequest]
+    emits: [TransferAccepted]
+    notes: "Caller MUST be `request.to`. `wrapper_ticket` must be the Receiving ticket for the wrapper that was transferred to the request object during `initiate_transfer`."
+
+  - name: cancel_transfer
+    sig: "<T: key + store>(request: PendingOwnershipTransfer<T>, wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>, ctx: &mut TxContext)"
+    role: "Cancel — original initiator aborts the handoff and reclaims the wrapper. Consumes the request object."
+    aborts: [ENotOwner, EInvalidTransferRequest]
+    emits: [TransferCancelled]
+    notes: "Caller MUST equal `request.from` (the address recorded when `initiate_transfer` ran). Wrapper is sent back to that address; the pending request is deleted."
+
+  - name: unwrap
+    sig: "<T: key + store>(self: TwoStepTransferWrapper<T>, ctx: &mut TxContext) -> T"
+    role: "Reclaim the underlying object and destroy the wrapper. Bypasses the two-step request flow entirely — only callable by whoever currently owns the wrapper as an owned object."
+    aborts: []
+    emits: [UnwrapExecuted]
+
+  - name: borrow
+    sig: "<T: key + store>(self: &TwoStepTransferWrapper<T>) -> &T"
+    role: "Immutable read access to the wrapped object without touching the transfer flow."
+    aborts: []
+
+  - name: borrow_mut
+    sig: "<T: key + store>(self: &mut TwoStepTransferWrapper<T>) -> &mut T"
+    role: "Mutable access to the wrapped object without changing ownership state."
+    aborts: []
+
+  - name: borrow_val
+    sig: "<T: key + store>(self: &mut TwoStepTransferWrapper<T>) -> (T, Borrow)"
+    role: "Temporarily extract the wrapped object by value. Returns a `Borrow` hot potato that MUST be consumed by `return_val` before the PTB ends."
+    aborts: []
+    notes: "Use only when you need to call a function that consumes `T` by value (e.g. an inner cap method that takes ownership). For read-only or `&mut` access, prefer `borrow` / `borrow_mut` — they avoid the hot-potato bookkeeping."
+
+  - name: return_val
+    sig: "<T: key + store>(self: &mut TwoStepTransferWrapper<T>, obj: T, borrow: Borrow)"
+    role: "Return the value extracted by `borrow_val` to the same wrapper. Consumes the `Borrow` hot potato."
+    aborts: [EWrongTwoStepTransferWrapper, EWrongTwoStepTransferObject]
+    notes: "Must return to the SAME wrapper that issued the `Borrow` and with the SAME object id. The aborts catch wrapper / object swaps within the PTB."
+
+  - name: request_borrow_val
+    sig: "<T: key + store>(request: &mut PendingOwnershipTransfer<T>, wrapper_ticket: Receiving<TwoStepTransferWrapper<T>>, ctx: &mut TxContext) -> (TwoStepTransferWrapper<T>, RequestBorrow)"
+    role: "Receive wrapper custody from a pending request so the recorded `from` can operate on the wrapped object during a pending transfer. Returns a `RequestBorrow` hot potato."
+    aborts: [ENotOwner, EInvalidTransferRequest]
+    notes: |
+      Caller MUST be `request.from`. `RequestBorrow` MUST be consumed by
+      `request_return_val` before the PTB ends — that puts the wrapper back
+      under the same pending request so accept/cancel still resolve.
+
+  - name: request_return_val
+    sig: "<T: key + store>(request: &PendingOwnershipTransfer<T>, wrapper: TwoStepTransferWrapper<T>, borrow: RequestBorrow)"
+    role: "Return a wrapper borrowed via `request_borrow_val` back to the same pending request. Consumes the `RequestBorrow` hot potato."
+    aborts: [EInvalidTransferRequest]
+    notes: "The wrapper is transferred back to the request's object address via TTO. The hot potato + request reference together guarantee the wrapper cannot be routed to any other request."
+
+errors:
+  EInvalidTransferRequest:
+    code: 0
+    message: "Transfer request does not match wrapper"
+  EWrongTwoStepTransferWrapper:
+    code: 1
+    message: "Wrong two step transfer wrapper"
+  EWrongTwoStepTransferObject:
+    code: 2
+    message: "Wrong two step transfer object"
+  ENotOwner:
+    code: 3
+    message: "Caller is not the current owner"
+  ENotNewOwner:
+    code: 4
+    message: "Caller is not the prospective owner"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "I want to hand off a privileged capability — which OpenZeppelin module do I reach for?"
+    options:
+      - use: "two_step_transfer"
+        when: "The new owner must explicitly accept, but once accepted the transfer can take effect immediately. Cancel authority is the original signer."
+        why: "Catches human-error misdirection (wrong address, typo); the wrapper stays locked inside a PendingOwnershipTransfer until `accept_transfer` runs."
+      - use: "openzeppelin_access::delayed_transfer"
+        when: "The transfer should be visible on-chain for a delay window before it can execute (e.g., timelocked admin handover, observability for monitors)."
+        why: "Two-step doesn't enforce any waiting window — a recipient under attacker control could accept immediately."
+      - use: "openzeppelin_access::access_control"
+        when: "Authority is distributed across multiple roles, not a single privileged owner."
+        why: "Two-step is for object-level handoff of a single capability; RBAC is for typed role checks across many actors."
+
+  - question: "I'm in a shared-object workflow with delegated executors — can I use two_step_transfer?"
+    options:
+      - use: "Do NOT — pick a different design"
+        when: "Always, when arbitrary executors can trigger `initiate_transfer` on behalf of a shared object."
+        why: "`ctx.sender()` at initiation time is recorded as `from` and becomes the cancel authority. An attacker who executes initiation can later call `cancel_transfer` and pocket the wrapper. See do_not[shared-object-executor-init]."
+      - use: "two_step_transfer"
+        when: "The transaction signer executing `initiate_transfer` is intentionally the logical owner / cancel authority for the wrapped object."
+        why: "Signer identity maps cleanly to ownership; cancel rights and ownership align."
+
+  - question: "I need to use the wrapped object during a pending transfer — what's the path?"
+    options:
+      - use: "request_borrow_val + request_return_val"
+        when: "The wrapper is currently held by a `PendingOwnershipTransfer` and you (recorded `from`) need to call a method that consumes the wrapper by value."
+        why: "Pulls the wrapper out via TTO, lets you use it, then deposits it back under the same request via a `RequestBorrow` hot potato. Accept / cancel still resolve."
+      - use: "borrow / borrow_mut on the wrapper"
+        when: "There is NO pending transfer yet (you still own the wrapper as an owned object) and you just need ref-level access to the inner object."
+        why: "Cheapest path — no TTO, no hot potato. But it only works before `initiate_transfer` consumes the wrapper."
+      - use: "borrow_val + return_val"
+        when: "You own the wrapper directly (no pending transfer) and need by-value access to the inner object within a PTB."
+        why: "Hot-potato extract / return without unwinding the wrapper itself. Use when an inner method needs `T` by value."
+
+  - question: "The recipient changed their mind / wrong address — how do I undo the transfer?"
+    options:
+      - use: "cancel_transfer"
+        when: "Before `accept_transfer` runs. Caller must equal the original `from`."
+        why: "Returns the wrapper to the original initiator and deletes the request."
+      - use: "(unrecoverable)"
+        when: "After `accept_transfer` already ran."
+        why: "Ownership has moved. The new owner would have to run a fresh `initiate_transfer` back to you."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Call `cancel_transfer` from the same signer that ran `initiate_transfer` — `ctx.sender()` must equal the recorded `from`."
+    fails_with: ENotOwner
+    affects: [cancel_transfer, request_borrow_val]
+
+  - must: "Call `accept_transfer` from the signer recorded as `to` (the prospective owner). Other signers cannot finalize."
+    fails_with: ENotNewOwner
+    affects: [accept_transfer]
+
+  - must: "Pass the `Receiving<TwoStepTransferWrapper<T>>` ticket for the wrapper that was actually transferred to THIS pending request. Wrapper identity is checked against `request.wrapper_id`."
+    fails_with: EInvalidTransferRequest
+    affects: [accept_transfer, cancel_transfer, request_borrow_val, request_return_val]
+
+  - must: "When consuming a `Borrow` via `return_val`, return to the SAME wrapper that issued it — `object::id(self)` must equal the borrow's `wrapper_id`."
+    fails_with: EWrongTwoStepTransferWrapper
+    affects: [return_val]
+
+  - must: "When consuming a `Borrow` via `return_val`, return the SAME object originally extracted — `object::id(&obj)` must equal the borrow's `object_id`."
+    fails_with: EWrongTwoStepTransferObject
+    affects: [return_val]
+
+do_not:
+  - id: shared-object-executor-init
+    severity: high
+    description: "Call `initiate_transfer` from a shared-object workflow where any executor can trigger transfer initiation on behalf of the protocol."
+    why_bad: "`ctx.sender()` is recorded as `from` and becomes the cancel authority. A hostile executor who triggers initiation can later call `cancel_transfer` and walk away with the wrapped capability."
+    fix: "Use this module only when the signer running `initiate_transfer` is intentionally the logical owner / cancel authority. For shared-custody designs, use a different ownership-transfer pattern (delayed_transfer or a bespoke design that derives cancel authority from a role, not the signer)."
+    example_bad: |
+      // WRONG — `executor` is any keeper bot; whichever signer happens
+      // to run this becomes the cancel authority.
+      public fun rotate_admin(pool: &mut SharedPool, new_admin: address, ctx: &mut TxContext) {
+          let cap = shared_pool::take_admin_cap(pool);
+          let wrapper = two_step_transfer::wrap(cap, ctx);
+          wrapper.initiate_transfer(new_admin, ctx); // ctx.sender() == executor
+      }
+    example_good: |
+      // RIGHT — the protocol's logical owner signs `initiate_transfer`
+      // directly; shared executors do not.
+      public fun owner_rotate_admin(cap: AdminCap, new_admin: address, ctx: &mut TxContext) {
+          let wrapper = two_step_transfer::wrap(cap, ctx);
+          wrapper.initiate_transfer(new_admin, ctx); // ctx.sender() == intended owner
+      }
+
+  - id: user-frequency-two-step-transfer
+    severity: medium
+    description: "Wire `wrap` / `initiate_transfer` / `accept_transfer` into a user-frequency call path (per-trade, per-deposit, per-claim)."
+    why_bad: "Every transfer creates a shared `PendingOwnershipTransfer` object; concurrent user transactions either contend on that shared object or proliferate stale ones. Two-step transfer is for admin-frequency capability handoff, not hot-path object flow."
+    fix: "Reserve two_step_transfer for capability handoff (admin cap, treasury cap, governance executor). For user-facing flows use direct `transfer::public_transfer` or a domain-specific design."
+    example_bad: |
+      // WRONG — wrapping every user trade ticket in two-step is contention + overhead.
+      public fun submit_trade(ticket: TradeTicket, ctx: &mut TxContext) {
+          let wrapped = two_step_transfer::wrap(ticket, ctx);
+          wrapped.initiate_transfer(matching_engine_addr, ctx);
+      }
+    example_good: |
+      // RIGHT — direct transfer on the hot path; two-step is for admin handoff.
+      public fun submit_trade(ticket: TradeTicket) {
+          transfer::public_transfer(ticket, matching_engine_addr());
+      }
+
+  - id: assume-wrapper-publicly-transferable
+    severity: medium
+    description: "Try to move a `TwoStepTransferWrapper<T>` with `transfer::public_transfer` or store it in an arbitrary container."
+    why_bad: "The wrapper intentionally has `key` but NOT `store`. `transfer::public_transfer` fails to compile and any container that requires `store` rejects it. This is a feature: it forces all transfer paths through this module's two-step flow."
+    fix: "Use `initiate_transfer` (which moves the wrapper inside a `PendingOwnershipTransfer` via TTO) or `unwrap` (which destroys the wrapper and returns the inner `T`). Don't try to side-step the wrapper's missing `store` ability."
+    example_bad: |
+      // WRONG — TwoStepTransferWrapper has no `store`; this is a compile error.
+      let wrapper = two_step_transfer::wrap(admin_cap, ctx);
+      transfer::public_transfer(wrapper, recipient); // compile error
+    example_good: |
+      // RIGHT — go through the two-step initiation flow.
+      let wrapper = two_step_transfer::wrap(admin_cap, ctx);
+      wrapper.initiate_transfer(recipient, ctx);
+
+composes_with: []   # Empty — no in-source / in-test / in-docs composition is asserted for this
+                    # module. Sibling pointers ("for delayed handover use delayed_transfer", "for
+                    # multi-role authorization use access_control") live in does_not_solve[];
+                    # picking between siblings lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+
+  canonical_test:
+    file: contracts/access/tests/two_step_tests.move
+    function: consecutive_transfers
+
+  precondition_proofs:
+    - precondition_fails_with: ENotOwner
+      test_file: contracts/access/tests/two_step_tests.move
+      test_functions:
+        - cancel_transfer_rejects_non_owner
+        - request_borrow_val_rejects_non_owner
+    - precondition_fails_with: ENotNewOwner
+      test_file: contracts/access/tests/two_step_tests.move
+      test_functions:
+        - accept_transfer_rejects_non_new_owner
+    - precondition_fails_with: EInvalidTransferRequest
+      test_file: contracts/access/tests/two_step_tests.move
+      test_functions:
+        - accept_transfer_rejects_mismatched_wrapper
+        - cancel_transfer_rejects_mismatched_wrapper
+        - request_return_val_rejects_wrong_wrapper
+        - request_return_val_rejects_wrong_request
+    - precondition_fails_with: EWrongTwoStepTransferWrapper
+      test_file: contracts/access/tests/two_step_tests.move
+      test_functions:
+        - return_val_rejects_wrong_wrapper
+    - precondition_fails_with: EWrongTwoStepTransferObject
+      test_file: contracts/access/tests/two_step_tests.move
+      test_functions:
+        - return_val_rejects_wrong_object
+
+  do_not_demonstrations:
+    - do_not_id: shared-object-executor-init
+      test_functions: []   # consumer-side design rule; not in-tree
+    - do_not_id: user-frequency-two-step-transfer
+      test_functions: []   # consumer-side design rule; not in-tree
+    - do_not_id: assume-wrapper-publicly-transferable
+      test_functions: []   # compile-time constraint (no `store`); not exercised at runtime
+
+  do_not_detection:
+    - do_not_id: shared-object-executor-init
+      pattern: "initiate_transfer invoked from a function that takes a shared object by &mut and is callable by arbitrary signers"
+      heuristic: "function signature includes `&mut <SharedObject>` AND body calls `two_step_transfer::initiate_transfer` or `<wrapper>.initiate_transfer`"
+    - do_not_id: user-frequency-two-step-transfer
+      pattern: "wrap/initiate_transfer/accept_transfer called from a function whose name matches hot-path verbs"
+      heuristic: "function name matches /^(swap|trade|deposit|withdraw|claim|submit_.*|mint|burn)$/ AND body references two_step_transfer::"
+    - do_not_id: assume-wrapper-publicly-transferable
+      pattern: "transfer::public_transfer applied to a TwoStepTransferWrapper value"
+      heuristic: "regex `public_transfer\\s*\\(\\s*[A-Za-z0-9_]*wrapper[A-Za-z0-9_]*` flagged when type is TwoStepTransferWrapper"
+
+  events:
+    - { name: WrapExecuted, fields: [wrapper_id, object_id, owner] }
+    - { name: UnwrapExecuted, fields: [wrapper_id, object_id, owner] }
+    - { name: TransferInitiated, fields: [wrapper_id, current_owner, new_owner] }
+    - { name: TransferAccepted, fields: [wrapper_id, previous_owner, new_owner] }
+    - { name: TransferCancelled, fields: [wrapper_id, current_owner, new_owner] }

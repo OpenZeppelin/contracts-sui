@@ -1,0 +1,439 @@
+schema_version: "1.0"
+
+# ============================================================
+# STAGE 1 — SELECTION
+# ============================================================
+
+module:
+  name: openzeppelin_math::u128
+  package: openzeppelin_math
+  one_liner: "Overflow-safe arithmetic on `u128` with explicit `RoundingMode` and `Option<u128>` returns at the overflow boundary — the 128-bit variant of the openzeppelin_math primitive family; headroom for `u64 * u64` and Q64.64 fixed-point."
+  summary: |
+    Overflow-safe arithmetic on 128-bit unsigned integers — `mul_div`,
+    `mul_shr`, `average`, `checked_shl/shr`, `clz/msb`, `log2/log10/log256`,
+    `sqrt`, `inv_mod`, `mul_mod`, `is_power_of_ten`. Width-specific facade
+    over the shared `macros` helpers, with explicit `RoundingMode` on every
+    rounding-sensitive call and `Option<u128>` on every operation that can
+    exceed the type range. Use `u128` (over `u64`) when you need extra
+    headroom for intermediate products in DeFi pricing / share accounting
+    (e.g. `u64 * u64` no longer fits a `u64`, but lives comfortably in `u128`)
+    or for fixed-point math (Q64.64, UD30x9). Pure stateless math — no
+    objects, events, or authorization. Mixed-frequency: hot-path callable.
+
+domain: math
+frequency: mixed
+does_not_solve:
+  - "Signed or fractional values — use the openzeppelin_math fixed-point package (UD30x9 / SD29x9 backed by u128)."
+  - "256-bit values — use openzeppelin_math::u256 (same API surface)."
+  - "Sui-framework-native widths (coin balances, timestamps, gas) — those are u64; use openzeppelin_math::u64."
+  - "Division and modulo other than via `mul_div` / `mul_mod` — Move's native `/` and `%` truncate without configurable rounding, use the helpers."
+  - "Capturing the truncated remainder of a `mul_div` — the function discards it; compute it yourself if your protocol must account for it."
+  - "Wide intermediates above 2^128 directly — `mul_div`/`mul_shr` use u256/u512 internally, but if you need to hold a >128-bit value, use u256."
+
+# ============================================================
+# STAGE 2 — INSTALL
+# ============================================================
+
+install:
+  use_statement: |
+    use openzeppelin_math::{rounding, u128};
+# ============================================================
+# STAGE 3 — BOOTSTRAP
+# ============================================================
+
+setup_snippet: |
+  module my_sui_app::pricing;
+
+  use openzeppelin_math::{rounding, u128};
+
+  // No `init` needed — `u128` is a pure stateless library.
+  // Import the module and call the free functions directly. The example
+  // below wraps `mul_div` in a protocol-specific helper, which is the
+  // canonical shape for a fee / share / pricing utility.
+
+  #[error(code = 0)]
+  const EMathOverflow: vector<u8> = "arithmetic overflow";
+
+  /// Apply a 0.25% fee to a u128 amount, rounding DOWN (caller absorbs
+  /// the remainder — the safe direction for protocol-to-user calculations).
+  public fun apply_fee(amount: u128): u128 {
+      u128::mul_div(amount, 9975u128, 10_000u128, rounding::down())
+          .destroy_or!(abort EMathOverflow)
+  }
+
+quick_start: |
+  // Minimal end-to-end happy path — no setup, no objects, no PTBs needed.
+  // All u128 functions are pure and callable from any function.
+
+  use openzeppelin_math::{rounding, u128};
+
+  // 1. Multiply-then-divide with explicit rounding. Intermediate product
+  //    is computed in a wider type (u256) so it never silently overflows.
+  //    Aborts EDivideByZero if denominator == 0; returns None if the
+  //    rounded quotient does not fit in u128.
+  let fee_quote: u128 = u128::mul_div(
+      amount, 1025u128, 1000u128, rounding::nearest(),
+  ).destroy_or!(abort EMathOverflow);
+
+  // 2. Integer square root with explicit rounding (geometric mean,
+  //    sqrt-price oracles). Cannot abort; cannot overflow.
+  let root: u128 = u128::sqrt(value, rounding::down());
+
+  // 3. Power-of-two shift used in Q-notation fixed-point. Returns None
+  //    if any non-zero bit would be lost — the canonical guard against
+  //    the Cetus-class bug (silent bit truncation in checked_shl).
+  let scaled: Option<u128> = u128::checked_shl(1u128, 96u8);
+
+# ============================================================
+# STAGE 4 — INTEGRATION
+# ============================================================
+
+types: []   # No structs, capabilities, or events — `u128` is a pure
+            # free-function library over the native `u128` primitive.
+
+api:
+  - name: mul_div
+    sig: "(a: u128, b: u128, denominator: u128, rounding_mode: RoundingMode) -> Option<u128>"
+    role: "Multiply `a * b` then divide by `denominator` with explicit rounding. Intermediate product computed in u256 — never silently overflows. Returns None when the rounded quotient doesn't fit in u128."
+    aborts: [EDivideByZero]
+    notes: |
+      The workhorse for swap pricing, fee calculations, interest accrual,
+      and share-based accounting. Prefer `mul_div` over manual `(a * b) / c`
+      — the manual form overflows even when the final quotient is safe.
+      Rounding mode is NOT optional — it determines which side of a trade
+      absorbs the remainder. Round DOWN for protocol-to-user payouts, UP
+      for caller-pays quotes; never default without thinking.
+
+  - name: mul_shr
+    sig: "(a: u128, b: u128, shift: u8, rounding_mode: RoundingMode) -> Option<u128>"
+    role: "Multiply `a * b` then shift right by `shift` bits with explicit rounding. Power-of-two-denominator fast path; equivalent to `mul_div(a, b, 1 << shift, mode)` but cheaper."
+    aborts: []
+    notes: |
+      Use for Q-notation fixed-point (Q64.64, Q96) and the tick-math used
+      in concentrated-liquidity AMMs — exactly the operation class behind
+      the Cetus exploit, where an off-by-one in a hand-rolled `checked_shl`
+      guard let a corrupted value through. `mul_shr` returns None on
+      overflow; surface it as a domain error or fallback explicitly.
+
+  - name: average
+    sig: "(a: u128, b: u128, rounding_mode: RoundingMode) -> u128"
+    role: "Arithmetic mean of two u128 values with explicit rounding. Uses bit manipulation to avoid the intermediate sum — safe for `a, b` near u128::MAX."
+    aborts: []
+    notes: "Cannot overflow (uses `(a & b) + ((a ^ b) >> 1)` internally). Use for TWAP midpoints, interpolation, pairwise averaging."
+
+  - name: checked_shl
+    sig: "(value: u128, shift: u8) -> Option<u128>"
+    role: "Lossless left shift — returns None if any non-zero bit would be pushed out of the 128-bit range."
+    aborts: []
+    notes: |
+      The exact bug class behind the Cetus $223M exploit (May 2025): a
+      hand-rolled `checked_shl` had an off-by-one in its overflow threshold,
+      letting a corrupted value through. Always prefer this over `<<` when
+      scaling values via shifts. Returns `Some(0)` when `value == 0` for any
+      `shift`, `None` when `shift >= 128`.
+
+  - name: checked_shr
+    sig: "(value: u128, shift: u8) -> Option<u128>"
+    role: "Lossless right shift — returns None if any non-zero bit would be discarded."
+    aborts: []
+    notes: "Mirror of `checked_shl` for the right direction. Use when scaling DOWN via shifts and the discarded bits represent precision you cannot lose."
+
+  - name: clz
+    sig: "(value: u128) -> u8"
+    role: "Count leading zero bits in `value`. Returns 128 for `value == 0`."
+    aborts: []
+
+  - name: msb
+    sig: "(value: u128) -> u8"
+    role: "Zero-based index of the most significant set bit. Returns 0 for `value == 0` by convention."
+    aborts: []
+
+  - name: log2
+    sig: "(value: u128, rounding_mode: RoundingMode) -> u8"
+    role: "Base-2 integer logarithm with configurable rounding. Returns 0 for `value == 0`."
+    aborts: []
+    notes: "Used in tick-math for concentrated-liquidity AMMs. Return type is `u8` for u128 (`u16` only for u256)."
+
+  - name: log256
+    sig: "(value: u128, rounding_mode: RoundingMode) -> u8"
+    role: "Base-256 integer logarithm with configurable rounding. Returns 0 for `value == 0`."
+    aborts: []
+    notes: "Use to determine byte-length needed to encode/serialize a value."
+
+  - name: log10
+    sig: "(value: u128, rounding_mode: RoundingMode) -> u8"
+    role: "Base-10 integer logarithm with configurable rounding. Returns 0 for `value == 0`."
+    aborts: []
+    notes: "Use for decimal-aware scaling and display formatting."
+
+  - name: sqrt
+    sig: "(value: u128, rounding_mode: RoundingMode) -> u128"
+    role: "Integer square root with explicit rounding. Cannot overflow; cannot abort. Returns 0 for `value == 0`."
+    aborts: []
+    notes: "Used in `sqrtPriceX96` concentrated-liquidity pricing, geometric-mean oracles, volatility math. Rounding direction is value-sensitive: rounding the wrong way creates an exploitable price discrepancy."
+
+  - name: inv_mod
+    sig: "(value: u128, modulus: u128) -> Option<u128>"
+    role: "Modular multiplicative inverse — returns Some(x) where `value * x ≡ 1 (mod modulus)`, or None when not coprime or `modulus == 1`."
+    aborts: [EZeroModulus]
+    notes: "Essential for cryptographic verification, on-chain randomness schemes, and certain pricing algorithms. Aborts if `modulus == 0`; returns `None` (not abort) when the inverse does not exist."
+
+  - name: mul_mod
+    sig: "(a: u128, b: u128, modulus: u128) -> u128"
+    role: "Compute `(a * b) mod modulus` without intermediate overflow. Uses u256 internally so the product never silently truncates."
+    aborts: [EZeroModulus]
+
+  - name: is_power_of_ten
+    sig: "(n: u128) -> bool"
+    role: "Returns true iff `n` is a power of 10 within the u128 range (10^0 .. 10^38). O(1) lookup table — cannot abort."
+    aborts: []
+
+errors:
+  EDivideByZero:
+    code: 0
+    message: "Divisor must be non-zero"
+  EZeroModulus:
+    code: 1
+    message: "Modulus must be non-zero"
+
+# ============================================================
+# STAGE 4.5 — DECISIONS
+# ============================================================
+
+decisions:
+  - question: "Which integer width should I use — u64, u128, or u256?"
+    options:
+      - use: "openzeppelin_math::u64"
+        when: "Default for Sui protocol values — coin balances, timestamps, gas, and amounts the Sui framework itself uses are all u64. Choose this unless you have a concrete reason to widen."
+        why: "Cheapest gas; matches the Sui-native types you'll be passing in and out of `Coin`, `Balance`, `Clock`, etc. `mul_div` / `mul_shr` widen internally so intermediate overflow isn't a reason to upgrade."
+      - use: "openzeppelin_math::u128 (this module)"
+        when: "You need to STORE a value above u64::MAX (~1.8e19) — typical for fixed-point representations (Q64.64, UD30x9), liquidity-tick products, or interest-accumulator scales — OR you need to perform a u64×u64 product as a final stored result without rounding back to u64."
+        why: "Extra headroom; same API surface as u64 and u256 so swapping widths is mechanical. The fixed-point UD30x9 / SD29x9 types are backed by u128 for exactly this reason."
+      - use: "openzeppelin_math::u256"
+        when: "Cross-chain interop with EVM-native 256-bit values, or computations whose final stored value exceeds u128::MAX."
+        why: "Same API surface; reach for it only when the wider stored result is genuinely needed — u256 ops are the most expensive."
+
+  - question: "I need `(a * b) / c` — which function do I call?"
+    options:
+      - use: "mul_div"
+        when: "Default for ANY `(a * b) / c` shape, including swap pricing, fee math, share accounting, interest accrual. Pick the `rounding_mode` deliberately — DOWN for protocol-to-user payouts, UP for caller-pays quotes, NEAREST for display."
+        why: "Intermediate product is computed in a wider type — never silently overflows. Manual `(a * b) / c` overflows when `a * b > u128::MAX` even when the final quotient fits."
+      - use: "mul_shr"
+        when: "Denominator is a power of two (Q-notation fixed-point: Q64.64, Q96, tick-math). Pass the shift count, not the denominator."
+        why: "Cheaper than `mul_div` for the power-of-two case. The exact operation class behind the Cetus exploit — use the audited helper instead of rolling your own."
+      - use: "Native `(a * b) / c`"
+        when: "Never in protocol code. Only acceptable for compile-time-known constants where you can prove the product fits in u128."
+        why: "Overflows on the multiplication BEFORE the division, even when the final result is representable. Rounding is fixed to truncation (round-toward-zero), which is rarely the protocol-correct policy."
+
+  - question: "What `rounding_mode` should I pass?"
+    options:
+      - use: "rounding::down()"
+        when: "Protocol-to-user payouts, withdrawals, share-to-asset conversions on exit — the caller absorbs the remainder."
+        why: "Safe default for value flowing OUT of the protocol. Truncating toward zero ensures the protocol never gives away more than it holds. ERC-4626 deposit/withdraw both round DOWN by convention."
+      - use: "rounding::up()"
+        when: "Caller-pays quotes, ceiling computations, conservative upper bounds — the protocol absorbs the remainder."
+        why: "Use when the protocol needs a guaranteed-sufficient amount (e.g., fee quote that must always cover gas)."
+      - use: "rounding::nearest()"
+        when: "Fee quotes and display calculations where rounding against either party on non-tie values is undesirable. Round-half-up tie-break."
+        why: "Symmetric in the average case. Not safe as a protocol policy because attackers can choose inputs to bias toward whichever side benefits them — prefer DOWN/UP for value-sensitive paths."
+
+  - question: "I want a left shift by N bits — `<<` or `checked_shl`?"
+    options:
+      - use: "checked_shl"
+        when: "Any time the shift count is not a hard-coded value smaller than the number of leading zeros you know `value` has. Returns `None` when any non-zero bit would be pushed out."
+        why: "The Cetus $223M exploit was a hand-rolled `checked_shl` with an off-by-one — surface the overflow as `None` and handle it, do not pre-check yourself."
+      - use: "Native `<<`"
+        when: "Never on user-controlled values; only acceptable for compile-time-known shifts on compile-time-known constants."
+        why: "Silently discards high bits. Indistinguishable from a successful shift at runtime."
+
+  - question: "I have a u64 value that I need to multiply by another u64 — do I need to widen?"
+    options:
+      - use: "Stay on openzeppelin_math::u64 and use u64::mul_div"
+        when: "The FINAL stored result fits in u64 (typical: `(amount * numerator) / denominator` with a denominator close to numerator)."
+        why: "u64::mul_div widens internally to u256 for the intermediate product, then narrows back. No need to drag u128 through your function signatures."
+      - use: "Cast to u128 and use u128::mul_div"
+        when: "The FINAL stored result genuinely needs to exceed u64::MAX (e.g., storing a Q64.64 fixed-point number, an interest accumulator that compounds to >u64::MAX)."
+        why: "Width matches the stored value. Down-cast back to u64 with `safe_downcast_balance` (decimal_scaling) or a manual `as u64` only when you have proven the result fits."
+
+# ============================================================
+# STAGE 5 — ANTI-PATTERN COMPLIANCE
+# ============================================================
+
+preconditions:
+  - must: "Do not pass `denominator = 0` to `mul_div`. Validate or branch on a zero denominator at the call site."
+    fails_with: EDivideByZero
+    affects: [mul_div]
+
+  - must: "Do not pass `modulus = 0` to `inv_mod` or `mul_mod`. Validate or branch on a zero modulus at the call site."
+    fails_with: EZeroModulus
+    affects: [inv_mod, mul_mod]
+
+do_not:
+  - id: hand-rolled-checked-shl
+    severity: high
+    description: "Re-implement left-shift overflow checking by hand instead of calling `u128::checked_shl`."
+    why_bad: "Off-by-one in the threshold (e.g., `assert!(shift < 128 - msb(value))` vs `<=`) silently lets a corrupted value through. This is the exact bug class behind the May 2025 Cetus $223M exploit on Sui."
+    fix: "Always call `u128::checked_shl(value, shift)` and surface `None` as a domain error or explicit fallback. The library does the round-trip check (`(value << shift) >> shift == value`) that hand-rolled versions miss."
+    example_bad: |
+      // WRONG — hand-rolled threshold. Off-by-one is a $223M bug.
+      public fun scale_q64(value: u128, shift: u8): u128 {
+          let bits_used = u128::msb(value);
+          assert!(shift + bits_used < 128, EOverflow); // off-by-one risk
+          value << shift
+      }
+    example_good: |
+      // RIGHT — let the audited helper do the round-trip check.
+      use openzeppelin_math::u128;
+
+      #[error(code = 0)]
+      const EOverflow: vector<u8> = "arithmetic overflow";
+
+      public fun scale_q64(value: u128, shift: u8): u128 {
+          u128::checked_shl(value, shift).destroy_or!(abort EOverflow)
+      }
+
+  - id: manual-mul-then-div
+    severity: high
+    description: "Compute `(a * b) / c` directly with native `*` and `/` operators on u128 inputs."
+    why_bad: "The multiplication overflows when `a * b > u128::MAX` even when the final quotient `(a*b)/c` fits comfortably in u128. Silent abort on overflow corrupts protocol state mid-transaction; truncating division rounds toward zero with no protocol opt-out."
+    fix: "Use `u128::mul_div(a, b, c, rounding_mode)` — the intermediate product is computed in a wider type, and rounding is an explicit, value-sensitive choice."
+    example_bad: |
+      // WRONG — overflows on the multiplication even when the answer fits.
+      public fun shares_for_assets_bad(assets: u128, total_shares: u128, total_assets: u128): u128 {
+          (assets * total_shares) / total_assets   // aborts when product > u128::MAX
+      }
+    example_good: |
+      // RIGHT — widened intermediate, explicit rounding policy.
+      use openzeppelin_math::{rounding, u128};
+
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
+
+      public fun shares_for_assets_good(
+          assets: u128, total_shares: u128, total_assets: u128,
+      ): u128 {
+          u128::mul_div(assets, total_shares, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: rounding-mode-not-thought-through
+    severity: high
+    description: "Pick a `RoundingMode` by reflex (always `down()`, always `nearest()`) without reasoning about which side of the trade absorbs the remainder."
+    why_bad: "Rounding direction determines where value leaks. Rounding UP on deposits or DOWN on withdrawals creates an exploitable round-trip — an attacker deposits and withdraws repeatedly to extract dust. ERC-4626-style vaults round DOWN in both directions for exactly this reason."
+    fix: "For protocol-to-user payouts, round DOWN (protocol absorbs the remainder). For user-pays-protocol quotes, round UP (caller absorbs). Use NEAREST only for display / non-value-sensitive paths. Document the policy at the call site."
+    example_bad: |
+      // WRONG — rounds UP on the user-receives side. Repeated deposit/withdraw
+      // round-trips silently mint dust shares for the depositor.
+      public fun deposit_shares(amount: u128, total_assets: u128, total_supply: u128): u128 {
+          u128::mul_div(amount, total_supply, total_assets, rounding::up())
+              .destroy_or!(abort EMathOverflow)
+      }
+    example_good: |
+      // RIGHT — protocol-to-user payout rounds DOWN; the vault keeps the remainder.
+      public fun deposit_shares(amount: u128, total_assets: u128, total_supply: u128): u128 {
+          u128::mul_div(amount, total_supply, total_assets, rounding::down())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: silent-option-unwrap
+    severity: medium
+    description: "Discard the `Option<u128>` from `mul_div` / `mul_shr` / `checked_shl` / `checked_shr` / `inv_mod` by calling `destroy_some` (or `.extract()`) without a fallback."
+    why_bad: "When the operation actually overflows, the program aborts with a low-level `option::EOPTION_NOT_SET` instead of a domain error. The caller cannot tell whether the abort came from overflow or from elsewhere, and there's no opportunity to provide a cap-on-overflow fallback."
+    fix: "Use `option.destroy_or!(abort EMathOverflow)` with a module-local error constant, OR `option::is_some(&result)` + a fallback value, OR propagate the `Option` to the caller for them to decide."
+    example_bad: |
+      // WRONG — silent unwrap; overflow surfaces as `option::EOPTION_NOT_SET`.
+      public fun unsafe_fee(amount: u128): u128 {
+          option::destroy_some(
+              u128::mul_div(amount, 1025u128, 1000u128, rounding::nearest()),
+          )
+      }
+    example_good: |
+      // RIGHT — abort with a domain error the caller can map.
+      #[error(code = 0)]
+      const EMathOverflow: vector<u8> = "arithmetic overflow";
+
+      public fun fee_quote(amount: u128): u128 {
+          u128::mul_div(amount, 1025u128, 1000u128, rounding::nearest())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+  - id: wrong-width-for-stored-value
+    severity: low
+    description: "Use `openzeppelin_math::u128` for values whose FINAL stored form will be downcast to `u64` (typical Sui-native amount) without reason."
+    why_bad: "Burns gas widening to u128 and narrowing back, drags u128 through function signatures unnecessarily, and creates two narrowing points where a downcast can abort. The intermediate product overflow that motivates u128 is already handled internally by `u64::mul_div`."
+    fix: "Stay on `openzeppelin_math::u64` whenever the FINAL stored value fits in u64 — the u64 module already widens to u256 internally for the intermediate product. Only reach for u128 when the stored value itself needs the extra range (Q64.64 / UD30x9 fixed-point, accumulators that compound past u64::MAX)."
+    example_bad: |
+      // WRONG — u64 amount in, u64 amount out, but u128 intermediates leak
+      // through the public API for no benefit.
+      public fun fee_amount_bad(amount: u64): u64 {
+          let a128 = amount as u128;
+          let result = u128::mul_div(a128, 1025u128, 1000u128, rounding::nearest())
+              .destroy_or!(abort EMathOverflow);
+          result as u64   // narrowing assert lost
+      }
+    example_good: |
+      // RIGHT — stay on u64; u64::mul_div widens internally to u256.
+      use openzeppelin_math::{rounding, u64 as math_u64};
+
+      public fun fee_amount_good(amount: u64): u64 {
+          math_u64::mul_div(amount, 1025u64, 1000u64, rounding::nearest())
+              .destroy_or!(abort EMathOverflow)
+      }
+
+composes_with: []   # Empty — no compositions are source-cited. Sibling pointers
+                    # (u64 for Sui-native widths, u256 for cross-chain, fixed-point
+                    # for fractional values) live in does_not_solve[]; picking
+                    # between widths and rounding modes lives in decisions[].
+
+# ============================================================
+# Audit grounding — agent skips during code generation
+# ============================================================
+
+_audit_grounding:
+
+  canonical_test: null   # No end-to-end happy path — `u128` is a stateless
+                         # library with sharded operation-by-operation tests.
+                         # Consult the suite under math/core/tests/u128_tests.move
+                         # for per-function coverage (see precondition_proofs[]).
+
+  precondition_proofs:
+    - precondition_fails_with: EDivideByZero
+      test_file: math/core/tests/u128_tests.move
+      test_functions:
+        - mul_div_rejects_zero_denominator
+    - precondition_fails_with: EZeroModulus
+      test_file: math/core/tests/u128_tests.move
+      test_functions:
+        - inv_mod_rejects_zero_modulus
+        - mul_mod_rejects_zero_modulus
+
+  do_not_demonstrations:
+    - do_not_id: hand-rolled-checked-shl
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: manual-mul-then-div
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: rounding-mode-not-thought-through
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: silent-option-unwrap
+      test_functions: []   # consumer-side pattern; not in-tree
+    - do_not_id: wrong-width-for-stored-value
+      test_functions: []   # consumer-side pattern; not in-tree
+
+  do_not_detection:
+    - do_not_id: hand-rolled-checked-shl
+      pattern: "Function body contains `value << shift` (or `<<` on a u128) guarded only by a hand-written assert! involving msb/clz/threshold arithmetic, with no call to openzeppelin_math::u128::checked_shl in the same function."
+      heuristic: "regex within same fn: /<<\\s*[A-Za-z_][A-Za-z0-9_]*/ AND no /u128::checked_shl\\(/ AND assert! that references msb|clz|128"
+    - do_not_id: manual-mul-then-div
+      pattern: "Two-operand multiplication on u128 immediately followed by a division by another u128 — `(a * b) / c` shape without going through mul_div."
+      heuristic: "regex: /\\b([A-Za-z_][A-Za-z0-9_]*\\s*\\*\\s*[A-Za-z_][A-Za-z0-9_]*)\\s*\\)?\\s*\\/\\s*[A-Za-z_]/ on operands typed u128, AND no preceding u128::mul_div call binding the same operands"
+    - do_not_id: rounding-mode-not-thought-through
+      pattern: "Same `rounding::*()` constant passed to mul_div in both DEPOSIT-direction and WITHDRAW-direction functions of a vault / share-accounting module."
+      heuristic: "two public fns matching /(deposit|mint).*shares|wrap/ and /(withdraw|redeem).*(assets|tokens)|unwrap/ in the same module, both using the SAME rounding::up()/down()/nearest() literal"
+    - do_not_id: silent-option-unwrap
+      pattern: "`option::destroy_some` (or `.extract()`) applied directly to the result of u128::mul_div / mul_shr / checked_shl / checked_shr / inv_mod with no preceding is_some check or destroy_or fallback."
+      heuristic: "regex: /(option::destroy_some|\\.extract\\(\\))\\(\\s*u128::(mul_div|mul_shr|checked_shl|checked_shr|inv_mod)/"
+    - do_not_id: wrong-width-for-stored-value
+      pattern: "Function whose public signature takes and returns u64 but performs `as u128` widening at entry and `as u64` narrowing at exit purely to call u128::mul_div internally."
+      heuristic: "public fun with u64 param AND u64 return AND body contains both /\\bas u128\\b/ and /\\bas u64\\b/ and a u128::mul_div call"
+
+  events: []   # No events declared by this module.

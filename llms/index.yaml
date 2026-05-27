@@ -1,0 +1,32 @@
+# Repository-root catalog of AI integrator metadata — the machine-readable entry
+# point for MCP servers and AI agents. Fetch this FIRST to discover every package
+# in a single request, then drill into each package's `index.yaml` (the module
+# surface) and finally into per-module YAMLs (APIs, errors, decisions, anti-patterns).
+#
+# The narrative `llms.txt` at the repo root is the human-facing convention entry;
+# this file is its structured sibling. Conforms to the root-catalog form of
+# schemas/llms-package-index-v1.json (the `packages` shape).
+
+schema_version: "1.0"
+repo: OpenZeppelin/contracts-sui
+repo_ref: 55a79713a7e51a142de017e57bd7901ce8198212
+release: null   # release tag this catalog matches (null if generated between tags)
+
+packages:
+  - name: openzeppelin_access
+    group: contracts
+    mvr: "@openzeppelin-move/access"
+    index: contracts/access/llms/index.yaml
+    summary: "Role-based access control with typed `Auth<Role>` proofs, plus controlled ownership-transfer policies (two-step acceptance, time-locked transfers)."
+
+  - name: openzeppelin_math
+    group: math
+    mvr: "@openzeppelin-move/integer-math"
+    index: math/core/llms/index.yaml
+    summary: "Overflow-safe integer arithmetic (`u8`–`u512`) with explicit rounding, plus decimal scaling, rounding modes, and in-place vector sort macros."
+
+  - name: openzeppelin_fp_math
+    group: math
+    mvr: "@openzeppelin-move/fixed-point-math"
+    index: math/fixed_point/llms/index.yaml
+    summary: "Decimal fixed-point types — unsigned `UD30x9` and signed `SD29x9` (9 decimals, u128-backed) with arithmetic, conversions, and transcendental ops."

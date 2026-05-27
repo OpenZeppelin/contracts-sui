@@ -1,0 +1,97 @@
+name: llms metadata — validation
+
+# Validates llms metadata YAMLs at three layers:
+#   1. JSON Schema conformance (per-module + per-package index + root catalog)
+#   2. Cross-field semantic integrity (api.aborts ⊆ errors, affects exhaustive,
+#      audit_grounding refs consistent — see scripts/validate-llms-semantics.py)
+#   3. Completeness: every public source module has a YAML + index entry, no
+#      orphan YAMLs, all index paths resolve (scripts/validate-llms-completeness.py)
+#
+# Layers 1–2 validate only the YAMLs the PR changed (unless schemas/validators/
+# workflow changed → full re-validation). Layer 3 is a whole-tree source↔metadata
+# check that always runs — it must fire on `sources/**` changes too, since adding
+# a module without its YAML produces no YAML diff but is exactly the gap to catch.
+
+on:
+  pull_request:
+    paths:
+      - '**/llms/**/*.yaml'
+      - '**/sources/**/*.move'
+      - 'schemas/llms-metadata-v1.json'
+      - 'schemas/llms-package-index-v1.json'
+      - 'scripts/validate-llms-schema.py'
+      - 'scripts/validate-llms-semantics.py'
+      - 'scripts/validate-llms-completeness.py'
+      - '.github/workflows/llms-schema-validation.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need history for `git diff` against base ref
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --quiet pyyaml jsonschema
+
+      - name: Determine affected YAMLs
+        id: scope
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+
+          # Full re-validation when anything that could change validation behavior
+          # is touched: the schemas themselves (a stricter schema can retroactively
+          # invalidate previously-passing YAMLs), the validator script (its
+          # behavior may have changed), or this workflow (scope-detection logic
+          # may have changed). In all three cases we want every YAML re-checked
+          # on this PR.
+          DIFF=$(git diff --name-only "$BASE"...HEAD)
+          if echo "$DIFF" | grep -qE '^(schemas/(llms-metadata-v1|llms-package-index-v1)\.json|scripts/validate-llms-(schema|semantics|completeness)\.py|\.github/workflows/llms-schema-validation\.yml)$'; then
+            echo "scope=ALL (schemas / validator / workflow changed)"
+            find . -type f -name '*.yaml' -path '*/llms/*' | sort > affected.txt
+          else
+            echo "scope=DIFF"
+            echo "$DIFF" \
+              | grep -E '(^|/)llms/.*\.yaml$' \
+              | sort > affected.txt || true
+          fi
+
+          echo "---affected---"
+          cat affected.txt
+          count=$(wc -l < affected.txt | tr -d ' ')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Validate (schema + semantics)
+        if: steps.scope.outputs.count != '0'
+        run: |
+          set +e
+          rc=0
+          echo "::group::Schema validation"
+          xargs -a affected.txt python3 scripts/validate-llms-schema.py
+          [ $? -ne 0 ] && rc=1
+          echo "::endgroup::"
+          echo "::group::Semantic validation (cross-field referential integrity)"
+          xargs -a affected.txt python3 scripts/validate-llms-semantics.py
+          [ $? -ne 0 ] && rc=1
+          echo "::endgroup::"
+          exit $rc
+
+      - name: No YAMLs to schema/semantics-validate
+        if: steps.scope.outputs.count == '0'
+        run: echo "No changed llms YAMLs in the diff — schema/semantics layers have nothing to scope. Completeness still runs below."
+
+      # Layer 3 — whole-tree source↔metadata completeness. Always runs (even when
+      # the YAML diff is empty), because a sources-only change can add a public
+      # module with no YAML — which produces zero YAML diff but is the gap to catch.
+      - name: Completeness check (source ↔ metadata)
+        if: ${{ !cancelled() }}
+        run: |
+          echo "::group::Completeness (every public module → YAML + index entry; no orphans; index paths resolve)"
+          python3 scripts/validate-llms-completeness.py
+          echo "::endgroup::"
