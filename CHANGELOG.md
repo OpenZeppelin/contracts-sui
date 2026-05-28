@@ -25,7 +25,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- `vector::median` macro for unsigned integer vectors (`u8`..`u256`) with configurable rounding for even-length input; returns `Option` to signal empty input. (#135)
+- `vector::median` macro for unsigned integer vectors (`u8`..`u256`) with configurable rounding for even-length input; aborts with `vector::EEmptyVector` on empty input. (#135)
+
 #### Changed
 
 - `u128::is_power_of_ten` and `u256::is_power_of_ten` now compute the result via `log10_floor` and `pow` instead of a hardcoded lookup table. (#323)
