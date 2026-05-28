@@ -277,10 +277,7 @@ fun median_u16_even_length() {
 
 #[test]
 fun median_u32_odd_length() {
-    assert_eq!(
-        vector::median!(vector[1000u32, 1, 500, 3, 7], rounding::down()),
-        7u32,
-    );
+    assert_eq!(vector::median!(vector[1000u32, 1, 500, 3, 7], rounding::down()), 7u32);
 }
 
 #[test]
@@ -295,10 +292,7 @@ fun median_u128_even_length_large_values() {
 fun median_u256_odd_length_large_values() {
     let u128_max_as_u256 = std::u128::max_value!() as u256;
     assert_eq!(
-        vector::median!(
-            vector[0, std::u256::max_value!(), u128_max_as_u256],
-            rounding::down(),
-        ),
+        vector::median!(vector[0, std::u256::max_value!(), u128_max_as_u256], rounding::down()),
         u128_max_as_u256,
     );
 }
