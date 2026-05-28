@@ -114,6 +114,10 @@ const ENoPendingDelayChange: vector<u8> = "No pending default admin delay change
 #[error(code = 12)]
 const EZeroAddress: vector<u8> = "Cannot use the zero address as a role holder or transfer target";
 
+/// The current root holder tried to schedule a no-op transfer to itself.
+#[error(code = 13)]
+const EDefaultAdminTransferToSelf: vector<u8> = "Cannot transfer default admin to self";
+
 // === Constants ===
 
 /// Upper bound on `default_admin_delay_ms` — the configured timelock for
@@ -557,6 +561,7 @@ public fun set_role_admin<RootRole, Role, AdminRole>(
 /// #### Aborts
 /// - `EUnauthorized` if the caller does not hold the root role.
 /// - `EZeroAddress` if `new_admin` is `@0x0`. Use `begin_default_admin_renounce` to lock the registry permanently.
+/// - `EDefaultAdminTransferToSelf` if `new_admin` is the current root holder.
 public fun begin_default_admin_transfer<RootRole>(
     ac: &mut AccessControl<RootRole>,
     new_admin: address,
@@ -565,6 +570,7 @@ public fun begin_default_admin_transfer<RootRole>(
 ) {
     assert!(ac.has_role_by_name(ac.protected_root, ctx.sender()), EUnauthorized);
     assert!(new_admin != @0x0, EZeroAddress);
+    assert!(new_admin != ctx.sender(), EDefaultAdminTransferToSelf);
 
     let execute_after_ms = clock.timestamp_ms() + ac.default_admin_delay_ms;
     ac.pending_default_admin =

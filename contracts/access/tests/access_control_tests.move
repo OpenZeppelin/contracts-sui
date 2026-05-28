@@ -812,6 +812,16 @@ fun test_begin_admin_transfer_rejects_zero_address() {
     abort 999
 }
 
+#[test, expected_failure(abort_code = access_control::EDefaultAdminTransferToSelf)]
+fun test_begin_admin_transfer_rejects_self() {
+    let deployer = @0xA;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.begin_default_admin_transfer(deployer, &clk, scenario.ctx());
+    abort 999
+}
+
 #[test]
 fun test_begin_admin_transfer_overwrites_pending() {
     let deployer = @0xA;
@@ -962,66 +972,6 @@ fun test_accept_admin_transfer_at_exact_delay() {
     ac.accept_default_admin_transfer(&clk, scenario.ctx());
 
     assert!(ac.has_role<_, ACCESS_CONTROL_TESTS>(new_admin));
-
-    clock::destroy_for_testing(clk);
-    test_scenario::return_shared(ac);
-    scenario.end();
-}
-
-// Self-transfer edge case: `old_admin == new_admin`. The function does NOT
-// short-circuit — it emits the full revoke-old + grant-new pair even though
-// they reference the same address, and the registry ends with the original
-// holder still holding root. This pins the no-special-case decision so a future
-// "optimization" to skip the events when `new_admin == sender` can't be made
-// silently.
-#[test]
-fun test_accept_admin_transfer_to_self() {
-    let deployer = @0xA;
-    let delay = 100;
-    let mut scenario = setup(deployer, delay);
-    let mut ac = take_ac(&scenario);
-
-    let mut clk = clock::create_for_testing(scenario.ctx());
-    clk.set_for_testing(0);
-    ac.begin_default_admin_transfer(deployer, &clk, scenario.ctx());
-    test_scenario::return_shared(ac);
-
-    scenario.next_tx(deployer);
-    let mut ac = take_ac(&scenario);
-    clk.set_for_testing(delay);
-    let granted_before = event::events_by_type<access_control::RoleGranted>().length();
-    let revoked_before = event::events_by_type<access_control::RoleRevoked>().length();
-    ac.accept_default_admin_transfer(&clk, scenario.ctx());
-
-    // Deployer still holds root after rotating to self; pending state cleared.
-    assert!(ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
-    assert!(!ac.has_pending_default_admin_transfer());
-    assert!(ac.pending_default_admin_new_admin().is_none());
-
-    // Both events fire — function does not short-circuit transfer-to-self.
-    assert_eq!(event::events_by_type<access_control::RoleGranted>().length(), granted_before + 1);
-    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), revoked_before + 1);
-
-    let granted = event::events_by_type<access_control::RoleGranted>();
-    let last_granted = granted[granted.length() - 1];
-    assert_eq!(
-        last_granted,
-        access_control::test_new_role_granted(
-            with_original_ids<ACCESS_CONTROL_TESTS>(),
-            deployer,
-            deployer,
-        ),
-    );
-    let revoked = event::events_by_type<access_control::RoleRevoked>();
-    let last_revoked = revoked[revoked.length() - 1];
-    assert_eq!(
-        last_revoked,
-        access_control::test_new_role_revoked(
-            with_original_ids<ACCESS_CONTROL_TESTS>(),
-            deployer,
-            deployer,
-        ),
-    );
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
