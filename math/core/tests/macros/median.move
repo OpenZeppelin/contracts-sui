@@ -71,19 +71,22 @@ fun median_already_sorted_odd() {
     assert_eq!(vector::median!(vector[1u64, 2, 3, 4, 5], rounding::down()), 3u64);
 }
 
-#[test]
-fun median_odd_length_rounding_mode_irrelevant_down() {
-    assert_eq!(vector::median!(vector[5u64, 1, 9, 3, 7], rounding::down()), 5u64);
-}
+#[random_test]
+fun median_odd_length_rounding_modes_agree_u64(mut v: vector<u64>, a: u64, _b: u64) {
+    // ensure `v` has odd length
+    if (v.is_empty()) {
+        v.push_back(a);
+    } else if (v.length() % 2 == 0) {
+        // pop avoids overflow risk of push if v.length == u64::max
+        v.pop_back();
+    };
 
-#[test]
-fun median_odd_length_rounding_mode_irrelevant_up() {
-    assert_eq!(vector::median!(vector[5u64, 1, 9, 3, 7], rounding::up()), 5u64);
-}
+    let down = vector::median!(v, rounding::down());
+    let nearest = vector::median!(v, rounding::nearest());
+    let up = vector::median!(v, rounding::up());
 
-#[test]
-fun median_odd_length_rounding_mode_irrelevant_nearest() {
-    assert_eq!(vector::median!(vector[5u64, 1, 9, 3, 7], rounding::nearest()), 5u64);
+    assert_eq!(down, nearest);
+    assert_eq!(nearest, up);
 }
 
 // === Even-length correctness and rounding contract ===
@@ -131,6 +134,24 @@ fun median_even_length_nearest_exact_midpoint_nearest() {
 #[test]
 fun median_sorted_even_length() {
     assert_eq!(vector::median!(vector[1u64, 3, 5, 7], rounding::down()), 4u64);
+}
+
+#[random_test]
+fun median_even_length_rounding_modes_are_monotonic_u64(mut v: vector<u64>, a: u64, b: u64) {
+    // ensure `v` has even length (pop avoids overflow risk of push if v.length == u64::max)
+    if (v.length() % 2 == 1) { v.pop_back(); };
+    // ensure `v` is non-empty
+    if (v.is_empty()) {
+        v.push_back(a);
+        v.push_back(b);
+    };
+
+    let down = vector::median!(v, rounding::down());
+    let nearest = vector::median!(v, rounding::nearest());
+    let up = vector::median!(v, rounding::up());
+
+    assert!(down <= nearest);
+    assert!(nearest <= up);
 }
 
 // === Duplicates ===

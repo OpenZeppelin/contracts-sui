@@ -34,14 +34,14 @@ Generic over `u8`..`u256`:
 
 ## Usage examples
 
-```rust
+```move
 use openzeppelin_math::{u128, rounding};
 
 let result = u128::mul_div(100, 200, 3, rounding::up());
 // result = Some(6667) (rounded up from 6666.66...)
 ```
 
-```rust
+```move
 use openzeppelin_math::{u64, rounding};
 
 let mean = u64::average(5, 6, rounding::down());
@@ -49,7 +49,8 @@ let mean = u64::average(5, 6, rounding::down());
 ```
 
 ```move
-use openzeppelin_math::{vector, rounding};
+use openzeppelin_math::rounding;
+use openzeppelin_math::vector;
 
 let med = vector::median!(vector[5u64, 1, 9, 3, 7], rounding::down());
 // med = 5
