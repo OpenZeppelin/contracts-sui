@@ -234,11 +234,29 @@ fun median_permutation_other_shuffle_even() {
 // === Overflow safety on even-length resolution ===
 
 #[test]
-fun median_even_length_zero_and_max() {
-    // floor(u64::MAX / 2)
+fun median_even_u64_zero_and_max_down() {
+    // floor(u64::MAX / 2) = 2^63 - 1
     assert_eq!(
         vector::median!(vector[0, std::u64::max_value!()], rounding::down()),
         std::u64::max_value!() / 2,
+    );
+}
+
+#[test]
+fun median_even_u64_zero_and_max_up() {
+    // ceil(u64::MAX / 2) = 2^63
+    assert_eq!(
+        vector::median!(vector[0, std::u64::max_value!()], rounding::up()),
+        std::u64::max_value!() / 2 + 1,
+    );
+}
+
+#[test]
+fun median_even_u64_zero_and_max_nearest() {
+    // 0.5 tie -> nearest rounds up -> 2^63
+    assert_eq!(
+        vector::median!(vector[0, std::u64::max_value!()], rounding::nearest()),
+        std::u64::max_value!() / 2 + 1,
     );
 }
 
