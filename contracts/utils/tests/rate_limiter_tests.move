@@ -820,8 +820,8 @@ fun is_variant_predicate_guards_variant_typed_getter() {
 
     let rl = rate_limiter::new_cooldown(5, 50, 5, 0, &clk);
     let v = if (rl.is_bucket()) rl.refill_amount()
-        else if (rl.is_cooldown()) rl.cooldown_ms()
-        else rl.window_ms();
+    else if (rl.is_cooldown()) rl.cooldown_ms()
+    else rl.window_ms();
     assert_eq!(v, 50); // resolved via is_cooldown() -> cooldown_ms(), no abort
 
     teardown(test, clk);
