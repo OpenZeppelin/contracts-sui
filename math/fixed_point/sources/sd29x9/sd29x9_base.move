@@ -251,11 +251,13 @@ public fun log10(x: SD29x9): SD29x9 {
 ///
 /// The result is rounded toward zero, matching the convention used by
 /// `mul_trunc`, `div_trunc`, and `pow` in this module. For positive results
-/// (inputs `>= 1`) this coincides with rounding down. For negative results
-/// (inputs in `(0, 1)`) the signed result usually sits closer to zero than
-/// the true value, but in narrow edge cases where the kernel's small upward
-/// magnitude bias crosses an integer boundary it may instead be 1 ulp (unit
-/// in the last place) further from zero.
+/// (inputs `>= 1`) this coincides with rounding down and sits at most 2
+/// ulps below the true value (see `raw_log2` for the kernel's precision
+/// bound). For negative results (inputs in `(0, 1)`) the signed result
+/// usually sits closer to zero than the true value, but in narrow edge
+/// cases where the kernel's small upward magnitude bias crosses an integer
+/// boundary it may instead be 1 ulp (unit in the last place) further from
+/// zero.
 ///
 /// #### Parameters
 /// - `x`: Input value.

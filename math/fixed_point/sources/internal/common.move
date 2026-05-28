@@ -116,13 +116,10 @@ public(package) macro fun log10_2_e18(): u128 {
 /// Internal precision used by the fixed-point logarithm kernel: `10^18`
 /// (~`2^60`), an order of magnitude finer than the user-facing `10^9` scale.
 ///
-/// Error analysis: in the squaring loop, error in `y` grows ~2× per iteration
-/// (since `y_new = y_old^2 / internal`), but a wrong bit at iteration `i`
-/// only perturbs `frac` by `internal / 2^(i+1)` — exponentially decaying, so
-/// late-iteration errors contribute little. Empirically the total `frac`
-/// error stays under `~10^3` at scale `10^18`, well below one user-facing
-/// ulp (unit in the last place, `10^9`). A 9-decimal variant would lack the
-/// headroom for inputs near `1.0`; 18-decimal preserves precision.
+/// The 18-decimal internal scale gives the squaring loop enough headroom for
+/// inputs near `1.0`: a 9-decimal variant would not resolve the fractional
+/// bits the loop sets when `y` starts close to `1`. The overall kernel
+/// precision bound is documented on `raw_log2`.
 const INTERNAL_LOG_SCALE: u128 = 1_000_000_000_000_000_000; // 10^18
 
 /// Scale-correction denominator for `apply_log2_factor`: two scale-`10^18`
@@ -172,6 +169,14 @@ public(package) fun apply_log2_factor(log2_mag_e18: u128, factor_e18: u128): u12
 ///
 /// #### Aborts
 /// - `ELogOfZero` if `x_raw` is zero.
+///
+/// #### Precision
+/// The magnitude is at most 2 user-facing ulps below the true value,
+/// monotone-down. The dominant loss is the `x_raw >> n` truncation in the
+/// `x_raw >= scale` branch (with `n = floor(log2(x_raw / 10^9))`), which
+/// discards up to `n` low-order bits — so the deficit grows with `n` and
+/// reaches the 2-ulp ceiling at `x_raw = u128::MAX`. The `x_raw < scale`
+/// branch performs a lossless left shift and stays in the sub-ulp regime.
 public(package) fun raw_log2(x_raw: u128): (bool, u128) {
     assert!(x_raw > 0, ELogOfZero);
 

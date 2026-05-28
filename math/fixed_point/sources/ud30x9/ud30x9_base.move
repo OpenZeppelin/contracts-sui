@@ -250,8 +250,10 @@ public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
 
 /// Computes the natural logarithm of a `UD30x9` value.
 ///
-/// Derived from `log2` via the identity `ln(x) = log2(x) * ln(2)`. Both factors
-/// round toward zero, so the result may sit up to one ulp below the true value.
+/// Derived from `log2` via the identity `ln(x) = log2(x) * ln(2)`. Both the
+/// `log2` kernel and the base-conversion step round toward zero, so the
+/// result may sit up to 2 ulps below the true value; see `raw_log2` for the
+/// kernel's precision bound.
 ///
 /// #### Parameters
 /// - `x`: Input value.
@@ -272,10 +274,11 @@ public fun ln(x: UD30x9): UD30x9 {
 
 /// Computes the base-10 logarithm of a `UD30x9` value.
 ///
-/// Derived from `log2` via the identity `log10(x) = log2(x) * log10(2)`. Both
-/// factors round toward zero, so the result may sit up to one ulp below the
-/// true value. In particular, `log10(10) == one() - 1 ulp` under pure
-/// round-down arithmetic.
+/// Derived from `log2` via the identity `log10(x) = log2(x) * log10(2)`.
+/// Both the `log2` kernel and the base-conversion step round toward zero,
+/// so the result may sit up to 2 ulps below the true value; see `raw_log2`
+/// for the kernel's precision bound. In particular, `log10(10)` may sit up
+/// to 2 ulps below `one()`.
 ///
 /// #### Parameters
 /// - `x`: Input value.
@@ -296,14 +299,15 @@ public fun log10(x: UD30x9): UD30x9 {
 
 /// Computes the base-2 logarithm of a `UD30x9` value.
 ///
-/// The result is rounded down to the nearest representable `UD30x9` value:
-/// it is the largest `UD30x9` `r` such that `2^r <= x`.
+/// The result is rounded down and sits at most 2 ulps below the true
+/// `log2(x)`; see `raw_log2` for the kernel's precision bound. For inputs
+/// in `[1, 2)` the result is exact.
 ///
 /// #### Parameters
 /// - `x`: Input value.
 ///
 /// #### Returns
-/// - `log2(x)`, rounded down to the nearest representable `UD30x9` value.
+/// - `log2(x)`, at most 2 ulps below the true value.
 ///
 /// #### Aborts
 /// - `ELogUndefined` if `x` is less than one (result would be negative or undefined).
