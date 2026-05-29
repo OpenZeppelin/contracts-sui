@@ -150,6 +150,8 @@ const MAX_DELAY_INCREASE_WAIT_MS: u64 = 48 * 60 * 60 * 1_000;
 /// can ever be registered in it (Invariant 2), every `Auth<Role>` that exists was
 /// produced by that one registry, against a sender that genuinely held `Role`.
 /// Consumers can take `&Auth<Role>` as authorization without any body checks.
+/// This is a PTB-local snapshot: if the holder later renounces `Role` in the
+/// same PTB, the witness remains valid but no longer reflects live membership.
 public struct Auth<phantom Role> has drop {
     addr: address,
 }
@@ -853,7 +855,8 @@ public fun cancel_default_admin_delay_change<RootRole>(
 ///
 /// #### Returns
 /// - An `Auth<Role>` capability bound to `ctx.sender()`. Pass it by reference
-/// to gated functions in the same PTB.
+/// to gated functions in the same PTB. The witness proves membership at mint
+/// time, not after a later same-PTB renounce.
 ///
 /// #### Aborts
 /// - `EForeignRole` if `Role`'s home module differs from `RootRole`'s.
