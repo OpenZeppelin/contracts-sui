@@ -78,11 +78,10 @@ fun test_new_with_otw_succeeds() {
     assert_eq!(ac.protected_root(), with_original_ids<ACCESS_CONTROL_TESTS>());
     // RoleGranted emitted for the root holder. Asserted in the same tx as
     // construction because `events_by_type` is per-transaction.
-    let granted = event::events_by_type<access_control::RoleGranted>();
+    let granted = event::events_by_type<access_control::RoleGranted<ACCESS_CONTROL_TESTS>>();
     assert_eq!(granted.length(), 1);
-    let expected = access_control::test_new_role_granted(
+    let expected = access_control::test_new_role_granted<ACCESS_CONTROL_TESTS>(
         with_original_ids<ACCESS_CONTROL_TESTS>(),
-        deployer,
         deployer,
     );
     assert_eq!(granted[0], expected);
@@ -170,12 +169,11 @@ fun test_grant_role_happy_path() {
 
     // `events_by_type` is per-transaction; the construction event from `setup`
     // lives in the previous tx, so only the grant event shows up here.
-    let granted = event::events_by_type<access_control::RoleGranted>();
+    let granted = event::events_by_type<access_control::RoleGranted<ACCESS_CONTROL_TESTS>>();
     assert_eq!(granted.length(), 1);
-    let expected = access_control::test_new_role_granted(
+    let expected = access_control::test_new_role_granted<ACCESS_CONTROL_TESTS>(
         with_original_ids<AdminA>(),
         alice,
-        deployer,
     );
     assert_eq!(granted[0], expected);
 
@@ -191,10 +189,14 @@ fun test_grant_role_idempotent() {
     let mut ac = take_ac(&scenario);
 
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
-    let count_after_first = event::events_by_type<access_control::RoleGranted>().length();
+    let count_after_first = event::events_by_type<
+        access_control::RoleGranted<ACCESS_CONTROL_TESTS>,
+    >().length();
     // Second grant to the same account is a no-op — no new event, no abort.
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
-    let count_after_second = event::events_by_type<access_control::RoleGranted>().length();
+    let count_after_second = event::events_by_type<
+        access_control::RoleGranted<ACCESS_CONTROL_TESTS>,
+    >().length();
     assert_eq!(count_after_first, count_after_second);
 
     test_scenario::return_shared(ac);
@@ -276,12 +278,11 @@ fun test_revoke_role_happy_path() {
     ac.revoke_role<_, AdminA>(alice, scenario.ctx());
     assert!(!ac.has_role<_, AdminA>(alice));
 
-    let revoked = event::events_by_type<access_control::RoleRevoked>();
+    let revoked = event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>();
     assert_eq!(revoked.length(), 1);
-    let expected = access_control::test_new_role_revoked(
+    let expected = access_control::test_new_role_revoked<ACCESS_CONTROL_TESTS>(
         with_original_ids<AdminA>(),
         alice,
-        deployer,
     );
     assert_eq!(revoked[0], expected);
 
@@ -297,11 +298,16 @@ fun test_revoke_role_idempotent_non_member() {
     let mut ac = take_ac(&scenario);
 
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
-    let revoked_count = event::events_by_type<access_control::RoleRevoked>().length();
+    let revoked_count = event::events_by_type<
+        access_control::RoleRevoked<ACCESS_CONTROL_TESTS>,
+    >().length();
 
     // Carol never had the role — revoking is a no-op.
     ac.revoke_role<_, AdminA>(@0xC, scenario.ctx());
-    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), revoked_count);
+    assert_eq!(
+        event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>().length(),
+        revoked_count,
+    );
 
     test_scenario::return_shared(ac);
     scenario.end();
@@ -315,7 +321,10 @@ fun test_revoke_role_idempotent_unknown_role() {
 
     // RoleY was never granted, so it has no bag entry. Revoking is a no-op.
     ac.revoke_role<_, RoleY>(@0xB, scenario.ctx());
-    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
+    assert_eq!(
+        event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>().length(),
+        0,
+    );
 
     test_scenario::return_shared(ac);
     scenario.end();
@@ -372,11 +381,10 @@ fun test_renounce_role_happy_path() {
     ac.renounce_role<_, AdminA>(alice, scenario.ctx());
     assert!(!ac.has_role<_, AdminA>(alice));
 
-    let revoked = event::events_by_type<access_control::RoleRevoked>();
+    let revoked = event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>();
     let last = revoked[revoked.length() - 1];
-    let expected = access_control::test_new_role_revoked(
+    let expected = access_control::test_new_role_revoked<ACCESS_CONTROL_TESTS>(
         with_original_ids<AdminA>(),
-        alice,
         alice,
     );
     assert_eq!(last, expected);
@@ -409,7 +417,10 @@ fun test_renounce_role_idempotent_non_member() {
 
     // alice never held AdminA — renounce is a no-op, no event.
     ac.renounce_role<_, AdminA>(alice, scenario.ctx());
-    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
+    assert_eq!(
+        event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>().length(),
+        0,
+    );
 
     test_scenario::return_shared(ac);
     scenario.end();
@@ -435,7 +446,10 @@ fun test_renounce_role_idempotent_role_in_bag_non_member() {
     scenario.next_tx(carol);
     let mut ac = take_ac(&scenario);
     ac.renounce_role<_, AdminA>(carol, scenario.ctx());
-    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
+    assert_eq!(
+        event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>().length(),
+        0,
+    );
 
     test_scenario::return_shared(ac);
     scenario.end();
@@ -476,9 +490,9 @@ fun test_set_role_admin_happy_path() {
     assert_eq!(ac.get_role_admin<_, RoleX>(), with_original_ids<AdminA>());
 
     // RoleAdminChanged emitted.
-    let changed = event::events_by_type<access_control::RoleAdminChanged>();
+    let changed = event::events_by_type<access_control::RoleAdminChanged<ACCESS_CONTROL_TESTS>>();
     assert_eq!(changed.length(), 1);
-    let expected = access_control::test_new_role_admin_changed(
+    let expected = access_control::test_new_role_admin_changed<ACCESS_CONTROL_TESTS>(
         with_original_ids<RoleX>(),
         with_original_ids<ACCESS_CONTROL_TESTS>(),
         with_original_ids<AdminA>(),
@@ -537,9 +551,9 @@ fun test_set_role_admin_updates_existing_role() {
     assert!(ac.has_role<_, RoleX>(alice));
 
     // Event reports previous = root (NOT empty), new = AdminA.
-    let changed = event::events_by_type<access_control::RoleAdminChanged>();
+    let changed = event::events_by_type<access_control::RoleAdminChanged<ACCESS_CONTROL_TESTS>>();
     assert_eq!(changed.length(), 1);
-    let expected = access_control::test_new_role_admin_changed(
+    let expected = access_control::test_new_role_admin_changed<ACCESS_CONTROL_TESTS>(
         with_original_ids<RoleX>(),
         with_original_ids<ACCESS_CONTROL_TESTS>(),
         with_original_ids<AdminA>(),
@@ -787,9 +801,14 @@ fun test_begin_admin_transfer_happy_path() {
     assert_eq!(ac.pending_default_admin_new_admin(), option::some(new_admin));
     assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(delay));
 
-    let scheduled = event::events_by_type<access_control::DefaultAdminTransferScheduled>();
+    let scheduled = event::events_by_type<
+        access_control::DefaultAdminTransferScheduled<ACCESS_CONTROL_TESTS>,
+    >();
     assert_eq!(scheduled.length(), 1);
-    let expected = access_control::test_new_default_admin_transfer_scheduled(new_admin, delay);
+    let expected = access_control::test_new_default_admin_transfer_scheduled<ACCESS_CONTROL_TESTS>(
+        new_admin,
+        delay,
+    );
     assert_eq!(scheduled[0], expected);
 
     clock::destroy_for_testing(clk);
@@ -844,6 +863,15 @@ fun test_begin_admin_transfer_overwrites_pending() {
     assert_eq!(ac.pending_default_admin_new_admin(), option::some(@0xC));
     assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(50));
 
+    let cancelled = event::events_by_type<
+        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+    >();
+    assert_eq!(cancelled.length(), 1);
+    let expected = access_control::test_new_default_admin_transfer_cancelled<
+        ACCESS_CONTROL_TESTS,
+    >();
+    assert_eq!(cancelled[0], expected);
+
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
@@ -868,8 +896,12 @@ fun test_accept_admin_transfer_happy_path() {
     scenario.next_tx(new_admin);
     let mut ac = take_ac(&scenario);
     clk.set_for_testing(delay);
-    let granted_before = event::events_by_type<access_control::RoleGranted>().length();
-    let revoked_before = event::events_by_type<access_control::RoleRevoked>().length();
+    let granted_before = event::events_by_type<
+        access_control::RoleGranted<ACCESS_CONTROL_TESTS>,
+    >().length();
+    let revoked_before = event::events_by_type<
+        access_control::RoleRevoked<ACCESS_CONTROL_TESTS>,
+    >().length();
     ac.accept_default_admin_transfer(&clk, scenario.ctx());
 
     // Atomic rotation: old admin lost root, new admin gained it.
@@ -880,30 +912,34 @@ fun test_accept_admin_transfer_happy_path() {
     assert!(ac.pending_default_admin_new_admin().is_none());
     assert!(ac.pending_default_admin_execute_after_ms().is_none());
     // Both events emitted in this transaction.
-    assert_eq!(event::events_by_type<access_control::RoleGranted>().length(), granted_before + 1);
-    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), revoked_before + 1);
+    assert_eq!(
+        event::events_by_type<access_control::RoleGranted<ACCESS_CONTROL_TESTS>>().length(),
+        granted_before + 1,
+    );
+    assert_eq!(
+        event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>().length(),
+        revoked_before + 1,
+    );
 
     // Field-level event payload assertions for the atomic rotation: the pair
     // of events (revoke-old, grant-new) must each carry the right role
-    // TypeName and the right addresses.
-    let granted = event::events_by_type<access_control::RoleGranted>();
+    // TypeName and account address.
+    let granted = event::events_by_type<access_control::RoleGranted<ACCESS_CONTROL_TESTS>>();
     let last_granted = granted[granted.length() - 1];
     assert_eq!(
         last_granted,
-        access_control::test_new_role_granted(
+        access_control::test_new_role_granted<ACCESS_CONTROL_TESTS>(
             with_original_ids<ACCESS_CONTROL_TESTS>(),
-            new_admin,
             new_admin,
         ),
     );
-    let revoked = event::events_by_type<access_control::RoleRevoked>();
+    let revoked = event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>();
     let last_revoked = revoked[revoked.length() - 1];
     assert_eq!(
         last_revoked,
-        access_control::test_new_role_revoked(
+        access_control::test_new_role_revoked<ACCESS_CONTROL_TESTS>(
             with_original_ids<ACCESS_CONTROL_TESTS>(),
             deployer,
-            new_admin,
         ),
     );
 
@@ -998,9 +1034,13 @@ fun test_cancel_admin_transfer_happy_path() {
 
     assert!(!ac.has_pending_default_admin_transfer());
     assert!(ac.pending_default_admin_new_admin().is_none());
-    let cancelled = event::events_by_type<access_control::DefaultAdminTransferCancelled>();
+    let cancelled = event::events_by_type<
+        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+    >();
     assert_eq!(cancelled.length(), 1);
-    let expected = access_control::test_new_default_admin_transfer_cancelled();
+    let expected = access_control::test_new_default_admin_transfer_cancelled<
+        ACCESS_CONTROL_TESTS,
+    >();
     assert_eq!(cancelled[0], expected);
 
     clock::destroy_for_testing(clk);
@@ -1050,7 +1090,9 @@ fun test_cancel_admin_transfer_clears_pending_renounce() {
     assert!(!ac.is_pending_default_admin_renounce());
     // Indexers correlate the cancel event with the prior schedule event to
     // know which kind was cleared.
-    let cancelled = event::events_by_type<access_control::DefaultAdminTransferCancelled>();
+    let cancelled = event::events_by_type<
+        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+    >();
     assert_eq!(cancelled.length(), 1);
 
     clock::destroy_for_testing(clk);
@@ -1183,9 +1225,13 @@ fun test_begin_admin_renounce_happy_path() {
     assert!(ac.pending_default_admin_new_admin().is_none());
     assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(delay));
 
-    let scheduled = event::events_by_type<access_control::DefaultAdminRenounceScheduled>();
+    let scheduled = event::events_by_type<
+        access_control::DefaultAdminRenounceScheduled<ACCESS_CONTROL_TESTS>,
+    >();
     assert_eq!(scheduled.length(), 1);
-    let expected = access_control::test_new_default_admin_renounce_scheduled(delay);
+    let expected = access_control::test_new_default_admin_renounce_scheduled<ACCESS_CONTROL_TESTS>(
+        delay,
+    );
     assert_eq!(scheduled[0], expected);
 
     clock::destroy_for_testing(clk);
@@ -1204,8 +1250,9 @@ fun test_begin_admin_renounce_rejects_non_root() {
     abort 999
 }
 
-// Scheduling a renounce overwrites an existing pending transfer (and vice
-// versa). The two are mutually exclusive — they share `pending_default_admin`.
+// Scheduling a renounce cancels and overwrites an existing pending transfer
+// (and vice versa). The two are mutually exclusive — they share
+// `pending_default_admin`.
 #[test]
 fun test_begin_admin_renounce_overwrites_pending_transfer() {
     let deployer = @0xA;
@@ -1221,6 +1268,11 @@ fun test_begin_admin_renounce_overwrites_pending_transfer() {
     ac.begin_default_admin_renounce(&clk, scenario.ctx());
     assert!(ac.is_pending_default_admin_renounce());
     assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(50));
+
+    let cancelled = event::events_by_type<
+        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+    >();
+    assert_eq!(cancelled.length(), 1);
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
@@ -1244,14 +1296,19 @@ fun test_begin_admin_transfer_overwrites_pending_renounce() {
     assert!(!ac.is_pending_default_admin_renounce());
     assert_eq!(ac.pending_default_admin_new_admin(), option::some(new_admin));
 
+    let cancelled = event::events_by_type<
+        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+    >();
+    assert_eq!(cancelled.length(), 1);
+
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
 }
 
 // Symmetric to the transfer-overwrites-transfer and the cross-kind tests
-// above: a second `begin_default_admin_renounce` overwrites the first,
-// re-anchoring `execute_after_ms` to the new clock.
+// above: a second `begin_default_admin_renounce` cancels and overwrites the
+// first, re-anchoring `execute_after_ms` to the new clock.
 #[test]
 fun test_begin_admin_renounce_overwrites_pending_renounce() {
     let deployer = @0xA;
@@ -1268,6 +1325,11 @@ fun test_begin_admin_renounce_overwrites_pending_renounce() {
 
     assert!(ac.is_pending_default_admin_renounce());
     assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(50));
+
+    let cancelled = event::events_by_type<
+        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+    >();
+    assert_eq!(cancelled.length(), 1);
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
@@ -1287,8 +1349,12 @@ fun test_accept_admin_renounce_happy_path() {
     ac.begin_default_admin_renounce(&clk, scenario.ctx());
 
     clk.set_for_testing(delay);
-    let revoked_before = event::events_by_type<access_control::RoleRevoked>().length();
-    let granted_before = event::events_by_type<access_control::RoleGranted>().length();
+    let revoked_before = event::events_by_type<
+        access_control::RoleRevoked<ACCESS_CONTROL_TESTS>,
+    >().length();
+    let granted_before = event::events_by_type<
+        access_control::RoleGranted<ACCESS_CONTROL_TESTS>,
+    >().length();
     ac.accept_default_admin_renounce(&clk, scenario.ctx());
 
     // Caller (current root) is removed from the root role; pending cleared.
@@ -1297,16 +1363,21 @@ fun test_accept_admin_renounce_happy_path() {
     assert!(!ac.is_pending_default_admin_renounce());
 
     // Exactly one RoleRevoked and zero RoleGranted (no incoming admin).
-    assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), revoked_before + 1);
-    assert_eq!(event::events_by_type<access_control::RoleGranted>().length(), granted_before);
+    assert_eq!(
+        event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>().length(),
+        revoked_before + 1,
+    );
+    assert_eq!(
+        event::events_by_type<access_control::RoleGranted<ACCESS_CONTROL_TESTS>>().length(),
+        granted_before,
+    );
 
-    let revoked = event::events_by_type<access_control::RoleRevoked>();
+    let revoked = event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>();
     let last = revoked[revoked.length() - 1];
     assert_eq!(
         last,
-        access_control::test_new_role_revoked(
+        access_control::test_new_role_revoked<ACCESS_CONTROL_TESTS>(
             with_original_ids<ACCESS_CONTROL_TESTS>(),
-            deployer,
             deployer,
         ),
     );
@@ -1418,9 +1489,13 @@ fun test_begin_delay_change_increase_below_cap() {
     assert_eq!(ac.pending_default_admin_delay_change_new_delay_ms(), option::some(two_hours));
     assert_eq!(ac.pending_default_admin_delay_change_schedule_after_ms(), option::some(two_hours));
 
-    let scheduled = event::events_by_type<access_control::DefaultAdminDelayChangeScheduled>();
+    let scheduled = event::events_by_type<
+        access_control::DefaultAdminDelayChangeScheduled<ACCESS_CONTROL_TESTS>,
+    >();
     assert_eq!(scheduled.length(), 1);
-    let expected = access_control::test_new_default_admin_delay_change_scheduled(
+    let expected = access_control::test_new_default_admin_delay_change_scheduled<
+        ACCESS_CONTROL_TESTS,
+    >(
         two_hours,
         two_hours,
     );
@@ -1569,6 +1644,15 @@ fun test_begin_delay_change_overwrites_pending() {
     assert_eq!(ac.pending_default_admin_delay_change_new_delay_ms(), option::some(200));
     assert_eq!(ac.pending_default_admin_delay_change_schedule_after_ms(), option::some(50 + 200));
 
+    let cancelled = event::events_by_type<
+        access_control::DefaultAdminDelayChangeCancelled<ACCESS_CONTROL_TESTS>,
+    >();
+    assert_eq!(cancelled.length(), 1);
+    let expected = access_control::test_new_default_admin_delay_change_cancelled<
+        ACCESS_CONTROL_TESTS,
+    >();
+    assert_eq!(cancelled[0], expected);
+
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
@@ -1686,9 +1770,13 @@ fun test_cancel_delay_change_happy_path() {
     ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
 
     assert!(!ac.has_pending_default_admin_delay_change());
-    let cancelled = event::events_by_type<access_control::DefaultAdminDelayChangeCancelled>();
+    let cancelled = event::events_by_type<
+        access_control::DefaultAdminDelayChangeCancelled<ACCESS_CONTROL_TESTS>,
+    >();
     assert_eq!(cancelled.length(), 1);
-    let expected = access_control::test_new_default_admin_delay_change_cancelled();
+    let expected = access_control::test_new_default_admin_delay_change_cancelled<
+        ACCESS_CONTROL_TESTS,
+    >();
     assert_eq!(cancelled[0], expected);
 
     clock::destroy_for_testing(clk);
@@ -1735,14 +1823,16 @@ fun test_cancel_elapsed_delay_change_materializes_without_cancel_event() {
 
     clk.set_for_testing(two_hours);
     let cancelled_before = event::events_by_type<
-        access_control::DefaultAdminDelayChangeCancelled,
+        access_control::DefaultAdminDelayChangeCancelled<ACCESS_CONTROL_TESTS>,
     >().length();
     ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
 
     assert_eq!(ac.default_admin_delay_ms(&clk), two_hours);
     assert!(!ac.has_pending_default_admin_delay_change());
     assert_eq!(
-        event::events_by_type<access_control::DefaultAdminDelayChangeCancelled>().length(),
+        event::events_by_type<
+            access_control::DefaultAdminDelayChangeCancelled<ACCESS_CONTROL_TESTS>,
+        >().length(),
         cancelled_before,
     );
 

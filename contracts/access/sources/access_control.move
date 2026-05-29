@@ -201,7 +201,7 @@ public struct RoleData has store {
 /// `new_admin = none` represents a pending renounce — the current root holder
 /// finalizes after the delay via `accept_default_admin_renounce`. The same
 /// pending slot is reused so a transfer and a renounce are mutually
-/// exclusive: scheduling either overwrites the other.
+/// exclusive: scheduling either cancels and overwrites the other.
 public struct PendingAdminTransfer has drop, store {
     new_admin: Option<address>,
     execute_after_ms: u64,
@@ -217,15 +217,20 @@ public struct PendingDelayChange has drop, store {
 
 // === Events ===
 
+/// Access-control events are parameterized by `RootRole` so the event type
+/// identifies the registry without duplicating registry fields in every
+/// payload. Event attribution is available from the Sui event envelope
+/// (`SuiEvent.sender`) and is intentionally not duplicated in the Move event
+/// payloads.
+///
 /// Emitted when a role is granted to an account.
 ///
 /// Role identifiers are `TypeName`s — they embed the defining package address
 /// and module name of the role struct, so events from independently-published
 /// consumer protocols are distinguishable off-chain.
-public struct RoleGranted has copy, drop {
+public struct RoleGranted<phantom RootRole> has copy, drop {
     role: TypeName,
     account: address,
-    sender: address,
 }
 
 /// Emitted when a role is removed from an account.
@@ -233,10 +238,9 @@ public struct RoleGranted has copy, drop {
 /// Role identifiers are `TypeName`s — they embed the defining package address
 /// and module name of the role struct, so events from independently-published
 /// consumer protocols are distinguishable off-chain.
-public struct RoleRevoked has copy, drop {
+public struct RoleRevoked<phantom RootRole> has copy, drop {
     role: TypeName,
     account: address,
-    sender: address,
 }
 
 /// Emitted when a role's admin role is reconfigured.
@@ -244,7 +248,7 @@ public struct RoleRevoked has copy, drop {
 /// Role identifiers are `TypeName`s — they embed the defining package address
 /// and module name of each role struct, so events from independently-published
 /// consumer protocols are distinguishable off-chain.
-public struct RoleAdminChanged has copy, drop {
+public struct RoleAdminChanged<phantom RootRole> has copy, drop {
     role: TypeName,
     previous_admin_role: TypeName,
     new_admin_role: TypeName,
@@ -253,7 +257,7 @@ public struct RoleAdminChanged has copy, drop {
 /// Emitted when a transfer of the root role is scheduled. Distinct from
 /// `DefaultAdminRenounceScheduled` so off-chain consumers can tell the two
 /// kinds of pending state apart without inspecting payload.
-public struct DefaultAdminTransferScheduled has copy, drop {
+public struct DefaultAdminTransferScheduled<phantom RootRole> has copy, drop {
     new_admin: address,
     execute_after_ms: u64,
 }
@@ -261,23 +265,26 @@ public struct DefaultAdminTransferScheduled has copy, drop {
 /// Emitted when a renounce of the root role is scheduled. Distinct from
 /// `DefaultAdminTransferScheduled` so off-chain consumers can tell the two
 /// kinds of pending state apart without inspecting payload.
-public struct DefaultAdminRenounceScheduled has copy, drop {
+public struct DefaultAdminRenounceScheduled<phantom RootRole> has copy, drop {
     execute_after_ms: u64,
 }
 
-/// Emitted when a pending root role transfer or renounce is cancelled. Indexers
+/// Emitted when a pending root role transfer or renounce is cancelled, either
+/// explicitly or because it is overwritten by a new pending action. Indexers
 /// can correlate with the prior `DefaultAdminTransferScheduled` or
 /// `DefaultAdminRenounceScheduled` event to know which kind was cancelled.
-public struct DefaultAdminTransferCancelled has copy, drop {}
+public struct DefaultAdminTransferCancelled<phantom RootRole> has copy, drop {}
 
 /// Emitted when a change to `default_admin_delay_ms` is scheduled.
-public struct DefaultAdminDelayChangeScheduled has copy, drop {
+public struct DefaultAdminDelayChangeScheduled<phantom RootRole> has copy, drop {
     new_delay_ms: u64,
     schedule_after_ms: u64,
 }
 
-/// Emitted when an unelapsed pending `default_admin_delay_ms` change is cancelled.
-public struct DefaultAdminDelayChangeCancelled has copy, drop {}
+/// Emitted when an unelapsed pending `default_admin_delay_ms` change is
+/// cancelled, either explicitly or because it is overwritten by a new pending
+/// delay change.
+public struct DefaultAdminDelayChangeCancelled<phantom RootRole> has copy, drop {}
 
 // === Constructor ===
 
@@ -337,7 +344,7 @@ public fun new<RootRole: drop>(
             },
         );
 
-    event::emit(RoleGranted { role: root_type, account: sender, sender });
+    event::emit(RoleGranted<RootRole> { role: root_type, account: sender });
 
     ac
 }
@@ -429,7 +436,7 @@ public fun grant_role<RootRole, Role>(
     if (role_data.members.contains(&account)) return;
 
     role_data.members.insert(account);
-    event::emit(RoleGranted { role: role_name, account, sender: ctx.sender() });
+    event::emit(RoleGranted<RootRole> { role: role_name, account });
 }
 
 /// Revoke role `Role` from `account`. Caller must hold the admin role of `Role`.
@@ -461,7 +468,7 @@ public fun revoke_role<RootRole, Role>(
     if (!role_data.members.contains(&account)) return;
 
     role_data.members.remove(&account);
-    event::emit(RoleRevoked { role: role_name, account, sender: ctx.sender() });
+    event::emit(RoleRevoked<RootRole> { role: role_name, account });
 }
 
 /// Voluntarily relinquish role `Role`.
@@ -497,7 +504,7 @@ public fun renounce_role<RootRole, Role>(
     if (!role_data.members.contains(&account)) return;
 
     role_data.members.remove(&account);
-    event::emit(RoleRevoked { role: role_name, account, sender: ctx.sender() });
+    event::emit(RoleRevoked<RootRole> { role: role_name, account });
 }
 
 /// Set the admin role of `Role` to `AdminRole`. Caller must hold the current
@@ -539,7 +546,7 @@ public fun set_role_admin<RootRole, Role, AdminRole>(
             );
     };
 
-    event::emit(RoleAdminChanged {
+    event::emit(RoleAdminChanged<RootRole> {
         role: role_name,
         previous_admin_role,
         new_admin_role: new_admin_name,
@@ -552,9 +559,9 @@ public fun set_role_admin<RootRole, Role, AdminRole>(
 ///
 /// Caller must hold the root role. The transfer cannot be accepted until
 /// `default_admin_delay_ms` has elapsed. An existing pending transfer or
-/// renounce is overwritten — the caller can correct a wrong target (or
-/// switch between transfer and renounce) without cancelling first. If a
-/// pending delay change has elapsed, it is applied before scheduling.
+/// renounce is cancelled and overwritten — the caller can correct a wrong
+/// target (or switch between transfer and renounce) without cancelling first.
+/// If a pending delay change has elapsed, it is applied before scheduling.
 ///
 /// #### Parameters
 /// - `ac`: the registry to mutate.
@@ -578,13 +585,16 @@ public fun begin_default_admin_transfer<RootRole>(
     refresh_default_admin_delay(ac, clock);
 
     let execute_after_ms = clock.timestamp_ms() + ac.default_admin_delay_ms;
+    if (ac.pending_default_admin.is_some()) {
+        event::emit(DefaultAdminTransferCancelled<RootRole> {});
+    };
     ac.pending_default_admin =
         option::some(PendingAdminTransfer {
             new_admin: option::some(new_admin),
             execute_after_ms,
         });
 
-    event::emit(DefaultAdminTransferScheduled { new_admin, execute_after_ms });
+    event::emit(DefaultAdminTransferScheduled<RootRole> { new_admin, execute_after_ms });
 }
 
 /// Accept a pending root role transfer. Caller must be the pending new admin
@@ -620,7 +630,6 @@ public fun accept_default_admin_transfer<RootRole>(
 
     let _ = ac.pending_default_admin.extract();
 
-    let sender = ctx.sender();
     let root_type = ac.protected_root;
 
     // Root role has at most one holder; find and revoke atomically.
@@ -628,11 +637,11 @@ public fun accept_default_admin_transfer<RootRole>(
     if (!keys.is_empty()) {
         let old_admin = keys[0];
         ac.roles.borrow_mut<_, RoleData>(root_type).members.remove(&old_admin);
-        event::emit(RoleRevoked { role: root_type, account: old_admin, sender });
+        event::emit(RoleRevoked<RootRole> { role: root_type, account: old_admin });
     };
 
     ac.roles.borrow_mut<_, RoleData>(root_type).members.insert(new_admin);
-    event::emit(RoleGranted { role: root_type, account: new_admin, sender });
+    event::emit(RoleGranted<RootRole> { role: root_type, account: new_admin });
 }
 
 /// Initiate a renounce of the root role.
@@ -640,8 +649,8 @@ public fun accept_default_admin_transfer<RootRole>(
 /// Caller must hold the root role. The renounce cannot be finalized until
 /// `default_admin_delay_ms` has elapsed, giving the protocol a cancel window
 /// before the registry becomes permanently unmanaged. An existing pending
-/// transfer or renounce is overwritten. If a pending delay change has elapsed,
-/// it is applied before scheduling.
+/// transfer or renounce is cancelled and overwritten. If a pending delay
+/// change has elapsed, it is applied before scheduling.
 ///
 /// #### Security Warning
 ///
@@ -665,13 +674,16 @@ public fun begin_default_admin_renounce<RootRole>(
     refresh_default_admin_delay(ac, clock);
 
     let execute_after_ms = clock.timestamp_ms() + ac.default_admin_delay_ms;
+    if (ac.pending_default_admin.is_some()) {
+        event::emit(DefaultAdminTransferCancelled<RootRole> {});
+    };
     ac.pending_default_admin =
         option::some(PendingAdminTransfer {
             new_admin: option::none(),
             execute_after_ms,
         });
 
-    event::emit(DefaultAdminRenounceScheduled { execute_after_ms });
+    event::emit(DefaultAdminRenounceScheduled<RootRole> { execute_after_ms });
 }
 
 /// Finalize a pending root role renounce. Caller must currently hold the
@@ -709,7 +721,7 @@ public fun accept_default_admin_renounce<RootRole>(
     let root_type = ac.protected_root;
 
     ac.roles.borrow_mut<_, RoleData>(root_type).members.remove(&sender);
-    event::emit(RoleRevoked { role: root_type, account: sender, sender });
+    event::emit(RoleRevoked<RootRole> { role: root_type, account: sender });
 }
 
 /// Cancel a pending root role transfer or renounce. Caller must hold the
@@ -732,7 +744,7 @@ public fun cancel_default_admin_transfer<RootRole>(
 
     let _ = ac.pending_default_admin.extract();
 
-    event::emit(DefaultAdminTransferCancelled {});
+    event::emit(DefaultAdminTransferCancelled<RootRole> {});
 }
 
 // === Default Admin Delay Change ===
@@ -755,8 +767,8 @@ public fun cancel_default_admin_transfer<RootRole>(
 /// - **No change** (`new_delay_ms == current`): wait = 0.
 ///
 /// Caller must hold the root role. An unelapsed pending delay change is
-/// overwritten. An elapsed pending delay change is applied first, then the new
-/// schedule is computed from that applied value.
+/// cancelled and overwritten. An elapsed pending delay change is applied first,
+/// then the new schedule is computed from that applied value.
 ///
 /// #### Parameters
 /// - `ac`: the registry to mutate.
@@ -785,13 +797,16 @@ public fun begin_default_admin_delay_change<RootRole>(
     };
     let schedule_after_ms = clock.timestamp_ms() + wait;
 
+    if (ac.pending_default_admin_delay_change.is_some()) {
+        event::emit(DefaultAdminDelayChangeCancelled<RootRole> {});
+    };
     ac.pending_default_admin_delay_change =
         option::some(PendingDelayChange {
             new_delay_ms,
             schedule_after_ms,
         });
 
-    event::emit(DefaultAdminDelayChangeScheduled { new_delay_ms, schedule_after_ms });
+    event::emit(DefaultAdminDelayChangeScheduled<RootRole> { new_delay_ms, schedule_after_ms });
 }
 
 /// Cancel an unelapsed pending delay change. Caller must hold the root role.
@@ -819,7 +834,7 @@ public fun cancel_default_admin_delay_change<RootRole>(
 
     let _ = ac.pending_default_admin_delay_change.extract();
 
-    event::emit(DefaultAdminDelayChangeCancelled {});
+    event::emit(DefaultAdminDelayChangeCancelled<RootRole> {});
 }
 
 // === Auth Issuance ===
@@ -1068,53 +1083,63 @@ fun assert_home_module<RootRole, Role>() {
 // === Test-Only Helpers ===
 
 #[test_only]
-public fun test_new_role_granted(role: TypeName, account: address, sender: address): RoleGranted {
-    RoleGranted { role, account, sender }
+public fun test_new_role_granted<RootRole>(
+    role: TypeName,
+    account: address,
+): RoleGranted<RootRole> {
+    RoleGranted<RootRole> { role, account }
 }
 
 #[test_only]
-public fun test_new_role_revoked(role: TypeName, account: address, sender: address): RoleRevoked {
-    RoleRevoked { role, account, sender }
+public fun test_new_role_revoked<RootRole>(
+    role: TypeName,
+    account: address,
+): RoleRevoked<RootRole> {
+    RoleRevoked<RootRole> { role, account }
 }
 
 #[test_only]
-public fun test_new_role_admin_changed(
+public fun test_new_role_admin_changed<RootRole>(
     role: TypeName,
     previous_admin_role: TypeName,
     new_admin_role: TypeName,
-): RoleAdminChanged {
-    RoleAdminChanged { role, previous_admin_role, new_admin_role }
+): RoleAdminChanged<RootRole> {
+    RoleAdminChanged<RootRole> { role, previous_admin_role, new_admin_role }
 }
 
 #[test_only]
-public fun test_new_default_admin_transfer_scheduled(
+public fun test_new_default_admin_transfer_scheduled<RootRole>(
     new_admin: address,
     execute_after_ms: u64,
-): DefaultAdminTransferScheduled {
-    DefaultAdminTransferScheduled { new_admin, execute_after_ms }
+): DefaultAdminTransferScheduled<RootRole> {
+    DefaultAdminTransferScheduled<RootRole> { new_admin, execute_after_ms }
 }
 
 #[test_only]
-public fun test_new_default_admin_transfer_cancelled(): DefaultAdminTransferCancelled {
-    DefaultAdminTransferCancelled {}
+public fun test_new_default_admin_transfer_cancelled<RootRole>(): DefaultAdminTransferCancelled<
+    RootRole,
+> {
+    DefaultAdminTransferCancelled<RootRole> {}
 }
 
 #[test_only]
-public fun test_new_default_admin_renounce_scheduled(
+public fun test_new_default_admin_renounce_scheduled<RootRole>(
     execute_after_ms: u64,
-): DefaultAdminRenounceScheduled {
-    DefaultAdminRenounceScheduled { execute_after_ms }
+): DefaultAdminRenounceScheduled<RootRole> {
+    DefaultAdminRenounceScheduled<RootRole> { execute_after_ms }
 }
 
 #[test_only]
-public fun test_new_default_admin_delay_change_scheduled(
+public fun test_new_default_admin_delay_change_scheduled<RootRole>(
     new_delay_ms: u64,
     schedule_after_ms: u64,
-): DefaultAdminDelayChangeScheduled {
-    DefaultAdminDelayChangeScheduled { new_delay_ms, schedule_after_ms }
+): DefaultAdminDelayChangeScheduled<RootRole> {
+    DefaultAdminDelayChangeScheduled<RootRole> { new_delay_ms, schedule_after_ms }
 }
 
 #[test_only]
-public fun test_new_default_admin_delay_change_cancelled(): DefaultAdminDelayChangeCancelled {
-    DefaultAdminDelayChangeCancelled {}
+public fun test_new_default_admin_delay_change_cancelled<
+    RootRole,
+>(): DefaultAdminDelayChangeCancelled<RootRole> {
+    DefaultAdminDelayChangeCancelled<RootRole> {}
 }
