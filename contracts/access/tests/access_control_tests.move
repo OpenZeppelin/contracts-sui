@@ -115,9 +115,11 @@ fun test_new_rejects_excessive_delay() {
 fun test_new_accepts_max_delay() {
     let deployer = @0xA;
     let max = access_control::max_default_admin_delay_ms();
-    let scenario = setup(deployer, max);
+    let mut scenario = setup(deployer, max);
     let ac = take_ac(&scenario);
-    assert_eq!(ac.default_admin_delay_ms(), max);
+    let clk = clock::create_for_testing(scenario.ctx());
+    assert_eq!(ac.default_admin_delay_ms(&clk), max);
+    clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
 }
@@ -125,9 +127,11 @@ fun test_new_accepts_max_delay() {
 #[test]
 fun test_new_accepts_zero_delay() {
     let deployer = @0xA;
-    let scenario = setup(deployer, 0);
+    let mut scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
-    assert_eq!(ac.default_admin_delay_ms(), 0);
+    let clk = clock::create_for_testing(scenario.ctx());
+    assert_eq!(ac.default_admin_delay_ms(&clk), 0);
+    clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
 }
@@ -707,9 +711,11 @@ fun test_protected_root_returns_root_typename() {
 #[test]
 fun test_default_admin_delay_ms_persisted() {
     let deployer = @0xA;
-    let scenario = setup(deployer, 12345);
+    let mut scenario = setup(deployer, 12345);
     let ac = take_ac(&scenario);
-    assert_eq!(ac.default_admin_delay_ms(), 12345);
+    let clk = clock::create_for_testing(scenario.ctx());
+    assert_eq!(ac.default_admin_delay_ms(&clk), 12345);
+    clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
 }
@@ -1568,10 +1574,10 @@ fun test_begin_delay_change_overwrites_pending() {
     scenario.end();
 }
 
-// === accept_default_admin_delay_change ===
+// === automatic default admin delay application ===
 
 #[test]
-fun test_accept_delay_change_happy_path() {
+fun test_default_admin_delay_ms_returns_elapsed_pending_delay() {
     let deployer = @0xA;
     let one_hour: u64 = 60 * 60 * 1_000;
     let two_hours: u64 = 2 * one_hour;
@@ -1581,10 +1587,36 @@ fun test_accept_delay_change_happy_path() {
     clk.set_for_testing(0);
     ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
 
-    clk.set_for_testing(two_hours);
-    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
+    clk.set_for_testing(two_hours - 1);
+    assert_eq!(ac.default_admin_delay_ms(&clk), one_hour);
 
-    assert_eq!(ac.default_admin_delay_ms(), two_hours);
+    clk.set_for_testing(two_hours);
+    assert_eq!(ac.default_admin_delay_ms(&clk), two_hours);
+    assert!(ac.has_pending_default_admin_delay_change());
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun test_elapsed_delay_change_applies_to_new_transfer() {
+    let deployer = @0xA;
+    let new_admin = @0xB;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let two_hours: u64 = 2 * one_hour;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
+
+    let now = two_hours;
+    clk.set_for_testing(now);
+    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
+
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(now + two_hours));
+    assert_eq!(ac.default_admin_delay_ms(&clk), two_hours);
     assert!(!ac.has_pending_default_admin_delay_change());
 
     clock::destroy_for_testing(clk);
@@ -1592,10 +1624,8 @@ fun test_accept_delay_change_happy_path() {
     scenario.end();
 }
 
-// `accept` requires no permission — the schedule was committed at `begin`,
-// so any caller can trigger the state transition once the schedule passes.
 #[test]
-fun test_accept_delay_change_callable_by_anyone() {
+fun test_elapsed_delay_change_applies_to_new_renounce() {
     let deployer = @0xA;
     let one_hour: u64 = 60 * 60 * 1_000;
     let two_hours: u64 = 2 * one_hour;
@@ -1604,32 +1634,24 @@ fun test_accept_delay_change_callable_by_anyone() {
     let mut clk = clock::create_for_testing(scenario.ctx());
     clk.set_for_testing(0);
     ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
-    test_scenario::return_shared(ac);
 
-    scenario.next_tx(@0xB);
-    let mut ac = take_ac(&scenario);
-    clk.set_for_testing(two_hours);
-    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
-    assert_eq!(ac.default_admin_delay_ms(), two_hours);
+    let now = two_hours;
+    clk.set_for_testing(now);
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(now + two_hours));
+    assert_eq!(ac.default_admin_delay_ms(&clk), two_hours);
+    assert!(!ac.has_pending_default_admin_delay_change());
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = access_control::ENoPendingDelayChange)]
-fun test_accept_delay_change_rejects_no_pending() {
+#[test]
+fun test_unelapsed_delay_change_does_not_apply_to_new_transfer() {
     let deployer = @0xA;
-    let mut scenario = setup(deployer, 0);
-    let mut ac = take_ac(&scenario);
-    let clk = clock::create_for_testing(scenario.ctx());
-    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
-    abort 999
-}
-
-#[test, expected_failure(abort_code = access_control::EDelayNotElapsed)]
-fun test_accept_delay_change_rejects_too_early() {
-    let deployer = @0xA;
+    let new_admin = @0xB;
     let one_hour: u64 = 60 * 60 * 1_000;
     let two_hours: u64 = 2 * one_hour;
     let mut scenario = setup(deployer, one_hour);
@@ -1637,9 +1659,18 @@ fun test_accept_delay_change_rejects_too_early() {
     let mut clk = clock::create_for_testing(scenario.ctx());
     clk.set_for_testing(0);
     ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
-    clk.set_for_testing(two_hours - 1);
-    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
-    abort 999
+
+    let now = two_hours - 1;
+    clk.set_for_testing(now);
+    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
+
+    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(now + one_hour));
+    assert_eq!(ac.default_admin_delay_ms(&clk), one_hour);
+    assert!(ac.has_pending_default_admin_delay_change());
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
 }
 
 // === cancel_default_admin_delay_change ===
@@ -1652,7 +1683,7 @@ fun test_cancel_delay_change_happy_path() {
     let clk = clock::create_for_testing(scenario.ctx());
     ac.begin_default_admin_delay_change(100, &clk, scenario.ctx());
 
-    ac.cancel_default_admin_delay_change(scenario.ctx());
+    ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
 
     assert!(!ac.has_pending_default_admin_delay_change());
     let cancelled = event::events_by_type<access_control::DefaultAdminDelayChangeCancelled>();
@@ -1670,7 +1701,8 @@ fun test_cancel_delay_change_rejects_no_pending() {
     let deployer = @0xA;
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
-    ac.cancel_default_admin_delay_change(scenario.ctx());
+    let clk = clock::create_for_testing(scenario.ctx());
+    ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
     abort 999
 }
 
@@ -1685,9 +1717,38 @@ fun test_cancel_delay_change_rejects_non_root() {
 
     scenario.next_tx(@0xB);
     let mut ac = take_ac(&scenario);
-    ac.cancel_default_admin_delay_change(scenario.ctx());
+    ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
     clock::destroy_for_testing(clk);
     abort 999
+}
+
+#[test]
+fun test_cancel_elapsed_delay_change_materializes_without_cancel_event() {
+    let deployer = @0xA;
+    let one_hour: u64 = 60 * 60 * 1_000;
+    let two_hours: u64 = 2 * one_hour;
+    let mut scenario = setup(deployer, one_hour);
+    let mut ac = take_ac(&scenario);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+    ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
+
+    clk.set_for_testing(two_hours);
+    let cancelled_before = event::events_by_type<
+        access_control::DefaultAdminDelayChangeCancelled,
+    >().length();
+    ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
+
+    assert_eq!(ac.default_admin_delay_ms(&clk), two_hours);
+    assert!(!ac.has_pending_default_admin_delay_change());
+    assert_eq!(
+        event::events_by_type<access_control::DefaultAdminDelayChangeCancelled>().length(),
+        cancelled_before,
+    );
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
 }
 
 // === Pending getters: delay change ===
@@ -1707,7 +1768,7 @@ fun test_delay_change_getters_when_no_pending() {
 // === In-flight noninterference ===
 
 // A pending admin transfer was scheduled under the OLD delay. A delay change
-// is then scheduled and accepted. The pending transfer's `execute_after_ms`
+// is then scheduled and materialized. The pending transfer's `execute_after_ms`
 // must not change — in-flight transfers honor the delay they were scheduled
 // under, regardless of subsequent delay changes.
 #[test]
@@ -1725,13 +1786,14 @@ fun test_delay_change_does_not_affect_pending_transfer() {
     let pending_execute_at = ac.pending_default_admin_execute_after_ms();
     assert_eq!(pending_execute_at, option::some(one_hour));
 
-    // Schedule + accept a delay decrease to a much smaller value.
+    // Schedule a delay decrease to a much smaller value, then materialize it
+    // through a clock-aware mutation after the freed-time wait.
     ac.begin_default_admin_delay_change(1, &clk, scenario.ctx());
     clk.set_for_testing(one_hour); // past the freed-time wait
-    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
+    ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
 
     // Configured delay updated...
-    assert_eq!(ac.default_admin_delay_ms(), 1);
+    assert_eq!(ac.default_admin_delay_ms(&clk), 1);
     // ...but the in-flight transfer's execute_after_ms is unchanged.
     assert_eq!(ac.pending_default_admin_execute_after_ms(), pending_execute_at);
 
@@ -1740,26 +1802,29 @@ fun test_delay_change_does_not_affect_pending_transfer() {
     scenario.end();
 }
 
-// After the delay change applies, a NEW transfer uses the new delay.
 #[test]
-fun test_new_transfer_uses_new_delay() {
+fun test_begin_delay_change_applies_elapsed_pending_before_new_schedule() {
     let deployer = @0xA;
-    let new_admin = @0xB;
     let one_hour: u64 = 60 * 60 * 1_000;
     let two_hours: u64 = 2 * one_hour;
+    let three_hours: u64 = 3 * one_hour;
     let mut scenario = setup(deployer, one_hour);
     let mut ac = take_ac(&scenario);
     let mut clk = clock::create_for_testing(scenario.ctx());
     clk.set_for_testing(0);
     ac.begin_default_admin_delay_change(two_hours, &clk, scenario.ctx());
-    clk.set_for_testing(two_hours);
-    ac.accept_default_admin_delay_change(&clk, scenario.ctx());
 
-    // Schedule a transfer; it should use the new (2h) delay.
-    let now = two_hours;
-    clk.set_for_testing(now);
-    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
-    assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(now + two_hours));
+    // The first change has elapsed. Scheduling a decrease from 2h to 1h must
+    // use the 2h effective delay as the current value, so wait = 1h.
+    clk.set_for_testing(two_hours);
+    ac.begin_default_admin_delay_change(one_hour, &clk, scenario.ctx());
+
+    assert_eq!(ac.default_admin_delay_ms(&clk), two_hours);
+    assert_eq!(ac.pending_default_admin_delay_change_new_delay_ms(), option::some(one_hour));
+    assert_eq!(
+        ac.pending_default_admin_delay_change_schedule_after_ms(),
+        option::some(three_hours),
+    );
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
