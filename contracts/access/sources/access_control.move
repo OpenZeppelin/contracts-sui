@@ -176,9 +176,10 @@ public struct AccessControl<phantom RootRole> has key, store {
     /// specific new admin or a renounce. See `PendingAdminTransfer`.
     pending_default_admin: Option<PendingAdminTransfer>,
     /// Pending change to `default_admin_delay_ms`. The change becomes
-    /// effective once `schedule_after_ms` has elapsed, and is materialized by
-    /// the next clock-aware mutation; an in-flight `pending_default_admin` is
-    /// unaffected (it locks in the delay it was scheduled under).
+    /// effective once `schedule_after_ms` has elapsed. Until a delay-refreshing
+    /// entrypoint clears this slot, it remains stored as pending; an in-flight
+    /// `pending_default_admin` is unaffected (it locks in the delay it was
+    /// scheduled under).
     pending_default_admin_delay_change: Option<PendingDelayChange>,
     /// Current minimum delay (ms) for root role transfer / renounce.
     /// Mutable through the delayed change flow only.
@@ -207,8 +208,8 @@ public struct PendingAdminTransfer has drop, store {
 }
 
 /// Snapshot of a pending change to `default_admin_delay_ms`. Becomes effective
-/// once `schedule_after_ms` has elapsed and is materialized by the next
-/// clock-aware mutation.
+/// once `schedule_after_ms` has elapsed and is later cleared by a
+/// delay-refreshing entrypoint.
 public struct PendingDelayChange has drop, store {
     new_delay_ms: u64,
     schedule_after_ms: u64,
@@ -876,7 +877,7 @@ public fun max_default_admin_delay_ms(): u64 { MAX_DEFAULT_ADMIN_DELAY_MS }
 /// Effective timelock (ms) for root role transfer / renounce.
 ///
 /// If a pending delay change has elapsed, this returns the pending new delay
-/// even if no mutation has materialized it yet.
+/// even if the stored pending slot has not been cleared yet.
 ///
 /// #### Parameters
 /// - `ac`: the registry to query.
@@ -951,8 +952,8 @@ public fun max_delay_increase_wait_ms(): u64 {
 
 /// Whether a delay change is still stored as pending.
 ///
-/// An elapsed pending change may still return `true` here until the next
-/// clock-aware mutation materializes it. Use `default_admin_delay_ms` for the
+/// An elapsed pending change may still return `true` here until a
+/// delay-refreshing entrypoint clears it. Use `default_admin_delay_ms` for the
 /// effective delay.
 ///
 /// #### Parameters
@@ -963,8 +964,8 @@ public fun has_pending_default_admin_delay_change<RootRole>(ac: &AccessControl<R
 
 /// The proposed new delay value of the stored pending change.
 ///
-/// An elapsed pending change may still return `some` here until the next
-/// clock-aware mutation materializes it. Use `default_admin_delay_ms` for the
+/// An elapsed pending change may still return `some` here until a
+/// delay-refreshing entrypoint clears it. Use `default_admin_delay_ms` for the
 /// effective delay.
 ///
 /// #### Parameters
@@ -982,8 +983,8 @@ public fun pending_default_admin_delay_change_new_delay_ms<RootRole>(
 
 /// The timestamp at which the stored pending delay change becomes effective.
 ///
-/// An elapsed pending change may still return `some` here until the next
-/// clock-aware mutation materializes it. Use `default_admin_delay_ms` for the
+/// An elapsed pending change may still return `some` here until a
+/// delay-refreshing entrypoint clears it. Use `default_admin_delay_ms` for the
 /// effective delay.
 ///
 /// #### Parameters
@@ -1002,7 +1003,7 @@ public fun pending_default_admin_delay_change_schedule_after_ms<RootRole>(
 // === Internal Helpers ===
 
 /// Returns the delay that should be used at `clock.timestamp_ms()`, including
-/// elapsed pending changes that have not been materialized yet.
+/// elapsed pending changes whose stored pending slot has not been cleared yet.
 fun effective_default_admin_delay_ms<RootRole>(ac: &AccessControl<RootRole>, clock: &Clock): u64 {
     if (ac.pending_default_admin_delay_change.is_some()) {
         let pending = ac.pending_default_admin_delay_change.borrow();

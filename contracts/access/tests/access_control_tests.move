@@ -1786,8 +1786,8 @@ fun test_delay_change_does_not_affect_pending_transfer() {
     let pending_execute_at = ac.pending_default_admin_execute_after_ms();
     assert_eq!(pending_execute_at, option::some(one_hour));
 
-    // Schedule a delay decrease to a much smaller value, then materialize it
-    // through a clock-aware mutation after the freed-time wait.
+    // Schedule a delay decrease to a much smaller value, then clear the
+    // elapsed pending slot through a delay-refreshing mutation.
     ac.begin_default_admin_delay_change(1, &clk, scenario.ctx());
     clk.set_for_testing(one_hour); // past the freed-time wait
     ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
