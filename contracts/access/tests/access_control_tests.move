@@ -352,7 +352,7 @@ fun test_revoke_role_idempotent_unknown_role() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
 
-    // RoleY was never granted, so it has no bag entry. Revoking is a no-op.
+    // RoleY was never granted, so it has no role entry. Revoking is a no-op.
     ac.revoke_role<_, RoleY>(@0xB, scenario.ctx());
     assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
 
@@ -454,8 +454,8 @@ fun test_renounce_role_idempotent_non_member() {
     scenario.end();
 }
 
-// Renounce idempotency: role in bag, but the caller is not a member — the
-// second early-return path. Distinct from the "role not in bag" path covered
+// Renounce idempotency: role entry exists, but the caller is not a member —
+// the second early-return path. Distinct from the "no role entry" path covered
 // by the test above.
 #[test]
 fun test_renounce_role_idempotent_role_in_bag_non_member() {
@@ -465,11 +465,11 @@ fun test_renounce_role_idempotent_role_in_bag_non_member() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
 
-    // Grant AdminA to alice — the role's bag entry now exists.
+    // Grant AdminA to alice — the role entry now exists.
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
     test_scenario::return_shared(ac);
 
-    // Carol is not a member of AdminA — exercises the "role in bag, not
+    // Carol is not a member of AdminA — exercises the "role entry exists, not
     // member" early-return branch.
     scenario.next_tx(carol);
     let mut ac = take_ac(&scenario);
@@ -542,7 +542,7 @@ fun test_set_role_admin_lazy_create() {
     scenario.end();
 }
 
-// set_role_admin against a role that already has a bag entry — exercises
+// set_role_admin against a role that already has an entry — exercises
 // the "update existing admin_role" branch (the lazy-create branch is covered
 // by the test above) and asserts the event reports previous = old admin
 // rather than empty / fresh-default.
@@ -553,7 +553,7 @@ fun test_set_role_admin_updates_existing_role() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
 
-    // First grant of RoleX creates the bag entry with admin = root.
+    // First grant of RoleX creates the role entry with admin = root.
     ac.grant_role<_, RoleX>(alice, scenario.ctx());
     assert_eq!(ac.get_role_admin<_, RoleX>(), with_original_ids<ACCESS_CONTROL_TESTS>());
 
@@ -669,7 +669,7 @@ fun test_has_role_unknown_role_returns_false() {
     let deployer = @0xA;
     let scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
-    // RoleX has no bag entry at all.
+    // RoleX has no role entry at all.
     assert!(!ac.has_role<_, RoleX>(deployer));
     test_scenario::return_shared(ac);
     scenario.end();
