@@ -91,6 +91,36 @@ fun test_new_with_otw_succeeds() {
     scenario.end();
 }
 
+#[test]
+#[allow(lint(share_owned))]
+fun test_new_with_admin_sets_explicit_root_holder() {
+    let deployer = @0xA;
+    let initial_admin = @0xB;
+    let mut scenario = test_scenario::begin(deployer);
+    let ac = access_control::new_with_admin<ACCESS_CONTROL_TESTS>(
+        ACCESS_CONTROL_TESTS {},
+        initial_admin,
+        0,
+        scenario.ctx(),
+    );
+
+    assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
+    assert!(ac.has_role<_, ACCESS_CONTROL_TESTS>(initial_admin));
+    assert_eq!(ac.protected_root(), with_original_ids<ACCESS_CONTROL_TESTS>());
+
+    let granted = event::events_by_type<access_control::RoleGranted>();
+    assert_eq!(granted.length(), 1);
+    let expected = access_control::test_new_role_granted(
+        with_original_ids<ACCESS_CONTROL_TESTS>(),
+        initial_admin,
+        deployer,
+    );
+    assert_eq!(granted[0], expected);
+
+    transfer::public_share_object(ac);
+    scenario.end();
+}
+
 #[test, expected_failure(abort_code = access_control::ENotOneTimeWitness)]
 fun test_new_rejects_non_otw() {
     let deployer = @0xA;
@@ -106,6 +136,19 @@ fun test_new_rejects_excessive_delay() {
     let _ac = access_control::new<ACCESS_CONTROL_TESTS>(
         ACCESS_CONTROL_TESTS {},
         access_control::max_default_admin_delay_ms() + 1,
+        scenario.ctx(),
+    );
+    abort 999
+}
+
+#[test, expected_failure(abort_code = access_control::EZeroAddress)]
+fun test_new_with_admin_rejects_zero_address() {
+    let deployer = @0xA;
+    let mut scenario = test_scenario::begin(deployer);
+    let _ac = access_control::new_with_admin<ACCESS_CONTROL_TESTS>(
+        ACCESS_CONTROL_TESTS {},
+        @0x0,
+        0,
         scenario.ctx(),
     );
     abort 999
@@ -365,7 +408,7 @@ fun test_renounce_role_happy_path() {
 
     scenario.next_tx(alice);
     let mut ac = take_ac(&scenario);
-    ac.renounce_role<_, AdminA>(alice, scenario.ctx());
+    ac.renounce_role<_, AdminA>(scenario.ctx());
     assert!(!ac.has_role<_, AdminA>(alice));
 
     let revoked = event::events_by_type<access_control::RoleRevoked>();
@@ -391,7 +434,7 @@ fun test_renounce_role_rejects_root() {
     let deployer = @0xA;
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
-    ac.renounce_role<_, ACCESS_CONTROL_TESTS>(deployer, scenario.ctx());
+    ac.renounce_role<_, ACCESS_CONTROL_TESTS>(scenario.ctx());
     abort 999
 }
 
@@ -404,16 +447,16 @@ fun test_renounce_role_idempotent_non_member() {
     let mut ac = take_ac(&scenario);
 
     // alice never held AdminA — renounce is a no-op, no event.
-    ac.renounce_role<_, AdminA>(alice, scenario.ctx());
+    ac.renounce_role<_, AdminA>(scenario.ctx());
     assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
 
     test_scenario::return_shared(ac);
     scenario.end();
 }
 
-// Renounce idempotency: account == sender, role in bag, but the caller is not
-// a member — the second early-return path. Distinct from the "role not in bag"
-// path covered by the test above.
+// Renounce idempotency: role in bag, but the caller is not a member — the
+// second early-return path. Distinct from the "role not in bag" path covered
+// by the test above.
 #[test]
 fun test_renounce_role_idempotent_role_in_bag_non_member() {
     let deployer = @0xA;
@@ -430,21 +473,11 @@ fun test_renounce_role_idempotent_role_in_bag_non_member() {
     // member" early-return branch.
     scenario.next_tx(carol);
     let mut ac = take_ac(&scenario);
-    ac.renounce_role<_, AdminA>(carol, scenario.ctx());
+    ac.renounce_role<_, AdminA>(scenario.ctx());
     assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
 
     test_scenario::return_shared(ac);
     scenario.end();
-}
-
-#[test, expected_failure(abort_code = access_control::ECannotRenounceForOtherAccount)]
-fun test_renounce_role_rejects_other_account() {
-    let deployer = @0xA;
-    let mut scenario = setup(deployer, 0);
-    let mut ac = take_ac(&scenario);
-    // Sender is deployer; trying to renounce on behalf of @0xB must abort.
-    ac.renounce_role<_, AdminA>(@0xB, scenario.ctx());
-    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
@@ -452,7 +485,7 @@ fun test_renounce_role_rejects_foreign() {
     let deployer = @0xA;
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
-    ac.renounce_role<_, ForeignRole>(deployer, scenario.ctx());
+    ac.renounce_role<_, ForeignRole>(scenario.ctx());
     abort 999
 }
 

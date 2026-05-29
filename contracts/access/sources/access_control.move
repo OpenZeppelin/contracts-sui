@@ -17,7 +17,7 @@
 ///    `set_role_admin`) plus the auth-mint path (`new_auth`) — checks that
 ///    the role type's home module matches the root role's home module.
 ///    Foreign role types are rejected at the boundary; they cannot be
-///    introduced into the bag. The check uses `type_name::with_original_ids`,
+///    introduced into the role map. The check uses `type_name::with_original_ids`,
 ///    which compares the package's *original* publish address — so role
 ///    types introduced in later upgrades to the same module in the same
 ///    package pass the check too. The home-module rule restricts roles to the
@@ -48,9 +48,9 @@
 module openzeppelin_access::access_control;
 
 use std::type_name::{TypeName, with_original_ids};
-use sui::bag::{Self, Bag};
 use sui::clock::Clock;
 use sui::event;
+use sui::table::{Self, Table};
 use sui::types;
 use sui::vec_set::{Self, VecSet};
 
@@ -79,43 +79,39 @@ const ENotPendingAdmin: vector<u8> = "Caller is not the pending admin";
 #[error(code = 4)]
 const EDelayNotElapsed: vector<u8> = "Pending action's timelock has not elapsed";
 
-/// Role renounce attempted for an account other than the transaction sender.
-#[error(code = 5)]
-const ECannotRenounceForOtherAccount: vector<u8> = "Can only renounce role for own account";
-
 /// Default admin delay value exceeds the allowed maximum.
-#[error(code = 6)]
+#[error(code = 5)]
 const EDelayTooLarge: vector<u8> = "Admin delay exceeds the maximum allowed value";
 
 /// Root role value is not a genuine One-Time Witness.
-#[error(code = 7)]
+#[error(code = 6)]
 const ENotOneTimeWitness: vector<u8> = "Root role must be a One-Time Witness";
 
 /// A role type from a module other than the root role's home module was used
 /// in a write path.
-#[error(code = 8)]
+#[error(code = 7)]
 const EForeignRole: vector<u8> = "Role type must be defined in the same module as the root role";
 
 /// Pending root role action is a renounce, not a transfer.
-#[error(code = 9)]
+#[error(code = 8)]
 const ENotPendingTransfer: vector<u8> = "Pending action is a renounce, not a transfer";
 
 /// Pending root role action is a transfer, not a renounce.
-#[error(code = 10)]
+#[error(code = 9)]
 const ENotPendingRenounce: vector<u8> = "Pending action is not a renounce";
 
 /// No pending default admin delay change exists.
-#[error(code = 11)]
+#[error(code = 10)]
 const ENoPendingDelayChange: vector<u8> = "No pending default admin delay change";
 
 /// Zero address was used as a role holder or root transfer target. The zero
 /// address has no signing key, so a role granted to it can never be exercised
 /// and a transfer scheduled to it can never be accepted.
-#[error(code = 12)]
+#[error(code = 11)]
 const EZeroAddress: vector<u8> = "Cannot use the zero address as a role holder or transfer target";
 
 /// The current root holder tried to schedule a no-op transfer to itself.
-#[error(code = 13)]
+#[error(code = 12)]
 const EDefaultAdminTransferToSelf: vector<u8> = "Cannot transfer default admin to self";
 
 // === Constants ===
@@ -166,7 +162,7 @@ public struct AccessControl<phantom RootRole> has key, store {
     id: UID,
     /// Per-role membership and admin mapping. Keyed by `TypeName`.
     /// Entries are created lazily on first grant or `set_role_admin`.
-    roles: Bag,
+    roles: Table<TypeName, RoleData>,
     /// `TypeName` of the root role (= `RootRole`'s OTW). Direct
     /// `grant_role` / `revoke_role` / `renounce_role` / `set_role_admin` on
     /// this role is blocked (`ECannotManageRootRole`); use the timelocked
@@ -280,12 +276,15 @@ public struct DefaultAdminDelayChangeCancelled has copy, drop {}
 
 // === Constructor ===
 
-/// Create the singleton `AccessControl` for a module.
+/// Create the singleton `AccessControl` for a module, with the transaction
+/// sender as the initial root role holder.
 ///
 /// The caller passes their module's One-Time Witness as `otw`. The runtime
 /// `is_one_time_witness` check confirms the value is genuine — this is what
 /// enforces Invariant 1 (one registry per module, initialized at first
 /// publish). The transaction sender automatically becomes the root role holder.
+/// Prefer this constructor when the initial admin should be the caller; it
+/// avoids copy-pasting an address into `init`.
 ///
 /// The expected call site is the consumer module's `init` function, where
 /// the VM has already produced exactly one OTW value. That `init` function is
@@ -310,15 +309,47 @@ public fun new<RootRole: drop>(
     default_admin_delay_ms: u64,
     ctx: &mut TxContext,
 ): AccessControl<RootRole> {
+    new_with_admin(otw, ctx.sender(), default_admin_delay_ms, ctx)
+}
+
+/// Create the singleton `AccessControl` for a module, with an explicit initial
+/// root role holder.
+///
+/// Use this variant only when the initial admin intentionally differs from the
+/// publishing transaction sender, for example a multisig or governance address.
+/// Otherwise prefer `new`, which uses `ctx.sender()` and avoids address
+/// copy-paste mistakes in package initialization code.
+///
+/// #### Parameters
+/// - `otw`: a VM-issued One-Time Witness of type `RootRole`. Consumed by the call.
+/// - `initial_admin`: the address that receives the root role.
+/// - `default_admin_delay_ms`: timelock (ms) that applies to root role transfer and renounce. Mutable post-creation via `begin_default_admin_delay_change`.
+/// - `ctx`: transaction context.
+///
+/// #### Returns
+/// - The freshly-minted singleton `AccessControl<RootRole>` registry. The caller
+/// is responsible for sharing, embedding, or otherwise positioning it.
+///
+/// #### Aborts
+/// - `ENotOneTimeWitness` if `otw` is not a true One-Time Witness.
+/// - `EDelayTooLarge` if `default_admin_delay_ms` exceeds `MAX_DEFAULT_ADMIN_DELAY_MS`.
+/// - `EZeroAddress` if `initial_admin` is `@0x0`.
+public fun new_with_admin<RootRole: drop>(
+    otw: RootRole,
+    initial_admin: address,
+    default_admin_delay_ms: u64,
+    ctx: &mut TxContext,
+): AccessControl<RootRole> {
     assert!(types::is_one_time_witness(&otw), ENotOneTimeWitness);
     assert!(default_admin_delay_ms <= MAX_DEFAULT_ADMIN_DELAY_MS, EDelayTooLarge);
+    assert!(initial_admin != @0x0, EZeroAddress);
 
-    let sender = ctx.sender();
+    let event_sender = ctx.sender();
     let root_type = with_original_ids<RootRole>();
 
     let mut ac = AccessControl<RootRole> {
         id: object::new(ctx),
-        roles: bag::new(ctx),
+        roles: table::new(ctx),
         protected_root: root_type,
         pending_default_admin: option::none(),
         pending_default_admin_delay_change: option::none(),
@@ -330,13 +361,13 @@ public fun new<RootRole: drop>(
         .add(
             root_type,
             RoleData {
-                members: vec_set::singleton(sender),
+                members: vec_set::singleton(initial_admin),
                 // Root role is self-administering.
                 admin_role: root_type,
             },
         );
 
-    event::emit(RoleGranted { role: root_type, account: sender, sender });
+    event::emit(RoleGranted { role: root_type, account: initial_admin, sender: event_sender });
 
     ac
 }
@@ -424,7 +455,7 @@ public fun grant_role<RootRole, Role>(
             );
     };
 
-    let role_data = ac.roles.borrow_mut<_, RoleData>(role_name);
+    let role_data = ac.roles.borrow_mut(role_name);
     if (role_data.members.contains(&account)) return;
 
     role_data.members.insert(account);
@@ -456,7 +487,7 @@ public fun revoke_role<RootRole, Role>(
 
     if (!ac.roles.contains(role_name)) return;
 
-    let role_data = ac.roles.borrow_mut<_, RoleData>(role_name);
+    let role_data = ac.roles.borrow_mut(role_name);
     if (!role_data.members.contains(&account)) return;
 
     role_data.members.remove(&account);
@@ -472,31 +503,25 @@ public fun revoke_role<RootRole, Role>(
 /// #### Parameters
 /// - `Role` (type): the role to relinquish.
 /// - `ac`: the registry to mutate.
-/// - `account`: the address relinquishing `Role`.
 /// - `ctx`: transaction context.
 ///
 /// #### Aborts
-/// - `ECannotRenounceForOtherAccount` if `account != ctx.sender()`.
 /// - `EForeignRole` if `Role`'s home module differs from `RootRole`'s.
 /// - `ECannotManageRootRole` if `Role` is the root role.
-public fun renounce_role<RootRole, Role>(
-    ac: &mut AccessControl<RootRole>,
-    account: address,
-    ctx: &mut TxContext,
-) {
-    assert!(account == ctx.sender(), ECannotRenounceForOtherAccount);
+public fun renounce_role<RootRole, Role>(ac: &mut AccessControl<RootRole>, ctx: &mut TxContext) {
     assert_home_module<RootRole, Role>();
 
+    let sender = ctx.sender();
     let role_name = with_original_ids<Role>();
     assert!(role_name != ac.protected_root, ECannotManageRootRole);
 
     if (!ac.roles.contains(role_name)) return;
 
-    let role_data = ac.roles.borrow_mut<_, RoleData>(role_name);
-    if (!role_data.members.contains(&account)) return;
+    let role_data = ac.roles.borrow_mut(role_name);
+    if (!role_data.members.contains(&sender)) return;
 
-    role_data.members.remove(&account);
-    event::emit(RoleRevoked { role: role_name, account, sender: ctx.sender() });
+    role_data.members.remove(&sender);
+    event::emit(RoleRevoked { role: role_name, account: sender, sender });
 }
 
 /// Set the admin role of `Role` to `AdminRole`. Caller must hold the current
@@ -528,7 +553,7 @@ public fun set_role_admin<RootRole, Role, AdminRole>(
     let new_admin_name = with_original_ids<AdminRole>();
 
     if (ac.roles.contains(role_name)) {
-        ac.roles.borrow_mut<_, RoleData>(role_name).admin_role = new_admin_name;
+        ac.roles.borrow_mut(role_name).admin_role = new_admin_name;
     } else {
         ac
             .roles
@@ -621,14 +646,14 @@ public fun accept_default_admin_transfer<RootRole>(
     let root_type = ac.protected_root;
 
     // Root role has at most one holder; find and revoke atomically.
-    let keys = ac.roles.borrow<_, RoleData>(root_type).members.keys();
+    let keys = ac.roles.borrow(root_type).members.keys();
     if (!keys.is_empty()) {
         let old_admin = keys[0];
-        ac.roles.borrow_mut<_, RoleData>(root_type).members.remove(&old_admin);
+        ac.roles.borrow_mut(root_type).members.remove(&old_admin);
         event::emit(RoleRevoked { role: root_type, account: old_admin, sender });
     };
 
-    ac.roles.borrow_mut<_, RoleData>(root_type).members.insert(new_admin);
+    ac.roles.borrow_mut(root_type).members.insert(new_admin);
     event::emit(RoleGranted { role: root_type, account: new_admin, sender });
 }
 
@@ -703,7 +728,7 @@ public fun accept_default_admin_renounce<RootRole>(
     let sender = ctx.sender();
     let root_type = ac.protected_root;
 
-    ac.roles.borrow_mut<_, RoleData>(root_type).members.remove(&sender);
+    ac.roles.borrow_mut(root_type).members.remove(&sender);
     event::emit(RoleRevoked { role: root_type, account: sender, sender });
 }
 
@@ -1011,14 +1036,14 @@ fun has_role_by_name<RootRole>(
     account: address,
 ): bool {
     if (!ac.roles.contains(role)) return false;
-    ac.roles.borrow<_, RoleData>(role).members.contains(&account)
+    ac.roles.borrow(role).members.contains(&account)
 }
 
 /// Returns the admin role `TypeName` of `role`. Defaults to the root role for
 /// roles that have no entry yet.
 fun get_role_admin_name<RootRole>(ac: &AccessControl<RootRole>, role: TypeName): TypeName {
     if (!ac.roles.contains(role)) return ac.protected_root;
-    ac.roles.borrow<_, RoleData>(role).admin_role
+    ac.roles.borrow(role).admin_role
 }
 
 /// Asserts `Role` and `RootRole` come from the same package + module.
