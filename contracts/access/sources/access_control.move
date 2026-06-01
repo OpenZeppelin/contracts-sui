@@ -181,11 +181,11 @@ public struct AccessControl<phantom RootRole> has key, store {
     /// Pending change to the default admin — either a transfer to a specific
     /// new admin or a renounce. See `PendingAdminTransfer`.
     pending_default_admin: Option<PendingAdminTransfer>,
-    /// Pending change to `default_admin_delay_ms`. The change becomes
-    /// effective once `schedule_after_ms` has elapsed. Until a delay-refreshing
-    /// entrypoint clears this slot, it remains stored as pending; an in-flight
-    /// `pending_default_admin` is unaffected (it locks in the delay it was
-    /// scheduled under).
+    /// Pending change to `default_admin_delay_ms`. The change becomes effective
+    /// once `schedule_after_ms` has elapsed. Until a delay-refreshing entrypoint
+    /// clears this slot, it may remain stored here even though public pending
+    /// getters no longer report it as pending. An in-flight `pending_default_admin`
+    /// is unaffected (it locks in the delay it was scheduled under).
     pending_default_admin_delay_change: Option<PendingDelayChange>,
     /// Current minimum delay (ms) for root role transfer / renounce.
     /// Mutable through the delayed change flow only.
@@ -833,26 +833,24 @@ public fun begin_default_admin_delay_change<RootRole>(
 
 /// Cancel an unelapsed pending delay change. Caller must hold the root role.
 ///
-/// If the pending delay change has already elapsed, this call applies it and
-/// clears the pending slot instead of cancelling it.
+/// If the pending delay change has already elapsed, this call aborts because
+/// there is no active pending change to cancel.
 ///
 /// #### Parameters
 /// - `ac`: the registry to mutate.
-/// - `clock`: current clock; used to materialize elapsed delay changes.
+/// - `clock`: current clock; used to detect elapsed delay changes.
 /// - `ctx`: transaction context.
 ///
 /// #### Aborts
-/// - `ENoPendingDelayChange` if no pending change exists.
+/// - `ENoPendingDelayChange` if no active pending change exists.
 /// - `EUnauthorized` if the caller does not hold the root role.
 public fun cancel_default_admin_delay_change<RootRole>(
     ac: &mut AccessControl<RootRole>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(ac.pending_default_admin_delay_change.is_some(), ENoPendingDelayChange);
+    assert!(has_active_pending_default_admin_delay_change(ac, clock), ENoPendingDelayChange);
     assert!(ac.has_role_by_name(ac.protected_root, ctx.sender()), EUnauthorized);
-
-    if (refresh_default_admin_delay(ac, clock)) return;
 
     let _ = ac.pending_default_admin_delay_change.extract();
 
@@ -995,54 +993,56 @@ public fun max_delay_increase_wait_ms(): u64 {
     MAX_DELAY_INCREASE_WAIT_MS
 }
 
-/// Whether a delay change is still stored as pending.
-///
-/// An elapsed pending change may still return `true` here until a
-/// delay-refreshing entrypoint clears it. Use `default_admin_delay_ms` for the
-/// effective delay.
+/// Whether a delay change is still active and cancellable.
 ///
 /// #### Parameters
 /// - `ac`: the registry to query.
-public fun has_pending_default_admin_delay_change<RootRole>(ac: &AccessControl<RootRole>): bool {
-    ac.pending_default_admin_delay_change.is_some()
+/// - `clock`: current clock; used to determine whether a pending change has elapsed.
+public fun has_pending_default_admin_delay_change<RootRole>(
+    ac: &AccessControl<RootRole>,
+    clock: &Clock,
+): bool {
+    has_active_pending_default_admin_delay_change(ac, clock)
 }
 
-/// The proposed new delay value of the stored pending change.
-///
-/// An elapsed pending change may still return `some` here until a
-/// delay-refreshing entrypoint clears it. Use `default_admin_delay_ms` for the
-/// effective delay.
+/// The proposed new delay value of the active pending change.
 ///
 /// #### Parameters
 /// - `ac`: the registry to query.
+/// - `clock`: current clock; used to determine whether a pending change has elapsed.
 ///
 /// #### Returns
-/// - `some(new_delay_ms)` with the proposed delay if a change is pending.
-/// - `none` if there is no pending change.
+/// - `some(new_delay_ms)` with the proposed delay if a change is active.
+/// - `none` if there is no active pending change.
 public fun pending_default_admin_delay_change_new_delay_ms<RootRole>(
     ac: &AccessControl<RootRole>,
+    clock: &Clock,
 ): Option<u64> {
     if (ac.pending_default_admin_delay_change.is_none()) return option::none();
-    option::some(ac.pending_default_admin_delay_change.borrow().new_delay_ms)
+    let pending = ac.pending_default_admin_delay_change.borrow();
+    if (clock.timestamp_ms() >= pending.schedule_after_ms) return option::none();
+    option::some(pending.new_delay_ms)
 }
 
-/// The timestamp at which the stored pending delay change becomes effective.
-///
-/// An elapsed pending change may still return `some` here until a
-/// delay-refreshing entrypoint clears it. Use `default_admin_delay_ms` for the
-/// effective delay.
+/// The timestamp at which the active pending delay change becomes effective.
 ///
 /// #### Parameters
 /// - `ac`: the registry to query.
+/// - `clock`: current clock; used to determine whether a pending change has elapsed.
 ///
 /// #### Returns
 /// - `some(ts)` with the millisecond timestamp the pending change takes effect at.
-/// - `none` if there is no pending change.
+/// - `none` if there is no active pending change.
+/// - `none` once `clock.timestamp_ms() >= ts`; the change is then effective and
+/// no longer cancellable.
 public fun pending_default_admin_delay_change_schedule_after_ms<RootRole>(
     ac: &AccessControl<RootRole>,
+    clock: &Clock,
 ): Option<u64> {
     if (ac.pending_default_admin_delay_change.is_none()) return option::none();
-    option::some(ac.pending_default_admin_delay_change.borrow().schedule_after_ms)
+    let pending = ac.pending_default_admin_delay_change.borrow();
+    if (clock.timestamp_ms() >= pending.schedule_after_ms) return option::none();
+    option::some(pending.schedule_after_ms)
 }
 
 // === Internal Helpers ===
@@ -1058,6 +1058,17 @@ fun effective_default_admin_delay_ms<RootRole>(ac: &AccessControl<RootRole>, clo
     };
 
     ac.default_admin_delay_ms
+}
+
+/// Returns true only while a stored pending delay change has not elapsed yet.
+/// Elapsed changes are effective, but no longer active or cancellable.
+fun has_active_pending_default_admin_delay_change<RootRole>(
+    ac: &AccessControl<RootRole>,
+    clock: &Clock,
+): bool {
+    if (ac.pending_default_admin_delay_change.is_none()) return false;
+
+    clock.timestamp_ms() < ac.pending_default_admin_delay_change.borrow().schedule_after_ms
 }
 
 /// Applies an elapsed pending delay change and clears it. Returns true if a
