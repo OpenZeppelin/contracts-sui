@@ -344,7 +344,7 @@ public fun new_with_admin<RootRole: drop>(
     assert!(default_admin_delay_ms <= MAX_DEFAULT_ADMIN_DELAY_MS, EDelayTooLarge);
     assert!(initial_admin != @0x0, EZeroAddress);
 
-    let event_sender = ctx.sender();
+    let sender = ctx.sender();
     let root_type = with_original_ids<RootRole>();
 
     let mut ac = AccessControl<RootRole> {
@@ -367,7 +367,7 @@ public fun new_with_admin<RootRole: drop>(
             },
         );
 
-    event::emit(RoleGranted { role: root_type, account: initial_admin, sender: event_sender });
+    event::emit(RoleGranted { role: root_type, account: initial_admin, sender });
 
     ac
 }
