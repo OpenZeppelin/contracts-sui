@@ -1037,7 +1037,7 @@ fun has_role_by_name<RootRole>(
     account: address,
 ): bool {
     if (role == ac.protected_root) {
-        return ac.root_admin.is_some() && *ac.root_admin.borrow() == account
+        return ac.root_admin == option::some(account)
     };
     if (!ac.roles.contains(role)) return false;
     ac.roles.borrow(role).members.contains(&account)
