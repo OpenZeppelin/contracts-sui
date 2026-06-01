@@ -5,6 +5,7 @@ use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
 use openzeppelin_math::rounding;
+use openzeppelin_math::u128;
 use openzeppelin_math::u256;
 
 // === Errors ===
@@ -272,22 +273,27 @@ public fun ln(x: UD30x9): UD30x9 {
 
 /// Computes the base-10 logarithm of a `UD30x9` value.
 ///
-/// Derived from `log2` via the identity `log10(x) = log2(x) * log10(2)`. Both
-/// factors round toward zero, so the result may sit up to one ulp below the
-/// true value. In particular, `log10(10) == one() - 1 ulp` under pure
-/// round-down arithmetic.
+/// Exact when `x` is an integer power of ten (`10^k`, `k >= 0`). Otherwise
+/// derived from `log2` via `log10(x) = log2(x) * log10(2)`; both factors
+/// floor, so the result may sit up to one ulp below the true value.
 ///
 /// #### Parameters
 /// - `x`: Input value.
 ///
 /// #### Returns
-/// - `log10(x)`, rounded down to the nearest representable `UD30x9` value.
+/// - `log10(x)`, rounded down to the nearest representable `UD30x9` value
+///   (exact at integer powers of ten).
 ///
 /// #### Aborts
 /// - `ELogUndefined` if `x` is less than one.
 public fun log10(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
     assert!(raw >= common::scale!(), ELogUndefined);
+    if (u128::is_power_of_ten(raw)) {
+        // Subtract `9 = log10(SCALE)` to strip the embedded scale.
+        let j = u128::log10(raw, rounding::down());
+        return wrap(((j - 9) as u128) * common::scale!())
+    };
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);

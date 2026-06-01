@@ -228,20 +228,35 @@ public fun ln(x: SD29x9): SD29x9 {
 
 /// Computes the base-10 logarithm of an `SD29x9` value.
 ///
-/// Derived from `log2` via `log10(x) = log2(x) * log10(2)`. Rounded toward
-/// zero; see `log2` for full rounding semantics on signed results.
+/// Exact when `x` is an integer power of ten, including sub-unit powers
+/// `10^-k` (`k` in `1..=9`). Otherwise derived from `log2` via
+/// `log10(x) = log2(x) * log10(2)` and rounded toward zero; see `log2`
+/// for full rounding semantics on signed results.
 ///
 /// #### Parameters
 /// - `x`: Input value.
 ///
 /// #### Returns
-/// - `log10(x)`, rounded toward zero.
+/// - `log10(x)`, rounded toward zero (exact at integer powers of ten).
 ///
 /// #### Aborts
 /// - `ELogUndefined` if `x` is zero or negative.
 public fun log10(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     assert!(!neg && mag > 0, ELogUndefined);
+    // Applied on the decomposed magnitude before the sign branch so sub-unit
+    // `10^-k` inputs (raw magnitudes below `SCALE`) also resolve exactly.
+    if (u256::is_power_of_ten(mag)) {
+        // Subtract `9 = log10(SCALE)` to strip the embedded scale; `j < 9`
+        // means a sub-unit input (`10^-k`), producing a negative result.
+        let j = u256::log10(mag, rounding::down());
+        let (result_neg, result_abs) = if (j >= 9) {
+            (false, ((j - 9) as u256) * common::scale_u256!())
+        } else {
+            (true, ((9 - j) as u256) * common::scale_u256!())
+        };
+        return wrap_components(Components { neg: result_neg, mag: result_abs })
+    };
     let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
     let result_mag = common::apply_log2_factor(log_mag_internal, common::log10_2_e18!());
     wrap_components(Components { neg: log_neg, mag: result_mag as u256 })
