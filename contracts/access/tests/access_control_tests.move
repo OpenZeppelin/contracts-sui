@@ -906,6 +906,12 @@ fun test_begin_admin_transfer_overwrites_pending() {
         ACCESS_CONTROL_TESTS,
     >();
     assert_eq!(cancelled[0], expected);
+    assert_eq!(
+        event::events_by_type<
+            access_control::DefaultAdminRenounceCancelled<ACCESS_CONTROL_TESTS>,
+        >().length(),
+        0,
+    );
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
@@ -1160,9 +1166,8 @@ fun test_cancel_admin_transfer_rejects_non_root() {
     abort 999
 }
 
-// `cancel_default_admin_transfer` clears either kind of pending action —
-// the same function and same `DefaultAdminTransferCancelled` event are
-// reused for both transfer and renounce cancels.
+// `cancel_default_admin_transfer` clears either kind of pending action and
+// emits the cancellation event matching the pending action kind.
 #[test]
 fun test_cancel_admin_transfer_clears_pending_renounce() {
     let deployer = @0xA;
@@ -1175,12 +1180,20 @@ fun test_cancel_admin_transfer_clears_pending_renounce() {
 
     assert!(!ac.has_pending_default_admin_transfer());
     assert!(!ac.is_pending_default_admin_renounce());
-    // Indexers correlate the cancel event with the prior schedule event to
-    // know which kind was cleared.
     let cancelled = event::events_by_type<
-        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+        access_control::DefaultAdminRenounceCancelled<ACCESS_CONTROL_TESTS>,
     >();
     assert_eq!(cancelled.length(), 1);
+    let expected = access_control::test_new_default_admin_renounce_cancelled<
+        ACCESS_CONTROL_TESTS,
+    >();
+    assert_eq!(cancelled[0], expected);
+    assert_eq!(
+        event::events_by_type<
+            access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+        >().length(),
+        0,
+    );
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
@@ -1375,6 +1388,12 @@ fun test_begin_admin_renounce_overwrites_pending_transfer() {
         access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
     >();
     assert_eq!(cancelled.length(), 1);
+    assert_eq!(
+        event::events_by_type<
+            access_control::DefaultAdminRenounceCancelled<ACCESS_CONTROL_TESTS>,
+        >().length(),
+        0,
+    );
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
@@ -1399,9 +1418,15 @@ fun test_begin_admin_transfer_overwrites_pending_renounce() {
     assert_eq!(ac.pending_default_admin_new_admin(), option::some(new_admin));
 
     let cancelled = event::events_by_type<
-        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+        access_control::DefaultAdminRenounceCancelled<ACCESS_CONTROL_TESTS>,
     >();
     assert_eq!(cancelled.length(), 1);
+    assert_eq!(
+        event::events_by_type<
+            access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+        >().length(),
+        0,
+    );
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
@@ -1429,9 +1454,15 @@ fun test_begin_admin_renounce_overwrites_pending_renounce() {
     assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(50));
 
     let cancelled = event::events_by_type<
-        access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+        access_control::DefaultAdminRenounceCancelled<ACCESS_CONTROL_TESTS>,
     >();
     assert_eq!(cancelled.length(), 1);
+    assert_eq!(
+        event::events_by_type<
+            access_control::DefaultAdminTransferCancelled<ACCESS_CONTROL_TESTS>,
+        >().length(),
+        0,
+    );
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
