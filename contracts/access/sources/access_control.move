@@ -162,12 +162,17 @@ public struct AccessControl<phantom RootRole> has key, store {
     id: UID,
     /// Per-role membership and admin mapping. Keyed by `TypeName`.
     /// Entries are created lazily on first grant or `set_role_admin`.
+    /// Does NOT contain an entry for the root role; see `root_admin`.
     roles: Table<TypeName, RoleData>,
     /// `TypeName` of the root role (= `RootRole`'s OTW). Direct
     /// `grant_role` / `revoke_role` / `renounce_role` / `set_role_admin` on
     /// this role is blocked (`ECannotManageRootRole`); use the timelocked
     /// transfer or renounce flow.
     protected_root: TypeName,
+    /// The sole holder of the root role, or `none` after a renounce.
+    /// Stored as a dedicated field (not inside `roles`) to express the
+    /// singleton constraint directly and simplify transfer and renounce paths.
+    root_admin: Option<address>,
     /// Pending change to the root role holder — either a transfer to a
     /// specific new admin or a renounce. See `PendingAdminTransfer`.
     pending_default_admin: Option<PendingAdminTransfer>,
@@ -347,25 +352,15 @@ public fun new_with_admin<RootRole: drop>(
     let event_sender = ctx.sender();
     let root_type = with_original_ids<RootRole>();
 
-    let mut ac = AccessControl<RootRole> {
+    let ac = AccessControl<RootRole> {
         id: object::new(ctx),
         roles: table::new(ctx),
         protected_root: root_type,
+        root_admin: option::some(initial_admin),
         pending_default_admin: option::none(),
         pending_default_admin_delay_change: option::none(),
         default_admin_delay_ms,
     };
-
-    ac
-        .roles
-        .add(
-            root_type,
-            RoleData {
-                members: vec_set::singleton(initial_admin),
-                // Root role is self-administering.
-                admin_role: root_type,
-            },
-        );
 
     event::emit(RoleGranted { role: root_type, account: initial_admin, sender: event_sender });
 
@@ -645,15 +640,12 @@ public fun accept_default_admin_transfer<RootRole>(
     let sender = ctx.sender();
     let root_type = ac.protected_root;
 
-    // Root role has at most one holder; find and revoke atomically.
-    let keys = ac.roles.borrow(root_type).members.keys();
-    if (!keys.is_empty()) {
-        let old_admin = keys[0];
-        ac.roles.borrow_mut(root_type).members.remove(&old_admin);
+    if (ac.root_admin.is_some()) {
+        let old_admin = *ac.root_admin.borrow();
         event::emit(RoleRevoked { role: root_type, account: old_admin, sender });
     };
 
-    ac.roles.borrow_mut(root_type).members.insert(new_admin);
+    ac.root_admin = option::some(new_admin);
     event::emit(RoleGranted { role: root_type, account: new_admin, sender });
 }
 
@@ -728,7 +720,7 @@ public fun accept_default_admin_renounce<RootRole>(
     let sender = ctx.sender();
     let root_type = ac.protected_root;
 
-    ac.roles.borrow_mut(root_type).members.remove(&sender);
+    ac.root_admin = option::none();
     event::emit(RoleRevoked { role: root_type, account: sender, sender });
 }
 
@@ -913,6 +905,15 @@ public fun protected_root<RootRole>(ac: &AccessControl<RootRole>): TypeName {
     ac.protected_root
 }
 
+/// The current holder of the root role, or `none` if the role has been
+/// renounced.
+///
+/// #### Parameters
+/// - `ac`: the registry to query.
+public fun default_admin<RootRole>(ac: &AccessControl<RootRole>): Option<address> {
+    ac.root_admin
+}
+
 /// Upper bound on `default_admin_delay_ms`.
 public fun max_default_admin_delay_ms(): u64 { MAX_DEFAULT_ADMIN_DELAY_MS }
 
@@ -1035,6 +1036,9 @@ fun has_role_by_name<RootRole>(
     role: TypeName,
     account: address,
 ): bool {
+    if (role == ac.protected_root) {
+        return ac.root_admin.is_some() && *ac.root_admin.borrow() == account
+    };
     if (!ac.roles.contains(role)) return false;
     ac.roles.borrow(role).members.contains(&account)
 }
