@@ -2,6 +2,7 @@
 module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::common;
+use openzeppelin_fp_math::gaussian::cdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9, wrap, one};
 
@@ -112,6 +113,31 @@ public fun and2(x: UD30x9, y: UD30x9): UD30x9 {
 /// - `x` unchanged, since `UD30x9` is unsigned.
 public fun abs(x: UD30x9): UD30x9 {
     x
+}
+
+/// Standard-normal cumulative distribution function `Φ(z)` on non-negative `z`.
+///
+/// Returns the probability `Φ(z) ∈ [0.5, 1]` represented as `UD30x9`. Since
+/// `UD30x9` inputs are inherently non-negative, the output is always at least
+/// `0.5`. The implementation evaluates an AAA-rational approximation
+/// `N(z) / D(z)` at WAD scale via Horner's method on a sign-magnitude `u256`
+/// accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a single
+/// nearest-rounding step.
+///
+/// #### Parameters
+/// - `z`: Non-negative input.
+///
+/// #### Returns
+/// - `Φ(z) ∈ [0.5, 1]` at `UD30x9` scale.
+///
+/// #### Behavior
+/// - Saturates exactly to `1.0` for `z ≥ 6.3`. At that bound `Φ` is already
+///   within `~10⁻¹⁰` of `1`, well below the output's `10⁻⁹` resolution.
+/// - `Φ(0)` is bit-exactly `0.5`.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
+///   worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
+public fun cdf(z: UD30x9): UD30x9 {
+    wrap(cdf_nonneg_raw(z.unwrap()))
 }
 
 /// Rounds toward positive infinity to the next integer (if fractional), otherwise unchanged.
