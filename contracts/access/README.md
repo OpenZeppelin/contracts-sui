@@ -29,7 +29,10 @@ Initialize the registry from the module's `init` function when the package is
 first published. Sui does not run `init` for modules added in a later package
 upgrade, so an already-published package cannot adopt AccessControl by adding a
 new module that expects its OTW to be delivered. Publish a fresh package with
-its own initializing module and AccessControl registry instead.
+its own initializing module and AccessControl registry instead. Use
+`access_control::new` when the publisher should be the default admin, or
+`access_control::new_with_admin` when the initial default admin should be an
+explicit governance or multisig address.
 
 ```move
 use openzeppelin_access::access_control::{Self, AccessControl, Auth};

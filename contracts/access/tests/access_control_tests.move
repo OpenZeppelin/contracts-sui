@@ -72,17 +72,49 @@ fun test_new_with_otw_succeeds() {
         scenario.ctx(),
     );
 
-    // Sender becomes the root holder.
+    // Sender becomes the default admin.
     assert!(ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
+    assert_eq!(ac.default_admin(), option::some(deployer));
     // Protected root TypeName matches the OTW type.
     assert_eq!(ac.protected_root(), with_original_ids<ACCESS_CONTROL_TESTS>());
-    // RoleGranted emitted for the root holder. Asserted in the same tx as
+    // RoleGranted emitted for the default admin. Asserted in the same tx as
     // construction because `events_by_type` is per-transaction.
     let granted = event::events_by_type<access_control::RoleGranted>();
     assert_eq!(granted.length(), 1);
     let expected = access_control::test_new_role_granted(
         with_original_ids<ACCESS_CONTROL_TESTS>(),
         deployer,
+        deployer,
+    );
+    assert_eq!(granted[0], expected);
+
+    transfer::public_share_object(ac);
+    scenario.end();
+}
+
+#[test]
+#[allow(lint(share_owned))]
+fun test_new_with_admin_sets_explicit_root_holder() {
+    let deployer = @0xA;
+    let initial_admin = @0xB;
+    let mut scenario = test_scenario::begin(deployer);
+    let ac = access_control::new_with_admin<ACCESS_CONTROL_TESTS>(
+        ACCESS_CONTROL_TESTS {},
+        initial_admin,
+        0,
+        scenario.ctx(),
+    );
+
+    assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
+    assert!(ac.has_role<_, ACCESS_CONTROL_TESTS>(initial_admin));
+    assert_eq!(ac.default_admin(), option::some(initial_admin));
+    assert_eq!(ac.protected_root(), with_original_ids<ACCESS_CONTROL_TESTS>());
+
+    let granted = event::events_by_type<access_control::RoleGranted>();
+    assert_eq!(granted.length(), 1);
+    let expected = access_control::test_new_role_granted(
+        with_original_ids<ACCESS_CONTROL_TESTS>(),
+        initial_admin,
         deployer,
     );
     assert_eq!(granted[0], expected);
@@ -106,6 +138,19 @@ fun test_new_rejects_excessive_delay() {
     let _ac = access_control::new<ACCESS_CONTROL_TESTS>(
         ACCESS_CONTROL_TESTS {},
         access_control::max_default_admin_delay_ms() + 1,
+        scenario.ctx(),
+    );
+    abort 999
+}
+
+#[test, expected_failure(abort_code = access_control::EZeroAddress)]
+fun test_new_with_admin_rejects_zero_address() {
+    let deployer = @0xA;
+    let mut scenario = test_scenario::begin(deployer);
+    let _ac = access_control::new_with_admin<ACCESS_CONTROL_TESTS>(
+        ACCESS_CONTROL_TESTS {},
+        @0x0,
+        0,
         scenario.ctx(),
     );
     abort 999
@@ -197,9 +242,9 @@ fun test_grant_role_idempotent() {
     scenario.end();
 }
 
-// Non-root roles have no membership cap (unlike root, which is capped at one
-// holder by `accept_default_admin_transfer`'s revoke-then-grant logic). Pin
-// that two distinct accounts can simultaneously hold the same non-root role.
+// Non-root roles have no membership cap (unlike root, which is stored as a
+// single `Option<address>` holder). Pin that two distinct accounts can
+// simultaneously hold the same non-root role.
 #[test]
 fun test_grant_role_multiple_holders() {
     let deployer = @0xA;
@@ -309,7 +354,7 @@ fun test_revoke_role_idempotent_unknown_role() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
 
-    // RoleY was never granted, so it has no bag entry. Revoking is a no-op.
+    // RoleY was never granted, so it has no role entry. Revoking is a no-op.
     ac.revoke_role<_, RoleY>(@0xB, scenario.ctx());
     assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
 
@@ -365,7 +410,7 @@ fun test_renounce_role_happy_path() {
 
     scenario.next_tx(alice);
     let mut ac = take_ac(&scenario);
-    ac.renounce_role<_, AdminA>(alice, scenario.ctx());
+    ac.renounce_role<_, AdminA>(scenario.ctx());
     assert!(!ac.has_role<_, AdminA>(alice));
 
     let revoked = event::events_by_type<access_control::RoleRevoked>();
@@ -391,7 +436,7 @@ fun test_renounce_role_rejects_root() {
     let deployer = @0xA;
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
-    ac.renounce_role<_, ACCESS_CONTROL_TESTS>(deployer, scenario.ctx());
+    ac.renounce_role<_, ACCESS_CONTROL_TESTS>(scenario.ctx());
     abort 999
 }
 
@@ -404,47 +449,37 @@ fun test_renounce_role_idempotent_non_member() {
     let mut ac = take_ac(&scenario);
 
     // alice never held AdminA — renounce is a no-op, no event.
-    ac.renounce_role<_, AdminA>(alice, scenario.ctx());
+    ac.renounce_role<_, AdminA>(scenario.ctx());
     assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
 
     test_scenario::return_shared(ac);
     scenario.end();
 }
 
-// Renounce idempotency: account == sender, role in bag, but the caller is not
-// a member — the second early-return path. Distinct from the "role not in bag"
-// path covered by the test above.
+// Renounce idempotency: role entry exists, but the caller is not a member —
+// the second early-return path. Distinct from the "no role entry" path covered
+// by the test above.
 #[test]
-fun test_renounce_role_idempotent_role_in_bag_non_member() {
+fun test_renounce_role_idempotent_existing_role_non_member() {
     let deployer = @0xA;
     let alice = @0xB;
     let carol = @0xC;
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
 
-    // Grant AdminA to alice — the role's bag entry now exists.
+    // Grant AdminA to alice — the role entry now exists.
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
     test_scenario::return_shared(ac);
 
-    // Carol is not a member of AdminA — exercises the "role in bag, not
+    // Carol is not a member of AdminA — exercises the "role entry exists, not
     // member" early-return branch.
     scenario.next_tx(carol);
     let mut ac = take_ac(&scenario);
-    ac.renounce_role<_, AdminA>(carol, scenario.ctx());
+    ac.renounce_role<_, AdminA>(scenario.ctx());
     assert_eq!(event::events_by_type<access_control::RoleRevoked>().length(), 0);
 
     test_scenario::return_shared(ac);
     scenario.end();
-}
-
-#[test, expected_failure(abort_code = access_control::ECannotRenounceForOtherAccount)]
-fun test_renounce_role_rejects_other_account() {
-    let deployer = @0xA;
-    let mut scenario = setup(deployer, 0);
-    let mut ac = take_ac(&scenario);
-    // Sender is deployer; trying to renounce on behalf of @0xB must abort.
-    ac.renounce_role<_, AdminA>(@0xB, scenario.ctx());
-    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EForeignRole)]
@@ -452,7 +487,7 @@ fun test_renounce_role_rejects_foreign() {
     let deployer = @0xA;
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
-    ac.renounce_role<_, ForeignRole>(deployer, scenario.ctx());
+    ac.renounce_role<_, ForeignRole>(scenario.ctx());
     abort 999
 }
 
@@ -509,7 +544,7 @@ fun test_set_role_admin_lazy_create() {
     scenario.end();
 }
 
-// set_role_admin against a role that already has a bag entry — exercises
+// set_role_admin against a role that already has an entry — exercises
 // the "update existing admin_role" branch (the lazy-create branch is covered
 // by the test above) and asserts the event reports previous = old admin
 // rather than empty / fresh-default.
@@ -520,7 +555,7 @@ fun test_set_role_admin_updates_existing_role() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
 
-    // First grant of RoleX creates the bag entry with admin = root.
+    // First grant of RoleX creates the role entry with admin = root.
     ac.grant_role<_, RoleX>(alice, scenario.ctx());
     assert_eq!(ac.get_role_admin<_, RoleX>(), with_original_ids<ACCESS_CONTROL_TESTS>());
 
@@ -636,7 +671,7 @@ fun test_has_role_unknown_role_returns_false() {
     let deployer = @0xA;
     let scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
-    // RoleX has no bag entry at all.
+    // RoleX has no role entry at all.
     assert!(!ac.has_role<_, RoleX>(deployer));
     test_scenario::return_shared(ac);
     scenario.end();
@@ -780,6 +815,7 @@ fun test_begin_admin_transfer_happy_path() {
     assert!(ac.has_pending_default_admin_transfer());
     assert_eq!(ac.pending_default_admin_new_admin(), option::some(new_admin));
     assert_eq!(ac.pending_default_admin_execute_after_ms(), option::some(delay));
+    assert_eq!(ac.default_admin(), option::some(deployer));
 
     let scheduled = event::events_by_type<access_control::DefaultAdminTransferScheduled>();
     assert_eq!(scheduled.length(), 1);
@@ -869,6 +905,9 @@ fun test_accept_admin_transfer_happy_path() {
     // Atomic rotation: old admin lost root, new admin gained it.
     assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
     assert!(ac.has_role<_, ACCESS_CONTROL_TESTS>(new_admin));
+    assert_eq!(ac.default_admin(), option::some(new_admin));
+    let auth = ac.new_auth<_, ACCESS_CONTROL_TESTS>(scenario.ctx());
+    assert_eq!(access_control::auth_addr(&auth), new_admin);
     // Pending state cleared.
     assert!(!ac.has_pending_default_admin_transfer());
     assert!(ac.pending_default_admin_new_admin().is_none());
@@ -904,6 +943,54 @@ fun test_accept_admin_transfer_happy_path() {
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
+}
+
+#[test]
+fun test_transferred_admin_can_manage_root_role_administered_roles() {
+    let deployer = @0xA;
+    let new_admin = @0xB;
+    let user = @0xC;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+
+    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
+    test_scenario::return_shared(ac);
+
+    scenario.next_tx(new_admin);
+    let mut ac = take_ac(&scenario);
+    ac.accept_default_admin_transfer(&clk, scenario.ctx());
+    ac.grant_role<_, AdminA>(user, scenario.ctx());
+
+    assert!(ac.has_role<_, AdminA>(user));
+    assert_eq!(ac.get_role_admin<_, AdminA>(), with_original_ids<ACCESS_CONTROL_TESTS>());
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = access_control::EUnauthorized)]
+fun test_old_admin_cannot_manage_root_role_administered_roles_after_transfer() {
+    let deployer = @0xA;
+    let new_admin = @0xB;
+    let user = @0xC;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+
+    ac.begin_default_admin_transfer(new_admin, &clk, scenario.ctx());
+    test_scenario::return_shared(ac);
+
+    scenario.next_tx(new_admin);
+    let mut ac = take_ac(&scenario);
+    ac.accept_default_admin_transfer(&clk, scenario.ctx());
+    test_scenario::return_shared(ac);
+
+    scenario.next_tx(deployer);
+    let mut ac = take_ac(&scenario);
+    ac.grant_role<_, AdminA>(user, scenario.ctx());
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::ENoPendingAdminTransfer)]
@@ -992,6 +1079,7 @@ fun test_cancel_admin_transfer_happy_path() {
 
     assert!(!ac.has_pending_default_admin_transfer());
     assert!(ac.pending_default_admin_new_admin().is_none());
+    assert_eq!(ac.default_admin(), option::some(deployer));
     let cancelled = event::events_by_type<access_control::DefaultAdminTransferCancelled>();
     assert_eq!(cancelled.length(), 1);
     let expected = access_control::test_new_default_admin_transfer_cancelled();
@@ -1171,6 +1259,7 @@ fun test_begin_admin_renounce_happy_path() {
 
     assert!(ac.has_pending_default_admin_transfer());
     assert!(ac.is_pending_default_admin_renounce());
+    assert_eq!(ac.default_admin(), option::some(deployer));
     // Renounce has no incoming admin — `pending_default_admin_new_admin`
     // returns `none` for both "no pending" and "pending renounce". Use
     // `is_pending_default_admin_renounce` to disambiguate (above).
@@ -1185,6 +1274,20 @@ fun test_begin_admin_renounce_happy_path() {
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(ac);
     scenario.end();
+}
+
+#[test, expected_failure(abort_code = access_control::EUnauthorized)]
+fun test_renounced_admin_cannot_manage_root_role_administered_roles() {
+    let deployer = @0xA;
+    let user = @0xB;
+    let mut scenario = setup(deployer, 0);
+    let mut ac = take_ac(&scenario);
+    let clk = clock::create_for_testing(scenario.ctx());
+
+    ac.begin_default_admin_renounce(&clk, scenario.ctx());
+    ac.accept_default_admin_renounce(&clk, scenario.ctx());
+    ac.grant_role<_, AdminA>(user, scenario.ctx());
+    abort 999
 }
 
 #[test, expected_failure(abort_code = access_control::EUnauthorized)]
@@ -1285,8 +1388,9 @@ fun test_accept_admin_renounce_happy_path() {
     let granted_before = event::events_by_type<access_control::RoleGranted>().length();
     ac.accept_default_admin_renounce(&clk, scenario.ctx());
 
-    // Caller (current root) is removed from the root role; pending cleared.
+    // Caller (current default admin) is removed from the root role; pending cleared.
     assert!(!ac.has_role<_, ACCESS_CONTROL_TESTS>(deployer));
+    assert!(ac.default_admin().is_none());
     assert!(!ac.has_pending_default_admin_transfer());
     assert!(!ac.is_pending_default_admin_renounce());
 
