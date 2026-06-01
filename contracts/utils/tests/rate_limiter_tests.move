@@ -145,7 +145,7 @@ fun fixed_window_can_start_with_partial_available() {
     let (test, mut clk) = setup(0);
 
     // Start with 1 of 3 units available; the first window is partially consumed.
-    let mut rl = rate_limiter::new_fixed_window(3, 100, 0, 1, &clk);
+    let mut rl = rate_limiter::new_fixed_window(3, 100, 1, 0, &clk);
     assert_eq!(rl.available(&clk), 1);
 
     rl.consume_or_abort(1, &clk);
@@ -162,14 +162,14 @@ fun fixed_window_can_start_with_partial_available() {
 #[test, expected_failure(abort_code = rate_limiter::EInitialAboveCapacity)]
 fun fixed_window_rejects_initial_above_capacity() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_fixed_window(5, 100, 0, 6, &clk);
+    rate_limiter::new_fixed_window(5, 100, 6, 0, &clk);
     abort
 }
 
 #[test, expected_failure(abort_code = rate_limiter::EWindowAnchorInFuture)]
 fun fixed_window_rejects_anchor_in_future() {
     let (_test, clk) = setup(50);
-    rate_limiter::new_fixed_window(5, 100, 51, 5, &clk);
+    rate_limiter::new_fixed_window(5, 100, 5, 51, &clk);
     abort
 }
 
@@ -178,7 +178,7 @@ fun fixed_window_counts_per_window_and_resets_on_boundary() {
     let (test, mut clk) = setup(0);
 
     // 3 consumes per 100 ms window.
-    let mut rl = rate_limiter::new_fixed_window(3, 100, 0, 3, &clk);
+    let mut rl = rate_limiter::new_fixed_window(3, 100, 3, 0, &clk);
     assert_eq!(rl.available(&clk), 3);
 
     rl.consume_or_abort(1, &clk);
@@ -357,7 +357,7 @@ fun try_consume_with_zero_amount_aborts() {
 #[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
 fun try_consume_with_zero_amount_aborts_fixed_window() {
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_fixed_window(10, 100, 0, 10, &clk);
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 10, 0, &clk);
     rl.try_consume(0, &clk);
     abort
 }
@@ -410,7 +410,7 @@ fun new_fixed_window_rejects_zero_capacity() {
 #[test, expected_failure(abort_code = rate_limiter::EZeroWindow)]
 fun new_fixed_window_rejects_zero_window_ms() {
     let (_test, clk) = setup(0);
-    rate_limiter::new_fixed_window(10, 0, 0, 10, &clk);
+    rate_limiter::new_fixed_window(10, 0, 10, 0, &clk);
     abort
 }
 
@@ -454,7 +454,7 @@ fun bucket_failed_try_consume_does_not_drain_state() {
 fun fixed_window_failed_try_consume_does_not_advance_used() {
     let (test, clk) = setup(0);
 
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 5, 0, &clk);
     rl.consume_or_abort(3, &clk);
     assert_eq!(rl.available(&clk), 2);
 
@@ -518,7 +518,7 @@ fun bucket_available_returns_up_to_date_accrual_even_on_failed_try_consume() {
 fun fixed_window_available_reflects_rollover_after_failed_try_consume() {
     let (test, mut clk) = setup(0);
 
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 5, 0, &clk);
     rl.consume_or_abort(3, &clk);
     assert_eq!(rl.available(&clk), 2);
 
@@ -610,7 +610,7 @@ fun fixed_window_try_consume_max_amount_returns_false() {
 
     // The check is `amount > capacity - used` (not `used + amount > capacity`), so
     // u64::MAX is rejected without overflowing.
-    let mut rl = rate_limiter::new_fixed_window(10, 100, 0, 10, &clk);
+    let mut rl = rate_limiter::new_fixed_window(10, 100, 10, 0, &clk);
     assert!(!rl.try_consume(18446744073709551615, &clk));
     // State unchanged on rejection.
     assert_eq!(rl.available(&clk), 10);
@@ -626,7 +626,7 @@ fun fixed_window_first_window_has_full_length_at_nonzero_creation() {
 
     // Creation at t=99 with window_ms=100. First window is [99, 199), not the
     // wall-clock-aligned [0, 100) the previous design produced.
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 99, 5, &clk);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 5, 99, &clk);
     rl.consume_or_abort(3, &clk);
 
     // Wall-clock alignment would have rolled at t=100 (start of [100, 200)). With the
@@ -666,7 +666,7 @@ fun bucket_available_predicts_try_consume() {
 fun fixed_window_available_predicts_try_consume() {
     let (test, clk) = setup(0);
 
-    let mut rl = rate_limiter::new_fixed_window(7, 100, 0, 7, &clk);
+    let mut rl = rate_limiter::new_fixed_window(7, 100, 7, 0, &clk);
     let avail = rl.available(&clk);
     assert_eq!(avail, 7);
     assert!(rl.try_consume(avail, &clk));
@@ -709,7 +709,7 @@ fun fixed_window_try_consume_of_available_aborts_when_exhausted() {
     // available() returns 0 inside an exhausted window before rollover, and try_consume(0)
     // aborts EInvalidAmount.
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 5, 0, &clk);
     rl.consume_or_abort(5, &clk);
     let n = rl.available(&clk);
     rl.try_consume(n, &clk);
@@ -734,7 +734,7 @@ fun cooldown_try_consume_of_available_aborts_when_gated() {
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
 fun fixed_window_consume_or_abort_aborts_when_full() {
     let (_test, clk) = setup(0);
-    let mut rl = rate_limiter::new_fixed_window(2, 100, 0, 2, &clk);
+    let mut rl = rate_limiter::new_fixed_window(2, 100, 2, 0, &clk);
     rl.consume_or_abort(2, &clk);
     rl.consume_or_abort(1, &clk);
     abort
@@ -761,7 +761,7 @@ fun getters_return_constructor_values() {
     assert_eq!(b.refill_interval_ms(), 10);
     assert_eq!(b.last_refill_ms(&clk), clk.timestamp_ms());
 
-    let fw = rate_limiter::new_fixed_window(7, 100, 0, 7, &clk);
+    let fw = rate_limiter::new_fixed_window(7, 100, 7, 0, &clk);
     assert_eq!(fw.capacity(), 7);
     assert_eq!(fw.window_ms(), 100);
     assert_eq!(fw.window_start_ms(&clk), 0);
@@ -799,7 +799,7 @@ fun is_variant_predicates_are_exclusive_and_correct() {
     assert!(!b.is_fixed_window());
     assert!(!b.is_cooldown());
 
-    let fw = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    let fw = rate_limiter::new_fixed_window(5, 100, 5, 0, &clk);
     assert!(!fw.is_bucket());
     assert!(fw.is_fixed_window());
     assert!(!fw.is_cooldown());
@@ -838,7 +838,7 @@ fun refill_amount_on_non_bucket_aborts() {
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun refill_interval_ms_on_non_bucket_aborts() {
     let (_test, clk) = setup(0);
-    let fw = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    let fw = rate_limiter::new_fixed_window(5, 100, 5, 0, &clk);
     fw.refill_interval_ms();
     abort
 }
@@ -870,7 +870,7 @@ fun window_ms_on_non_fixed_window_aborts() {
 #[test, expected_failure(abort_code = rate_limiter::EWrongVariant)]
 fun cooldown_ms_on_non_cooldown_aborts() {
     let (_test, clk) = setup(0);
-    let fw = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    let fw = rate_limiter::new_fixed_window(5, 100, 5, 0, &clk);
     fw.cooldown_ms();
     abort
 }
@@ -943,7 +943,7 @@ fun reconfigure_fixed_window_via_construct_fresh_preserve_anchor() {
     let (test, mut clk) = setup(0);
 
     // 5 units per 100 ms, anchored at 0.
-    let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
+    let mut rl = rate_limiter::new_fixed_window(5, 100, 5, 0, &clk);
     rl.consume_or_abort(2, &clk);
     assert_eq!(rl.available(&clk), 3);
 
@@ -954,7 +954,7 @@ fun reconfigure_fixed_window_via_construct_fresh_preserve_anchor() {
     let projected = rl.available(&clk);
     let new_cap = 4;
     let initial = if (projected < new_cap) projected else new_cap;
-    rl = rate_limiter::new_fixed_window(new_cap, 100, anchor, initial, &clk);
+    rl = rate_limiter::new_fixed_window(new_cap, 100, initial, anchor, &clk);
 
     // Same window as before — rollover still lands at t=100.
     assert_eq!(rl.available(&clk), 3);

@@ -205,8 +205,8 @@ public fun new_bucket(
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per window.
 /// - `window_ms`: Length of one window, in milliseconds.
-/// - `window_start_ms`: Anchor for the first window. Must be `<= clock.timestamp_ms()`.
 /// - `initial_available`: Starting available units for the current window.
+/// - `window_start_ms`: Anchor for the first window. Must be `<= clock.timestamp_ms()`.
 /// - `clock`: Reference to the Sui `Clock`, used to validate the anchor.
 ///
 /// #### Returns
@@ -220,8 +220,8 @@ public fun new_bucket(
 public fun new_fixed_window(
     capacity: u64,
     window_ms: u64,
-    window_start_ms: u64,
     initial_available: u64,
+    window_start_ms: u64,
     clock: &Clock,
 ): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
@@ -362,7 +362,7 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             amount,
             now,
         ),
-        RateLimiter::Cooldown { cooldown_ms, capacity, available, cooldown_end_ms } => {
+        RateLimiter::Cooldown { capacity, cooldown_ms, cooldown_end_ms, available } => {
             let usable = if (*available > 0) *available
             else if (now >= *cooldown_end_ms) *capacity
             else return false;
