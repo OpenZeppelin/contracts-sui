@@ -62,7 +62,7 @@ const ERateLimited: vector<u8> = "Rate limited";
 /// Capacity must be greater than zero.
 #[error(code = 1)]
 const EZeroCapacity: vector<u8> = "Capacity must be greater than zero";
-/// Reconfigure target does not match the limiter's current variant.
+/// A variant-typed function was called on a limiter of a different variant.
 #[error(code = 2)]
 const EWrongVariant: vector<u8> = "Wrong rate limiter variant";
 /// Consume amount must be greater than zero; a zero-unit consume is a programmer error,
@@ -201,6 +201,13 @@ public fun new_bucket(
 /// A future anchor is rejected at construction; combined with the Sui `Clock`'s
 /// monotonicity, this keeps `window_start_ms <= clock.timestamp_ms()` at every subsequent
 /// call site so that the projection cannot underflow.
+///
+/// `initial_available` is meaningful only within the window containing the anchor. If the
+/// anchor is backdated a full `window_ms` or more into the past, the first read crosses a
+/// window boundary and resets the balance to `capacity`, silently discarding the seeded
+/// value. For example, `new_fixed_window(5, 100, 0, 2)` read at timestamp `100` reports `5`,
+/// not the seeded `2`, because one full window has elapsed since the anchor at `0`;
+/// anchoring at `50` (still inside the first window) preserves the seeded `2`.
 ///
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per window.
@@ -381,7 +388,8 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
     }
 }
 
-/// Read-only view of the currently available capacity after applying accrual or window reset.
+/// Read-only view of the currently available units (headroom) after projecting accrual,
+/// window reset, or cooldown release.
 ///
 /// For `Bucket` this is the number of tokens that could be consumed right now; for
 /// `FixedWindow` it is the remaining headroom after any window rollover; for `Cooldown` it
