@@ -18,37 +18,37 @@ fun sorted_median_u64(sorted: &vector<u64>, rounding_mode: RoundingMode): u64 {
 
 // === Empty input ===
 
-#[test, expected_failure(abort_code = vector::EEmptyVector)]
+#[test, expected_failure(abort_code = vector::EMedianOfEmptyVector)]
 fun median_empty_u8_aborts() {
     vector::median!(&vector<u8>[], rounding::down());
 }
 
-#[test, expected_failure(abort_code = vector::EEmptyVector)]
+#[test, expected_failure(abort_code = vector::EMedianOfEmptyVector)]
 fun median_empty_u16_aborts() {
     vector::median!(&vector<u16>[], rounding::down());
 }
 
-#[test, expected_failure(abort_code = vector::EEmptyVector)]
+#[test, expected_failure(abort_code = vector::EMedianOfEmptyVector)]
 fun median_empty_u32_aborts() {
     vector::median!(&vector<u32>[], rounding::down());
 }
 
-#[test, expected_failure(abort_code = vector::EEmptyVector)]
+#[test, expected_failure(abort_code = vector::EMedianOfEmptyVector)]
 fun median_empty_u64_aborts() {
     vector::median!(&vector<u64>[], rounding::down());
 }
 
-#[test, expected_failure(abort_code = vector::EEmptyVector)]
+#[test, expected_failure(abort_code = vector::EMedianOfEmptyVector)]
 fun median_empty_u128_aborts() {
     vector::median!(&vector<u128>[], rounding::down());
 }
 
-#[test, expected_failure(abort_code = vector::EEmptyVector)]
+#[test, expected_failure(abort_code = vector::EMedianOfEmptyVector)]
 fun median_empty_u256_aborts() {
     vector::median!(&vector<u256>[], rounding::nearest());
 }
 
-#[test, expected_failure(abort_code = vector::EEmptyVector)]
+#[test, expected_failure(abort_code = vector::EMedianOfEmptyVector)]
 fun median_u256_empty_aborts() {
     vector::median_u256(vector[], rounding::down());
 }

@@ -6,7 +6,7 @@ use openzeppelin_math::rounding::RoundingMode;
 // === Errors ===
 
 #[error(code = 0)]
-const EEmptyVector: vector<u8> = "Median of empty vector is undefined";
+const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 
 // === Public Functions ===
 
@@ -228,7 +228,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 /// - The median of `$vec`.
 ///
 /// #### Aborts
-/// - `EEmptyVector` if `$vec` is empty.
+/// - `EMedianOfEmptyVector` if `$vec` is empty.
 ///
 /// #### Example
 /// ```move
@@ -263,7 +263,7 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
 /// - The median of `vec`.
 ///
 /// #### Aborts
-/// - `EEmptyVector` if `vec` is empty.
+/// - `EMedianOfEmptyVector` if `vec` is empty.
 ///
 /// #### Example
 /// ```move
@@ -275,7 +275,7 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
 /// ```
 public fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256 {
     let len = vec.length();
-    assert!(len != 0, EEmptyVector);
+    assert!(len != 0, EMedianOfEmptyVector);
 
     let mid = len / 2;
     if (len % 2 == 1) {
@@ -304,7 +304,7 @@ fun select_k_u256(vec: &mut vector<u256>, k: u64): u256 {
     loop {
         if (start + 1 >= end) return vec[k];
 
-        // Small ranges are cheaper to sort directly than to keep partitioning.
+        // Use insertion sort as the quickselect base case for small active ranges.
         if (end - start <= 10) {
             insertion_sort_u256_range(vec, start, end);
             return vec[k]
