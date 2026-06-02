@@ -171,12 +171,22 @@ public(package) fun apply_log2_factor(log2_mag_e18: u128, factor_e18: u128): u12
 /// - `ELogOfZero` if `x_raw` is zero.
 ///
 /// #### Precision
-/// The magnitude is at most 2 user-facing ulps below the true value,
-/// monotone-down. The dominant loss is the `x_raw >> n` truncation in the
-/// `x_raw >= scale` branch (with `n = floor(log2(x_raw / 10^9))`), which
-/// discards up to `n` low-order bits — so the deficit grows with `n` and
-/// reaches the 2-ulp ceiling at `x_raw = u128::MAX`. The `x_raw < scale`
-/// branch performs a lossless left shift and stays in the sub-ulp regime.
+/// The error direction differs by branch, because the final assembly is
+/// `n_abs * internal + frac` for `x_raw >= scale` but `n_abs * internal -
+/// frac` for `x_raw < scale`:
+///
+/// - `x_raw >= scale` (`n_abs = floor(log2(x_raw / 10^9))`): the magnitude
+///   is at most 2 user-facing ulps below the true magnitude, monotone-down.
+///   The dominant loss is the `x_raw >> n_abs` truncation, which discards up
+///   to `n_abs` low-order bits — so the deficit grows with `n_abs` and
+///   reaches the 2-ulp ceiling at `x_raw = u128::MAX`.
+/// - `x_raw < scale`: normalization is a lossless left shift, so the only
+///   loss is the loop's round-down of `frac`. Since `frac` is subtracted
+///   here, that round-down leaves the magnitude at or slightly above the
+///   true magnitude — a sub-ulp upward bias.
+///
+/// The user-facing rounding this induces on negative results (toward zero,
+/// with rare 1-ulp edge cases) is documented on `SD29x9::log2`.
 public(package) fun raw_log2(x_raw: u128): (bool, u128) {
     assert!(x_raw > 0, ELogOfZero);
 
