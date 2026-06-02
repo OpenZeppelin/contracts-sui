@@ -25,7 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- `vector::median` macro for unsigned integer vectors (#135)
+- `vector::median` macro for borrowed unsigned integer vectors with configurable rounding for even-length input, backed by quickselect to avoid sorting the full vector; includes concrete `vector::median_u256`. (#135)
 
 #### Changed
 

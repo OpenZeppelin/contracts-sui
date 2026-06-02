@@ -1,9 +1,20 @@
 #[test_only]
 module openzeppelin_math::median;
 
-use openzeppelin_math::rounding;
+use openzeppelin_math::macros;
+use openzeppelin_math::rounding::{Self, RoundingMode};
 use openzeppelin_math::vector;
 use std::unit_test::assert_eq;
+
+fun sorted_median_u64(sorted: &vector<u64>, rounding_mode: RoundingMode): u64 {
+    let len = sorted.length();
+    let mid = len / 2;
+    if (len % 2 == 1) {
+        sorted[mid]
+    } else {
+        macros::average!(sorted[mid - 1], sorted[mid], rounding_mode)
+    }
+}
 
 // === Empty input ===
 
@@ -37,6 +48,11 @@ fun median_empty_u256_aborts() {
     vector::median!(&vector<u256>[], rounding::nearest());
 }
 
+#[test, expected_failure(abort_code = vector::EEmptyVector)]
+fun median_u256_empty_aborts() {
+    vector::median_u256(vector[], rounding::down());
+}
+
 // === Single-element and small inputs ===
 
 #[test]
@@ -64,6 +80,29 @@ fun median_does_not_mutate_input() {
 #[test]
 fun median_u256_computes_directly() {
     assert_eq!(vector::median_u256(vector[10u256, 2, 8, 4], rounding::down()), 6u256);
+}
+
+#[test]
+fun median_u256_computes_odd_directly() {
+    assert_eq!(vector::median_u256(vector[9u256, 1, 7, 3, 5], rounding::down()), 5u256);
+}
+
+#[test]
+fun median_u256_respects_even_rounding_modes() {
+    assert_eq!(vector::median_u256(vector[6u256, 5, 1, 2], rounding::down()), 3u256);
+    assert_eq!(vector::median_u256(vector[6u256, 5, 1, 2], rounding::nearest()), 4u256);
+    assert_eq!(vector::median_u256(vector[6u256, 5, 1, 2], rounding::up()), 4u256);
+}
+
+#[test]
+fun median_u256_handles_many_duplicates() {
+    assert_eq!(vector::median_u256(vector[4u256, 1, 4, 4, 2, 4], rounding::down()), 4u256);
+}
+
+#[test]
+fun median_u256_handles_extreme_values() {
+    let max = std::u256::max_value!();
+    assert_eq!(vector::median_u256(vector[0, max], rounding::nearest()), max / 2 + 1);
 }
 
 // === Odd-length correctness ===
@@ -99,6 +138,24 @@ fun median_odd_length_rounding_modes_agree_u64(mut v: vector<u64>, a: u64, _b: u
 
     assert_eq!(down, nearest);
     assert_eq!(nearest, up);
+}
+
+#[random_test]
+fun median_matches_sorted_reference_u64(mut v: vector<u64>, a: u64) {
+    if (v.is_empty()) {
+        v.push_back(a);
+    };
+
+    let down = vector::median!(&v, rounding::down());
+    let nearest = vector::median!(&v, rounding::nearest());
+    let up = vector::median!(&v, rounding::up());
+
+    let mut sorted = v;
+    vector::quick_sort!(&mut sorted);
+
+    assert_eq!(down, sorted_median_u64(&sorted, rounding::down()));
+    assert_eq!(nearest, sorted_median_u64(&sorted, rounding::nearest()));
+    assert_eq!(up, sorted_median_u64(&sorted, rounding::up()));
 }
 
 // === Even-length correctness and rounding contract ===
@@ -322,6 +379,13 @@ fun median_supports_u8() {
 }
 
 #[test]
+fun median_u8_even_length_rounds_after_average() {
+    assert_eq!(vector::median!(&vector[1u8, 2, 5, 9], rounding::down()), 3u8);
+    assert_eq!(vector::median!(&vector[1u8, 2, 5, 9], rounding::nearest()), 4u8);
+    assert_eq!(vector::median!(&vector[1u8, 2, 5, 9], rounding::up()), 4u8);
+}
+
+#[test]
 fun median_u16_even_length() {
     assert_eq!(vector::median!(&vector[100u16, 200, 1, 3], rounding::down()), 51u16);
 }
@@ -360,4 +424,41 @@ fun median_large_odd_length() {
         i = i + 1;
     };
     assert_eq!(vector::median!(&vec, rounding::down()), 500u64);
+}
+
+#[test]
+fun median_large_even_reverse_sorted_length() {
+    // Build a 1000-element vector [1000, 999, ..., 1].
+    let mut vec = vector<u64>[];
+    let mut i = 1000u64;
+    while (i > 0) {
+        vec.push_back(i);
+        i = i - 1;
+    };
+
+    assert_eq!(vector::median!(&vec, rounding::down()), 500u64);
+    assert_eq!(vector::median!(&vec, rounding::up()), 501u64);
+    assert_eq!(vector::median!(&vec, rounding::nearest()), 501u64);
+}
+
+#[test]
+fun median_large_duplicate_heavy_vector() {
+    // Build 1000 interleaved values with counts: 400 ones, 300 twos, 300 threes.
+    let mut vec = vector<u64>[];
+    let mut i = 0u64;
+    while (i < 1000) {
+        let bucket = i % 10;
+        if (bucket < 4) {
+            vec.push_back(1);
+        } else if (bucket < 7) {
+            vec.push_back(2);
+        } else {
+            vec.push_back(3);
+        };
+        i = i + 1;
+    };
+
+    assert_eq!(vector::median!(&vec, rounding::down()), 2u64);
+    assert_eq!(vector::median!(&vec, rounding::nearest()), 2u64);
+    assert_eq!(vector::median!(&vec, rounding::up()), 2u64);
 }

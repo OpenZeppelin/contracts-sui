@@ -24,8 +24,8 @@ Operations for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`, including:
 Generic over `u8`..`u256`:
 
 - `vector::quick_sort` / `vector::quick_sort_by`: In-place iterative quicksort with three-way partitioning
-- `vector::median`: Median of an unsigned integer vector with configurable rounding for even-length input; aborts on empty input
-- `vector::median_u256`: Concrete median function for `vector<u256>`
+- `vector::median`: Median of a borrowed unsigned integer vector with configurable rounding for even-length input; uses quickselect instead of sorting the full vector and aborts on empty input
+- `vector::median_u256`: Concrete `vector<u256>` median function using the same quickselect implementation
 
 ## Rounding modes
 
