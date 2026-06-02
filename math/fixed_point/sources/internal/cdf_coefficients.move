@@ -1,6 +1,5 @@
 // AUTO-GENERATED — do not hand-edit.
-// Source: codegen/cdf/derive.py + codegen/cdf/emit_coefficients.py
-// Regenerated: 2026-05-09
+// Source: math/fixed_point/codegen/cdf/derive.py + math/fixed_point/codegen/cdf/emit_coefficients.py
 
 /// Numerator and denominator coefficients for the AAA-rational standard-normal
 /// CDF approximation on `[0, max_z()]`. All values are sign-magnitude pairs at
@@ -12,7 +11,7 @@
 /// inside the Horner loop — avoiding a fresh constant load on every iteration.
 ///
 /// See `cdf` for the consumer API. This module is regenerated from the AAA fit
-/// in `codegen/cdf/`; do not hand-edit.
+/// in `math/fixed_point/codegen/cdf/`; do not hand-edit.
 #[allow(implicit_const_copy)]
 module openzeppelin_fp_math::cdf_coefficients;
 

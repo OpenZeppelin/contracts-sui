@@ -1,6 +1,5 @@
 // AUTO-GENERATED — do not hand-edit.
-// Source: codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)
-// Regenerated: 2026-05-09
+// Source: math/fixed_point/codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)
 
 /// Deterministic test vectors for `sd29x9_base::cdf`. Each row asserts the
 /// result of `sd29x9::wrap(z_raw, neg).cdf()` matches `expected` to within
