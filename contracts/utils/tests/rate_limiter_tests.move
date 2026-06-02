@@ -1007,9 +1007,11 @@ fun reconfigure_cooldown_via_construct_fresh_preserve_in_flight_gate() {
 // Arming the gate computes `cooldown_end_ms = now + cooldown_ms`. A `cooldown_ms` near
 // `u64::MAX` overflows this addition at any nonzero clock. The module enforces only
 // positivity on `cooldown_ms` (INV-R3) and trusts the operator to pick a policy-reasonable
-// value; overflow is fail-closed (abort), never a wrapped backward deadline.
+// value; overflow is fail-closed (abort), never a wrapped backward deadline. The arming
+// site guards it explicitly, so the abort carries the named `ECooldownDeadlineOverflow`
+// code rather than a generic arithmetic error.
 
-#[test, expected_failure(arithmetic_error, location = openzeppelin_utils::rate_limiter)]
+#[test, expected_failure(abort_code = rate_limiter::ECooldownDeadlineOverflow)]
 fun cooldown_arming_aborts_on_deadline_overflow() {
     // cooldown_ms = u64::MAX, clock at 1. Draining `available` to 0 arms the gate and
     // computes `1 + u64::MAX`, which overflows.
