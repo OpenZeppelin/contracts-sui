@@ -31,6 +31,7 @@ from codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
+    rel_or_abs,
     write_move,
 )
 from codegen.shared.reference import DPS, SCALE_DECIMAL, phi as phi_oracle
@@ -143,7 +144,8 @@ use openzeppelin_fp_math::sd29x9;
 
 const TOLERANCE: u128 = 5; // ≤ 5 ULP at UD30x9 scale (10^-9)
 
-const ETestCaseFailed: u64 = 0;
+#[error(code = 0)]
+const ETestCaseFailed: vector<u8> = "cdf test vector mismatch: |actual - expected| exceeded TOLERANCE";
 
 public struct TestCase has copy, drop {{
     z_raw: u128,
@@ -195,7 +197,8 @@ use openzeppelin_fp_math::ud30x9;
 
 const TOLERANCE: u128 = 5; // ≤ 5 ULP at UD30x9 scale (10^-9)
 
-const ETestCaseFailed: u64 = 0;
+#[error(code = 0)]
+const ETestCaseFailed: vector<u8> = "cdf test vector mismatch: |actual - expected| exceeded TOLERANCE";
 
 public struct TestCase has copy, drop {{
     z_raw: u128,
@@ -256,9 +259,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Generating {len(cases)} SD29x9 test vectors")
     print(f"Generating {len(positive_cases)} UD30x9 test vectors (positive subset)")
     write_move(args.sd29x9_output, sd_text)
-    print(f"Wrote {args.sd29x9_output.relative_to(REPO_ROOT)}")
+    print(f"Wrote {rel_or_abs(args.sd29x9_output, REPO_ROOT)}")
     write_move(args.ud30x9_output, ud_text)
-    print(f"Wrote {args.ud30x9_output.relative_to(REPO_ROOT)}")
+    print(f"Wrote {rel_or_abs(args.ud30x9_output, REPO_ROOT)}")
     return 0
 
 

@@ -51,6 +51,16 @@ def auto_generated_banner(source: str) -> str:
     )
 
 
+def rel_or_abs(path: Path, root: Path) -> Path:
+    """`path` relative to `root` when possible, else `path` unchanged. Used only
+    for human-readable logging — a custom `--output` outside the repo must not
+    crash the script after a successful write."""
+    try:
+        return path.relative_to(root)
+    except ValueError:
+        return path
+
+
 def write_move(path: Path, content: str) -> None:
     """Write a Move source file, creating parent directories if needed.
     Trailing newline is enforced for POSIX cleanliness."""

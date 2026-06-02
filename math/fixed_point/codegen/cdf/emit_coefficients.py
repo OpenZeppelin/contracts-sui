@@ -6,8 +6,10 @@ Coefficient layout in the emitted module:
 - `DEN_MAGS: vector<u128>` and `DEN_NEGS: vector<bool>` (parallel arrays).
 - Both vectors are in **ascending power order** (index 0 = constant term).
 
-Accessors `cdf_num_coeff(i) / cdf_den_coeff(i)` return `(magnitude, is_negative)`
-matching the reference package's `coefficients` API shape.
+The emitted accessors return the whole `vector<u128>` / `vector<bool>` constants
+(`cdf_num_mags()`, `cdf_num_negs()`, `cdf_den_mags()`, `cdf_den_negs()`) so the
+on-chain Horner loop binds them to a local once and indexes locally, plus
+`max_z_raw()` exposing the central-domain saturation bound at the `10^9` scale.
 """
 from __future__ import annotations
 
@@ -24,13 +26,14 @@ from codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
+    rel_or_abs,
     write_move,
 )
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 
 WAD = constants.WAD
-MAX_Z_RAW_WAD = constants.MAX_Z_RAW_WAD
+MAX_Z_RAW = constants.MAX_Z_RAW
 
 DERIVE_OUTPUT_PATH = pathlib.Path(__file__).parent / ".derive_output.json"
 COEFF_OUTPUT_PATH = (
@@ -68,14 +71,12 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
     num_neg_items = ["true" if n else "false" for _, n in num]
     den_mag_items = [fmt_u128(m) for m, _ in den]
     den_neg_items = ["true" if n else "false" for _, n in den]
-    num_len = len(num)
-    den_len = len(den)
 
     return f"""{banner}
 /// Numerator and denominator coefficients for the AAA-rational standard-normal
-/// CDF approximation on `[0, max_z()]`. All values are sign-magnitude pairs at
-/// WAD (`10^18`) scale, indexed in ascending power order (index 0 is the
-/// constant term).
+/// CDF approximation on the central domain `[0, 6.3]`. All values are
+/// sign-magnitude pairs at WAD (`10^18`) scale, indexed in ascending power
+/// order (index 0 is the constant term).
 ///
 /// Accessors return the underlying `vector<u128>` / `vector<bool>` constants so
 /// callers can bind them to a local once per CDF evaluation and index locally
@@ -83,7 +84,6 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 ///
 /// See `cdf` for the consumer API. This module is regenerated from the AAA fit
 /// in `math/fixed_point/codegen/cdf/`; do not hand-edit.
-#[allow(implicit_const_copy)]
 module openzeppelin_fp_math::cdf_coefficients;
 
 {render_vector("NUM_MAGS", "u128", num_mag_items)}
@@ -94,18 +94,11 @@ module openzeppelin_fp_math::cdf_coefficients;
 
 {render_vector("DEN_NEGS", "bool", den_neg_items)}
 
-/// Number of numerator coefficients (polynomial degree = result − 1).
-const NUM_LEN: u64 = {num_len};
-
-/// Number of denominator coefficients (polynomial degree = result − 1).
-const DEN_LEN: u64 = {den_len};
-
-/// Saturation threshold |z| at WAD scale: |z| ≥ this returns the saturated CDF
-/// value (0 for negative z, 10^9 for positive z) without consulting the rational.
-const MAX_Z_WAD: u128 = {fmt_u128(MAX_Z_RAW_WAD)};
-
-/// Internal arithmetic scale used by the coefficient encoding (WAD = 10^18).
-const SCALE_WAD: u128 = {fmt_u128(WAD)};
+/// Saturation threshold |z| at the raw `10^9` scale: inputs with |z| ≥ this
+/// saturate to the endpoint (0 for negative z, 10^9 for positive z) instead of
+/// consulting the rational. Single source of truth for the central-domain
+/// bound, consumed by `cdf::cdf_nonneg_raw`.
+const MAX_Z_RAW: u128 = {fmt_u128(MAX_Z_RAW)};
 
 /// Numerator magnitudes (ascending power order).
 public(package) fun cdf_num_mags(): vector<u128> {{ NUM_MAGS }}
@@ -119,17 +112,8 @@ public(package) fun cdf_den_mags(): vector<u128> {{ DEN_MAGS }}
 /// Denominator sign flags (ascending power order); index `i` paired with `cdf_den_mags()[i]`.
 public(package) fun cdf_den_negs(): vector<bool> {{ DEN_NEGS }}
 
-/// Number of numerator coefficients.
-public(package) fun cdf_num_len(): u64 {{ NUM_LEN }}
-
-/// Number of denominator coefficients.
-public(package) fun cdf_den_len(): u64 {{ DEN_LEN }}
-
-/// Saturation threshold |z| at WAD scale.
-public(package) fun max_z(): u128 {{ MAX_Z_WAD }}
-
-/// Internal arithmetic scale (WAD = 10^18).
-public(package) fun scale(): u128 {{ SCALE_WAD }}
+/// Saturation threshold |z| at the raw `10^9` scale (`6_300_000_000`).
+public(package) fun max_z_raw(): u128 {{ MAX_Z_RAW }}
 """
 
 
@@ -157,14 +141,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.check:
         if check_move(args.output, text):
-            print(f"OK: {args.output.relative_to(REPO_ROOT)} is in sync")
+            print(f"OK: {rel_or_abs(args.output, REPO_ROOT)} is in sync")
             return 0
         print("FAIL: run `python -m codegen.cdf.emit_coefficients` to regenerate", file=sys.stderr)
         return 1
 
     print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at WAD")
     write_move(args.output, text)
-    print(f"Wrote {args.output.relative_to(REPO_ROOT)}")
+    print(f"Wrote {rel_or_abs(args.output, REPO_ROOT)}")
     return 0
 
 
