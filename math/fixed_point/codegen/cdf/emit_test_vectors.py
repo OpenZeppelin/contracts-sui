@@ -145,7 +145,8 @@ use openzeppelin_fp_math::sd29x9;
 const TOLERANCE: u128 = 5; // ≤ 5 ULP at UD30x9 scale (10^-9)
 
 #[error(code = 0)]
-const ETestCaseFailed: vector<u8> = "cdf test vector mismatch: |actual - expected| exceeded TOLERANCE";
+const ETestCaseFailed: vector<u8> =
+    "cdf test vector mismatch: |actual - expected| exceeded TOLERANCE";
 
 public struct TestCase has copy, drop {{
     z_raw: u128,
@@ -198,7 +199,8 @@ use openzeppelin_fp_math::ud30x9;
 const TOLERANCE: u128 = 5; // ≤ 5 ULP at UD30x9 scale (10^-9)
 
 #[error(code = 0)]
-const ETestCaseFailed: vector<u8> = "cdf test vector mismatch: |actual - expected| exceeded TOLERANCE";
+const ETestCaseFailed: vector<u8> =
+    "cdf test vector mismatch: |actual - expected| exceeded TOLERANCE";
 
 public struct TestCase has copy, drop {{
     z_raw: u128,
