@@ -7,8 +7,9 @@ Picks a deterministic, hand-curated set of test inputs:
 - 16 evenly spaced points across [0, max_z] for breadth.
 
 For each (z, sign) the expected Φ(z) value is computed at the UD30x9 raw scale
-(10^9) using the mpmath oracle. Saturation cases (|z| > 6.3) get exact
-endpoint values so the test exercises that branch in cdf.
+(10^9) using the mpmath oracle. Saturation cases (|z| ≥ 6.3, i.e. quantized
+z_raw ≥ MAX_Z_RAW) get exact endpoint values so the test exercises that branch
+in cdf.
 
 Two output files are produced from the same source-of-truth case list:
 - `tests/sd29x9_tests/cdf_test_vectors.move` — all cases (positive + negative).
