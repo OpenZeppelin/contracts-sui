@@ -250,12 +250,12 @@ public fun log10(x: SD29x9): SD29x9 {
         // Subtract `9 = log10(SCALE)` to strip the embedded scale; `j < 9`
         // means a sub-unit input (`10^-k`), producing a negative result.
         let j = u256::log10(mag, rounding::down());
-        let (result_neg, result_abs) = if (j >= 9) {
+        let (is_neg, result_abs) = if (j >= 9) {
             (false, ((j - 9) as u256) * common::scale_u256!())
         } else {
             (true, ((9 - j) as u256) * common::scale_u256!())
         };
-        return wrap_components(Components { neg: result_neg, mag: result_abs })
+        return wrap_components(Components { neg: is_neg, mag: result_abs })
     };
     let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
     let result_mag = common::apply_log2_factor(log_mag_internal, common::log10_2_e18!());
