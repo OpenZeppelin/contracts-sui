@@ -1,17 +1,18 @@
-"""High-precision standard-normal CDF oracle, used as the reference for AAA
-coefficient derivation, quantized-coefficient validation, and exact test-vector
-generation.
+"""High-precision standard-normal CDF oracle.
 
-mpmath is set to 100 decimal places of internal precision, well in excess of
-the WAD (10^18) and UD30x9 (10^9) scales we need to land at.
+The mpmath oracle (100 dps) is used where we need values exact far beyond the
+target scales: emitting bit-exact test vectors and quantizing the derived
+coefficients. Coefficient *derivation* (`cdf/derive.py`) and *validation*
+(`cdf/validate.py`) instead measure error against `scipy.stats.norm.cdf`
+(float64, accurate to ~1e-16 — three orders of magnitude tighter than the 5e-9
+error budget), so scipy is the reference there. The two agree to float64
+precision; `sanity_check_against_scipy()` asserts it.
 """
 from __future__ import annotations
 
 from mpmath import mp, mpf, ncdf
 
-DPS = 100  # decimal places of internal precision
-WAD = 10**18
-SCALE_DECIMAL = 10**9  # UD30x9 raw scale
+from codegen.shared.constants import DPS, SCALE_DECIMAL
 
 # Set once at import time. Callers that change `mp.dps` should restore it
 # (or call `_ensure_dps()` before evaluating).

@@ -1,7 +1,8 @@
 """Helpers for emitting Move source files from codegen scripts."""
 from __future__ import annotations
 
-import datetime as _dt
+import difflib
+import sys
 from pathlib import Path
 
 
@@ -39,19 +40,48 @@ def _grouped(digits: str) -> str:
 
 def auto_generated_banner(source: str) -> str:
     """A two-line banner identifying the file as auto-generated. Use in every
-    emitted Move file. Generation date is included for human auditing."""
-    today = _dt.date.today().isoformat()
+    emitted Move file.
+
+    Deliberately carries no timestamp: emitted output is a deterministic
+    function of its inputs, so regenerating an unchanged fit is a no-op and the
+    `--check` drift guard can compare committed output byte-for-byte."""
     return (
         f"// AUTO-GENERATED — do not hand-edit.\n"
         f"// Source: {source}\n"
-        f"// Regenerated: {today}\n"
     )
 
 
 def write_move(path: Path, content: str) -> None:
     """Write a Move source file, creating parent directories if needed.
     Trailing newline is enforced for POSIX cleanliness."""
-    if not content.endswith("\n"):
-        content += "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(_with_trailing_newline(content), encoding="utf-8")
+
+
+def check_move(path: Path, content: str) -> bool:
+    """Return `True` iff `path` exists and already matches `content` exactly
+    (after trailing-newline normalization, matching `write_move`).
+
+    On mismatch, print a unified diff to stderr. This is the drift guard behind
+    the emitters' `--check` mode: it asserts the committed Move file is in sync
+    with what the generator would produce right now."""
+    expected = _with_trailing_newline(content)
+    if not path.exists():
+        print(f"DRIFT: {path} does not exist", file=sys.stderr)
+        return False
+    current = path.read_text(encoding="utf-8")
+    if current == expected:
+        return True
+    diff = difflib.unified_diff(
+        current.splitlines(keepends=True),
+        expected.splitlines(keepends=True),
+        fromfile=f"{path} (committed)",
+        tofile=f"{path} (freshly generated)",
+    )
+    print(f"DRIFT: {path} is out of sync with the generator:", file=sys.stderr)
+    print("".join(diff), file=sys.stderr)
+    return False
+
+
+def _with_trailing_newline(content: str) -> str:
+    return content if content.endswith("\n") else content + "\n"

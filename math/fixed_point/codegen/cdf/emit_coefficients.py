@@ -17,20 +17,20 @@ import pathlib
 import sys
 from typing import Sequence
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+from mpmath import mp, mpf
 
-from mpmath import mp, mpf  # noqa: E402
-
-from codegen.shared.move_emit import (  # noqa: E402
+from codegen.shared import constants
+from codegen.shared.move_emit import (
     auto_generated_banner,
+    check_move,
     fmt_u128,
     write_move,
 )
 
-WAD = 10**18
-MAX_Z_RAW_WAD = 6_300_000_000_000_000_000  # 6.3 × 10^18
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
+
+WAD = constants.WAD
+MAX_Z_RAW_WAD = constants.MAX_Z_RAW_WAD
 
 DERIVE_OUTPUT_PATH = pathlib.Path(__file__).parent / ".derive_output.json"
 COEFF_OUTPUT_PATH = (
@@ -40,14 +40,15 @@ COEFF_OUTPUT_PATH = (
 
 def quantize(c_str: str) -> tuple[int, bool]:
     """Quantize a high-precision coefficient string at unit scale to a
-    `(u128 magnitude, bool is_negative)` pair at WAD scale, half-up rounding."""
-    mp.dps = 100
+    `(u128 magnitude, bool is_negative)` pair at WAD scale, half-up rounding.
+
+    The u128 range is enforced downstream by `fmt_u128` when the literal is
+    rendered, so it is not re-checked here."""
+    mp.dps = constants.DPS
     c = mpf(c_str)
     is_neg = c < 0
     mag_real = (-c if is_neg else c) * mpf(WAD)
     mag = int(mag_real + mpf("0.5"))
-    if mag >= 2**128:
-        raise ValueError(f"coefficient {c_str} doesn't fit u128 at WAD: mag={mag}")
     if mag == 0:
         is_neg = False  # canonicalize zero
     return mag, bool(is_neg)
@@ -60,7 +61,7 @@ def render_vector(name: str, ty: str, items: Sequence[str], indent: str = "    "
 
 def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str:
     banner = auto_generated_banner(
-        "codegen/cdf/derive.py + codegen/cdf/emit_coefficients.py"
+        "math/fixed_point/codegen/cdf/derive.py + math/fixed_point/codegen/cdf/emit_coefficients.py"
     )
 
     num_mag_items = [fmt_u128(m) for m, _ in num]
@@ -81,7 +82,7 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 /// inside the Horner loop — avoiding a fresh constant load on every iteration.
 ///
 /// See `cdf` for the consumer API. This module is regenerated from the AAA fit
-/// in `codegen/cdf/`; do not hand-edit.
+/// in `math/fixed_point/codegen/cdf/`; do not hand-edit.
 #[allow(implicit_const_copy)]
 module openzeppelin_fp_math::cdf_coefficients;
 
@@ -136,6 +137,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Emit cdf_coefficients.move.")
     parser.add_argument("--input", type=pathlib.Path, default=DERIVE_OUTPUT_PATH)
     parser.add_argument("--output", type=pathlib.Path, default=COEFF_OUTPUT_PATH)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Verify the committed file matches freshly generated output; exit 1 on "
+        "drift, do not write. Requires a prior `derive` run for the JSON input.",
+    )
     args = parser.parse_args(argv)
 
     if not args.input.exists():
@@ -146,9 +153,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     num = [quantize(s) for s in raw["num_coeffs_str"]]
     den = [quantize(s) for s in raw["den_coeffs_str"]]
+    text = emit_module(num, den)
+
+    if args.check:
+        if check_move(args.output, text):
+            print(f"OK: {args.output.relative_to(REPO_ROOT)} is in sync")
+            return 0
+        print("FAIL: run `python -m codegen.cdf.emit_coefficients` to regenerate", file=sys.stderr)
+        return 1
 
     print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at WAD")
-    text = emit_module(num, den)
     write_move(args.output, text)
     print(f"Wrote {args.output.relative_to(REPO_ROOT)}")
     return 0

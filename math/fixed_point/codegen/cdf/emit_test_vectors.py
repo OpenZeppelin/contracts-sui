@@ -24,18 +24,18 @@ import pathlib
 import sys
 from typing import Sequence
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+from mpmath import mp, mpf
 
-from mpmath import mp, mpf  # noqa: E402
-
-from codegen.shared.move_emit import (  # noqa: E402
+from codegen.shared import constants
+from codegen.shared.move_emit import (
     auto_generated_banner,
+    check_move,
     fmt_u128,
     write_move,
 )
-from codegen.shared.reference import DPS, SCALE_DECIMAL, phi as phi_oracle  # noqa: E402
+from codegen.shared.reference import DPS, SCALE_DECIMAL, phi as phi_oracle
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 
 SD29X9_OUTPUT_PATH = (
     REPO_ROOT
@@ -55,7 +55,8 @@ UD30X9_OUTPUT_PATH = (
     / "cdf_test_vectors.move"
 )
 
-MAX_Z_RAW_DECIMAL = 6_300_000_000  # 6.3 at UD30x9 scale
+MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at UD30x9 scale — saturation threshold
+MAX_Z_FLOAT = float(constants.MAX_Z)
 
 CRITICAL_Z = [
     "0",
@@ -76,18 +77,21 @@ CRITICAL_Z = [
 
 
 def evenly_spaced_z(n: int = 16) -> list[str]:
-    """n evenly spaced sample points across [0, 6.3], serialized as decimal strings
-    so quantization to 10^9 is unambiguous."""
-    return [str(round(i * 6.3 / (n - 1), 4)) for i in range(n)]
+    """n evenly spaced sample points across [0, MAX_Z], serialized as decimal
+    strings so quantization to 10^9 is unambiguous."""
+    return [str(round(i * MAX_Z_FLOAT / (n - 1), 4)) for i in range(n)]
 
 
 def expected_phi_raw(z_str: str, neg: bool) -> int:
-    """Φ(±z) at the UD30x9 raw scale, with explicit saturation outside |z| ≤ 6.3."""
+    """Φ(±z) at the UD30x9 raw scale.
+
+    Saturation mirrors the on-chain boundary exactly: it triggers when the
+    *quantized* input `z_raw` meets or exceeds `MAX_Z_RAW` (the `>=` test in
+    `gaussian.move::cdf_nonneg_raw`), not on a real-valued `> 6.3` comparison."""
     mp.dps = DPS
-    z = mpf(z_str)
-    if z > mpf("6.3"):
+    if quantize_z(z_str) >= MAX_Z_RAW:
         return 0 if neg else SCALE_DECIMAL
-    phi_pos = phi_oracle(z)
+    phi_pos = phi_oracle(mpf(z_str))
     phi_signed = (mpf(1) - phi_pos) if neg else phi_pos
     return int(phi_signed * mpf(SCALE_DECIMAL) + mpf("0.5"))
 
@@ -118,7 +122,7 @@ def build_test_cases() -> list[tuple[int, bool, int]]:
 
 def emit_sd29x9_module(cases: list[tuple[int, bool, int]]) -> str:
     banner = auto_generated_banner(
-        "codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)"
+        "math/fixed_point/codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)"
     )
 
     indent = "        "
@@ -169,7 +173,7 @@ fun test_cdf_vectors() {{
 def emit_ud30x9_module(cases: list[tuple[int, bool, int]]) -> str:
     """UD30x9 variant: positive-only cases, no `neg` field."""
     banner = auto_generated_banner(
-        "codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)"
+        "math/fixed_point/codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)"
     )
 
     indent = "        "
@@ -223,21 +227,38 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--sd29x9-output", type=pathlib.Path, default=SD29X9_OUTPUT_PATH)
     parser.add_argument("--ud30x9-output", type=pathlib.Path, default=UD30X9_OUTPUT_PATH)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Verify the committed files match freshly generated output; exit 1 on "
+        "drift, do not write.",
+    )
     args = parser.parse_args(argv)
 
     cases = build_test_cases()
     positive_cases = [c for c in cases if not c[1]]
-    print(f"Generating {len(cases)} SD29x9 test vectors")
-    print(f"Generating {len(positive_cases)} UD30x9 test vectors (positive subset)")
 
     sd_text = emit_sd29x9_module(cases)
+    ud_text = emit_ud30x9_module(cases)
+
+    if args.check:
+        ok = check_move(args.sd29x9_output, sd_text)
+        ok = check_move(args.ud30x9_output, ud_text) and ok
+        if ok:
+            print(
+                f"OK: SD29x9 ({len(cases)}) + UD30x9 ({len(positive_cases)}) "
+                "test vectors are in sync"
+            )
+            return 0
+        print("FAIL: run `python -m codegen.cdf.emit_test_vectors` to regenerate", file=sys.stderr)
+        return 1
+
+    print(f"Generating {len(cases)} SD29x9 test vectors")
+    print(f"Generating {len(positive_cases)} UD30x9 test vectors (positive subset)")
     write_move(args.sd29x9_output, sd_text)
     print(f"Wrote {args.sd29x9_output.relative_to(REPO_ROOT)}")
-
-    ud_text = emit_ud30x9_module(cases)
     write_move(args.ud30x9_output, ud_text)
     print(f"Wrote {args.ud30x9_output.relative_to(REPO_ROOT)}")
-
     return 0
 
 

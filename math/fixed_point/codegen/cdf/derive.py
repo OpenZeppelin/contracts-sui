@@ -20,15 +20,13 @@ import sys
 import warnings
 from typing import Sequence
 
-# Make `from codegen.shared...` work whether invoked via `python -m` or directly.
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
 import numpy as np
 from mpmath import mp, mpf
 from scipy.interpolate import AAA
 from scipy.stats import norm
+
+from codegen.shared import constants
+from codegen.shared.reference import DPS
 
 # AAA emits a RuntimeWarning when it hits `max_terms` before satisfying `rtol`.
 # Our sweep deliberately caps `max_terms`, so the warning is expected noise.
@@ -38,10 +36,10 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 
-from codegen.shared.reference import DPS  # noqa: E402
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 
-MAX_Z = mpf("6.3")
-MAX_Z_FLOAT = 6.3
+MAX_Z = mpf(constants.MAX_Z)
+MAX_Z_FLOAT = float(constants.MAX_Z)
 MIN_DEG = 4
 MAX_DEG = 13
 TARGET_ERROR = 5e-9
@@ -209,7 +207,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Chosen: degree {degree} (n_coeffs = {degree + 1}), max error {err:.3e} at z={worst_z:.4f}")
 
     # Coefficient magnitude check at WAD scale before serialization.
-    wad = mpf(10) ** 18
+    wad = mpf(constants.WAD)
     max_mag = mpf(0)
     for c in num + den:
         m = abs(c) * wad
@@ -226,9 +224,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "max_error": err,
         "worst_z": worst_z,
         "target_error": TARGET_ERROR,
-        "max_z": str(MAX_Z),
-        "wad": str(10**18),
-        "scale_decimal": str(10**9),
+        "max_z": constants.MAX_Z,
+        "wad": str(constants.WAD),
+        "scale_decimal": str(constants.SCALE_DECIMAL),
         "num_coeffs_str": [mp.nstr(c, 30) for c in num],
         "den_coeffs_str": [mp.nstr(c, 30) for c in den],
         "support_points": [float(z) for z in aaa.support_points],

@@ -8,8 +8,9 @@ mirrors the Move implementation exactly**:
   - Horner inner step: `acc = (acc.mag * z_wad) // 10^18 + c_i`, with
     sign-magnitude tracking and floor-division on the magnitude (matches
     `mul_div(..., Down)` in `math/core/sources/u256.move`).
-  - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with banker's-style
-    nearest rounding (mirrors the Move `Nearest` mode).
+  - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up
+    (ties away from zero) nearest rounding, mirroring the Move `Nearest` mode in
+    `gaussian.move::mul_div_nearest_u256`.
 
 Asserts that the worst-case absolute error vs `scipy.stats.norm.cdf` over a
 10,000-point grid stays within `TARGET_ERROR_ULP` × 10^-9. Returns non-zero
@@ -23,16 +24,17 @@ import re
 import sys
 from typing import Sequence
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+import numpy as np
+from scipy.stats import norm
 
-import numpy as np  # noqa: E402
-from scipy.stats import norm  # noqa: E402
+from codegen.shared import constants
 
-WAD = 10**18
-SCALE = 10**9
-MAX_Z_RAW = 6_300_000_000  # 6.3 at 10^9
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
+
+WAD = constants.WAD
+SCALE = constants.SCALE_DECIMAL
+MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at 10^9
+MAX_Z_FLOAT = float(constants.MAX_Z)
 HALF_SCALE = SCALE // 2  # Φ(0) bit-exact
 
 COEFF_PATH = (
@@ -110,6 +112,16 @@ def horner_eval(z: SignedInt, coeffs: list[SignedInt]) -> SignedInt:
     return acc
 
 
+def mul_div_nearest(a: int, b: int, d: int) -> int:
+    """`(a * b) / d` rounded half-up (ties away from zero), structurally
+    mirroring the Move `gaussian::mul_div_nearest_u256` (round up iff
+    `2 * rem >= d`). Caller guarantees `d > 0`."""
+    prod = a * b
+    quot = prod // d
+    rem = prod - quot * d
+    return quot + 1 if rem * 2 >= d else quot
+
+
 def cdf_simulate(z_raw: int, neg: bool, num: list[SignedInt], den: list[SignedInt]) -> int:
     """Mirror the on-chain `sd29x9_base::cdf` for a (z_raw at 10^9, neg) input."""
     if z_raw >= MAX_Z_RAW:
@@ -126,8 +138,7 @@ def cdf_simulate(z_raw: int, neg: bool, num: list[SignedInt], den: list[SignedIn
         raise RuntimeError(f"D non-positive at z_raw={z_raw} — INV-7 violation")
 
     # Final ratio: phi_raw = round(N * 10^9 / D) with Nearest (half-up) rounding.
-    num_prod = n_acc[0] * SCALE
-    phi_raw = (num_prod + d_acc[0] // 2) // d_acc[0]
+    phi_raw = mul_div_nearest(n_acc[0], SCALE, d_acc[0])
     if phi_raw > SCALE:
         phi_raw = SCALE  # last-ULP overshoot guard (INV-9)
 
@@ -158,22 +169,37 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"{args.coeffs.relative_to(REPO_ROOT)}"
     )
 
-    grid = np.linspace(0.0, 6.3, args.n)
+    grid = np.linspace(0.0, MAX_Z_FLOAT, args.n)
     worst_err = 0.0
     worst_z = 0.0
+    worst_neg = False
     for z in grid:
-        z_raw = int(round(float(z) * SCALE))
-        ref = float(norm.cdf(float(z)))
-        phi_raw = cdf_simulate(z_raw, False, num, den)
-        approx = phi_raw / SCALE
-        err = abs(approx - ref)
-        if err > worst_err:
-            worst_err = err
-            worst_z = float(z)
+        zf = float(z)
+        z_raw = int(round(zf * SCALE))
+        phi_pos = cdf_simulate(z_raw, False, num, den)
+        # Also drive the negative branch: this exercises the reflection and the
+        # INV-14 underflow guard inside cdf_simulate, neither of which the
+        # positive path reaches.
+        phi_neg = cdf_simulate(z_raw, True, num, den)
+        if phi_neg != SCALE - phi_pos:
+            print(
+                f"FAIL: reflection broken at z_raw={z_raw}: "
+                f"Φ(-z)={phi_neg} != {SCALE} - {phi_pos}",
+                file=sys.stderr,
+            )
+            return 1
+        for neg, phi_raw in ((False, phi_pos), (True, phi_neg)):
+            ref = float(norm.cdf(-zf if neg else zf))
+            err = abs(phi_raw / SCALE - ref)
+            if err > worst_err:
+                worst_err = err
+                worst_z = zf
+                worst_neg = neg
 
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
-    print(f"Worst error: {worst_err:.3e} = {err_ulp} ULP at z={worst_z:.5f}")
+    sign = "-" if worst_neg else "+"
+    print(f"Worst error: {worst_err:.3e} = {err_ulp} ULP at z={sign}{worst_z:.5f}")
     print(f"Target:      {target_abs:.3e} = {TARGET_ERROR_ULP} ULP")
     if worst_err <= target_abs:
         print(f"PASS: max_error_quantized = {worst_err:.3e} ≤ {target_abs:.3e} ✓")
