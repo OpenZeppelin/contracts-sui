@@ -144,8 +144,10 @@ public(package) fun mul_div_nearest_u256(a: u256, b: u256, d: u256): u256 {
     let prod = a * b;
     let quot = prod / d;
     let rem = prod - quot * d;
-    // Half-up: round when remainder ≥ d - remainder, i.e. 2 × rem ≥ d.
-    if (rem * 2 >= d) quot + 1 else quot
+    // Half-up, ties away from zero. Compared as `rem ≥ d - rem` rather than
+    // `2 × rem ≥ d`: `rem < d`, so `d - rem` never underflows, and this avoids
+    // overflowing `rem × 2` when `d` is near `u256::max`.
+    if (rem >= d - rem) quot + 1 else quot
 }
 
 // === Horner Evaluator ===
