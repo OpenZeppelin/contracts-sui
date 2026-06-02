@@ -1,10 +1,11 @@
 #[test_only]
 module openzeppelin_fp_math::sd29x9_cdf_tests;
 
+use openzeppelin_fp_math::cdf;
 use openzeppelin_fp_math::cdf_coefficients;
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
-use openzeppelin_fp_math::sd29x9_test_helpers::{neg, pos};
+use openzeppelin_fp_math::sd29x9_test_helpers::{assert_within, neg, pos};
 use std::unit_test::assert_eq;
 
 // === Constants ===
@@ -13,6 +14,7 @@ const SCALE: u128 = 1_000_000_000; // SD29x9 raw scale (10^9)
 const HALF_RAW: u128 = 500_000_000;
 const ONE_RAW: u128 = 1_000_000_000;
 const MAX_Z_RAW: u128 = 6_300_000_000; // 6.3 at SD29x9 scale
+const ONE_WAD: u128 = 1_000_000_000_000_000_000; // 1.0 at WAD scale (coefficient injection)
 
 // 5 ULP at the SD29x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
 const TOLERANCE: u128 = 5;
@@ -22,17 +24,6 @@ const TOLERANCE: u128 = 5;
 const PHI_1_RAW: u128 = 841_344_746;
 const PHI_2_RAW: u128 = 977_249_868;
 const PHI_3_RAW: u128 = 998_650_102;
-
-// === Helpers ===
-
-fun abs_diff(a: u128, b: u128): u128 {
-    if (a >= b) a - b else b - a
-}
-
-fun assert_within(actual: u128, expected: u128, tol: u128) {
-    let diff = abs_diff(actual, expected);
-    assert!(diff <= tol, 0xC0DE);
-}
 
 // === Bit-exact / well-known points ===
 
@@ -114,7 +105,7 @@ fun output_range_bounded_by_unit_interval() {
             pos(offset - 7 * SCALE)
         };
         let v = z.cdf().unwrap();
-        assert!(v <= ONE_RAW, 0xC0DE);
+        assert!(v <= ONE_RAW);
         i = i + 1;
     };
 }
@@ -137,7 +128,7 @@ fun no_overshoot_at_high_z() {
     let n = probes.length();
     while (i < n) {
         let v = pos(probes[i]).cdf().unwrap();
-        assert!(v <= ONE_RAW, 0xC0DE);
+        assert!(v <= ONE_RAW);
         i = i + 1;
     };
 }
@@ -160,7 +151,7 @@ fun monotonic_on_grid() {
             pos(offset - MAX_Z_RAW)
         };
         let curr = z.cdf().unwrap();
-        assert!(curr >= prev, 0xC0DE);
+        assert!(curr >= prev);
         prev = curr;
         i = i + 1;
     };
@@ -199,24 +190,43 @@ fun cdf_is_deterministic() {
 }
 
 #[test]
-fun coefficient_accessors_are_deterministic() {
-    // Two consecutive reads must return the same vectors.
-    assert_eq!(cdf_coefficients::cdf_num_mags(), cdf_coefficients::cdf_num_mags());
-    assert_eq!(cdf_coefficients::cdf_num_negs(), cdf_coefficients::cdf_num_negs());
-    assert_eq!(cdf_coefficients::cdf_den_mags(), cdf_coefficients::cdf_den_mags());
-    assert_eq!(cdf_coefficients::cdf_den_negs(), cdf_coefficients::cdf_den_negs());
-    assert_eq!(cdf_coefficients::cdf_num_len(), cdf_coefficients::cdf_num_len());
-    assert_eq!(cdf_coefficients::cdf_den_len(), cdf_coefficients::cdf_den_len());
+fun coefficient_arrays_have_matching_lengths() {
+    // The Horner loop iterates by the mags-vector length and indexes the
+    // parallel negs vector, so the two must stay the same length.
+    assert_eq!(
+        cdf_coefficients::cdf_num_mags().length(),
+        cdf_coefficients::cdf_num_negs().length(),
+    );
+    assert_eq!(
+        cdf_coefficients::cdf_den_mags().length(),
+        cdf_coefficients::cdf_den_negs().length(),
+    );
 }
 
-#[test]
-fun coefficient_table_lengths_match_array_lengths() {
-    // Sanity: the *_len accessors track the actual vector length (caller relies
-    // on this implicitly when binding to locals and indexing).
-    assert_eq!(cdf_coefficients::cdf_num_mags().length(), cdf_coefficients::cdf_num_len());
-    assert_eq!(cdf_coefficients::cdf_num_negs().length(), cdf_coefficients::cdf_num_len());
-    assert_eq!(cdf_coefficients::cdf_den_mags().length(), cdf_coefficients::cdf_den_len());
-    assert_eq!(cdf_coefficients::cdf_den_negs().length(), cdf_coefficients::cdf_den_len());
+// === Integrity asserts (defense-in-depth; unreachable via the public API) ===
+
+#[test, expected_failure(abort_code = cdf::EInternalNumNegative)]
+fun numerator_negative_aborts() {
+    // A constant numerator of -1.0 forces N(z) < 0 on the central domain.
+    let _ = cdf::eval_rational_for_test(
+        SCALE, // z = 1.0, inside [0, 6.3)
+        vector[ONE_WAD],
+        vector[true],
+        vector[ONE_WAD],
+        vector[false],
+    );
+}
+
+#[test, expected_failure(abort_code = cdf::EInternalDenNonPositive)]
+fun denominator_nonpositive_aborts() {
+    // A constant denominator of -1.0 forces D(z) < 0 on the central domain.
+    let _ = cdf::eval_rational_for_test(
+        SCALE,
+        vector[ONE_WAD],
+        vector[false],
+        vector[ONE_WAD],
+        vector[true],
+    );
 }
 
 // === Method dispatch ===

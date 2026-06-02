@@ -51,7 +51,8 @@ numerical work; *evaluating* them is trivial. So we split it:
   a 100-digit reference, and write them into Move as integer constants.
 - **On-chain, every call (the Move code):** evaluate the two polynomials with
   Horner's method and divide. A handful of integer multiplies — deterministic,
-  constant gas. See `../sources/internal/gaussian.move`.
+  constant gas. See `../sources/internal/cdf.move` (and the shared primitives in
+  `../sources/internal/horner.move`).
 
 **Why AAA, and why Python.** The fitting algorithm is **AAA** (Adaptive
 Antoulas–Anderson). You hand it samples of a function and it automatically
@@ -99,6 +100,20 @@ which is cheap enough to run in CI on every change.
 
 > `scipy.interpolate.AAA` was introduced in SciPy **1.15.0**; earlier releases
 > will fail to import in `derive.py`.
+
+### Reproducing the committed tables byte-for-byte
+
+The floor pins above guarantee *correct* output, not *identical* output: a
+future `scipy.interpolate.AAA` could shift the fit. The committed coefficients
+were generated with these exact versions — pin to them to reproduce the tables
+byte-for-byte:
+
+| Package | Version |
+|---------|---------|
+| Python  | 3.14.2  |
+| mpmath  | 1.4.1   |
+| scipy   | 1.17.1  |
+| numpy   | 2.4.4   |
 
 ## Install
 

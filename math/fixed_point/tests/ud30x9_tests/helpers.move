@@ -18,3 +18,11 @@ public(package) fun unpack(p: Pair): (UD30x9, UD30x9) {
 public(package) fun fixed(value: u128): UD30x9 {
     ud30x9::wrap(value)
 }
+
+public(package) fun abs_diff(a: u128, b: u128): u128 {
+    if (a >= b) a - b else b - a
+}
+
+public(package) fun assert_within(actual: u128, expected: u128, tol: u128) {
+    assert!(abs_diff(actual, expected) <= tol);
+}

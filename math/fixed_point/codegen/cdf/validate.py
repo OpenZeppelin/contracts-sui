@@ -10,7 +10,7 @@ mirrors the Move implementation exactly**:
     `mul_div(..., Down)` in `math/core/sources/u256.move`).
   - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up
     (ties away from zero) nearest rounding, mirroring the Move `Nearest` mode in
-    `gaussian.move::mul_div_nearest_u256`.
+    `horner.move::mul_div_nearest_u256`.
 
 Asserts that the worst-case absolute error vs `scipy.stats.norm.cdf` over a
 10,000-point grid stays within `TARGET_ERROR_ULP` × 10^-9. Returns non-zero
@@ -114,7 +114,7 @@ def horner_eval(z: SignedInt, coeffs: list[SignedInt]) -> SignedInt:
 
 def mul_div_nearest(a: int, b: int, d: int) -> int:
     """`(a * b) / d` rounded half-up (ties away from zero), structurally
-    mirroring the Move `gaussian::mul_div_nearest_u256` (round up iff
+    mirroring the Move `horner::mul_div_nearest_u256` (round up iff
     `2 * rem >= d`). Caller guarantees `d > 0`."""
     prod = a * b
     quot = prod // d

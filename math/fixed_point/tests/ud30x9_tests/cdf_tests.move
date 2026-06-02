@@ -4,7 +4,7 @@ module openzeppelin_fp_math::ud30x9_cdf_tests;
 use openzeppelin_fp_math::sd29x9_test_helpers::pos;
 use openzeppelin_fp_math::ud30x9;
 use openzeppelin_fp_math::ud30x9_base;
-use openzeppelin_fp_math::ud30x9_test_helpers::fixed;
+use openzeppelin_fp_math::ud30x9_test_helpers::{assert_within, fixed};
 use std::unit_test::assert_eq;
 
 // === Constants ===
@@ -22,17 +22,6 @@ const TOLERANCE: u128 = 5;
 const PHI_1_RAW: u128 = 841_344_746;
 const PHI_2_RAW: u128 = 977_249_868;
 const PHI_3_RAW: u128 = 998_650_102;
-
-// === Helpers ===
-
-fun abs_diff(a: u128, b: u128): u128 {
-    if (a >= b) a - b else b - a
-}
-
-fun assert_within(actual: u128, expected: u128, tol: u128) {
-    let diff = abs_diff(actual, expected);
-    assert!(diff <= tol, 0xC0DE);
-}
 
 // === Bit-exact / well-known points ===
 
@@ -78,8 +67,8 @@ fun output_range_bounded_above_half() {
     while (i < n) {
         let raw = (i as u128) * step;
         let v = fixed(raw).cdf().unwrap();
-        assert!(v >= HALF_RAW, 0xC0DE);
-        assert!(v <= ONE_RAW, 0xC0DE);
+        assert!(v >= HALF_RAW);
+        assert!(v <= ONE_RAW);
         i = i + 1;
     };
 }
@@ -102,7 +91,7 @@ fun no_overshoot_at_high_z() {
     let n = probes.length();
     while (i < n) {
         let v = fixed(probes[i]).cdf().unwrap();
-        assert!(v <= ONE_RAW, 0xC0DE);
+        assert!(v <= ONE_RAW);
         i = i + 1;
     };
 }
@@ -120,7 +109,7 @@ fun monotonic_on_grid() {
     while (i < n) {
         let raw = (i as u128) * step;
         let curr = fixed(raw).cdf().unwrap();
-        assert!(curr >= prev, 0xC0DE);
+        assert!(curr >= prev);
         prev = curr;
         i = i + 1;
     };
@@ -144,7 +133,7 @@ fun cdf_is_deterministic() {
 fun matches_sd29x9_cdf_on_positives() {
     // Verifies that `UD30x9::cdf(z)` and `SD29x9::cdf(z.into_SD29x9())` produce
     // the same raw probability for every positive `z`. Both paths route through
-    // the same `gaussian::cdf_nonneg_raw` helper — this test asserts the type
+    // the same `cdf::cdf_nonneg_raw` helper — this test asserts the type
     // wrappers agree bit-for-bit.
     let probes: vector<u128> = vector[
         0, 100_000_000, 500_000_000, SCALE, 2 * SCALE, 3 * SCALE, 6 * SCALE,

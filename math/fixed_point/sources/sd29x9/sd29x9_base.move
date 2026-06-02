@@ -4,7 +4,7 @@
 module openzeppelin_fp_math::sd29x9_base;
 
 use openzeppelin_fp_math::common;
-use openzeppelin_fp_math::gaussian::cdf_nonneg_raw;
+use openzeppelin_fp_math::cdf::cdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 
@@ -26,13 +26,7 @@ const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 /// negative-input sign-flip subtraction `10^9 - phi` produce a result greater
 /// than `0.5`. Defense-in-depth against an AAA-fit regression.
 #[error(code = 3)]
-const EInternalNegSubUnderflow: vector<u8> = "CDF sign-flip subtraction underflowed: cdf_nonneg_raw returned below HALF_RAW";
-
-// === Constants ===
-
-/// `Φ(0)` at the `UD30x9` raw scale (`10^9`). The lower bound on
-/// `cdf_nonneg_raw`'s output; guarded at the sign-flip site in `cdf`.
-const HALF_RAW: u128 = 500_000_000;
+const EInternalNegSubUnderflow: vector<u8> = "CDF sign-flip subtraction underflowed: cdf_nonneg_raw returned below 0.5";
 
 // === Structs ===
 
@@ -158,13 +152,21 @@ public fun ceil(x: SD29x9): SD29x9 {
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale).
 ///   Empirical worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
 /// - `|cdf(z) + cdf(z.negate()) - 1| ≤ 5 ULP` for non-saturated inputs.
+///
+/// #### Aborts
+/// - Does not abort for any `SD29x9` input under the committed, validated
+///   coefficients. The implementation carries internal integrity asserts
+///   (`EInternalNegSubUnderflow` here, plus `cdf::EInternalNumNegative` /
+///   `cdf::EInternalDenNonPositive` in the evaluator) as defense-in-depth
+///   against a corrupted regenerated coefficient table; these cannot fire for
+///   the shipped coefficients.
 public fun cdf(z: SD29x9): SD29x9 {
     let Components { mag, neg } = decompose(z.unwrap());
     let phi = cdf_nonneg_raw(mag as u128);
     let raw = if (neg) {
         // Defense-in-depth: the AAA fit's `Φ(z) ≥ 0.5` mathematical
         // contract is what makes `common::scale!() - phi` safe here.
-        assert!(phi >= HALF_RAW, EInternalNegSubUnderflow);
+        assert!(phi >= common::scale!() / 2, EInternalNegSubUnderflow);
         common::scale!() - phi
     } else {
         phi

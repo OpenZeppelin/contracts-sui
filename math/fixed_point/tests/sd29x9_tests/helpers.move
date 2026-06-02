@@ -22,3 +22,11 @@ public(package) fun pos(raw: u128): SD29x9 {
 public(package) fun neg(raw: u128): SD29x9 {
     sd29x9::wrap(raw, true)
 }
+
+public(package) fun abs_diff(a: u128, b: u128): u128 {
+    if (a >= b) a - b else b - a
+}
+
+public(package) fun assert_within(actual: u128, expected: u128, tol: u128) {
+    assert!(abs_diff(actual, expected) <= tol);
+}
