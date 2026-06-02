@@ -33,9 +33,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 
 WAD = constants.WAD
 SCALE = constants.SCALE_DECIMAL
-MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at 10^9
-MAX_Z_FLOAT = float(constants.MAX_Z)
+MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at 10^9 — default; the gate parses the committed value
 HALF_SCALE = SCALE // 2  # Φ(0) bit-exact
+U256_MAX = 2**256 - 1  # on-chain Move intermediates must fit u256
 
 COEFF_PATH = (
     REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "cdf_coefficients.move"
@@ -55,6 +55,13 @@ def _parse_bool_vector(text: str, name: str) -> list[bool]:
     if not m:
         raise RuntimeError(f"could not find vector constant {name}")
     return [b == "true" for b in re.findall(r"\b(true|false)\b", m.group(1))]
+
+
+def _parse_u128_const(text: str, name: str) -> int:
+    m = re.search(rf"const {name}: u128\s*=\s*([\d_]+);", text)
+    if not m:
+        raise RuntimeError(f"could not find u128 constant {name}")
+    return int(m.group(1).replace("_", ""))
 
 
 def parse_coefficients(text: str) -> tuple[list[tuple[int, bool]], list[tuple[int, bool]]]:
@@ -86,7 +93,10 @@ def signed_add(a: SignedInt, b: SignedInt) -> SignedInt:
     if bm == 0:
         return _canonicalize(a)
     if an == bn:
-        return (am + bm, an)
+        s = am + bm
+        if s > U256_MAX:
+            raise RuntimeError(f"u256 overflow in signed_add: {am} + {bm}")
+        return (s, an)
     if am > bm:
         return (am - bm, an)
     if bm > am:
@@ -98,7 +108,10 @@ def signed_mul_wad(a: SignedInt, b: SignedInt) -> SignedInt:
     """`(a * b) / WAD` with floor-division on magnitudes (== mul_div with Down rounding)."""
     am, an = a
     bm, bn = b
-    mag = (am * bm) // WAD
+    prod = am * bm
+    if prod > U256_MAX:
+        raise RuntimeError(f"u256 overflow in signed_mul_wad: {am} * {bm}")
+    mag = prod // WAD
     return _canonicalize((mag, an ^ bn))
 
 
@@ -115,16 +128,28 @@ def horner_eval(z: SignedInt, coeffs: list[SignedInt]) -> SignedInt:
 def mul_div_nearest(a: int, b: int, d: int) -> int:
     """`(a * b) / d` rounded half-up (ties away from zero), structurally
     mirroring the Move `horner::mul_div_nearest_u256` (round up iff
-    `2 * rem >= d`). Caller guarantees `d > 0`."""
+    `rem >= d - rem`). Caller guarantees `d > 0`."""
     prod = a * b
+    if prod > U256_MAX:
+        raise RuntimeError(f"u256 overflow in mul_div_nearest: {a} * {b}")
     quot = prod // d
     rem = prod - quot * d
-    return quot + 1 if rem * 2 >= d else quot
+    return quot + 1 if rem >= d - rem else quot
 
 
-def cdf_simulate(z_raw: int, neg: bool, num: list[SignedInt], den: list[SignedInt]) -> int:
-    """Mirror the on-chain `sd29x9_base::cdf` for a (z_raw at 10^9, neg) input."""
-    if z_raw >= MAX_Z_RAW:
+def cdf_simulate(
+    z_raw: int,
+    neg: bool,
+    num: list[SignedInt],
+    den: list[SignedInt],
+    max_z_raw: int = MAX_Z_RAW,
+) -> int:
+    """Mirror the on-chain `sd29x9_base::cdf` for a (z_raw at 10^9, neg) input.
+
+    `max_z_raw` is the saturation cutoff; the CI gate passes the value parsed
+    from the committed `cdf_coefficients.move` so the simulation tracks the
+    on-chain bound instead of a Python copy that could silently drift from it."""
+    if z_raw >= max_z_raw:
         return 0 if neg else SCALE
     if z_raw == 0:
         return HALF_SCALE  # Φ(0) bit-exact special case (INV-12)
@@ -164,23 +189,24 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     text = args.coeffs.read_text(encoding="utf-8")
     num, den = parse_coefficients(text)
+    max_z_raw = _parse_u128_const(text, "MAX_Z_RAW")
     print(
-        f"Parsed {len(num)} numerator + {len(den)} denominator coefficients from "
-        f"{args.coeffs.relative_to(REPO_ROOT)}"
+        f"Parsed {len(num)} numerator + {len(den)} denominator coefficients "
+        f"(MAX_Z_RAW = {max_z_raw}) from {args.coeffs.relative_to(REPO_ROOT)}"
     )
 
-    grid = np.linspace(0.0, MAX_Z_FLOAT, args.n)
+    grid = np.linspace(0.0, max_z_raw / SCALE, args.n)
     worst_err = 0.0
     worst_z = 0.0
     worst_neg = False
     for z in grid:
         zf = float(z)
         z_raw = int(round(zf * SCALE))
-        phi_pos = cdf_simulate(z_raw, False, num, den)
+        phi_pos = cdf_simulate(z_raw, False, num, den, max_z_raw)
         # Also drive the negative branch: this exercises the reflection and the
         # INV-14 underflow guard inside cdf_simulate, neither of which the
         # positive path reaches.
-        phi_neg = cdf_simulate(z_raw, True, num, den)
+        phi_neg = cdf_simulate(z_raw, True, num, den, max_z_raw)
         if phi_neg != SCALE - phi_pos:
             print(
                 f"FAIL: reflection broken at z_raw={z_raw}: "
