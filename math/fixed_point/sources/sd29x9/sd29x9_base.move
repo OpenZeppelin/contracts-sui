@@ -562,7 +562,7 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
 ///   value.
 ///
 /// #### Aborts
-/// - Aborts if `x` is negative.
+/// - `ENegativeSqrt` if `x` is negative.
 public fun sqrt(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     assert!(!neg, ENegativeSqrt);

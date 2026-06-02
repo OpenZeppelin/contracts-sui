@@ -47,7 +47,7 @@ fun log10_of_zero_aborts() {
     ud30x9::zero().log10();
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::ELogUndefined)]
+#[test, expected_failure(abort_code = ud30x9_base::ELogResultUnrepresentable)]
 fun log10_of_sub_one_aborts() {
     fixed(SCALE - 1).log10();
 }
