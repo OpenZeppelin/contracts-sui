@@ -30,10 +30,14 @@ const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD2
 #[error(code = 4)]
 const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
 
-/// Logarithm is undefined: input must be greater than or equal to one
+/// Logarithm is undefined: input must be non-zero
 #[error(code = 5)]
-const ELogUndefined: vector<u8> =
-    "Logarithm is undefined: input must be greater than or equal to one";
+const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be non-zero";
+
+/// Logarithm result would be negative and is unrepresentable in `UD30x9`
+#[error(code = 6)]
+const ELogResultUnrepresentable: vector<u8> =
+    "Logarithm result would be negative and is unrepresentable in UD30x9";
 
 // === Public Functions ===
 
@@ -261,10 +265,13 @@ public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
 /// - `ln(x)`, rounded down to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
-/// - `ELogUndefined` if `x` is less than one.
+/// - `ELogUndefined` if `x` is zero.
+/// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
+///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
 public fun ln(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
-    assert!(raw >= common::scale!(), ELogUndefined);
+    assert!(raw > 0, ELogUndefined);
+    assert!(raw >= common::scale!(), ELogResultUnrepresentable);
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);
@@ -285,10 +292,13 @@ public fun ln(x: UD30x9): UD30x9 {
 ///   (exact at integer powers of ten).
 ///
 /// #### Aborts
-/// - `ELogUndefined` if `x` is less than one.
+/// - `ELogUndefined` if `x` is zero.
+/// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
+///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
 public fun log10(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
-    assert!(raw >= common::scale!(), ELogUndefined);
+    assert!(raw > 0, ELogUndefined);
+    assert!(raw >= common::scale!(), ELogResultUnrepresentable);
     if (u128::is_power_of_ten(raw)) {
         // Subtract `9 = log10(SCALE)` to strip the embedded scale.
         let j = u128::log10(raw, rounding::down());
@@ -312,10 +322,13 @@ public fun log10(x: UD30x9): UD30x9 {
 /// - `log2(x)`, rounded down to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
-/// - `ELogUndefined` if `x` is less than one (result would be negative or undefined).
+/// - `ELogUndefined` if `x` is zero.
+/// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
+///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
 public fun log2(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
-    assert!(raw >= common::scale!(), ELogUndefined);
+    assert!(raw > 0, ELogUndefined);
+    assert!(raw >= common::scale!(), ELogResultUnrepresentable);
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);
