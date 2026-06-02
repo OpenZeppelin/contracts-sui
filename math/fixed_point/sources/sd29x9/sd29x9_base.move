@@ -3,8 +3,8 @@
 /// Tailored to the signed `SD29x9` representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
-use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::cdf::cdf_nonneg_raw;
+use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 use openzeppelin_math::rounding;
@@ -36,7 +36,8 @@ const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictl
 /// negative-input sign-flip subtraction `10^9 - phi` produce a result greater
 /// than `0.5`. Defense-in-depth against an AAA-fit regression.
 #[error(code = 5)]
-const EInternalNegSubUnderflow: vector<u8> = "CDF sign-flip subtraction underflowed: cdf_nonneg_raw returned below 0.5";
+const EInternalNegSubUnderflow: vector<u8> =
+    "CDF sign-flip subtraction underflowed: cdf_nonneg_raw returned below 0.5";
 
 // === Structs ===
 

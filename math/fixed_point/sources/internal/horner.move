@@ -124,7 +124,8 @@ public(package) fun signed_add_coeff(acc: SignedScaled256, mag: u128, neg: bool)
 /// domain must re-establish this bound before reusing the evaluator.
 public(package) fun signed_mul_wad(a: SignedScaled256, b: SignedScaled256): SignedScaled256 {
     let mag = (a.mag * b.mag) / WAD_U256;
-    let neg = if (mag == 0) false else (a.neg != b.neg);
+    let neg = if (mag == 0) false
+    else (a.neg != b.neg);
     SignedScaled256 { mag, neg }
 }
 

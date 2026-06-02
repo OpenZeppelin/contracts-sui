@@ -10,7 +10,7 @@ use openzeppelin_fp_math::horner::{
     signed_from_coeff,
     signed_from_unsigned,
     signed_mul_wad,
-    signed_zero,
+    signed_zero
 };
 use std::unit_test::assert_eq;
 

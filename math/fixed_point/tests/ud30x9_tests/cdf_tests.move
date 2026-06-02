@@ -136,8 +136,17 @@ fun matches_sd29x9_cdf_on_positives() {
     // the same `cdf::cdf_nonneg_raw` helper — this test asserts the type
     // wrappers agree bit-for-bit.
     let probes: vector<u128> = vector[
-        0, 100_000_000, 500_000_000, SCALE, 2 * SCALE, 3 * SCALE, 6 * SCALE,
-        MAX_Z_RAW - 1, MAX_Z_RAW, MAX_Z_RAW + 1, 7 * SCALE,
+        0,
+        100_000_000,
+        500_000_000,
+        SCALE,
+        2 * SCALE,
+        3 * SCALE,
+        6 * SCALE,
+        MAX_Z_RAW - 1,
+        MAX_Z_RAW,
+        MAX_Z_RAW + 1,
+        7 * SCALE,
     ];
     let mut i = 0;
     let n = probes.length();

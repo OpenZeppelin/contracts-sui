@@ -18,11 +18,13 @@ use openzeppelin_fp_math::horner;
 
 /// Numerator polynomial returned a negative value on the central domain
 #[error(code = 0)]
-const EInternalNumNegative: vector<u8> = "CDF numerator polynomial returned a negative value on the central domain";
+const EInternalNumNegative: vector<u8> =
+    "CDF numerator polynomial returned a negative value on the central domain";
 
 /// Denominator polynomial returned a non-positive value on the central domain
 #[error(code = 1)]
-const EInternalDenNonPositive: vector<u8> = "CDF denominator polynomial returned a non-positive value on the central domain";
+const EInternalDenNonPositive: vector<u8> =
+    "CDF denominator polynomial returned a non-positive value on the central domain";
 
 // === Constants ===
 
@@ -85,10 +87,15 @@ fun eval_rational(
     // Final ratio: N(z) / D(z) at WAD, cast to UD30x9 (10^9) with a single
     // nearest-rounding step. The full-width product `n.mag × 10^9` is bounded
     // by ~10^29 on the central domain — well under u256 capacity.
-    let phi_raw_u256 = horner::mul_div_nearest_u256(horner::mag(&n), common::scale_u256!(), horner::mag(&d));
+    let phi_raw_u256 = horner::mul_div_nearest_u256(
+        horner::mag(&n),
+        common::scale_u256!(),
+        horner::mag(&d),
+    );
     // Last-ULP overshoot guard: rounding can produce ONE_RAW + 1 raw at z just
     // below max_z; clamp to keep the output a valid probability.
-    if (phi_raw_u256 > (ONE_RAW as u256)) ONE_RAW else (phi_raw_u256 as u128)
+    if (phi_raw_u256 > (ONE_RAW as u256)) ONE_RAW
+    else (phi_raw_u256 as u128)
 }
 
 /// Test-only window onto `eval_rational` so the `EInternalNumNegative` /

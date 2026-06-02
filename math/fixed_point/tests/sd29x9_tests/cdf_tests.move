@@ -162,7 +162,13 @@ fun monotonic_on_grid() {
 #[test]
 fun symmetry_on_well_known_points() {
     let probes: vector<u128> = vector[
-        100_000_000, 500_000_000, SCALE, 2 * SCALE, 3 * SCALE, 5 * SCALE, 6 * SCALE,
+        100_000_000,
+        500_000_000,
+        SCALE,
+        2 * SCALE,
+        3 * SCALE,
+        5 * SCALE,
+        6 * SCALE,
     ];
     let mut i = 0;
     let n = probes.length();

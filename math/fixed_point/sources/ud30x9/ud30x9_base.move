@@ -1,8 +1,8 @@
 /// Base utility functions for the `UD30x9` fixed-point type.
 module openzeppelin_fp_math::ud30x9_base;
 
-use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::cdf::cdf_nonneg_raw;
+use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
 use openzeppelin_math::rounding;
