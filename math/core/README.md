@@ -19,6 +19,14 @@ Operations for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`, including:
 - `is_power_of_ten`: Power-of-ten check
 - Decimal scaling helpers
 
+### Vector operations
+
+Generic over `u8`..`u256`:
+
+- `vector::quick_sort` / `vector::quick_sort_by`: In-place iterative quicksort with three-way partitioning
+- `vector::median`: Median of a borrowed unsigned integer vector with configurable rounding for even-length input; uses quickselect instead of sorting the full vector and aborts on empty input
+- `vector::median_u256`: Concrete `vector<u256>` median function using the same quickselect implementation
+
 ## Rounding modes
 
 - **Down**: Round toward zero (truncate)
@@ -27,16 +35,24 @@ Operations for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`, including:
 
 ## Usage examples
 
-```rust
+```move
 use openzeppelin_math::{u128, rounding};
 
 let result = u128::mul_div(100, 200, 3, rounding::up());
 // result = Some(6667) (rounded up from 6666.66...)
 ```
 
-```rust
+```move
 use openzeppelin_math::{u64, rounding};
 
 let mean = u64::average(5, 6, rounding::down());
 // mean = 5
+```
+
+```move
+use openzeppelin_math::rounding;
+use openzeppelin_math::vector;
+
+let med = vector::median!(&vector[5u64, 1, 9, 3, 7], rounding::down());
+// med = 5
 ```
