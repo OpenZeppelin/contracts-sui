@@ -211,15 +211,13 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 /// For even-length vectors, the median is the arithmetic mean of the two central
 /// values, rounded according to `$rounding_mode`.
 ///
-/// The macro is a thin wrapper that upcasts the input to `vector<u256>` and delegates
-/// to `median_u256`, so the sort and average expansions are paid once inside the
-/// package rather than at every integrator call site.
+/// The input vector is not mutated.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
 ///
 /// #### Parameters
-/// - `$vec`: Vector whose median is desired.
+/// - `$vec`: Reference to the vector whose median is desired.
 /// - `$rounding_mode`: Rounding strategy, applied only when the length is even.
 ///
 /// #### Returns
@@ -227,19 +225,17 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 ///
 /// #### Aborts
 /// - `EEmptyVector` if `$vec` is empty.
-public macro fun median<$Int>($vec: vector<$Int>, $rounding_mode: RoundingMode): $Int {
+public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode): $Int {
     let vec = $vec;
-    let vec_u256 = vec.map!(|x| x as u256);
+    let vec_u256 = vec.map_ref!(|x| *x as u256);
     median_u256(vec_u256, $rounding_mode) as $Int
 }
 
-// === Package Functions ===
+// === Concrete Public Functions ===
 
 /// Compute the median of a `u256` vector with configurable rounding.
 ///
-/// Shared workhorse behind the `median!` macro. Centralises the macro expansions of
-/// `quick_sort!` and `macros::average!` so they are paid once in this package rather
-/// than at every integrator call site.
+/// This function consumes and sorts `vec`.
 ///
 /// #### Parameters
 /// - `vec`: Vector whose median is desired (consumed).
@@ -250,7 +246,7 @@ public macro fun median<$Int>($vec: vector<$Int>, $rounding_mode: RoundingMode):
 ///
 /// #### Aborts
 /// - `EEmptyVector` if `vec` is empty.
-public(package) fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256 {
+public fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256 {
     let len = vec.length();
     assert!(len != 0, EEmptyVector);
 
