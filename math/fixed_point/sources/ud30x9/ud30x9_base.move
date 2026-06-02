@@ -4,7 +4,9 @@ module openzeppelin_fp_math::ud30x9_base;
 use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::cdf::cdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
-use openzeppelin_fp_math::ud30x9::{Self, UD30x9, wrap, one};
+use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u256;
 
 // === Errors ===
 
@@ -27,6 +29,11 @@ const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD2
 /// Shift size is out of range (must be less than 128)
 #[error(code = 4)]
 const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
+
+/// Logarithm is undefined: input must be greater than or equal to one
+#[error(code = 5)]
+const ELogUndefined: vector<u8> =
+    "Logarithm is undefined: input must be greater than or equal to one";
 
 // === Public Functions ===
 
@@ -269,9 +276,77 @@ public fun lshift(x: UD30x9, bits: u8): UD30x9 {
 /// - Otherwise, the result of shifting the `x`'s raw bits left by `bits`.
 public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return ud30x9::zero()
+        return zero()
     };
     wrap(x.unwrap() << bits)
+}
+
+/// Computes the natural logarithm of a `UD30x9` value.
+///
+/// Derived from `log2` via the identity `ln(x) = log2(x) * ln(2)`. Both factors
+/// round toward zero, so the result may sit up to one ulp below the true value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `ln(x)`, rounded down to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is less than one.
+public fun ln(x: UD30x9): UD30x9 {
+    let raw = x.unwrap();
+    assert!(raw >= common::scale!(), ELogUndefined);
+    // The `raw >= scale` precondition guarantees `raw_log2` returns a
+    // non-negative sign, so the discarded sign flag is provably `false`.
+    let (_, mag) = common::raw_log2(raw);
+    wrap(common::apply_log2_factor(mag, common::ln2_e18!()))
+}
+
+/// Computes the base-10 logarithm of a `UD30x9` value.
+///
+/// Derived from `log2` via the identity `log10(x) = log2(x) * log10(2)`. Both
+/// factors round toward zero, so the result may sit up to one ulp below the
+/// true value. In particular, `log10(10) == one() - 1 ulp` under pure
+/// round-down arithmetic.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `log10(x)`, rounded down to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is less than one.
+public fun log10(x: UD30x9): UD30x9 {
+    let raw = x.unwrap();
+    assert!(raw >= common::scale!(), ELogUndefined);
+    // The `raw >= scale` precondition guarantees `raw_log2` returns a
+    // non-negative sign, so the discarded sign flag is provably `false`.
+    let (_, mag) = common::raw_log2(raw);
+    wrap(common::apply_log2_factor(mag, common::log10_2_e18!()))
+}
+
+/// Computes the base-2 logarithm of a `UD30x9` value.
+///
+/// The result is rounded down to the nearest representable `UD30x9` value:
+/// it is the largest `UD30x9` `r` such that `2^r <= x`.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `log2(x)`, rounded down to the nearest representable `UD30x9` value.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is less than one (result would be negative or undefined).
+public fun log2(x: UD30x9): UD30x9 {
+    let raw = x.unwrap();
+    assert!(raw >= common::scale!(), ELogUndefined);
+    // The `raw >= scale` precondition guarantees `raw_log2` returns a
+    // non-negative sign, so the discarded sign flag is provably `false`.
+    let (_, mag) = common::raw_log2(raw);
+    wrap(mag / common::scale!())
 }
 
 /// Compares whether `x` is less than `y`.
@@ -487,6 +562,24 @@ public fun pow(x: UD30x9, exp: u8): UD30x9 {
     wrap_u256(result)
 }
 
+/// Computes the square root of a `UD30x9` value.
+///
+/// The result is the largest `UD30x9` value `r` such that `r * r <= x`. In other words, the
+/// result is truncated (rounded down) to the nearest representable `UD30x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - The square root of `x`, rounded down to the nearest representable `UD30x9` value.
+public fun sqrt(x: UD30x9): UD30x9 {
+    let raw = x.unwrap() as u256;
+    // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
+    // sqrt(raw / SCALE) = sqrt(raw * SCALE) / SCALE
+    let result = u256::sqrt(raw * common::scale_u256!(), rounding::down());
+    wrap(result as u128)
+}
+
 /// Checks whether two `UD30x9` values are not equal.
 ///
 /// #### Parameters
@@ -553,7 +646,7 @@ public fun rshift(x: UD30x9, bits: u8): UD30x9 {
 /// - Otherwise, the result of shifting the `x`'s raw bits right by `bits`.
 public fun unchecked_rshift(x: UD30x9, bits: u8): UD30x9 {
     if (bits >= 128) {
-        return ud30x9::zero()
+        return zero()
     };
     wrap(x.unwrap() >> bits)
 }

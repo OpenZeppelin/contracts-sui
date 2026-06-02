@@ -7,6 +7,8 @@ use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::cdf::cdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u256;
 
 // === Errors ===
 
@@ -22,10 +24,18 @@ const ECannotBeConvertedToUD30x9: vector<u8> = "Value cannot be converted to UD3
 #[error(code = 2)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
 
+/// Cannot compute square root of a negative value
+#[error(code = 3)]
+const ENegativeSqrt: vector<u8> = "Cannot compute square root of a negative value";
+
+/// Logarithm is undefined: input must be strictly positive
+#[error(code = 4)]
+const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictly positive";
+
 /// `cdf_nonneg_raw` returned a value below `Φ(0) = 0.5`, which would make the
 /// negative-input sign-flip subtraction `10^9 - phi` produce a result greater
 /// than `0.5`. Defense-in-depth against an AAA-fit regression.
-#[error(code = 3)]
+#[error(code = 5)]
 const EInternalNegSubUnderflow: vector<u8> = "CDF sign-flip subtraction underflowed: cdf_nonneg_raw returned below 0.5";
 
 // === Structs ===
@@ -257,6 +267,74 @@ public fun is_zero(x: SD29x9): bool {
 ///   values, and `max()`; returns `true` for any negative value including `min()`.
 public fun is_negative(x: SD29x9): bool {
     (x.unwrap() & common::sign_bit!()) != 0
+}
+
+/// Computes the natural logarithm of an `SD29x9` value.
+///
+/// Derived from `log2` via `ln(x) = log2(x) * ln(2)`. Rounded toward zero;
+/// see `log2` for full rounding semantics on signed results.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `ln(x)`, rounded toward zero.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is zero or negative.
+public fun ln(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg && mag > 0, ELogUndefined);
+    let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
+    let result_mag = common::apply_log2_factor(log_mag_internal, common::ln2_e18!());
+    wrap_components(Components { neg: log_neg, mag: result_mag as u256 })
+}
+
+/// Computes the base-10 logarithm of an `SD29x9` value.
+///
+/// Derived from `log2` via `log10(x) = log2(x) * log10(2)`. Rounded toward
+/// zero; see `log2` for full rounding semantics on signed results.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `log10(x)`, rounded toward zero.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is zero or negative.
+public fun log10(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg && mag > 0, ELogUndefined);
+    let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
+    let result_mag = common::apply_log2_factor(log_mag_internal, common::log10_2_e18!());
+    wrap_components(Components { neg: log_neg, mag: result_mag as u256 })
+}
+
+/// Computes the base-2 logarithm of an `SD29x9` value.
+///
+/// The result is rounded toward zero, matching the convention used by
+/// `mul_trunc`, `div_trunc`, and `pow` in this module. For positive results
+/// (inputs `>= 1`) this coincides with rounding down. For negative results
+/// (inputs in `(0, 1)`) the signed result usually sits closer to zero than
+/// the true value, but in narrow edge cases where the kernel's small upward
+/// magnitude bias crosses an integer boundary it may instead be 1 ulp (unit
+/// in the last place) further from zero.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `log2(x)`, rounded toward zero.
+///
+/// #### Aborts
+/// - `ELogUndefined` if `x` is zero or negative.
+public fun log2(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg && mag > 0, ELogUndefined);
+    let (log_neg, log_mag_internal) = common::raw_log2(mag as u128);
+    let log_mag = log_mag_internal / common::scale!();
+    wrap_components(Components { neg: log_neg, mag: log_mag as u256 })
 }
 
 /// Compares whether `x` is less than `y`.
@@ -531,6 +609,29 @@ public fun pow(x: SD29x9, exp: u8): SD29x9 {
 
     let result = Components { neg: res_neg, mag: res_mag };
     result.wrap_components()
+}
+
+/// Computes the square root of a `SD29x9` value.
+///
+/// The result is the largest `SD29x9` value `r` such that `r * r <= x`. In other words, the
+/// result is truncated (rounded down) to the nearest representable `SD29x9` value.
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - The non-negative square root of `x`, rounded down to the nearest representable `SD29x9`
+///   value.
+///
+/// #### Aborts
+/// - Aborts if `x` is negative.
+public fun sqrt(x: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(x.unwrap());
+    assert!(!neg, ENegativeSqrt);
+    // Multiply by SCALE to preserve 9 decimal places of precision through the square root:
+    // sqrt(mag / SCALE) = sqrt(mag * SCALE) / SCALE
+    let result = u256::sqrt(mag * common::scale_u256!(), rounding::down());
+    wrap_components(Components { neg: false, mag: result })
 }
 
 /// Returns the arithmetic negation of `x`.

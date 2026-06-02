@@ -404,6 +404,26 @@ public(package) macro fun log10<$Int>($value: $Int, $rounding_mode: RoundingMode
     }
 }
 
+/// Test whether `$n` is an exact non-negative integer power of ten (`10^k` for some
+/// `k >= 0`).
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$n`: The unsigned integer to test.
+///
+/// #### Returns
+/// - `true` if `$n` equals `10^k` for some `k >= 0`, otherwise `false`.
+public(package) macro fun is_power_of_ten<$Int>($n: $Int): bool {
+    let n = $n as u256;
+    if (n == 0) {
+        return false
+    };
+    let exp = log10_floor(n);
+    n == 10u256.pow(exp)
+}
+
 /// Compute floor(log10(value)) using binary search over powers of 10.
 ///
 /// This helper uses precomputed constants (`TEN_POW_2`, `TEN_POW_4`, etc.) to efficiently
@@ -1014,42 +1034,4 @@ public(package) fun mul_mod_impl(a: u256, b: u256, modulus: u256): u256 {
     } else {
         ((a * b) % modulus)
     }
-}
-
-/// Perform binary search on a sorted vector to find if `$needle` exists in the vector.
-///
-/// The helper works across all unsigned widths and performs a standard iterative binary
-/// search on a sorted vector. It compares the search value against the middle element
-/// at each iteration until either the value is found or the search space is exhausted.
-///
-/// #### Generics
-/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
-///
-/// #### Parameters
-/// - `$haystack`: A sorted vector of unsigned integers to search through.
-/// - `$needle`: The value to search for in the vector.
-///
-/// #### Returns
-/// `true` if `$needle` exists in `$haystack`, `false` otherwise.
-public(package) macro fun binary_search<$Int>($haystack: vector<$Int>, $needle: $Int): bool {
-    let haystack = $haystack;
-    let needle = $needle;
-
-    let mut left = 0;
-    let mut right = haystack.length();
-
-    while (left < right) {
-        let mid = left + (right - left) / 2;
-        let mid_val = *haystack.borrow(mid);
-
-        if (mid_val == needle) {
-            return true
-        } else if (mid_val < needle) {
-            left = mid + 1;
-        } else {
-            right = mid;
-        }
-    };
-
-    false
 }
