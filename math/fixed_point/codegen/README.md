@@ -70,7 +70,7 @@ the Move code reflects negatives via Φ(−z) = 1 − Φ(z).
 Three stages, four scripts. Generation flows left to right; `validate.py` is an
 independent re-check that closes the loop.
 
-```
+```text
 derive.py ──► .derive_output.json ──┬─► emit_coefficients.py ──► cdf_coefficients.move
 (AAA fit)        (chosen coeffs)     └─► emit_test_vectors.py  ──► cdf_test_vectors.move (×2)
 
@@ -174,7 +174,7 @@ strings (serialized from mpmath at 100 dps); everything else is informational.
 
 ## Layout
 
-```
+```text
 codegen/
 ├── Makefile             # install / regen / validate / check / ci / test
 ├── shared/
