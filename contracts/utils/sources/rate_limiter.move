@@ -43,6 +43,14 @@
 /// The library validates structural invariants on construction; the choice of semantics is
 /// entirely the integrator's.
 ///
+/// One semantic pitfall the library does not guard against: a `Bucket`'s (or `FixedWindow`'s)
+/// anchor may be carried over from the old limiter only when the rate is unchanged - that is,
+/// `refill_amount` and `refill_interval_ms` (or `window_ms`) stay the same. Accrual applies
+/// the *current* rate over the entire span since the anchor, so preserving an old anchor while
+/// changing the rate re-prices time that elapsed under the previous rate, minting tokens
+/// instantly. Any change to the rate must re-anchor to `clock.timestamp_ms()` so the new rate
+/// only applies going forward.
+///
 /// # Upgrade compatibility
 ///
 /// `RateLimiter` is a `public enum` embedded inside integrator-owned objects. Adding a new
@@ -154,11 +162,11 @@ public enum RateLimiter has drop, store {
 /// - `capacity`: Maximum token balance the bucket can hold.
 /// - `refill_amount`: Tokens credited per refill interval.
 /// - `refill_interval_ms`: Length of one refill interval, in milliseconds.
-/// - `initial_available`: Starting token balance. Must be `<= capacity`. Setting this to
-///   `0` forces the caller to wait for the first refill interval before any consume succeeds.
+/// - `initial_available`: Starting token balance. Setting this to `0` forces the caller
+///   to wait for the first refill interval before any consume succeeds.
 /// - `last_refill_ms`: Anchor for the refill schedule. For greenfield use, pass
-///   `clock.timestamp_ms()`; pass an earlier value to preserve the refill phase when
-///   reconstructing under a new configuration. Must be `<= clock.timestamp_ms()`.
+///   `clock.timestamp_ms()`; an earlier value preserves the refill phase, but only when the
+///   rate is unchanged (see the `# Reconfiguration` section in module docs).
 /// - `clock`: Reference to the Sui `Clock`, used to validate the anchor.
 ///
 /// #### Returns
@@ -205,7 +213,7 @@ public fun new_bucket(
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per window.
 /// - `window_ms`: Length of one window, in milliseconds.
-/// - `window_start_ms`: Anchor for the first window. Must be `<= clock.timestamp_ms()`.
+/// - `window_start_ms`: Anchor for the first window.
 /// - `initial_available`: Starting available units for the current window.
 /// - `clock`: Reference to the Sui `Clock`, used to validate the anchor.
 ///
@@ -256,7 +264,7 @@ public fun new_fixed_window(
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per batch.
 /// - `cooldown_ms`: Wait, in milliseconds, between exhausting the batch and the next reset.
-/// - `initial_available`: Starting available units. Must be `<= capacity`.
+/// - `initial_available`: Starting available units.
 /// - `cooldown_end_ms`: Initial gate deadline. `<= now` means no gate armed.
 /// - `clock`: Reference to the Sui `Clock`, used to validate the gate-deadline pairing.
 ///
