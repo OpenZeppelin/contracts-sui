@@ -5,6 +5,7 @@ use openzeppelin_fp_math::horner::{
     Self,
     SignedScaled256,
     horner_eval,
+    mul_div_nearest_u256,
     signed_add,
     signed_add_coeff,
     signed_from_coeff,
@@ -199,6 +200,48 @@ fun signed_mul_wad_truncates_subwad_to_zero() {
     let r = signed_mul_wad(signed(1, true), signed(1, true));
     assert_eq!(horner::mag(&r), 0);
     assert_eq!(horner::is_neg(&r), false);
+}
+
+// === mul_div_nearest_u256 (final WAD→10^9 ratio, half-up ties away from zero) ===
+
+#[test]
+fun mul_div_nearest_rounds_down_below_half() {
+    // 1 / 4 = 0.25 → 0 (remainder 1 < d - remainder = 3).
+    assert_eq!(mul_div_nearest_u256(1, 1, 4), 0);
+}
+
+#[test]
+fun mul_div_nearest_rounds_up_on_tie() {
+    // 1 / 2 = 0.5 and 3 / 2 = 1.5 are exact ties → round away from zero.
+    assert_eq!(mul_div_nearest_u256(1, 1, 2), 1);
+    assert_eq!(mul_div_nearest_u256(3, 1, 2), 2);
+}
+
+#[test]
+fun mul_div_nearest_rounds_up_above_half() {
+    // 7 / 4 = 1.75 → 2 (remainder 3 > d - remainder = 1).
+    assert_eq!(mul_div_nearest_u256(7, 1, 4), 2);
+}
+
+#[test]
+fun mul_div_nearest_exact_division_no_roundup() {
+    // 12 / 3 = 4 exactly (remainder 0 never rounds up).
+    assert_eq!(mul_div_nearest_u256(6, 2, 3), 4);
+}
+
+#[test]
+fun mul_div_nearest_no_overflow_near_u256_max() {
+    // Regression for the overflow-free rounding check: with `d` just above
+    // 2^255 and remainder 2^255, the naive `rem × 2 ≥ d` test would overflow
+    // u256. The `rem ≥ d - rem` form returns the correct rounded-up result.
+    let two_255 = 1u256 << 255;
+    assert_eq!(mul_div_nearest_u256(two_255, 1, two_255 + 1), 1);
+}
+
+#[test, expected_failure(arithmetic_error, location = openzeppelin_fp_math::horner)]
+fun mul_div_nearest_aborts_on_zero_divisor() {
+    // d == 0 → native division-by-zero abort.
+    let _ = mul_div_nearest_u256(1, 1, 0);
 }
 
 // === horner_eval! ===
