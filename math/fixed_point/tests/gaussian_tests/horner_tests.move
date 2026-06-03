@@ -125,6 +125,10 @@ fun signed_add_coeff_matches_add_from_coeff() {
     let m: u128 = 5_000_000_000_000_000_000;
     assert_eq!(signed_add_coeff(acc, m, true), signed_add(acc, signed_from_coeff(m, true)));
     assert_eq!(signed_add_coeff(acc, m, false), signed_add(acc, signed_from_coeff(m, false)));
+    // Opposite-sign with acc.mag > coeff.mag (subtract, keep acc's sign).
+    let acc2 = signed(5_000_000_000_000_000_000, false); // 5.0
+    let m2: u128 = 3_000_000_000_000_000_000; // 3.0
+    assert_eq!(signed_add_coeff(acc2, m2, true), signed_add(acc2, signed_from_coeff(m2, true)));
 }
 
 #[test]
