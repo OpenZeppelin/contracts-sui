@@ -10,9 +10,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### `openzeppelin_math`
 
+#### Added
+
+- Added `vector::median` macro for unsigned integer vectors with rounding for even lengths. Includes `vector::median_u256`. (#135)
+
 #### Changed
 
 - `u128::is_power_of_ten` and `u256::is_power_of_ten` now compute the result via `log10_floor` and `pow` instead of a hardcoded lookup table. (#323)
+
+### `openzeppelin_utils`
+
+#### Added
+
+- New `rate_limiter` module: an embeddable rate-limiting primitive with three strategies behind one enum. (#315)
 
 ## 1.2.0 (03-06-2026)
 
