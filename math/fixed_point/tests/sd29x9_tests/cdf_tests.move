@@ -87,6 +87,14 @@ fun saturation_at_sd29x9_extremes() {
     assert_eq!(sd29x9::min().cdf().unwrap(), 0);
 }
 
+#[test]
+fun max_z_raw_is_six_point_three() {
+    // Pin the saturation domain bound. Moving the domain (e.g. lowering it)
+    // would slip past the behavioral saturation tests and the Python sweep,
+    // but is caught explicitly here.
+    assert_eq!(cdf_coefficients::max_z_raw(), MAX_Z_RAW);
+}
+
 // === Output range ===
 
 #[test]
@@ -131,6 +139,21 @@ fun no_overshoot_at_high_z() {
         assert!(v <= ONE_RAW);
         i = i + 1;
     };
+}
+
+#[test]
+fun overshoot_clamps_to_one() {
+    // N(z)/D(z) = 2.0 exceeds 1.0, so the last-ULP overshoot clamp must pin the
+    // result to ONE_RAW. This branch is dead for the committed coefficients, so
+    // it is driven directly through the eval_rational seam.
+    let v = cdf::eval_rational_for_test(
+        SCALE,
+        vector[2 * ONE_WAD],
+        vector[false],
+        vector[ONE_WAD],
+        vector[false],
+    );
+    assert_eq!(v, ONE_RAW);
 }
 
 // === Monotonicity ===
@@ -181,6 +204,25 @@ fun symmetry_on_well_known_points() {
         assert_within(sum, ONE_RAW, TOLERANCE);
         i = i + 1;
     };
+}
+
+// === Negative-branch near-zero (underflow guard) ===
+
+#[test]
+fun negative_near_zero_no_underflow() {
+    // The negative branch computes `10^9 - phi`, closest to the
+    // EInternalNegSubUnderflow guard as |z| → 0 (where phi → 0.5). Neither the
+    // well-known points (smallest 0.1) nor the Python sweep (smallest ≈ 6.3e-4)
+    // probe this region; reaching the assert proves the guard did not fire.
+    let probes: vector<u128> = vector[1, 100, 10_000, 1_000_000, 50_000_000];
+    let mut i = 0;
+    let n = probes.length();
+    while (i < n) {
+        let v = neg(probes[i]).cdf().unwrap();
+        assert!(v <= HALF_RAW); // Φ(−|z|) ≤ 0.5
+        i = i + 1;
+    };
+    assert_within(neg(1).cdf().unwrap(), HALF_RAW, TOLERANCE);
 }
 
 // === Determinism ===
