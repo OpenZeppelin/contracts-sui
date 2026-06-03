@@ -92,7 +92,9 @@ single `i128`-style input or output.
 `log2`, `ln`, and `log10` are computed from a shared `log2` kernel; `ln` and
 `log10` apply a base-conversion factor on top.
 
-- **UD30x9** aborts on `x < 1` (the result would be negative). Rounds down.
+- **UD30x9** aborts for `0 < x < 1` because the fixed-point logarithm would be
+  negative; **UD30x9** also aborts for `x == 0` because the log operation is
+  undefined/invalid. Rounds down.
 - **SD29x9** aborts on `x <= 0`. Rounds toward zero, matching `mul_trunc`,
   `div_trunc`, and `pow` in the same module.
 

@@ -282,12 +282,10 @@ public fun ln(x: UD30x9): UD30x9 {
 
 /// Computes the base-10 logarithm of a `UD30x9` value.
 ///
-/// Exact when `x` is an integer power of ten (`10^k`, `k >= 0`). Otherwise
-/// derived from `log2` via the identity `log10(x) = log2(x) * log10(2)`.
-/// Both the `log2` kernel and the base-conversion step round toward zero,
-/// so the result may sit up to 2 ulps below the true value; see `raw_log2`
-/// for the kernel's precision bound. In particular, `log10(10)` may sit up
-/// to 2 ulps below `one()`.
+/// Exact when `x` is an integer power of ten (`10^k`, `k >= 0`): the
+/// dedicated power-of-ten branch returns `k * SCALE`, so `log10(10)` is
+/// exactly `one()`. Other inputs are derived from `log2` via the identity
+/// `log10(x) = log2(x) * log10(2)` and rounded down.
 ///
 /// #### Parameters
 /// - `x`: Input value.
