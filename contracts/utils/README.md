@@ -41,14 +41,14 @@ Pick the constructor that matches your policy; the consume and inspect calls are
 use openzeppelin_utils::rate_limiter::{Self, RateLimiter};
 use sui::clock::Clock;
 
-// Bucket — smooth throughput with bursts; refills 100 units every 6 s, cap 1 000, starting full.
-let limiter: RateLimiter = rate_limiter::new_bucket(1_000, 100, 6_000, 1_000, clock.timestamp_ms(), clock);
+// Bucket — smooth throughput with bursts; cap 1 000, refills 100 units every 6 s, starting full.
+let limiter: RateLimiter = rate_limiter::new_bucket(1_000, 100, 6_000, clock.timestamp_ms(), 1_000, clock);
 
 // Fixed window — hard per-hour quota of 100 units, starting full at the current time.
 let limiter: RateLimiter = rate_limiter::new_fixed_window(100, 3_600_000, clock.timestamp_ms(), 100, clock);
 
 // Cooldown — up to 1 000 units per batch, then a 60 s gate before the next batch.
-let limiter: RateLimiter = rate_limiter::new_cooldown(1_000, 60_000, 1_000, 0, clock);
+let limiter: RateLimiter = rate_limiter::new_cooldown(1_000, 60_000, 0, 1_000, clock);
 
 // Identical hot-path API regardless of variant:
 let units = limiter.available(clock);   // how many units are consumable right now
@@ -70,7 +70,7 @@ public struct Vault has key {
 }
 
 public fun new(clock: &Clock, ctx: &mut TxContext): Vault {
-    let withdraw_limiter = rate_limiter::new_bucket(1_000, 100, 6_000, 1_000, clock.timestamp_ms(), clock);
+    let withdraw_limiter = rate_limiter::new_bucket(1_000, 100, 6_000, clock.timestamp_ms(), 1_000, clock);
     Vault { id: object::new(ctx), withdraw_limiter }
 }
 

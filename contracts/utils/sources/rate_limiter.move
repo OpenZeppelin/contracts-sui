@@ -154,11 +154,11 @@ public enum RateLimiter has drop, store {
 /// - `capacity`: Maximum token balance the bucket can hold.
 /// - `refill_amount`: Tokens credited per refill interval.
 /// - `refill_interval_ms`: Length of one refill interval, in milliseconds.
-/// - `initial_available`: Starting token balance. Must be `<= capacity`. Setting this to
-///   `0` forces the caller to wait for the first refill interval before any consume succeeds.
 /// - `last_refill_ms`: Anchor for the refill schedule. For greenfield use, pass
 ///   `clock.timestamp_ms()`; pass an earlier value to preserve the refill phase when
 ///   reconstructing under a new configuration. Must be `<= clock.timestamp_ms()`.
+/// - `initial_available`: Starting token balance. Must be `<= capacity`. Setting this to
+///   `0` forces the caller to wait for the first refill interval before any consume succeeds.
 /// - `clock`: Reference to the Sui `Clock`, used to validate the anchor.
 ///
 /// #### Returns
@@ -168,21 +168,21 @@ public enum RateLimiter has drop, store {
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroRefillAmount` if `refill_amount == 0`.
 /// - `EZeroRefillInterval` if `refill_interval_ms == 0`.
-/// - `EInitialAboveCapacity` if `initial_available > capacity`.
 /// - `EBucketAnchorInFuture` if `last_refill_ms > clock.timestamp_ms()`.
+/// - `EInitialAboveCapacity` if `initial_available > capacity`.
 public fun new_bucket(
     capacity: u64,
     refill_amount: u64,
     refill_interval_ms: u64,
-    initial_available: u64,
     last_refill_ms: u64,
+    initial_available: u64,
     clock: &Clock,
 ): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(refill_amount > 0, EZeroRefillAmount);
     assert!(refill_interval_ms > 0, EZeroRefillInterval);
-    assert!(initial_available <= capacity, EInitialAboveCapacity);
     assert!(last_refill_ms <= clock.timestamp_ms(), EBucketAnchorInFuture);
+    assert!(initial_available <= capacity, EInitialAboveCapacity);
 
     RateLimiter::Bucket {
         capacity,
@@ -205,8 +205,8 @@ public fun new_bucket(
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per window.
 /// - `window_ms`: Length of one window, in milliseconds.
-/// - `initial_available`: Starting available units for the current window.
 /// - `window_start_ms`: Anchor for the first window. Must be `<= clock.timestamp_ms()`.
+/// - `initial_available`: Starting available units for the current window.
 /// - `clock`: Reference to the Sui `Clock`, used to validate the anchor.
 ///
 /// #### Returns
@@ -215,19 +215,19 @@ public fun new_bucket(
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroWindow` if `window_ms == 0`.
-/// - `EInitialAboveCapacity` if `initial_available > capacity`.
 /// - `EWindowAnchorInFuture` if `window_start_ms > clock.timestamp_ms()`.
+/// - `EInitialAboveCapacity` if `initial_available > capacity`.
 public fun new_fixed_window(
     capacity: u64,
     window_ms: u64,
-    initial_available: u64,
     window_start_ms: u64,
+    initial_available: u64,
     clock: &Clock,
 ): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(window_ms > 0, EZeroWindow);
-    assert!(initial_available <= capacity, EInitialAboveCapacity);
     assert!(window_start_ms <= clock.timestamp_ms(), EWindowAnchorInFuture);
+    assert!(initial_available <= capacity, EInitialAboveCapacity);
 
     RateLimiter::FixedWindow {
         capacity,
@@ -256,8 +256,8 @@ public fun new_fixed_window(
 /// #### Parameters
 /// - `capacity`: Maximum units consumable per batch.
 /// - `cooldown_ms`: Wait, in milliseconds, between exhausting the batch and the next reset.
-/// - `initial_available`: Starting available units. Must be `<= capacity`.
 /// - `cooldown_end_ms`: Initial gate deadline. `<= now` means no gate armed.
+/// - `initial_available`: Starting available units. Must be `<= capacity`.
 /// - `clock`: Reference to the Sui `Clock`, used to validate the gate-deadline pairing.
 ///
 /// #### Returns
@@ -266,22 +266,22 @@ public fun new_fixed_window(
 /// #### Aborts
 /// - `EZeroCapacity` if `capacity == 0`.
 /// - `EZeroCooldown` if `cooldown_ms == 0`.
-/// - `EInitialAboveCapacity` if `initial_available > capacity`.
 /// - `ECooldownArmedWithTokens` if `initial_available > 0 && cooldown_end_ms > clock.timestamp_ms()`.
+/// - `EInitialAboveCapacity` if `initial_available > capacity`.
 public fun new_cooldown(
     capacity: u64,
     cooldown_ms: u64,
-    initial_available: u64,
     cooldown_end_ms: u64,
+    initial_available: u64,
     clock: &Clock,
 ): RateLimiter {
     assert!(capacity > 0, EZeroCapacity);
     assert!(cooldown_ms > 0, EZeroCooldown);
-    assert!(initial_available <= capacity, EInitialAboveCapacity);
     assert!(
         initial_available == 0 || cooldown_end_ms <= clock.timestamp_ms(),
         ECooldownArmedWithTokens,
     );
+    assert!(initial_available <= capacity, EInitialAboveCapacity);
 
     RateLimiter::Cooldown {
         capacity,
@@ -338,11 +338,11 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             last_refill_ms,
             available,
         } => bucket_try_consume(
-            last_refill_ms,
-            available,
             *capacity,
             *refill_amount,
             *refill_interval_ms,
+            last_refill_ms,
+            available,
             amount,
             now,
         ),
@@ -354,11 +354,11 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
             window_start_ms,
             available,
         } => bucket_try_consume(
-            window_start_ms,
-            available,
             *capacity,
             *capacity,
             *window_ms,
+            window_start_ms,
+            available,
             amount,
             now,
         ),
@@ -408,27 +408,27 @@ public fun available(self: &RateLimiter, clock: &Clock): u64 {
             available,
         } => {
             let (_, accrued) = bucket_accrue(
-                *last_refill_ms,
-                *available,
                 *capacity,
                 *refill_amount,
                 *refill_interval_ms,
+                *last_refill_ms,
+                *available,
                 now,
             );
             accrued
         },
         RateLimiter::FixedWindow { capacity, window_ms, window_start_ms, available } => {
             let (_, accrued) = bucket_accrue(
-                *window_start_ms,
-                *available,
                 *capacity,
                 *capacity,
                 *window_ms,
+                *window_start_ms,
+                *available,
                 now,
             );
             accrued
         },
-        RateLimiter::Cooldown { capacity, available, cooldown_end_ms, .. } => {
+        RateLimiter::Cooldown { capacity, cooldown_end_ms, available, .. } => {
             if (*available > 0) *available
             else if (now >= *cooldown_end_ms) *capacity
             else 0
@@ -553,7 +553,7 @@ public fun window_ms(self: &RateLimiter): u64 {
 /// - `EWrongVariant` if the limiter is not a `FixedWindow`.
 public fun window_start_ms(self: &RateLimiter, clock: &Clock): u64 {
     match (self) {
-        RateLimiter::FixedWindow { window_start_ms, window_ms, .. } => {
+        RateLimiter::FixedWindow { window_ms, window_start_ms, .. } => {
             project_anchor(*window_start_ms, *window_ms, clock.timestamp_ms())
         },
         _ => abort EWrongVariant,
@@ -601,20 +601,20 @@ fun project_anchor(anchor: u64, interval_ms: u64, now: u64): u64 {
 /// All-or-nothing: on success advances `last_refill_ms` to the latest completed boundary
 /// and deducts `amount` from `available`; on failure leaves both untouched.
 fun bucket_try_consume(
-    last_refill_ms: &mut u64,
-    available: &mut u64,
     capacity: u64,
     refill_amount: u64,
     refill_interval_ms: u64,
+    last_refill_ms: &mut u64,
+    available: &mut u64,
     amount: u64,
     now: u64,
 ): bool {
     let (new_last, new_available) = bucket_accrue(
-        *last_refill_ms,
-        *available,
         capacity,
         refill_amount,
         refill_interval_ms,
+        *last_refill_ms,
+        *available,
         now,
     );
     if (amount > new_available) return false;
@@ -634,21 +634,21 @@ fun bucket_try_consume(
 /// advance, so a subsequent drain at the same `now` cannot re-mint them as fresh headroom.
 ///
 /// #### Parameters
-/// - `last_refill_ms`: Timestamp of the last accrual checkpoint.
-/// - `available`: Stored token balance at `last_refill_ms`.
 /// - `capacity`: Maximum token balance.
 /// - `refill_amount`: Tokens credited per refill interval.
 /// - `refill_interval_ms`: Length of one refill interval, in milliseconds.
+/// - `last_refill_ms`: Timestamp of the last accrual checkpoint.
+/// - `available`: Stored token balance at `last_refill_ms`.
 /// - `now`: Current timestamp; must be `>= last_refill_ms`.
 ///
 /// #### Returns
 /// - `(new_last_refill_ms, new_available)`: the advanced anchor and projected balance.
 fun bucket_accrue(
-    last_refill_ms: u64,
-    available: u64,
     capacity: u64,
     refill_amount: u64,
     refill_interval_ms: u64,
+    last_refill_ms: u64,
+    available: u64,
     now: u64,
 ): (u64, u64) {
     let elapsed_steps = (now - last_refill_ms) / refill_interval_ms;
