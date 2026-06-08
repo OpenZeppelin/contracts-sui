@@ -7,6 +7,12 @@
 /// that specific holder can claim. A claim must satisfy both limiters — the
 /// holder's personal bucket and the global window. This shows two limiters of
 /// different variants composed across two objects.
+///
+/// # Disclaimer
+///
+/// This module is an **unaudited example**, provided purely to illustrate ways the
+/// `RateLimiter` primitive can be integrated. It is not production-ready and must not be
+/// deployed as-is.
 module openzeppelin_utils::tiered_faucet;
 
 use openzeppelin_utils::rare_coin::RARE_COIN;

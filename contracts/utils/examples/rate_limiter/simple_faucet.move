@@ -1,3 +1,16 @@
+/// The simplest possible integration of `RateLimiter`.
+///
+/// A single shared `Faucet` holds one `RateLimiter` (a fixed window) embedded directly
+/// as a field. Every claimer draws against that one limiter collectively: the window
+/// budget is global, not per-user. This is the minimal pattern — one object, one
+/// embedded limiter, no capabilities — and is the foundation that `tiered_faucet`
+/// layers a per-holder limiter on top of.
+///
+/// # Disclaimer
+///
+/// This module is an **unaudited example**, provided purely to illustrate ways the
+/// `RateLimiter` primitive can be integrated. It is not production-ready and must not be
+/// deployed as-is.
 module openzeppelin_utils::simple_faucet;
 
 use openzeppelin_utils::rare_coin::RARE_COIN;
@@ -10,12 +23,15 @@ const HOUR: u64 = 60 * 60 * 1000;
 
 const HOURLY_LIMIT: u64 = 100;
 
+/// Shared faucet. The `limiter` field is the entire rate-limiting mechanism — there is no
+/// separate policy object or registry; the limiter's scope is just this `Faucet`.
 public struct Faucet has key {
     id: UID,
     balance: Balance<RARE_COIN>,
     limiter: RateLimiter,
 }
 
+/// Share a faucet whose global budget is 100 coins per hour, anchored at creation time.
 public fun new(funds: Coin<RARE_COIN>, clock: &Clock, ctx: &mut TxContext) {
     let limiter = rate_limiter::new_fixed_window(
         HOURLY_LIMIT,
@@ -32,6 +48,8 @@ public fun new(funds: Coin<RARE_COIN>, clock: &Clock, ctx: &mut TxContext) {
     })
 }
 
+/// Claim `amount` coins. The limiter is charged first, so a rate-limited claim aborts
+/// before the balance is ever touched.
 public fun claim(
     self: &mut Faucet,
     amount: u64,
@@ -42,6 +60,7 @@ public fun claim(
     coin::from_balance(self.balance.split(amount), ctx)
 }
 
+/// The faucet's currently-available global allowance (projects window rollover on read).
 public fun available(self: &Faucet, clock: &Clock): u64 {
     self.limiter.available(clock)
 }
@@ -111,6 +130,7 @@ fun global_throttle() {
 
     // The window starts full at 100, shared across all claimers.
     assert_eq!(faucet.available(&clock), 100);
+    // User tries to consume more than the global limiter allows.
     destroy(faucet.claim(110, &clock, scenario.ctx()));
 
     abort
