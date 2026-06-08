@@ -80,6 +80,15 @@ public fun withdraw(self: &mut Vault, amount: u64, clock: &Clock) {
 }
 ```
 
+### Examples
+
+Complete, compiling integrations live in [`examples/rate_limiter/`](examples/rate_limiter):
+
+- [`simple_faucet`](examples/rate_limiter/simple_faucet.move) - the minimal pattern: one shared object with a single embedded limiter (a global fixed window) shared by all claimers.
+- [`tiered_faucet`](examples/rate_limiter/tiered_faucet.move) - two limiters of different variants composed across two objects: a per-holder token bucket layered on top of the global window.
+
+These are **unaudited illustrations** of how the primitive can be integrated, not production-ready code.
+
 ### Operator Notes
 
 - Configs require positive values. For `Bucket`, internal accrual stays overflow-safe regardless of `capacity` and `refill_amount` magnitudes - no upper bounds need to be enforced beyond standard `u64` arithmetic.

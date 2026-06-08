@@ -19,6 +19,14 @@
 ///    `RateLimiter` with the desired field values (reading current state via `available`,
 ///    `capacity`, `window_start_ms`, `cooldown_end_ms`, etc.) and overwrites the field.
 ///
+/// # Examples
+///
+/// Complete, compiling integrations live under `examples/rate_limiter/`:
+/// - `simple_faucet` - one shared object with a single embedded limiter (a global fixed window),
+/// - `tiered_faucet` - a per-holder token bucket composed with a global window across two objects.
+///
+/// These are unaudited illustrations of how the primitive can be integrated, not production code.
+///
 /// # Operator responsibilities
 ///
 /// Configs only need positivity; the implementation handles internal overflow safety
