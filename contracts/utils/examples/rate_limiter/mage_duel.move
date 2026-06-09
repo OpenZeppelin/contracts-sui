@@ -33,12 +33,10 @@ use sui::table::{Self, Table};
 #[error(code = 0)]
 const EDuelOver: vector<u8> = "The duel already has a winner";
 #[error(code = 1)]
-const ENotOpponent: vector<u8> = "Only the named opponent can accept";
-#[error(code = 2)]
 const EAlreadyStarted: vector<u8> = "The duel has already been accepted";
-#[error(code = 3)]
+#[error(code = 2)]
 const ENotStarted: vector<u8> = "The duel has not been accepted yet";
-#[error(code = 4)]
+#[error(code = 3)]
 const EWrongDuel: vector<u8> = "This cap is for a different duel";
 
 // === Constants ===
