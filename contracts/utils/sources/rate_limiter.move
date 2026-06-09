@@ -304,6 +304,7 @@ public fun new_cooldown(
 /// - `EInvalidAmount` if `amount == 0`.
 /// - `ERateLimited` if the limiter cannot satisfy the request.
 public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) {
+    assert!(amount > 0, EInvalidAmount);
     assert!(self.try_consume(amount, clock), ERateLimited);
 }
 
@@ -314,21 +315,17 @@ public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) 
 /// failure (return `false`) persisted state is left untouched. Pending time transitions
 /// remain observable through `available()`, which projects on read.
 ///
-/// A zero-unit consume is treated as a programmer error, not a rate-limit condition, so
-/// behavior stays uniform across variants.
-///
 /// #### Parameters
 /// - `self`: Limiter being charged.
 /// - `amount`: Units to consume.
 /// - `clock`: Reference to the Sui `Clock`, used to project accrual / window rollover / cooldown release.
 ///
 /// #### Returns
-/// - `true` if the consume succeeded, `false` if the limiter refused.
-///
-/// #### Aborts
-/// - `EInvalidAmount` if `amount == 0`.
+/// - `true` if the consume succeeded.
+/// - `false` if the limiter refused, or if `amount == 0`.
 public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool {
-    assert!(amount > 0, EInvalidAmount);
+    if (amount == 0) return false;
+
     let now = clock.timestamp_ms();
     match (self) {
         RateLimiter::Bucket {
@@ -387,9 +384,10 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
 /// `FixedWindow` it is the remaining headroom after any window rollover; for `Cooldown` it
 /// is `capacity` if the cooldown has elapsed and the stored `available` otherwise.
 ///
-/// Note: `try_consume(self.available(clock), clock)` aborts with `EInvalidAmount` when
-/// `available()` returns `0` (empty Bucket, exhausted FixedWindow, or gated Cooldown).
-/// Guard with `if n > 0 { self.try_consume(n, clock) }` or branch on `available()` directly.
+/// Note: `try_consume(self.available(clock), clock)` returns `false` when `available()`
+/// returns `0` (empty Bucket, exhausted FixedWindow, or gated Cooldown), because a
+/// zero-unit consume is rejected. Guard with `if n > 0 { self.try_consume(n, clock) }`
+/// or branch on `available()` directly.
 ///
 /// #### Parameters
 /// - `self`: Limiter to inspect.
