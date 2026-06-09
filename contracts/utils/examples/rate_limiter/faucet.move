@@ -19,9 +19,13 @@ use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 
+// === Constants ===
+
 const HOUR: u64 = 60 * 60 * 1000;
 
 const HOURLY_LIMIT: u64 = 100;
+
+// === Structs ===
 
 /// Shared faucet with one global claim limiter shared by every holder.
 public struct Faucet has key {
@@ -39,10 +43,11 @@ public struct ClaimCap has key, store {
     personal_limiter: RateLimiter,
 }
 
-/// Share a faucet whose global budget is 100 coins per hour, and hand the funder
-/// an `AdminCap` for issuing claim capabilities.
-#[allow(lint(self_transfer))]
-public fun new(funds: Coin<RARE_COIN>, clock: &Clock, ctx: &mut TxContext) {
+// === Public Functions ===
+
+/// Share a faucet whose global budget is 100 coins per hour, and return an `AdminCap`
+/// for issuing claim capabilities.
+public fun new(funds: Coin<RARE_COIN>, clock: &Clock, ctx: &mut TxContext): AdminCap {
     let global_limiter = rate_limiter::new_fixed_window(
         HOURLY_LIMIT,
         HOUR,
@@ -56,7 +61,7 @@ public fun new(funds: Coin<RARE_COIN>, clock: &Clock, ctx: &mut TxContext) {
         balance: funds.into_balance(),
         global_limiter,
     });
-    transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender());
+    AdminCap { id: object::new(ctx) }
 }
 
 /// Issue a claim capability with a personal token-bucket limit: at most `per_user_cap`
@@ -95,6 +100,8 @@ public fun claim(
     coin::from_balance(self.balance.split(amount), ctx)
 }
 
+// === View helpers ===
+
 /// This holder's currently-available personal allowance (projects refill on read).
 public fun personal_allowance(cap: &ClaimCap, clock: &Clock): u64 {
     cap.personal_limiter.available(clock)
@@ -104,6 +111,8 @@ public fun personal_allowance(cap: &ClaimCap, clock: &Clock): u64 {
 public fun global_allowance(self: &Faucet, clock: &Clock): u64 {
     self.global_limiter.available(clock)
 }
+
+// === Test-Only Helpers ===
 
 #[test_only]
 use sui::test_scenario as ts;
@@ -125,12 +134,11 @@ fun users_claim_when_respecting_all_limits() {
     scenario.next_tx(admin);
 
     let rare_coins = scenario.take_from_sender<Coin<RARE_COIN>>();
-    new(rare_coins, &clock, scenario.ctx());
+    let admin_cap = new(rare_coins, &clock, scenario.ctx());
 
     scenario.next_tx(admin);
 
     let mut faucet = scenario.take_shared<Faucet>();
-    let admin_cap = scenario.take_from_sender<AdminCap>();
     // User 1: Personal cap of 60, refilling 10/sec.
     issue_claim_cap(&admin_cap, user_1, 60, 10, 1_000, &clock, scenario.ctx());
     // User 2: Personal cap of 50, refilling 15/sec.
@@ -180,12 +188,11 @@ fun personal_limit_binds_even_if_global_allows() {
     scenario.next_tx(admin);
 
     let rare_coins = scenario.take_from_sender<Coin<RARE_COIN>>();
-    new(rare_coins, &clock, scenario.ctx());
+    let admin_cap = new(rare_coins, &clock, scenario.ctx());
 
     scenario.next_tx(admin);
 
     let mut faucet = scenario.take_shared<Faucet>();
-    let admin_cap = scenario.take_from_sender<AdminCap>();
     // User 1: Personal cap of 60, refilling 10/sec.
     issue_claim_cap(&admin_cap, user, 60, 10, 1_000, &clock, scenario.ctx());
 

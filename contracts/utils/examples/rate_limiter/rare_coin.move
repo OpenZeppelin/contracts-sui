@@ -9,9 +9,13 @@
 /// deployed as-is.
 module openzeppelin_utils::rare_coin;
 
+// === Structs ===
+
 /// One-time witness for the coin. The all-caps name matching the module is the Sui
 /// convention that lets `init` register this as a currency.
 public struct RARE_COIN has drop {}
+
+// === Init ===
 
 /// Mints a fixed supply of 10,000 units to the publisher, freezes the supply, and
 /// freezes the metadata. Runs once at publish.
@@ -31,6 +35,8 @@ fun init(witness: RARE_COIN, ctx: &mut TxContext) {
     currency.finalize_and_delete_metadata_cap(ctx);
     transfer::public_transfer(coins, ctx.sender());
 }
+
+// === Test-Only Helpers ===
 
 #[test_only]
 public fun init_for_testing(ctx: &mut TxContext) {

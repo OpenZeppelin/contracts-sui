@@ -19,8 +19,13 @@ use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 
-/// A receipt or ticket was provided for a different vault than the one that issued it.
-const EWrongVault: u64 = 0;
+// === Errors ===
+
+#[error(code = 0)]
+const EWrongVault: vector<u8> =
+    "A receipt or ticket was provided for a different vault than the one that issued it";
+
+// === Structs ===
 
 /// Shared staking pool. `unbond_delay_ms` is the cooldown applied before staked funds can be claimed.
 public struct StakingVault has key {
@@ -42,6 +47,8 @@ public struct UnstakeTicket has key, store {
     coins: Balance<SUI>,
     gate: RateLimiter,
 }
+
+// === Public Functions ===
 
 /// Share a staking vault with the given unbonding delay.
 public fun new(unbond_delay_ms: u64, ctx: &mut TxContext) {
@@ -92,10 +99,14 @@ public fun claim(ticket: UnstakeTicket, clock: &Clock, ctx: &mut TxContext): Coi
     coin::from_balance(coins, ctx)
 }
 
+// === View helpers ===
+
 /// Whether the ticket's cooldown has elapsed and the coins can be claimed now.
 public fun is_claimable(ticket: &UnstakeTicket, clock: &Clock): bool {
     ticket.gate.available(clock) > 0
 }
+
+// === Test-Only Helpers ===
 
 #[test_only]
 use sui::test_scenario as ts;

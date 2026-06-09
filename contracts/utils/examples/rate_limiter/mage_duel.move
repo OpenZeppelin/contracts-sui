@@ -28,6 +28,8 @@ use sui::clock::Clock;
 use sui::event;
 use sui::table::{Self, Table};
 
+// === Errors ===
+
 #[error(code = 0)]
 const EDuelOver: vector<u8> = "The duel already has a winner";
 #[error(code = 1)]
@@ -39,12 +41,16 @@ const ENotStarted: vector<u8> = "The duel has not been accepted yet";
 #[error(code = 4)]
 const EWrongDuel: vector<u8> = "This cap is for a different duel";
 
+// === Constants ===
+
 const FIREBALL_KEY: vector<u8> = "fireball";
 const METEOR_KEY: vector<u8> = "meteor";
 
 const MAX_HEALTH: u64 = 100;
 const MAX_MANA: u64 = 60;
 const CD_MS: u64 = 10_000; // 10s cooldown after a spell is exhausted
+
+// === Structs ===
 
 /// Stats for one spell. Logic reads these; designers tune them here.
 public struct SpellDef has drop, store {
@@ -89,6 +95,8 @@ public struct OpponentCap has key, store {
     duel_id: ID,
 }
 
+// === Events ===
+
 /// Emitted when a challenger opens a duel against `opponent`.
 public struct DuelInitiated has copy, drop {
     duel_id: ID,
@@ -106,6 +114,8 @@ public struct DuelEnded has copy, drop {
     duel_id: ID,
     challenger_won: bool,
 }
+
+// === Public Functions ===
 
 /// Open a duel against `opponent`: spawn both full-health mages and share the `Duel`. Returns a
 /// `ChallengerCap` (kept by the challenger) and a `PotentialOpponentCap` (the invitation, to be
@@ -169,6 +179,35 @@ public fun opponent_cast_meteor(duel: &mut Duel, cap: &OpponentCap, clock: &Cloc
     cast(duel, false, METEOR_KEY, clock);
 }
 
+// === View helpers ===
+
+/// The challenger's current health (projects regeneration on read).
+public fun challenger_health(duel: &Duel, clock: &Clock): u64 {
+    duel.challenger_mage.health.available(clock)
+}
+
+/// The opponent's current health (projects regeneration on read).
+public fun opponent_health(duel: &Duel, clock: &Clock): u64 {
+    duel.opponent_mage.health.available(clock)
+}
+
+/// The challenger's current mana (projects regeneration on read).
+public fun challenger_mana(duel: &Duel, clock: &Clock): u64 {
+    duel.challenger_mage.mana.available(clock)
+}
+
+/// The opponent's current mana (projects regeneration on read).
+public fun opponent_mana(duel: &Duel, clock: &Clock): u64 {
+    duel.opponent_mage.mana.available(clock)
+}
+
+/// Whether the duel has ended (one mage has been defeated).
+public fun is_over(duel: &Duel): bool {
+    duel.challenger_won.is_some()
+}
+
+// === Private Functions ===
+
 /// Resolve a cast: burn a cooldown charge, pay mana, then damage the defender. Aborts (reverting the
 /// whole transaction) if the duel is not live, the spell is on cooldown, or the caster cannot
 /// afford the mana.
@@ -199,31 +238,6 @@ fun cast(duel: &mut Duel, challenger_attacking: bool, spell_key: vector<u8>, clo
         duel.challenger_won = option::some(challenger_attacking);
         event::emit(DuelEnded { duel_id: object::id(duel), challenger_won: challenger_attacking });
     };
-}
-
-/// The challenger's current health (projects regeneration on read).
-public fun challenger_health(duel: &Duel, clock: &Clock): u64 {
-    duel.challenger_mage.health.available(clock)
-}
-
-/// The opponent's current health (projects regeneration on read).
-public fun opponent_health(duel: &Duel, clock: &Clock): u64 {
-    duel.opponent_mage.health.available(clock)
-}
-
-/// The challenger's current mana (projects regeneration on read).
-public fun challenger_mana(duel: &Duel, clock: &Clock): u64 {
-    duel.challenger_mage.mana.available(clock)
-}
-
-/// The opponent's current mana (projects regeneration on read).
-public fun opponent_mana(duel: &Duel, clock: &Clock): u64 {
-    duel.opponent_mage.mana.available(clock)
-}
-
-/// Whether the duel has ended (one mage has been defeated).
-public fun is_over(duel: &Duel): bool {
-    duel.challenger_won.is_some()
 }
 
 /// Spawn a full-health, full-mana mage with both spells ready.
@@ -258,6 +272,8 @@ fun new_mage(clock: &Clock, ctx: &mut TxContext): Mage {
         spells,
     }
 }
+
+// === Test-Only Helpers ===
 
 #[test_only]
 use sui::test_scenario as ts;
