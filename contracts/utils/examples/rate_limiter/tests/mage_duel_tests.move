@@ -256,7 +256,10 @@ fun start_duel(scenario: &mut Scenario, clock: &Clock): (ID, ChallengerCap, Oppo
 // Build two independent duels and return duel 2 (taken from the inventory) together with duel 1's
 // caps — so a cast against duel 2 with a duel-1 cap exercises the `EWrongDuel` guard. Duel 2's own
 // caps are discarded; the caller cleans up whichever duel-1 cap it does not use.
-fun two_duels_cross_caps(scenario: &mut Scenario, clock: &Clock): (Duel, ChallengerCap, OpponentCap) {
+fun two_duels_cross_caps(
+    scenario: &mut Scenario,
+    clock: &Clock,
+): (Duel, ChallengerCap, OpponentCap) {
     let (_id1, challenger_cap1, opponent_cap1) = start_duel(scenario, clock);
     let (id2, challenger_cap2, opponent_cap2) = start_duel(scenario, clock);
 
