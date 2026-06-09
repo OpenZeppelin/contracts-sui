@@ -23,6 +23,7 @@
 ///
 /// Complete, compiling integrations live under `examples/rate_limiter/`:
 /// - `faucet` - a per-holder token bucket composed with a global window across two objects.
+/// - `staking_vault` - a cooldown armed as a one-shot timelock that gates claims until an unbonding delay elapses.
 ///
 /// These are unaudited illustrations of how the primitive can be integrated, not production code.
 ///
