@@ -147,7 +147,7 @@ public fun challenge(
 /// returns an `OpponentCap` that gates the opponent's casts.
 public fun accept(duel: &mut Duel, cap: PotentialOpponentCap, ctx: &mut TxContext): OpponentCap {
     let PotentialOpponentCap { id, duel_id } = cap;
-    assert!(duel_id == object::id(duel), ENotOpponent);
+    assert!(duel_id == object::id(duel), EWrongDuel);
     assert!(!duel.started, EAlreadyStarted);
     id.delete();
     duel.started = true;
