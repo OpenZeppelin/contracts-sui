@@ -1,7 +1,7 @@
 module openzeppelin_utils::staking_vault_tests;
 
 use openzeppelin_utils::rate_limiter;
-use openzeppelin_utils::staking_vault::{new, StakingVault};
+use openzeppelin_utils::staking_vault::{Self, new, StakingVault};
 use std::unit_test::{destroy, assert_eq};
 use sui::coin;
 use sui::sui::SUI;
@@ -61,6 +61,35 @@ fun claim_before_cooldown_elapses_aborts() {
     assert!(!ticket.is_claimable(&clock));
     // The gate has not released yet, so claiming aborts `ERateLimited`.
     destroy(ticket.claim(&clock, scenario.ctx()));
+
+    abort
+}
+
+// A receipt is bound to the vault that issued it: presenting it to a *different* vault aborts
+// `EWrongVault` before any funds move.
+#[test, expected_failure(abort_code = staking_vault::EWrongVault)]
+fun initiate_unstake_with_foreign_receipt_aborts() {
+    let staker = @0xA;
+
+    let mut scenario = ts::begin(staker);
+    let clock = sui::clock::create_for_testing(scenario.ctx());
+
+    // Two independent vaults.
+    new(UNBOND_DELAY_MS, scenario.ctx());
+    scenario.next_tx(staker);
+    let id_a = ts::most_recent_id_shared<StakingVault>().destroy_some();
+
+    new(UNBOND_DELAY_MS, scenario.ctx());
+    scenario.next_tx(staker);
+    let id_b = ts::most_recent_id_shared<StakingVault>().destroy_some();
+
+    let mut vault_a = ts::take_shared_by_id<StakingVault>(&scenario, id_a);
+    let mut vault_b = ts::take_shared_by_id<StakingVault>(&scenario, id_b);
+
+    // Stake into A, then try to begin unstaking against B with A's receipt.
+    let payment = coin::mint_for_testing<SUI>(1_000, scenario.ctx());
+    let receipt = vault_a.stake(payment, scenario.ctx());
+    destroy(vault_b.initiate_unstake(receipt, &clock, scenario.ctx()));
 
     abort
 }
