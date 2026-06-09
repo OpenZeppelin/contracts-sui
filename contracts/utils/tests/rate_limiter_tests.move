@@ -346,28 +346,28 @@ fun cooldown_rejects_amount_exceeding_available() {
     teardown(test, clk);
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
-fun try_consume_with_zero_amount_aborts() {
-    let (_test, clk) = setup(0);
+#[test]
+fun try_consume_with_zero_amount_returns_false_bucket() {
+    let (test, clk) = setup(0);
     let mut rl = rate_limiter::new_bucket(10, 1, 10, clk.timestamp_ms(), 10, &clk);
-    rl.try_consume(0, &clk);
-    abort
+    assert!(!rl.try_consume(0, &clk));
+    teardown(test, clk);
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
-fun try_consume_with_zero_amount_aborts_fixed_window() {
-    let (_test, clk) = setup(0);
+#[test]
+fun try_consume_with_zero_amount_returns_false_fixed_window() {
+    let (test, clk) = setup(0);
     let mut rl = rate_limiter::new_fixed_window(10, 100, 0, 10, &clk);
-    rl.try_consume(0, &clk);
-    abort
+    assert!(!rl.try_consume(0, &clk));
+    teardown(test, clk);
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
-fun try_consume_with_zero_amount_aborts_cooldown() {
-    let (_test, clk) = setup(0);
+#[test]
+fun try_consume_with_zero_amount_returns_false_cooldown() {
+    let (test, clk) = setup(0);
     let mut rl = rate_limiter::new_cooldown(10, 50, 0, 10, &clk);
-    rl.try_consume(0, &clk);
-    abort
+    assert!(!rl.try_consume(0, &clk));
+    teardown(test, clk);
 }
 
 // === Constructor config validation ===
@@ -690,43 +690,41 @@ fun cooldown_available_predicts_try_consume() {
     teardown(test, clk);
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
-fun try_consume_of_available_aborts_when_drained() {
-    // The `try_consume(self.available(clock), clock)` idiom is unsafe when the limiter
-    // is empty: available() returns 0 and try_consume(0) aborts EInvalidAmount.
-    // Callers must guard with `if n > 0 { ... }`.
-    let (_test, clk) = setup(0);
+#[test]
+fun try_consume_of_available_returns_false_when_drained() {
+    // The `try_consume(self.available(clock), clock)` idiom silently returns false when
+    // the limiter is empty: available() returns 0 and try_consume(0) is rejected.
+    // Guard with `if n > 0 { self.try_consume(n, clock) }`.
+    let (test, clk) = setup(0);
     let mut rl = rate_limiter::new_bucket(10, 1, 1_000_000, clk.timestamp_ms(), 10, &clk);
     rl.consume_or_abort(10, &clk);
     let n = rl.available(&clk);
-    rl.try_consume(n, &clk);
-    abort
+    assert!(!rl.try_consume(n, &clk));
+    teardown(test, clk);
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
-fun fixed_window_try_consume_of_available_aborts_when_exhausted() {
-    // Same footgun as `try_consume_of_available_aborts_when_drained` but for FixedWindow:
-    // available() returns 0 inside an exhausted window before rollover, and try_consume(0)
-    // aborts EInvalidAmount.
-    let (_test, clk) = setup(0);
+#[test]
+fun fixed_window_try_consume_of_available_returns_false_when_exhausted() {
+    // Same footgun as `try_consume_of_available_returns_false_when_drained` but for
+    // FixedWindow: available() returns 0 inside an exhausted window before rollover.
+    let (test, clk) = setup(0);
     let mut rl = rate_limiter::new_fixed_window(5, 100, 0, 5, &clk);
     rl.consume_or_abort(5, &clk);
     let n = rl.available(&clk);
-    rl.try_consume(n, &clk);
-    abort
+    assert!(!rl.try_consume(n, &clk));
+    teardown(test, clk);
 }
 
-#[test, expected_failure(abort_code = rate_limiter::EInvalidAmount)]
-fun cooldown_try_consume_of_available_aborts_when_gated() {
-    // Same footgun as `try_consume_of_available_aborts_when_drained` but for Cooldown:
-    // available() returns 0 while the gate is armed (deadline not yet elapsed), and
-    // try_consume(0) aborts EInvalidAmount.
-    let (_test, clk) = setup(0);
+#[test]
+fun cooldown_try_consume_of_available_returns_false_when_gated() {
+    // Same footgun as `try_consume_of_available_returns_false_when_drained` but for
+    // Cooldown: available() returns 0 while the gate is armed (deadline not yet elapsed).
+    let (test, clk) = setup(0);
     let mut rl = rate_limiter::new_cooldown(5, 50, 0, 5, &clk);
     rl.consume_or_abort(5, &clk); // drains and arms the gate
     let n = rl.available(&clk);
-    rl.try_consume(n, &clk);
-    abort
+    assert!(!rl.try_consume(n, &clk));
+    teardown(test, clk);
 }
 
 // === consume_or_abort across variants ===
@@ -1007,9 +1005,11 @@ fun reconfigure_cooldown_via_construct_fresh_preserve_in_flight_gate() {
 // Arming the gate computes `cooldown_end_ms = now + cooldown_ms`. A `cooldown_ms` near
 // `u64::MAX` overflows this addition at any nonzero clock. The module enforces only
 // positivity on `cooldown_ms` (INV-R3) and trusts the operator to pick a policy-reasonable
-// value; overflow is fail-closed (abort), never a wrapped backward deadline.
+// value; overflow is fail-closed (abort), never a wrapped backward deadline. The arming
+// site guards it explicitly, so the abort carries the named `ECooldownDeadlineOverflow`
+// code rather than a generic arithmetic error.
 
-#[test, expected_failure(arithmetic_error, location = openzeppelin_utils::rate_limiter)]
+#[test, expected_failure(abort_code = rate_limiter::ECooldownDeadlineOverflow)]
 fun cooldown_arming_aborts_on_deadline_overflow() {
     // cooldown_ms = u64::MAX, clock at 1. Draining `available` to 0 arms the gate and
     // computes `1 + u64::MAX`, which overflows.
