@@ -15,11 +15,18 @@
 ///  - Each side casts at the other through its own cap. A spell costs mana, deals damage, and burns
 ///    one charge of that spell's cooldown. When a mage's health reaches 0 the duel ends, the
 ///    winning side is recorded, and `DuelEnded` is emitted.
+///
+/// # Disclaimer
+///
+/// This module is an **unaudited example**, provided purely to illustrate ways the
+/// `RateLimiter` primitive can be integrated. It is not production-ready and must not be
+/// deployed as-is.
 module openzeppelin_utils::mage_duel;
 
 use openzeppelin_utils::rate_limiter::{Self, RateLimiter};
 use sui::clock::Clock;
 use sui::event;
+use sui::table::{Self, Table};
 
 #[error(code = 0)]
 const EDuelOver: vector<u8> = "The duel already has a winner";
@@ -32,23 +39,25 @@ const ENotStarted: vector<u8> = "The duel has not been accepted yet";
 #[error(code = 4)]
 const EWrongDuel: vector<u8> = "This cap is for a different duel";
 
+const FIREBALL_KEY: vector<u8> = "fireball";
+const METEOR_KEY: vector<u8> = "meteor";
+
 const MAX_HEALTH: u64 = 100;
 const MAX_MANA: u64 = 60;
 const CD_MS: u64 = 10_000; // 10s cooldown after a spell is exhausted
 
-// Spell A: cheap, light hit, single charge before cooldown.
-const SPELL_A_COST: u64 = 10;
-const SPELL_A_DAMAGE: u64 = 15;
-// Spell B: pricier, heavier hit, three charges before cooldown.
-const SPELL_B_COST: u64 = 20;
-const SPELL_B_DAMAGE: u64 = 30;
+/// Stats for one spell. Logic reads these; designers tune them here.
+public struct SpellDef has drop, store {
+    mana_cost: u64,
+    damage: u64,
+    cooldown: RateLimiter,
+}
 
 /// A single combatant. A plain `store` value held by the `Duel`.
 public struct Mage has store {
     health: RateLimiter,
     mana: RateLimiter,
-    spell_a_cd: RateLimiter,
-    spell_b_cd: RateLimiter,
+    spells: Table<vector<u8>, SpellDef>,
 }
 
 /// Shared arena holding both mages by value. `started` flips on `accept`; `challenger_won` is set
@@ -109,8 +118,8 @@ public fun challenge(
     let challenger = ctx.sender();
     let duel = Duel {
         id: object::new(ctx),
-        challenger_mage: new_mage(clock),
-        opponent_mage: new_mage(clock),
+        challenger_mage: new_mage(clock, ctx),
+        opponent_mage: new_mage(clock, ctx),
         started: false,
         challenger_won: option::none(),
     };
@@ -137,59 +146,56 @@ public fun accept(duel: &mut Duel, cap: PotentialOpponentCap, ctx: &mut TxContex
 }
 
 /// Challenger casts spell A at the opponent.
-public fun challenger_cast_spell_a(duel: &mut Duel, cap: &ChallengerCap, clock: &Clock) {
+public fun challenger_cast_fireball(duel: &mut Duel, cap: &ChallengerCap, clock: &Clock) {
     assert!(cap.duel_id == object::id(duel), EWrongDuel);
-    cast(duel, true, true, clock);
+    cast(duel, true, FIREBALL_KEY, clock);
 }
 
 /// Challenger casts spell B at the opponent.
-public fun challenger_cast_spell_b(duel: &mut Duel, cap: &ChallengerCap, clock: &Clock) {
+public fun challenger_cast_meteor(duel: &mut Duel, cap: &ChallengerCap, clock: &Clock) {
     assert!(cap.duel_id == object::id(duel), EWrongDuel);
-    cast(duel, true, false, clock);
+    cast(duel, true, METEOR_KEY, clock);
 }
 
 /// Opponent casts spell A at the challenger.
-public fun opponent_cast_spell_a(duel: &mut Duel, cap: &OpponentCap, clock: &Clock) {
+public fun opponent_cast_fireball(duel: &mut Duel, cap: &OpponentCap, clock: &Clock) {
     assert!(cap.duel_id == object::id(duel), EWrongDuel);
-    cast(duel, false, true, clock);
+    cast(duel, false, FIREBALL_KEY, clock);
 }
 
 /// Opponent casts spell B at the challenger.
-public fun opponent_cast_spell_b(duel: &mut Duel, cap: &OpponentCap, clock: &Clock) {
+public fun opponent_cast_meteor(duel: &mut Duel, cap: &OpponentCap, clock: &Clock) {
     assert!(cap.duel_id == object::id(duel), EWrongDuel);
-    cast(duel, false, false, clock);
+    cast(duel, false, METEOR_KEY, clock);
 }
 
-/// Resolve a cast: burn a cooldown charge, pay mana, then damage the target. Aborts (reverting the
+/// Resolve a cast: burn a cooldown charge, pay mana, then damage the defender. Aborts (reverting the
 /// whole transaction) if the duel is not live, the spell is on cooldown, or the caster cannot
 /// afford the mana.
-fun cast(duel: &mut Duel, challenger_attacking: bool, is_spell_a: bool, clock: &Clock) {
+fun cast(duel: &mut Duel, challenger_attacking: bool, spell_key: vector<u8>, clock: &Clock) {
     assert!(duel.started, ENotStarted);
     assert!(duel.challenger_won.is_none(), EDuelOver);
 
-    let (attacker, target) = if (challenger_attacking) {
+    let (attacker, defender) = if (challenger_attacking) {
         (&mut duel.challenger_mage, &mut duel.opponent_mage)
     } else {
         (&mut duel.opponent_mage, &mut duel.challenger_mage)
     };
 
-    // Attacker pays: a cooldown charge and the spell's mana cost.
-    if (is_spell_a) {
-        attacker.spell_a_cd.consume_or_abort(1, clock);
-        attacker.mana.consume_or_abort(SPELL_A_COST, clock);
-    } else {
-        attacker.spell_b_cd.consume_or_abort(1, clock);
-        attacker.mana.consume_or_abort(SPELL_B_COST, clock);
-    };
+    // Attacker pays: a cooldown charge and the spell's mana cost. Borrow the spell mutably so the
+    // burned cooldown charge persists in the table; read its stats out before touching `mana` so
+    // the mutable borrow of `spells` ends and `attacker` is free again.
+    let spell = attacker.spells.borrow_mut(spell_key);
+    spell.cooldown.consume_or_abort(1, clock);
+    attacker.mana.consume_or_abort(spell.mana_cost, clock);
 
-    // Target takes damage. Clamp to remaining health so an overkill blow doesn't get rejected by
+    // Defender takes damage. Clamp to remaining health so an overkill blow doesn't get rejected by
     // the limiter's all-or-nothing consume; guard the zero case (a zero-unit consume aborts).
-    let damage = if (is_spell_a) SPELL_A_DAMAGE else SPELL_B_DAMAGE;
-    let dealt = damage.min(target.health.available(clock));
-    if (dealt > 0) target.health.consume_or_abort(dealt, clock);
+    let dealt = spell.damage.min(defender.health.available(clock));
+    if (dealt > 0) defender.health.consume_or_abort(dealt, clock);
 
     // Defeated when no health remains: record the winning side and announce the duel's end.
-    if (target.health.available(clock) == 0) {
+    if (defender.health.available(clock) == 0) {
         duel.challenger_won = option::some(challenger_attacking);
         event::emit(DuelEnded { duel_id: object::id(duel), challenger_won: challenger_attacking });
     };
@@ -221,16 +227,102 @@ public fun is_over(duel: &Duel): bool {
 }
 
 /// Spawn a full-health, full-mana mage with both spells ready.
-fun new_mage(clock: &Clock): Mage {
+fun new_mage(clock: &Clock, ctx: &mut TxContext): Mage {
     let now = clock.timestamp_ms();
+
+    let mut spells = table::new<vector<u8>, SpellDef>(ctx);
+    spells.add(
+        FIREBALL_KEY,
+        SpellDef {
+            mana_cost: 10,
+            damage: 15,
+            // 1 charge, then a CD_MS cooldown. Starts ready (no gate armed, one charge seeded).
+            cooldown: rate_limiter::new_cooldown(1, CD_MS, 0, 1, clock),
+        },
+    );
+    spells.add(
+        METEOR_KEY,
+        SpellDef {
+            mana_cost: 20,
+            damage: 30,
+            // 3 charges, then a CD_MS cooldown. Starts ready (no gate armed, three charges seeded).
+            cooldown: rate_limiter::new_cooldown(3, CD_MS, 0, 3, clock),
+        },
+    );
+
     Mage {
         // Health as a bucket: starts full, regenerates 1 every 2s up to MAX_HEALTH.
-        health: rate_limiter::new_bucket(MAX_HEALTH, 1, 2_000, MAX_HEALTH, now, clock),
+        health: rate_limiter::new_bucket(MAX_HEALTH, 1, 2_000, now, MAX_HEALTH, clock),
         // Mana as a bucket: starts full, regenerates 5 every second up to MAX_MANA.
-        mana: rate_limiter::new_bucket(MAX_MANA, 5, 1_000, MAX_MANA, now, clock),
-        // Spell A: 1 charge, then a CD_MS cooldown. Starts ready (granted seed).
-        spell_a_cd: rate_limiter::new_cooldown(1, CD_MS, 1, 0, clock),
-        // Spell B: 3 charges, then a CD_MS cooldown. Starts ready (granted seed).
-        spell_b_cd: rate_limiter::new_cooldown(3, CD_MS, 3, 0, clock),
+        mana: rate_limiter::new_bucket(MAX_MANA, 5, 1_000, now, MAX_MANA, clock),
+        spells,
     }
+}
+
+#[test_only]
+use sui::test_scenario as ts;
+#[test_only]
+use std::unit_test::{destroy, assert_eq};
+
+#[test]
+fun duel_starts_and_spells_are_exchanged() {
+    let challenger = @0xA;
+    let opponent = @0xB;
+
+    let mut scenario = ts::begin(challenger);
+    let clock = sui::clock::create_for_testing(scenario.ctx());
+
+    // Challenger opens the duel and holds both the challenger cap and the invitation.
+    let (challenger_cap, invitation) = challenge(opponent, &clock, scenario.ctx());
+
+    // Opponent accepts, burning the invitation for an opponent cap. The duel is now live.
+    scenario.next_tx(opponent);
+    let mut duel = scenario.take_shared<Duel>();
+    let opponent_cap = duel.accept(invitation, scenario.ctx());
+
+    assert_eq!(duel.challenger_health(&clock), MAX_HEALTH);
+    assert_eq!(duel.opponent_health(&clock), MAX_HEALTH);
+
+    // Both sides trade a fireball (15 dmg, 10 mana) and a meteor (30 dmg, 20 mana). With no
+    // clock advance there is no regen, so the deltas are exact and cooldown charges stay unused.
+    duel.challenger_cast_fireball(&challenger_cap, &clock);
+    duel.opponent_cast_fireball(&opponent_cap, &clock);
+    duel.challenger_cast_meteor(&challenger_cap, &clock);
+    duel.opponent_cast_meteor(&opponent_cap, &clock);
+
+    // Each mage took 15 + 30 = 45 damage and spent 10 + 20 = 30 mana.
+    assert_eq!(duel.challenger_health(&clock), MAX_HEALTH - 45);
+    assert_eq!(duel.opponent_health(&clock), MAX_HEALTH - 45);
+    assert_eq!(duel.challenger_mana(&clock), MAX_MANA - 30);
+    assert_eq!(duel.opponent_mana(&clock), MAX_MANA - 30);
+    assert!(!duel.is_over());
+
+    destroy(challenger_cap);
+    destroy(opponent_cap);
+    ts::return_shared(duel);
+    sui::clock::destroy_for_testing(clock);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
+fun second_fireball_aborts_before_cooldown_elapses() {
+    let challenger = @0xA;
+    let opponent = @0xB;
+
+    let mut scenario = ts::begin(challenger);
+    let clock = sui::clock::create_for_testing(scenario.ctx());
+
+    let (challenger_cap, invitation) = challenge(opponent, &clock, scenario.ctx());
+
+    scenario.next_tx(opponent);
+    let mut duel = scenario.take_shared<Duel>();
+    let _opponent_cap = duel.accept(invitation, scenario.ctx());
+
+    // Fireball's cooldown has capacity 1: the first cast succeeds and exhausts it.
+    duel.challenger_cast_fireball(&challenger_cap, &clock);
+    assert_eq!(duel.opponent_health(&clock), MAX_HEALTH - 15); // first cast landed
+    // Casting again before CD_MS elapses hits the cooldown and aborts the whole transaction.
+    duel.challenger_cast_fireball(&challenger_cap, &clock);
+
+    abort
 }
