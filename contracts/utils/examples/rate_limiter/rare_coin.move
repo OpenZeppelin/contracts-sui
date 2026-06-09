@@ -28,8 +28,7 @@ fun init(witness: RARE_COIN, ctx: &mut TxContext) {
 
     let coins = treasury_cap.mint(10_000, ctx);
     currency.make_supply_fixed(treasury_cap);
-    let metadata_cap = currency.finalize(ctx);
-    transfer::public_freeze_object(metadata_cap);
+    currency.finalize_and_delete_metadata_cap(ctx);
     transfer::public_transfer(coins, ctx.sender());
 }
 
