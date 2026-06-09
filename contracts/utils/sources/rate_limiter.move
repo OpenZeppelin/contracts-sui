@@ -27,7 +27,8 @@
 /// below `u64::MAX`, but `cooldown_ms` near `u64::MAX` would overflow this addition.
 /// Operators must pick `cooldown_ms` such that `now + cooldown_ms` cannot overflow at
 /// any plausible chain timestamp during the limiter's lifetime - any policy-meaningful
-/// value (seconds to days to years in ms) satisfies this trivially.
+/// value (seconds to days to years in ms) satisfies this trivially. The arming site
+/// guards this explicitly: an overflowing deadline aborts with `ECooldownDeadlineOverflow`.
 ///
 /// Any function taking `&mut RateLimiter` mutates live state. Gate the entry functions
 /// that expose them with whatever authorization model is appropriate for the call site
@@ -112,6 +113,10 @@ const ECooldownArmedWithTokens: vector<u8> =
 /// `Bucket` refill anchor strictly in the future would underflow the next projection.
 #[error(code = 11)]
 const EBucketAnchorInFuture: vector<u8> = "Last refill time must not be in the future";
+/// Arming a `Cooldown` gate would overflow `now + cooldown_ms`. See "Operator responsibilities".
+#[error(code = 12)]
+const ECooldownDeadlineOverflow: vector<u8> =
+    "Cooldown deadline (now + cooldown_ms) would overflow u64";
 
 // === Structs ===
 
@@ -326,6 +331,7 @@ public fun new_cooldown(
 /// #### Aborts
 /// - `EInvalidAmount` if `amount == 0`.
 /// - `ERateLimited` if the limiter cannot satisfy the request.
+/// - `ECooldownDeadlineOverflow` if arming a `Cooldown` gate would overflow `now + cooldown_ms`.
 public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) {
     assert!(amount > 0, EInvalidAmount);
     assert!(self.try_consume(amount, clock), ERateLimited);
@@ -346,6 +352,9 @@ public fun consume_or_abort(self: &mut RateLimiter, amount: u64, clock: &Clock) 
 /// #### Returns
 /// - `true` if the consume succeeded.
 /// - `false` if the limiter refused, or if `amount == 0`.
+///
+/// #### Aborts
+/// - `ECooldownDeadlineOverflow` if arming a `Cooldown` gate would overflow `now + cooldown_ms`.
 public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool {
     if (amount == 0) return false;
 
@@ -391,9 +400,7 @@ public fun try_consume(self: &mut RateLimiter, amount: u64, clock: &Clock): bool
 
             *available = usable - amount;
             if (*available == 0) {
-                // SAFETY: `now + cooldown_ms` overflow is the operator's responsibility
-                // (see module-level "Operator responsibilities"). Trivially safe for any
-                // policy-meaningful `cooldown_ms`.
+                assert!(*cooldown_ms <= std::u64::max_value!() - now, ECooldownDeadlineOverflow);
                 *cooldown_end_ms = now + *cooldown_ms;
             };
             true
