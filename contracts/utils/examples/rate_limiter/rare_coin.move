@@ -1,6 +1,6 @@
-/// A throwaway fixed-supply coin used solely to give the faucet examples
-/// (`simple_faucet`, `tiered_faucet`) something concrete to hand out. Not part of the
-/// rate limiter itself — it just supplies the `Balance` the faucets are funded with.
+/// A throwaway fixed-supply coin used solely to give the `faucet` example something
+/// concrete to hand out. Not part of the rate limiter itself — it just supplies the
+/// `Balance` the faucet is funded with.
 ///
 /// # Disclaimer
 ///

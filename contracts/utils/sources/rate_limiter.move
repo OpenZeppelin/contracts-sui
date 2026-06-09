@@ -22,8 +22,7 @@
 /// # Examples
 ///
 /// Complete, compiling integrations live under `examples/rate_limiter/`:
-/// - `simple_faucet` - one shared object with a single embedded limiter (a global fixed window),
-/// - `tiered_faucet` - a per-holder token bucket composed with a global window across two objects.
+/// - `faucet` - a per-holder token bucket composed with a global window across two objects.
 ///
 /// These are unaudited illustrations of how the primitive can be integrated, not production code.
 ///

@@ -1,19 +1,17 @@
-/// Example 2 — A per-user faucet built on top of `simple_faucet`.
+/// A per-user faucet that composes two limiters of different variants across two objects.
 ///
-/// `simple_faucet` throttles *every* claimer collectively through one global
-/// fixed-window limiter on the shared `Faucet`. This variant keeps that global
-/// window but layers a *personal* limiter on top: each holder is handed a
-/// `ClaimCap` carrying its own `RateLimiter` (a token bucket) that caps how much
-/// that specific holder can claim. A claim must satisfy both limiters — the
-/// holder's personal bucket and the global window. This shows two limiters of
-/// different variants composed across two objects.
+/// The shared `Faucet` carries one global fixed-window limiter that throttles *every*
+/// claimer collectively. On top of that global window, each holder is handed a `ClaimCap`
+/// carrying its own `RateLimiter` (a token bucket) that caps how much that specific holder
+/// can claim. A claim must satisfy both limiters — the holder's personal bucket and the
+/// global window.
 ///
 /// # Disclaimer
 ///
 /// This module is an **unaudited example**, provided purely to illustrate ways the
 /// `RateLimiter` primitive can be integrated. It is not production-ready and must not be
 /// deployed as-is.
-module openzeppelin_utils::tiered_faucet;
+module openzeppelin_utils::faucet;
 
 use openzeppelin_utils::rare_coin::RARE_COIN;
 use openzeppelin_utils::rate_limiter::{Self, RateLimiter};
@@ -76,8 +74,8 @@ public fun issue_claim_cap(
         per_user_cap,
         refill_amount,
         refill_interval_ms,
-        per_user_cap, // start full
         clock.timestamp_ms(),
+        per_user_cap, // start full
         clock,
     );
     transfer::transfer(ClaimCap { id: object::new(ctx), personal_limiter }, recipient);
