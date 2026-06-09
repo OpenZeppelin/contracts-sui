@@ -9,6 +9,10 @@
 /// deployed as-is.
 module openzeppelin_utils::rare_coin;
 
+// === Constants ===
+
+const SUPPLY: u64 = 10_000;
+
 // === Structs ===
 
 /// One-time witness for the coin. The all-caps name matching the module is the Sui
@@ -30,7 +34,7 @@ fun init(witness: RARE_COIN, ctx: &mut TxContext) {
         ctx,
     );
 
-    let coins = treasury_cap.mint(10_000, ctx);
+    let coins = treasury_cap.mint(SUPPLY, ctx);
     currency.make_supply_fixed(treasury_cap);
     currency.finalize_and_delete_metadata_cap(ctx);
     transfer::public_transfer(coins, ctx.sender());

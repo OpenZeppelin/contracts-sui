@@ -7,6 +7,8 @@ use std::unit_test::{destroy, assert_eq};
 use sui::coin::{Self, Coin};
 use sui::test_scenario as ts;
 
+const HOUR: u64 = 60 * 60 * 1000;
+
 #[test]
 fun users_claim_when_respecting_all_limits() {
     let admin = @0xA;
@@ -91,4 +93,83 @@ fun personal_limit_binds_even_if_global_allows() {
     destroy(faucet.claim(&mut cap, 100, &clock, scenario.ctx()));
 
     abort
+}
+
+// The mirror image of the previous test: when the personal bucket has room but the global
+// window is empty, `claim` aborts on the *global* limiter (the second `consume_or_abort`).
+#[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
+fun global_limit_binds_even_if_personal_allows() {
+    let admin = @0xA;
+    let user = @0xB;
+
+    let mut scenario = ts::begin(admin);
+    let clock = sui::clock::create_for_testing(scenario.ctx());
+
+    rare_coin::init_for_testing(scenario.ctx());
+    scenario.next_tx(admin);
+
+    let rare_coins = scenario.take_from_sender<Coin<RARE_COIN>>();
+    let admin_cap = new(rare_coins, &clock, scenario.ctx());
+
+    scenario.next_tx(admin);
+
+    let mut faucet = scenario.take_shared<Faucet>();
+    // Personal cap of 200 — deliberately above the 100 global window, so the global cap binds first.
+    issue_claim_cap(&admin_cap, user, 200, 10, 1_000, &clock, scenario.ctx());
+
+    scenario.next_tx(user);
+
+    let mut cap = scenario.take_from_sender<ClaimCap>();
+    // Drain the global window to zero; the personal bucket still has 100 left.
+    destroy(faucet.claim(&mut cap, 100, &clock, scenario.ctx()));
+    assert_eq!(cap.personal_allowance(&clock), 100);
+    assert_eq!(faucet.global_allowance(&clock), 0);
+    // Personal allows this, but the global window is empty, so the global limiter aborts.
+    destroy(faucet.claim(&mut cap, 1, &clock, scenario.ctx()));
+
+    abort
+}
+
+// The global limiter is a fixed window: once a full `HOUR` elapses it rolls over to the
+// full hourly allowance, regardless of how much was consumed in the prior window.
+#[test]
+fun global_window_resets_after_an_hour() {
+    let admin = @0xA;
+    let user = @0xB;
+
+    let mut scenario = ts::begin(admin);
+    let mut clock = sui::clock::create_for_testing(scenario.ctx());
+
+    rare_coin::init_for_testing(scenario.ctx());
+    scenario.next_tx(admin);
+
+    let rare_coins = scenario.take_from_sender<Coin<RARE_COIN>>();
+    let admin_cap = new(rare_coins, &clock, scenario.ctx());
+
+    scenario.next_tx(admin);
+
+    let mut faucet = scenario.take_shared<Faucet>();
+    // Personal cap well above the global window so the global window is the only thing under test.
+    issue_claim_cap(&admin_cap, user, 200, 10, 1_000, &clock, scenario.ctx());
+
+    scenario.next_tx(user);
+
+    let mut cap = scenario.take_from_sender<ClaimCap>();
+    // Exhaust the global window.
+    destroy(faucet.claim(&mut cap, 100, &clock, scenario.ctx()));
+    assert_eq!(faucet.global_allowance(&clock), 0);
+
+    // After a full hour the window rolls over to the full hourly allowance.
+    clock.increment_for_testing(HOUR);
+    assert_eq!(faucet.global_allowance(&clock), 100);
+
+    // And claims succeed again against the fresh window.
+    destroy(faucet.claim(&mut cap, 50, &clock, scenario.ctx()));
+    assert_eq!(faucet.global_allowance(&clock), 50);
+
+    destroy(cap);
+    destroy(admin_cap);
+    ts::return_shared(faucet);
+    sui::clock::destroy_for_testing(clock);
+    scenario.end();
 }
