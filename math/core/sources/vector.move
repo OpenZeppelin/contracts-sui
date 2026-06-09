@@ -16,12 +16,13 @@ const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 ///
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
-/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
-/// pivot selection makes it much less likely for common inputs, while three-way partitioning
-/// improves practical performance when duplicate elements are present.
+/// average-case time complexity. The theoretical worst case is `O(n²)` and remains reachable
+/// for adversarially ordered inputs despite median-of-three pivot selection. Three-way
+/// partitioning improves practical performance when duplicate elements are present.
 ///
-/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
-/// it suitable for arbitrarily large vectors.
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros. Input
+/// size is still bounded by transaction gas and memory limits; avoid sorting unbounded vectors,
+/// especially when the caller can control the vector contents.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -31,6 +32,8 @@ const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 ///
 /// #### Example
 /// ```move
+/// use openzeppelin_math::vector;
+///
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
 /// vector::quick_sort!(&mut vec);
 /// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
@@ -45,13 +48,15 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 ///
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
-/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
-/// pivot selection makes it much less likely for common inputs, while three-way partitioning
-/// improves practical performance when duplicate elements are present. Using an incorrect
-/// comparator (see `$le` below) can also degrade performance.
+/// average-case time complexity. The theoretical worst case is `O(n²)` and remains reachable
+/// for adversarially ordered inputs despite median-of-three pivot selection. Three-way
+/// partitioning improves practical performance when duplicate elements are present. Using an
+/// incorrect comparator (see `$le` below) can also degrade performance or produce unsorted
+/// output.
 ///
-/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
-/// it suitable for arbitrarily large vectors.
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros. Input
+/// size is still bounded by transaction gas and memory limits; avoid sorting unbounded vectors,
+/// especially when the caller can control the vector contents.
 ///
 /// #### Generics
 /// - `$T`: Any type that can be compared using the provided comparison function.
@@ -59,14 +64,19 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// #### Parameters
 /// - `$vec`: A mutable reference to the vector to be sorted in-place.
 /// - `$le`: A comparison function that takes two references and returns `true` if the first
-///   element should be ordered before or equal to the second element. **Must implement
-///   non-strict ordering** (i.e., `<=` for ascending, `>=` for descending). Using a strict
-///   comparator (e.g., `<` instead of `<=`) defeats three-way partitioning, which can degrade
-///   performance to `O(n²)` when duplicate elements are present. Always use non-strict
-///   operators to ensure optimal behavior.
+///   element should be ordered before or equal to the second element. **Must implement a
+///   consistent total preorder** (i.e., non-strict `<=` for ascending, `>=` for descending).
+///   Using a strict comparator (e.g., `<` instead of `<=`) defeats three-way partitioning,
+///   which can degrade performance to `O(n²)` when duplicate elements are present. An
+///   inconsistent, non-transitive, or non-total comparator is not detected and can silently
+///   return a vector that is not sorted according to the intended order. The macro may invoke
+///   `$le` twice for a single element probe to distinguish equality from before/after ordering,
+///   so account for that when the comparator is expensive.
 ///
 /// #### Example
 /// ```move
+/// use openzeppelin_math::vector;
+///
 /// // Sort in ascending order
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
 /// vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
@@ -214,8 +224,10 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 /// The input vector is not mutated.
 ///
 /// Median selection uses quickselect over a `u256` working vector instead of
-/// sorting the full input. Benchmarks show similar cost for tiny vectors and
-/// substantially lower cost than sorting as input size grows.
+/// sorting the full input. Average-case time complexity is `O(n)`, with `O(n)` extra storage
+/// for the working vector. The theoretical worst case is `O(n²)` and remains reachable for
+/// adversarially ordered inputs despite median-of-three pivot selection. Avoid computing the
+/// median of unbounded vectors, especially when the caller can control the vector contents.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -232,7 +244,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 ///
 /// #### Example
 /// ```move
-/// use openzeppelin_math::rounding
+/// use openzeppelin_math::rounding;
 /// use openzeppelin_math::vector;
 ///
 /// let v = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
@@ -252,8 +264,10 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
 /// This function consumes and partially reorders `vec`.
 ///
 /// Median selection uses quickselect instead of sorting the full input.
-/// Benchmarks show similar cost for tiny vectors and substantially lower cost
-/// than sorting as input size grows.
+/// Average-case time complexity is `O(n)`. The theoretical worst case is `O(n²)` and remains
+/// reachable for adversarially ordered inputs despite median-of-three pivot selection. Avoid
+/// computing the median of unbounded vectors, especially when the caller can control the vector
+/// contents.
 ///
 /// #### Parameters
 /// - `vec`: Vector whose median is desired (consumed).
@@ -267,7 +281,7 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
 ///
 /// #### Example
 /// ```move
-/// use openzeppelin_math::rounding
+/// use openzeppelin_math::rounding;
 /// use openzeppelin_math::vector;
 ///
 /// let m = vector::median_u256(vector[10u256, 2, 8, 4], rounding::down());
