@@ -114,6 +114,8 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             let mut i = start + 1;
             while (i < end) {
                 let mut j = i;
+                // The comparator is non-strict, so strict ordering is derived as:
+                // a < b iff a <= b and !(b <= a).
                 while (
                     j != start
                         && $le(&vec[j], &vec[j - 1])
@@ -146,7 +148,8 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         // Three-way partition (Dutch National Flag) around the pivot.
         // Regions: [start, lt) ordered before pivot, [lt, i) equal to pivot, [i, gt) unprocessed,
         // [gt, pivot_index) ordered after pivot.
-        // The pivot value is at `pivot_index` (end - 1) and will be moved into the equal region after partitioning.
+        // The pivot value is held at `pivot_index` and will be swapped into `gt` after the
+        // scan, making the equal region contiguous as [lt, gt + 1).
         let mut lt = start;
         let mut i = start;
         let mut gt = pivot_index; // gt points to pivot_index initially; pivot is excluded from scan.
@@ -158,6 +161,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
                     i = i + 1;
                 } else {
                     // vec[i] ordered before pivot: swap to the before-pivot region.
+                    // When lt == i, this intentionally relies on swap(i, i) as a no-op.
                     vec.swap(lt, i);
                     lt = lt + 1;
                     i = i + 1;
@@ -165,6 +169,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             } else {
                 // vec[i] ordered after pivot: swap to the after-pivot region.
                 gt = gt - 1;
+                // When i == gt, this intentionally relies on swap(i, i) as a no-op.
                 vec.swap(i, gt);
                 // Don't advance `i`; the swapped-in element needs to be examined.
             };
@@ -173,13 +178,14 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         // Move the pivot from `pivot_index` into the equal region.
         // `gt` is now the start of the after-pivot region, and pivot is at `pivot_index` (== end - 1).
         // Swap pivot with vec[gt] to place it adjacent to the equal region.
+        // When gt == pivot_index, there is no after-pivot region and the swap is a no-op.
         vec.swap(gt, pivot_index);
         // After swap: [start, lt) before pivot, [lt, eq_end) equal to pivot, [eq_end, end) after pivot.
         let eq_end = gt + 1;
 
         // Push partitions: larger first, smaller second.
-        // Since we use pop_back, smaller will be processed first.
-        // Stack size will be no longer than O(log(n)).
+        // Since we use pop_back, smaller will be processed first. This ordering is what keeps
+        // the pending stack bounded by O(log(n)).
         let left_size = lt - start;
         let right_size = end - eq_end;
 
@@ -257,8 +263,6 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
     median_u256(vec_u256, $rounding_mode) as $Int
 }
 
-// === Concrete Public Functions ===
-
 /// Compute the median of a `u256` vector with configurable rounding.
 ///
 /// This function consumes and partially reorders `vec`.
@@ -293,6 +297,7 @@ public fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256
 
     let mid = len / 2;
     if (len % 2 == 1) {
+        // Odd lengths return a central order statistic; rounding mode has no effect.
         select_k_u256(&mut vec, mid)
     } else {
         let upper = select_k_u256(&mut vec, mid);
@@ -303,7 +308,7 @@ public fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256
     }
 }
 
-// === Internal Functions ===
+// === Private Functions ===
 
 // Return the kth order statistic, partially partitioning `vec` in place.
 //
@@ -350,23 +355,28 @@ fun select_k_u256(vec: &mut vector<u256>, k: u64): u256 {
         // - [lt, i) contains values equal to the pivot.
         // - [i, gt) is unprocessed.
         // - [gt, pivot_index) contains values greater than the pivot.
+        // The pivot is swapped into `gt` after the scan, making [lt, gt + 1)
+        // the contiguous pivot-equal region.
         while (i < gt) {
             if (vec[i] <= vec[pivot_index]) {
                 if (vec[pivot_index] <= vec[i]) {
                     i = i + 1;
                 } else {
+                    // When lt == i, this intentionally relies on swap(i, i) as a no-op.
                     vec.swap(lt, i);
                     lt = lt + 1;
                     i = i + 1;
                 }
             } else {
                 gt = gt - 1;
+                // When i == gt, this intentionally relies on swap(i, i) as a no-op.
                 vec.swap(i, gt);
             };
         };
 
         // Move the pivot next to the equal region. After this, [lt, eq_end)
         // contains exactly the pivot-equivalent values.
+        // When gt == pivot_index, there is no greater-than region and the swap is a no-op.
         vec.swap(gt, pivot_index);
         let eq_end = gt + 1;
 

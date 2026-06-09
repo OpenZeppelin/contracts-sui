@@ -17,7 +17,8 @@ const EZeroModulus: vector<u8> = "Modulus must be non-zero";
 
 // === Constants ===
 
-const MAX_LOG_10: u8 = 77;
+/// Maximum floor(log10(n)) for any non-zero `u256`.
+const MAX_LOG10: u8 = 77;
 const TEN_POW_2: u256 = 100;
 const TEN_POW_4: u256 = TEN_POW_2 * TEN_POW_2;
 const TEN_POW_8: u256 = TEN_POW_4 * TEN_POW_4;
@@ -424,11 +425,12 @@ public(package) macro fun is_power_of_ten<$Int>($n: $Int): bool {
     n == 10u256.pow(exp)
 }
 
-/// Compute floor(log10(value)) using binary search over powers of 10.
+/// Compute floor(log10(value)) using a fixed division cascade over powers of 10.
 ///
 /// This helper uses precomputed constants (`TEN_POW_2`, `TEN_POW_4`, etc.) to efficiently
-/// determine the magnitude of the input value. The algorithm repeatedly divides by higher
-/// powers of 10 (64, 32, 16, 8, 4, 2, 1) to narrow down the floor logarithm.
+/// determine the decimal magnitude of the input value. The algorithm checks descending powers
+/// of 10 (64, 32, 16, 8, 4, 2, 1); each successful check divides the working value by that
+/// power and adds the corresponding exponent to the floor logarithm.
 ///
 /// #### Parameters
 /// - `value`: The input value as a `u256`.
@@ -468,7 +470,7 @@ public(package) fun log10_floor(value: u256): u8 {
     result
 }
 
-// === Helper functions ===
+// === Helper Functions ===
 
 /// Internal helper for `mul_div` that selects the most efficient implementation based on the input size.
 ///
@@ -851,7 +853,7 @@ public(package) fun round_log256_to_nearest(value: u256, floor_log: u8): u8 {
 public(package) fun round_log10_to_nearest(value: u256, floor_log: u8): u8 {
     // Boundary check: log10(u256::MAX) ≈ 77.06, so floor_log ≤ 77.
     // If floor_log ≥ 77, it's already at the maximum possible log10 value with nearest rounding.
-    if (floor_log >= MAX_LOG_10) {
+    if (floor_log >= MAX_LOG10) {
         return floor_log
     };
     // Nearest-integer rounding for log10: check if value² ≥ 10^(2*floor_log + 1)
@@ -936,7 +938,7 @@ public(package) fun round_sqrt_result(
     }
 }
 
-// === Internal helpers for modular arithmetic ===
+// === Internal Modular Arithmetic Helpers ===
 
 /// Extended Euclidean algorithm that powers `inv_mod!`.
 ///
