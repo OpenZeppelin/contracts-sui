@@ -51,6 +51,14 @@
 /// instantly. Any change to the rate must re-anchor to `clock.timestamp_ms()` so the new rate
 /// only applies going forward.
 ///
+/// # Observability
+///
+/// This module deliberately emits no events. The limiter has no stable identity of its own -
+/// it shares the on-chain identity of the integrator-owned object hosting it. Emitting events
+/// for rate-limit hits, cooldown arming, and reconfiguration is therefore the integrator's
+/// responsibility, at their own entry functions where the hosting object's ID and call
+/// context are available.
+///
 /// # Upgrade compatibility
 ///
 /// `RateLimiter` is a `public enum` embedded inside integrator-owned objects. Adding a new
