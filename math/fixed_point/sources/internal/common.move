@@ -15,6 +15,25 @@ use openzeppelin_math::u128;
 #[error(code = 0)]
 const ELogOfZero: vector<u8> = "Logarithm of zero is undefined";
 
+// === Constants ===
+
+/// Internal precision used by the fixed-point logarithm kernel: `10^18`
+/// (~`2^60`), an order of magnitude finer than the user-facing `10^9` scale.
+///
+/// Error analysis: in the squaring loop, error in `y` grows ~2× per iteration
+/// (since `y_new = y_old^2 / internal`), but a wrong bit at iteration `i`
+/// only perturbs `frac` by `internal / 2^(i+1)` — exponentially decaying, so
+/// late-iteration errors contribute little. Empirically the total `frac`
+/// error stays under `~10^3` at scale `10^18`, well below one user-facing
+/// ulp (unit in the last place, `10^9`). A 9-decimal variant would lack the
+/// headroom for inputs near `1.0`; 18-decimal preserves precision.
+const INTERNAL_LOG_SCALE: u128 = 1_000_000_000_000_000_000; // 10^18
+
+/// Scale-correction denominator for `apply_log2_factor`: two scale-`10^18`
+/// factors yield a scale-`10^36` product; dividing by `10^27` lands the result
+/// at the user-facing scale `10^9`.
+const LOG_FACTOR_DENOM_E27: u128 = 1_000_000_000_000_000_000_000_000_000; // 10^27
+
 // === Package Functions ===
 
 /// Returns the raw fixed-point scale shared by `UD30x9` and `SD29x9`.
@@ -88,6 +107,9 @@ public(package) macro fun max_sd29x9_whole(): u128 {
 ///
 /// #### Returns
 /// - `numerator / denominator` when exact, otherwise that quotient plus one.
+///
+/// #### Aborts
+/// - When `denominator` is zero (native integer-division abort).
 public(package) fun div_away_u256(numerator: u256, denominator: u256): u256 {
     let quotient = numerator / denominator;
     if (quotient * denominator == numerator) {
@@ -112,23 +134,6 @@ public(package) macro fun ln2_e18(): u128 {
 public(package) macro fun log10_2_e18(): u128 {
     301_029_995_663_981_195
 }
-
-/// Internal precision used by the fixed-point logarithm kernel: `10^18`
-/// (~`2^60`), an order of magnitude finer than the user-facing `10^9` scale.
-///
-/// Error analysis: in the squaring loop, error in `y` grows ~2× per iteration
-/// (since `y_new = y_old^2 / internal`), but a wrong bit at iteration `i`
-/// only perturbs `frac` by `internal / 2^(i+1)` — exponentially decaying, so
-/// late-iteration errors contribute little. Empirically the total `frac`
-/// error stays under `~10^3` at scale `10^18`, well below one user-facing
-/// ulp (unit in the last place, `10^9`). A 9-decimal variant would lack the
-/// headroom for inputs near `1.0`; 18-decimal preserves precision.
-const INTERNAL_LOG_SCALE: u128 = 1_000_000_000_000_000_000; // 10^18
-
-/// Scale-correction denominator for `apply_log2_factor`: two scale-`10^18`
-/// factors yield a scale-`10^36` product; dividing by `10^27` lands the result
-/// at the user-facing scale `10^9`.
-const LOG_FACTOR_DENOM_E27: u128 = 1_000_000_000_000_000_000_000_000_000; // 10^27
 
 /// Combines a `raw_log2` magnitude with a base-conversion factor and returns
 /// the result at the user-facing `10^9` scale.
@@ -172,6 +177,24 @@ public(package) fun apply_log2_factor(log2_mag_e18: u128, factor_e18: u128): u12
 ///
 /// #### Aborts
 /// - `ELogOfZero` if `x_raw` is zero.
+///
+/// #### Precision
+/// The error direction differs by branch, because the final assembly is
+/// `n_abs * internal + frac` for `x_raw >= scale` but `n_abs * internal -
+/// frac` for `x_raw < scale`:
+///
+/// - `x_raw >= scale` (`n_abs = floor(log2(x_raw / 10^9))`): the magnitude
+///   is at most 2 user-facing ulps below the true magnitude, monotone-down.
+///   The dominant loss is the `x_raw >> n_abs` truncation, which discards up
+///   to `n_abs` low-order bits — so the deficit grows with `n_abs` and
+///   reaches the 2-ulp ceiling at `x_raw = u128::MAX`.
+/// - `x_raw < scale`: normalization is a lossless left shift, so the only
+///   loss is the loop's round-down of `frac`. Since `frac` is subtracted
+///   here, that round-down leaves the magnitude at or slightly above the
+///   true magnitude — a sub-ulp upward bias.
+///
+/// The user-facing rounding this induces on negative results (toward zero,
+/// with rare 1-ulp edge cases) is documented on `SD29x9::log2`.
 public(package) fun raw_log2(x_raw: u128): (bool, u128) {
     assert!(x_raw > 0, ELogOfZero);
 
