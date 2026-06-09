@@ -9,6 +9,8 @@ use sui::test_scenario as ts;
 
 const HOUR: u64 = 60 * 60 * 1000;
 
+// Happy path: two holders claim against their own personal buckets and the shared global window.
+// Each limiter debits independently, and the personal buckets refill over time.
 #[test]
 fun users_claim_when_respecting_all_limits() {
     let admin = @0xA;
@@ -64,6 +66,8 @@ fun users_claim_when_respecting_all_limits() {
     scenario.end();
 }
 
+// When the personal bucket is the tighter limiter, `claim` aborts on the *personal* check (the
+// first `consume_or_abort`) even though the global window still has room.
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
 fun personal_limit_binds_even_if_global_allows() {
     let admin = @0xA;

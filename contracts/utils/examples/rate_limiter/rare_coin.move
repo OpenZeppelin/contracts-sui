@@ -23,9 +23,9 @@ public struct RARE_COIN has drop {}
 
 /// Mints a fixed supply of 10,000 units to the publisher, freezes the supply, and
 /// freezes the metadata. Runs once at publish.
-fun init(witness: RARE_COIN, ctx: &mut TxContext) {
+fun init(otw: RARE_COIN, ctx: &mut TxContext) {
     let (mut currency, mut treasury_cap) = sui::coin_registry::new_currency_with_otw(
-        witness,
+        otw,
         0,
         "RARE_COIN",
         "Rare Coin",
@@ -42,6 +42,7 @@ fun init(witness: RARE_COIN, ctx: &mut TxContext) {
 
 // === Test-Only Helpers ===
 
+/// Run `init` under test, minting the fixed supply to the sender so a faucet can be funded.
 #[test_only]
 public fun init_for_testing(ctx: &mut TxContext) {
     init(RARE_COIN {}, ctx)

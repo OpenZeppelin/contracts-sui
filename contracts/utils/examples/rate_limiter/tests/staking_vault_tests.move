@@ -9,6 +9,7 @@ use sui::test_scenario as ts;
 
 const UNBOND_DELAY_MS: u64 = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// Happy path: stake, begin unstaking, then claim the coins once the unbonding cooldown elapses.
 #[test]
 fun stake_unstake_then_claim_after_cooldown() {
     let staker = @0xA;
@@ -42,6 +43,8 @@ fun stake_unstake_then_claim_after_cooldown() {
     scenario.end();
 }
 
+// Claiming before the unbonding delay elapses aborts `ERateLimited`: the armed gate has not
+// released yet.
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
 fun claim_before_cooldown_elapses_aborts() {
     let staker = @0xA;

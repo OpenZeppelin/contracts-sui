@@ -11,6 +11,8 @@ const MAX_MANA: u64 = 60;
 
 const CD_MS: u64 = 10_000;
 
+// Happy path: challenge, accept, then both sides trade a fireball and a meteor. With no clock
+// advance there is no regen, so health and mana debit by the exact spell stats.
 #[test]
 fun duel_starts_and_spells_are_exchanged() {
     let challenger = @0xA;
@@ -51,6 +53,8 @@ fun duel_starts_and_spells_are_exchanged() {
     scenario.end();
 }
 
+// Fireball's cooldown has capacity 1: the first cast succeeds, and recasting before `CD_MS`
+// elapses hits the gate and aborts `ERateLimited`.
 #[test, expected_failure(abort_code = rate_limiter::ERateLimited)]
 fun second_fireball_aborts_before_cooldown_elapses() {
     let challenger = @0xA;
