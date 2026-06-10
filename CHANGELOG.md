@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- Added `vector::median` macro for unsigned integer vectors with rounding for even lengths. Includes `vector::median_u256`. (#362)
+- Added `vector::median!` macro for unsigned integer vectors with rounding for even lengths. Includes `vector::median_u256`. (#362)
 
 #### Changed
 
