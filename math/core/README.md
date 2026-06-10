@@ -21,7 +21,7 @@ Operations for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`, including:
 
 ### Vector operations
 
-Generic over `u8`..`u256`:
+Generic over `u8`..`u256`, with comparator-based sorting available for other types:
 
 - `vector::quick_sort!` / `vector::quick_sort_by!`: In-place iterative quicksort with three-way partitioning
 - `vector::median!`: Median of a borrowed unsigned integer vector with configurable rounding for even-length input; uses quickselect instead of sorting the full vector and aborts on empty input
