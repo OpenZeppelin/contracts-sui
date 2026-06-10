@@ -50,7 +50,7 @@ fun ln_of_zero_aborts() {
     ud30x9::zero().ln();
 }
 
-#[test, expected_failure(abort_code = ud30x9_base::ELogUndefined)]
+#[test, expected_failure(abort_code = ud30x9_base::ELogResultUnrepresentable)]
 fun ln_of_sub_one_aborts() {
     fixed(SCALE - 1).ln();
 }

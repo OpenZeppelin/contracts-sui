@@ -92,13 +92,12 @@ single `i128`-style input or output.
 `log2`, `ln`, and `log10` are computed from a shared `log2` kernel; `ln` and
 `log10` apply a base-conversion factor on top.
 
-- **UD30x9** aborts on `x < 1` (the result would be negative).
-  Rounds down.
+- **UD30x9** aborts on `x < 1` (the result would be negative). Rounds down.
 - **SD29x9** aborts on `x <= 0`. Rounds toward zero, matching `mul_trunc`,
   `div_trunc`, and `pow` in the same module.
 
-Round-down compounding can put the result 1 ulp from the mathematical answer
-at irrational identity points (e.g. `log10(10·SCALE) == SCALE - 1`).
+`log10` is exact on integer powers of ten (including sub-unit `10^-k` on
+`SD29x9`): `log10(10^k) == k * SCALE`.
 
 ```move
 use openzeppelin_fp_math::{sd29x9, ud30x9_convert};

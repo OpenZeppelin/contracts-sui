@@ -5,6 +5,7 @@ use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
 use openzeppelin_math::rounding;
+use openzeppelin_math::u128;
 use openzeppelin_math::u256;
 
 // === Errors ===
@@ -29,10 +30,14 @@ const ECannotBeConvertedToSD29x9: vector<u8> = "Value cannot be converted to SD2
 #[error(code = 4)]
 const EInvalidShiftSize: vector<u8> = "Shift size is out of range (must be less than 128)";
 
-/// Logarithm is undefined: input must be greater than or equal to one
+/// Logarithm is undefined: input must be non-zero
 #[error(code = 5)]
-const ELogUndefined: vector<u8> =
-    "Logarithm is undefined: input must be greater than or equal to one";
+const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be non-zero";
+
+/// Logarithm result would be negative and is unrepresentable in `UD30x9`
+#[error(code = 6)]
+const ELogResultUnrepresentable: vector<u8> =
+    "Logarithm result would be negative and is unrepresentable in UD30x9";
 
 // === Public Functions ===
 
@@ -250,8 +255,10 @@ public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
 
 /// Computes the natural logarithm of a `UD30x9` value.
 ///
-/// Derived from `log2` via the identity `ln(x) = log2(x) * ln(2)`. Both factors
-/// round toward zero, so the result may sit up to one ulp below the true value.
+/// Derived from `log2` via the identity `ln(x) = log2(x) * ln(2)`. Both the
+/// `log2` kernel and the base-conversion step round toward zero, so the
+/// result may sit up to 2 ulps below the true value; see `raw_log2` for the
+/// kernel's precision bound.
 ///
 /// #### Parameters
 /// - `x`: Input value.
@@ -260,10 +267,13 @@ public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
 /// - `ln(x)`, rounded down to the nearest representable `UD30x9` value.
 ///
 /// #### Aborts
-/// - `ELogUndefined` if `x` is less than one.
+/// - `ELogUndefined` if `x` is zero.
+/// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
+///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
 public fun ln(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
-    assert!(raw >= common::scale!(), ELogUndefined);
+    assert!(raw > 0, ELogUndefined);
+    assert!(raw >= common::scale!(), ELogResultUnrepresentable);
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);
@@ -272,22 +282,33 @@ public fun ln(x: UD30x9): UD30x9 {
 
 /// Computes the base-10 logarithm of a `UD30x9` value.
 ///
-/// Derived from `log2` via the identity `log10(x) = log2(x) * log10(2)`. Both
-/// factors round toward zero, so the result may sit up to one ulp below the
-/// true value. In particular, `log10(10) == one() - 1 ulp` under pure
-/// round-down arithmetic.
+/// Exact when `x` is an integer power of ten (`10^k`, `k >= 0`). Otherwise
+/// derived from `log2` via the identity `log10(x) = log2(x) * log10(2)`.
+/// Both the `log2` kernel and the base-conversion step round toward zero,
+/// so the result may sit up to 2 ulps below the true value; see `raw_log2`
+/// for the kernel's precision bound. In particular, `log10(10)` may sit up
+/// to 2 ulps below `one()`.
 ///
 /// #### Parameters
 /// - `x`: Input value.
 ///
 /// #### Returns
-/// - `log10(x)`, rounded down to the nearest representable `UD30x9` value.
+/// - `log10(x)`, rounded down to the nearest representable `UD30x9` value
+///   (exact at integer powers of ten).
 ///
 /// #### Aborts
-/// - `ELogUndefined` if `x` is less than one.
+/// - `ELogUndefined` if `x` is zero.
+/// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
+///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
 public fun log10(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
-    assert!(raw >= common::scale!(), ELogUndefined);
+    assert!(raw > 0, ELogUndefined);
+    assert!(raw >= common::scale!(), ELogResultUnrepresentable);
+    if (u128::is_power_of_ten(raw)) {
+        // Subtract `9 = log10(SCALE)` to strip the embedded scale.
+        let j = u128::log10(raw, rounding::down());
+        return wrap(((j - 9) as u128) * common::scale!())
+    };
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);
@@ -296,20 +317,24 @@ public fun log10(x: UD30x9): UD30x9 {
 
 /// Computes the base-2 logarithm of a `UD30x9` value.
 ///
-/// The result is rounded down to the nearest representable `UD30x9` value:
-/// it is the largest `UD30x9` `r` such that `2^r <= x`.
+/// The result is rounded down and sits at most 2 ulps below the true
+/// `log2(x)`; see `raw_log2` for the kernel's precision bound. For inputs
+/// in `[1, 2)` the result is exact.
 ///
 /// #### Parameters
 /// - `x`: Input value.
 ///
 /// #### Returns
-/// - `log2(x)`, rounded down to the nearest representable `UD30x9` value.
+/// - `log2(x)`, at most 2 ulps below the true value.
 ///
 /// #### Aborts
-/// - `ELogUndefined` if `x` is less than one (result would be negative or undefined).
+/// - `ELogUndefined` if `x` is zero.
+/// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
+///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
 public fun log2(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
-    assert!(raw >= common::scale!(), ELogUndefined);
+    assert!(raw > 0, ELogUndefined);
+    assert!(raw >= common::scale!(), ELogResultUnrepresentable);
     // The `raw >= scale` precondition guarantees `raw_log2` returns a
     // non-negative sign, so the discarded sign flag is provably `false`.
     let (_, mag) = common::raw_log2(raw);

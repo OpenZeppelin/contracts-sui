@@ -37,14 +37,16 @@ Generic over `u8`..`u256`, with comparator-based sorting available for other typ
 ## Usage examples
 
 ```move
-use openzeppelin_math::{u128, rounding};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u128;
 
 let result = u128::mul_div(100, 200, 3, rounding::up());
 // result = Some(6667) (rounded up from 6666.66...)
 ```
 
 ```move
-use openzeppelin_math::{u64, rounding};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u64;
 
 let mean = u64::average(5, 6, rounding::down());
 // mean = 5
