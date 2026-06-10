@@ -25,8 +25,8 @@ Generic over `u8`..`u256`, with comparator-based sorting available for other typ
 
 - `vector::quick_sort`: In-place iterative quicksort with three-way partitioning for unsigned integer vectors
 - `vector::quick_sort_by`: In-place iterative quicksort with three-way partitioning and a caller-provided comparator
-- `vector::median`: Median of a borrowed unsigned integer vector with configurable rounding for even-length input; uses quickselect instead of sorting the full vector and aborts on empty input
-- `vector::median_u256`: Concrete `vector<u256>` median function using the same quickselect implementation
+- `vector::median`: Median of a borrowed unsigned integer vector with configurable rounding for even-length input; uses quickselect instead of sorting the full vector and aborts on empty input. As a macro it inlines the full algorithm at each call site (most gas-efficient form)
+- `vector::median_u8` … `vector::median_u256`: Precompiled median wrappers for each unsigned integer width (`u8`, `u16`, `u32`, `u64`, `u128`, `u256`); same quickselect algorithm and abort behavior as `median!`, with the selection bytecode compiled once in the library instead of inlined at the call site
 
 ## Rounding modes
 
