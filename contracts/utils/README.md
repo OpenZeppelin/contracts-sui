@@ -82,13 +82,16 @@ public fun withdraw(self: &mut Vault, amount: u64, clock: &Clock) {
 
 ### Examples
 
+> [!Warning]
+> These are **unaudited illustrations** of how the primitive can be integrated, not production-ready code.
+
 Complete, compiling integrations live in [`examples/rate_limiter/`](examples/rate_limiter):
 
 - [`faucet`](examples/rate_limiter/faucet.move) - two limiters of different variants composed across two objects: a per-holder token bucket layered on top of a global fixed window shared by all claimers.
 - [`staking_vault`](examples/rate_limiter/staking_vault.move) - a cooldown used as a one-shot timelock: unstaking arms a gate that releases after an unbonding delay, so the claim aborts until the delay has elapsed.
 - [`mage_duel`](examples/rate_limiter/mage_duel.move) - rate limiting can be used outside of DeFi; this example showcases many limiters of mixed variants packed into one type: a mage holds buckets for health and mana plus per-spell cooldowns, with `copy` limiters carried inside `store` structs.
 
-These are **unaudited illustrations** of how the primitive can be integrated, not production-ready code.
+
 
 ### Operator Notes
 
