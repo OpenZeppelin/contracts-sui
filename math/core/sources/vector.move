@@ -16,12 +16,13 @@ const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 ///
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
-/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
-/// pivot selection makes it much less likely for common inputs, while three-way partitioning
-/// improves practical performance when duplicate elements are present.
+/// average-case time complexity. The theoretical worst case is `O(n²)` and remains reachable
+/// for adversarially ordered inputs despite median-of-three pivot selection. Three-way
+/// partitioning improves practical performance when duplicate elements are present.
 ///
-/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
-/// it suitable for arbitrarily large vectors.
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros. Input
+/// size is still bounded by transaction gas and memory limits; avoid sorting unbounded vectors,
+/// especially when the caller can control the vector contents.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -31,6 +32,8 @@ const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 ///
 /// #### Example
 /// ```move
+/// use openzeppelin_math::vector;
+///
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
 /// vector::quick_sort!(&mut vec);
 /// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
@@ -45,13 +48,15 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 ///
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
-/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
-/// pivot selection makes it much less likely for common inputs, while three-way partitioning
-/// improves practical performance when duplicate elements are present. Using an incorrect
-/// comparator (see `$le` below) can also degrade performance.
+/// average-case time complexity. The theoretical worst case is `O(n²)` and remains reachable
+/// for adversarially ordered inputs despite median-of-three pivot selection. Three-way
+/// partitioning improves practical performance when duplicate elements are present. Using an
+/// incorrect comparator (see `$le` below) can also degrade performance or produce unsorted
+/// output.
 ///
-/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
-/// it suitable for arbitrarily large vectors.
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros. Input
+/// size is still bounded by transaction gas and memory limits; avoid sorting unbounded vectors,
+/// especially when the caller can control the vector contents.
 ///
 /// #### Generics
 /// - `$T`: Any type that can be compared using the provided comparison function.
@@ -59,14 +64,19 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// #### Parameters
 /// - `$vec`: A mutable reference to the vector to be sorted in-place.
 /// - `$le`: A comparison function that takes two references and returns `true` if the first
-///   element should be ordered before or equal to the second element. **Must implement
-///   non-strict ordering** (i.e., `<=` for ascending, `>=` for descending). Using a strict
-///   comparator (e.g., `<` instead of `<=`) defeats three-way partitioning, which can degrade
-///   performance to `O(n²)` when duplicate elements are present. Always use non-strict
-///   operators to ensure optimal behavior.
+///   element should be ordered before or equal to the second element. **Must implement a
+///   consistent total preorder** (i.e., non-strict `<=` for ascending, `>=` for descending).
+///   Using a strict comparator (e.g., `<` instead of `<=`) defeats three-way partitioning,
+///   which can degrade performance to `O(n²)` when duplicate elements are present. An
+///   inconsistent, non-transitive, or non-total comparator is not detected and can silently
+///   return a vector that is not sorted according to the intended order. The macro may invoke
+///   `$le` twice for a single element probe to distinguish equality from before/after ordering,
+///   so account for that when the comparator is expensive.
 ///
 /// #### Example
 /// ```move
+/// use openzeppelin_math::vector;
+///
 /// // Sort in ascending order
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
 /// vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
@@ -104,6 +114,8 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             let mut i = start + 1;
             while (i < end) {
                 let mut j = i;
+                // The comparator is non-strict, so strict ordering is derived as:
+                // a < b iff a <= b and !(b <= a).
                 while (
                     j != start
                         && $le(&vec[j], &vec[j - 1])
@@ -122,7 +134,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 
         // Choose median-of-three (start, mid, pivot_index) as a pivot
         // and place it on the last position.
-        let mid = (start + end) / 2;
+        let mid = start + (end - start) / 2;
         if ($le(&vec[mid], &vec[start])) {
             vec.swap(start, mid);
         };
@@ -136,7 +148,8 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         // Three-way partition (Dutch National Flag) around the pivot.
         // Regions: [start, lt) ordered before pivot, [lt, i) equal to pivot, [i, gt) unprocessed,
         // [gt, pivot_index) ordered after pivot.
-        // The pivot value is at `pivot_index` (end - 1) and will be moved into the equal region after partitioning.
+        // The pivot value is held at `pivot_index` and will be swapped into `gt` after the
+        // scan, making the equal region contiguous as [lt, gt + 1).
         let mut lt = start;
         let mut i = start;
         let mut gt = pivot_index; // gt points to pivot_index initially; pivot is excluded from scan.
@@ -148,6 +161,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
                     i = i + 1;
                 } else {
                     // vec[i] ordered before pivot: swap to the before-pivot region.
+                    // When lt == i, this intentionally relies on swap(i, i) as a no-op.
                     vec.swap(lt, i);
                     lt = lt + 1;
                     i = i + 1;
@@ -155,6 +169,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             } else {
                 // vec[i] ordered after pivot: swap to the after-pivot region.
                 gt = gt - 1;
+                // When i == gt, this intentionally relies on swap(i, i) as a no-op.
                 vec.swap(i, gt);
                 // Don't advance `i`; the swapped-in element needs to be examined.
             };
@@ -163,13 +178,14 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         // Move the pivot from `pivot_index` into the equal region.
         // `gt` is now the start of the after-pivot region, and pivot is at `pivot_index` (== end - 1).
         // Swap pivot with vec[gt] to place it adjacent to the equal region.
+        // When gt == pivot_index, there is no after-pivot region and the swap is a no-op.
         vec.swap(gt, pivot_index);
         // After swap: [start, lt) before pivot, [lt, eq_end) equal to pivot, [eq_end, end) after pivot.
         let eq_end = gt + 1;
 
         // Push partitions: larger first, smaller second.
-        // Since we use pop_back, smaller will be processed first.
-        // Stack size will be no longer than O(log(n)).
+        // Since we use pop_back, smaller will be processed first. This ordering is what keeps
+        // the pending stack bounded by O(log(n)).
         let left_size = lt - start;
         let right_size = end - eq_end;
 
@@ -214,8 +230,10 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 /// The input vector is not mutated.
 ///
 /// Median selection uses quickselect over a `u256` working vector instead of
-/// sorting the full input. Benchmarks show similar cost for tiny vectors and
-/// substantially lower cost than sorting as input size grows.
+/// sorting the full input. Average-case time complexity is `O(n)`, with `O(n)` extra storage
+/// for the working vector. The theoretical worst case is `O(n²)` and remains reachable for
+/// adversarially ordered inputs despite median-of-three pivot selection. Avoid computing the
+/// median of unbounded vectors, especially when the caller can control the vector contents.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -245,15 +263,15 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
     median_u256(vec_u256, $rounding_mode) as $Int
 }
 
-// === Concrete Public Functions ===
-
 /// Compute the median of a `u256` vector with configurable rounding.
 ///
 /// This function consumes and partially reorders `vec`.
 ///
 /// Median selection uses quickselect instead of sorting the full input.
-/// Benchmarks show similar cost for tiny vectors and substantially lower cost
-/// than sorting as input size grows.
+/// Average-case time complexity is `O(n)`. The theoretical worst case is `O(n²)` and remains
+/// reachable for adversarially ordered inputs despite median-of-three pivot selection. Avoid
+/// computing the median of unbounded vectors, especially when the caller can control the vector
+/// contents.
 ///
 /// #### Parameters
 /// - `vec`: Vector whose median is desired (consumed).
@@ -279,6 +297,7 @@ public fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256
 
     let mid = len / 2;
     if (len % 2 == 1) {
+        // Odd lengths return a central order statistic; rounding mode has no effect.
         select_k_u256(&mut vec, mid)
     } else {
         let upper = select_k_u256(&mut vec, mid);
@@ -289,7 +308,7 @@ public fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256
     }
 }
 
-// === Internal Functions ===
+// === Private Functions ===
 
 // Return the kth order statistic, partially partitioning `vec` in place.
 //
@@ -336,23 +355,28 @@ fun select_k_u256(vec: &mut vector<u256>, k: u64): u256 {
         // - [lt, i) contains values equal to the pivot.
         // - [i, gt) is unprocessed.
         // - [gt, pivot_index) contains values greater than the pivot.
+        // The pivot is swapped into `gt` after the scan, making [lt, gt + 1)
+        // the contiguous pivot-equal region.
         while (i < gt) {
             if (vec[i] <= vec[pivot_index]) {
                 if (vec[pivot_index] <= vec[i]) {
                     i = i + 1;
                 } else {
+                    // When lt == i, this intentionally relies on swap(i, i) as a no-op.
                     vec.swap(lt, i);
                     lt = lt + 1;
                     i = i + 1;
                 }
             } else {
                 gt = gt - 1;
+                // When i == gt, this intentionally relies on swap(i, i) as a no-op.
                 vec.swap(i, gt);
             };
         };
 
         // Move the pivot next to the equal region. After this, [lt, eq_end)
         // contains exactly the pivot-equivalent values.
+        // When gt == pivot_index, there is no greater-than region and the swap is a no-op.
         vec.swap(gt, pivot_index);
         let eq_end = gt + 1;
 
