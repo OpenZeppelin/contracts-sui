@@ -1,10 +1,11 @@
-/// Example 3 — Many limiters of mixed variants inside one type (and rate limiting outside DeFi).
+/// Many limiters of mixed variants inside one type (and rate limiting outside DeFi).
 ///
-/// A `Mage` packs four `RateLimiter`s, one per game resource:
-///  - `health`  (Bucket):   consuming = taking damage; refill = passive regeneration.
-///  - `mana`    (Bucket):   consuming = paying a spell's cost; refill = mana regeneration.
-///  - `spell_a_cd` (Cooldown, capacity 1): gated for `CD_MS` after a single cast.
-///  - `spell_b_cd` (Cooldown, capacity 3): gated for `CD_MS` after three casts.
+/// A `Mage` packs several `RateLimiter`s of mixed variants:
+///  - `health` (Bucket): consuming = taking damage; refill = passive regeneration.
+///  - `mana`   (Bucket): consuming = paying a spell's cost; refill = mana regeneration.
+///  - a `spells` table of `SpellDef`s, each carrying its own `Cooldown` limiter:
+///     - `fireball` (capacity 1): gated for `CD_MS` after a single cast.
+///     - `meteor`   (capacity 3): gated for `CD_MS` after three casts.
 ///
 /// The flow is challenge/accept and cap-gated:
 ///  - A challenger calls `challenge(opponent)`: this spawns both mages, shares a `Duel`, emits
@@ -12,9 +13,9 @@
 ///    `PotentialOpponentCap` invitation to be routed to the opponent.
 ///  - The opponent calls `accept(&mut Duel, PotentialOpponentCap)`: this burns the invitation,
 ///    starts the duel, emits `DuelStarted`, and returns an `OpponentCap`.
-///  - Each side casts at the other through its own cap. A spell costs mana, deals damage, and burns
-///    one charge of that spell's cooldown. When a mage's health reaches 0 the duel ends, the
-///    winning side is recorded, and `DuelEnded` is emitted.
+///  - Each side casts `fireball` or `meteor` at the other through its own cap. A spell burns one
+///    charge of its cooldown, costs mana, and deals damage. When a mage's health reaches 0 the duel
+///    ends, the winning side is recorded, and `DuelEnded` is emitted.
 ///
 /// # Disclaimer
 ///
