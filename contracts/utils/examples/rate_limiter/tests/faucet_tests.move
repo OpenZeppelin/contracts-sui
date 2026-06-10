@@ -29,7 +29,6 @@ fun users_claim_when_respecting_all_limits() {
 
     scenario.next_tx(admin);
 
-    let mut faucet = scenario.take_shared<Faucet>();
     // User 1: Personal cap of 60, refilling 10/sec.
     issue_claim_cap(&admin_cap, user_1, 60, 10, 1_000, &clock, scenario.ctx());
     // User 2: Personal cap of 50, refilling 15/sec.
@@ -37,6 +36,7 @@ fun users_claim_when_respecting_all_limits() {
 
     scenario.next_tx(user_1);
 
+    let mut faucet = scenario.take_shared<Faucet>();
     let mut cap_1 = scenario.take_from_sender<ClaimCap>();
     // The personal allowance binds well below the 100 global window.
     assert_eq!(cap_1.personal_allowance(&clock), 60);
@@ -44,10 +44,14 @@ fun users_claim_when_respecting_all_limits() {
     assert_eq!(cap_1.personal_allowance(&clock), 0);
     // The global window only saw 60 consumed, so it still has 40.
     assert_eq!(faucet.global_allowance(&clock), 40);
+    ts::return_shared(faucet);
 
     // the faucet will still permit the other user to claim
     scenario.next_tx(user_2);
+
+    let mut faucet = scenario.take_shared<Faucet>();
     let mut cap_2 = scenario.take_from_sender<ClaimCap>();
+
     assert_eq!(cap_2.personal_allowance(&clock), 50);
     destroy(faucet.claim(&mut cap_2, 40, &clock, scenario.ctx()));
     assert_eq!(cap_2.personal_allowance(&clock), 10);
@@ -85,12 +89,12 @@ fun personal_limit_binds_even_if_global_allows() {
 
     scenario.next_tx(admin);
 
-    let mut faucet = scenario.take_shared<Faucet>();
     // User 1: Personal cap of 60, refilling 10/sec.
     issue_claim_cap(&admin_cap, user, 60, 10, 1_000, &clock, scenario.ctx());
 
     scenario.next_tx(user);
 
+    let mut faucet = scenario.take_shared<Faucet>();
     let mut cap = scenario.take_from_sender<ClaimCap>();
     // The personal allowance binds well below the 100 global window.
     assert_eq!(cap.personal_allowance(&clock), 60);
@@ -118,12 +122,12 @@ fun global_limit_binds_even_if_personal_allows() {
 
     scenario.next_tx(admin);
 
-    let mut faucet = scenario.take_shared<Faucet>();
     // Personal cap of 200 — deliberately above the 100 global window, so the global cap binds first.
     issue_claim_cap(&admin_cap, user, 200, 10, 1_000, &clock, scenario.ctx());
 
     scenario.next_tx(user);
 
+    let mut faucet = scenario.take_shared<Faucet>();
     let mut cap = scenario.take_from_sender<ClaimCap>();
     // Drain the global window to zero; the personal bucket still has 100 left.
     destroy(faucet.claim(&mut cap, 100, &clock, scenario.ctx()));
@@ -153,12 +157,12 @@ fun global_window_resets_after_an_hour() {
 
     scenario.next_tx(admin);
 
-    let mut faucet = scenario.take_shared<Faucet>();
     // Personal cap well above the global window so the global window is the only thing under test.
     issue_claim_cap(&admin_cap, user, 200, 10, 1_000, &clock, scenario.ctx());
 
     scenario.next_tx(user);
 
+    let mut faucet = scenario.take_shared<Faucet>();
     let mut cap = scenario.take_from_sender<ClaimCap>();
     // Exhaust the global window.
     destroy(faucet.claim(&mut cap, 100, &clock, scenario.ctx()));
