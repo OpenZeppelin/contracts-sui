@@ -23,8 +23,8 @@ Operations for `u8`, `u16`, `u32`, `u64`, `u128`, and `u256`, including:
 
 Generic over `u8`..`u256`:
 
-- `vector::quick_sort` / `vector::quick_sort_by`: In-place iterative quicksort with three-way partitioning
-- `vector::median`: Median of a borrowed unsigned integer vector with configurable rounding for even-length input; uses quickselect instead of sorting the full vector and aborts on empty input
+- `vector::quick_sort!` / `vector::quick_sort_by!`: In-place iterative quicksort with three-way partitioning
+- `vector::median!`: Median of a borrowed unsigned integer vector with configurable rounding for even-length input; uses quickselect instead of sorting the full vector and aborts on empty input
 - `vector::median_u256`: Concrete `vector<u256>` median function using the same quickselect implementation
 
 ## Rounding modes
@@ -36,14 +36,16 @@ Generic over `u8`..`u256`:
 ## Usage examples
 
 ```move
-use openzeppelin_math::{u128, rounding};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u128;
 
 let result = u128::mul_div(100, 200, 3, rounding::up());
 // result = Some(6667) (rounded up from 6666.66...)
 ```
 
 ```move
-use openzeppelin_math::{u64, rounding};
+use openzeppelin_math::rounding;
+use openzeppelin_math::u64;
 
 let mean = u64::average(5, 6, rounding::down());
 // mean = 5
