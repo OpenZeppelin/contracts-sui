@@ -1,5 +1,13 @@
 module openzeppelin_math::vector;
 
+use openzeppelin_math::macros;
+use openzeppelin_math::rounding::RoundingMode;
+
+// === Errors ===
+
+#[error(code = 0)]
+const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
+
 // === Public Functions ===
 
 /// Sort an unsigned integer vector in-place using the quicksort algorithm.
@@ -193,4 +201,200 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             };
         };
     };
+}
+
+/// Compute the median of an unsigned integer vector.
+///
+/// For odd-length vectors, the median is the central order statistic and
+/// `$rounding_mode` has no effect on the result.
+///
+/// For even-length vectors, the median is the arithmetic mean of the two central
+/// values, rounded according to `$rounding_mode`.
+///
+/// The input vector is not mutated.
+///
+/// Median selection uses quickselect over a `u256` working vector instead of
+/// sorting the full input. Benchmarks show similar cost for tiny vectors and
+/// substantially lower cost than sorting as input size grows.
+///
+/// #### Generics
+/// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
+///
+/// #### Parameters
+/// - `$vec`: Reference to the vector whose median is desired.
+/// - `$rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `$vec`.
+///
+/// #### Aborts
+/// - `EMedianOfEmptyVector` if `$vec` is empty.
+///
+/// #### Example
+/// ```move
+/// use openzeppelin_math::rounding;
+/// use openzeppelin_math::vector;
+///
+/// let v = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
+/// let m = vector::median!(&v, rounding::down());
+/// // m == 3
+/// ```
+public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode): $Int {
+    let vec = $vec;
+    let vec_u256 = vec.map_ref!(|x| *x as u256);
+    median_u256(vec_u256, $rounding_mode) as $Int
+}
+
+// === Concrete Public Functions ===
+
+/// Compute the median of a `u256` vector with configurable rounding.
+///
+/// This function consumes and partially reorders `vec`.
+///
+/// Median selection uses quickselect instead of sorting the full input.
+/// Benchmarks show similar cost for tiny vectors and substantially lower cost
+/// than sorting as input size grows.
+///
+/// #### Parameters
+/// - `vec`: Vector whose median is desired (consumed).
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
+/// #### Aborts
+/// - `EMedianOfEmptyVector` if `vec` is empty.
+///
+/// #### Example
+/// ```move
+/// use openzeppelin_math::rounding;
+/// use openzeppelin_math::vector;
+///
+/// let m = vector::median_u256(vector[10u256, 2, 8, 4], rounding::down());
+/// // m == 6
+/// ```
+public fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256 {
+    let len = vec.length();
+    assert!(len != 0, EMedianOfEmptyVector);
+
+    let mid = len / 2;
+    if (len % 2 == 1) {
+        select_k_u256(&mut vec, mid)
+    } else {
+        let upper = select_k_u256(&mut vec, mid);
+        // Selecting index `mid` leaves all preceding elements less than or equal
+        // to `upper`, so the lower central statistic is the prefix maximum.
+        let lower = max_prefix_u256(&vec, mid);
+        macros::average!(lower, upper, rounding_mode)
+    }
+}
+
+// === Internal Functions ===
+
+// Return the kth order statistic, partially partitioning `vec` in place.
+//
+// Quickselect repeatedly partitions the active range around a pivot and keeps
+// only the side that can contain index `k`. This avoids sorting the whole vector
+// while still placing the selected value at the same index it would occupy in
+// sorted order.
+fun select_k_u256(vec: &mut vector<u256>, k: u64): u256 {
+    let mut start = 0;
+    let mut end = vec.length();
+
+    loop {
+        if (start + 1 >= end) return vec[k];
+
+        // Use insertion sort as the quickselect base case for small active ranges.
+        if (end - start <= 10) {
+            insertion_sort_u256_range(vec, start, end);
+            return vec[k]
+        };
+
+        let pivot_index = end - 1;
+        let mid = start + (end - start) / 2;
+
+        // Median-of-three pivot selection using start, middle, and end - 1.
+        // The median of those three values is moved into `pivot_index`.
+        if (vec[mid] <= vec[start]) {
+            vec.swap(start, mid);
+        };
+        if (vec[pivot_index] <= vec[start]) {
+            vec.swap(start, pivot_index)
+        };
+        if (vec[mid] <= vec[pivot_index]) {
+            vec.swap(mid, pivot_index);
+        };
+
+        let mut lt = start;
+        let mut i = start;
+        let mut gt = pivot_index;
+
+        // Three-way partition around the pivot at `pivot_index`.
+        //
+        // During the scan:
+        // - [start, lt) contains values less than the pivot.
+        // - [lt, i) contains values equal to the pivot.
+        // - [i, gt) is unprocessed.
+        // - [gt, pivot_index) contains values greater than the pivot.
+        while (i < gt) {
+            if (vec[i] <= vec[pivot_index]) {
+                if (vec[pivot_index] <= vec[i]) {
+                    i = i + 1;
+                } else {
+                    vec.swap(lt, i);
+                    lt = lt + 1;
+                    i = i + 1;
+                }
+            } else {
+                gt = gt - 1;
+                vec.swap(i, gt);
+            };
+        };
+
+        // Move the pivot next to the equal region. After this, [lt, eq_end)
+        // contains exactly the pivot-equivalent values.
+        vec.swap(gt, pivot_index);
+        let eq_end = gt + 1;
+
+        // Discard the partitions that cannot contain the kth order statistic.
+        if (k < lt) {
+            end = lt;
+        } else if (k >= eq_end) {
+            start = eq_end;
+        } else {
+            return vec[k]
+        };
+    }
+}
+
+// Sort a half-open sub-range [start, end). Used as the quickselect base case
+// for small active ranges.
+fun insertion_sort_u256_range(vec: &mut vector<u256>, start: u64, end: u64) {
+    let mut i = start + 1;
+    while (i < end) {
+        let mut j = i;
+        while (j != start && vec[j] < vec[j - 1]) {
+            vec.swap(j, j - 1);
+            j = j - 1;
+        };
+        i = i + 1;
+    };
+}
+
+// Return the maximum value in vec[0..end).
+//
+// For even-length medians, selecting the upper middle index partitions the
+// vector enough to guarantee every earlier element is less than or equal to it,
+// but that prefix is not sorted. The lower middle value is therefore the maximum
+// of the prefix.
+fun max_prefix_u256(vec: &vector<u256>, end: u64): u256 {
+    let mut max = vec[0];
+    let mut i = 1;
+    while (i < end) {
+        if (max < vec[i]) {
+            max = vec[i];
+        };
+        i = i + 1;
+    };
+    max
 }
