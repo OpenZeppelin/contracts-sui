@@ -473,7 +473,10 @@ fun median_u32_even_length_rounding_modes() {
 #[test]
 fun median_odd_length_rounding_modes_agree_u16() {
     let v = vector[5u16, 1, 9, 3, 7];
-    assert_eq!(vector::median_u16(&v, rounding::down()), vector::median_u16(&v, rounding::nearest()));
+    assert_eq!(
+        vector::median_u16(&v, rounding::down()),
+        vector::median_u16(&v, rounding::nearest()),
+    );
     assert_eq!(vector::median_u16(&v, rounding::nearest()), vector::median_u16(&v, rounding::up()));
     assert_eq!(vector::median_u16(&v, rounding::down()), 5);
 }
@@ -481,7 +484,10 @@ fun median_odd_length_rounding_modes_agree_u16() {
 #[test]
 fun median_odd_length_rounding_modes_agree_u32() {
     let v = vector[5u32, 1, 9, 3, 7];
-    assert_eq!(vector::median_u32(&v, rounding::down()), vector::median_u32(&v, rounding::nearest()));
+    assert_eq!(
+        vector::median_u32(&v, rounding::down()),
+        vector::median_u32(&v, rounding::nearest()),
+    );
     assert_eq!(vector::median_u32(&v, rounding::nearest()), vector::median_u32(&v, rounding::up()));
     assert_eq!(vector::median_u32(&v, rounding::down()), 5);
 }
@@ -489,8 +495,14 @@ fun median_odd_length_rounding_modes_agree_u32() {
 #[test]
 fun median_odd_length_rounding_modes_agree_u128() {
     let v = vector[5u128, 1, 9, 3, 7];
-    assert_eq!(vector::median_u128(&v, rounding::down()), vector::median_u128(&v, rounding::nearest()));
-    assert_eq!(vector::median_u128(&v, rounding::nearest()), vector::median_u128(&v, rounding::up()));
+    assert_eq!(
+        vector::median_u128(&v, rounding::down()),
+        vector::median_u128(&v, rounding::nearest()),
+    );
+    assert_eq!(
+        vector::median_u128(&v, rounding::nearest()),
+        vector::median_u128(&v, rounding::up()),
+    );
     assert_eq!(vector::median_u128(&v, rounding::down()), 5);
 }
 
@@ -500,35 +512,45 @@ fun median_odd_length_rounding_modes_agree_u128() {
 fun median_u8_matches_widened_u64(mut v: vector<u8>, a: u8) {
     if (v.is_empty()) v.push_back(a);
     let widened = v.map_ref!(|x| *x as u64);
-    all_modes().do!(|m| assert_eq!(vector::median_u8(&v, m) as u64, vector::median_u64(&widened, m)));
+    all_modes().do!(
+        |m| assert_eq!(vector::median_u8(&v, m) as u64, vector::median_u64(&widened, m)),
+    );
 }
 
 #[random_test]
 fun median_u16_matches_widened_u64(mut v: vector<u16>, a: u16) {
     if (v.is_empty()) v.push_back(a);
     let widened = v.map_ref!(|x| *x as u64);
-    all_modes().do!(|m| assert_eq!(vector::median_u16(&v, m) as u64, vector::median_u64(&widened, m)));
+    all_modes().do!(
+        |m| assert_eq!(vector::median_u16(&v, m) as u64, vector::median_u64(&widened, m)),
+    );
 }
 
 #[random_test]
 fun median_u32_matches_widened_u64(mut v: vector<u32>, a: u32) {
     if (v.is_empty()) v.push_back(a);
     let widened = v.map_ref!(|x| *x as u64);
-    all_modes().do!(|m| assert_eq!(vector::median_u32(&v, m) as u64, vector::median_u64(&widened, m)));
+    all_modes().do!(
+        |m| assert_eq!(vector::median_u32(&v, m) as u64, vector::median_u64(&widened, m)),
+    );
 }
 
 #[random_test]
 fun median_u64_matches_widened_u128(mut v: vector<u64>, a: u64) {
     if (v.is_empty()) v.push_back(a);
     let widened = v.map_ref!(|x| *x as u128);
-    all_modes().do!(|m| assert_eq!(vector::median_u64(&v, m) as u128, vector::median_u128(&widened, m)));
+    all_modes().do!(
+        |m| assert_eq!(vector::median_u64(&v, m) as u128, vector::median_u128(&widened, m)),
+    );
 }
 
 #[random_test]
 fun median_u128_matches_widened_u256(mut v: vector<u128>, a: u128) {
     if (v.is_empty()) v.push_back(a);
     let widened = v.map_ref!(|x| *x as u256);
-    all_modes().do!(|m| assert_eq!(vector::median_u128(&v, m) as u256, vector::median_u256(&widened, m)));
+    all_modes().do!(
+        |m| assert_eq!(vector::median_u128(&v, m) as u256, vector::median_u256(&widened, m)),
+    );
 }
 
 #[random_test]

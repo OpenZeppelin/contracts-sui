@@ -156,7 +156,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 
         // Choose median-of-three (start, mid, pivot_index) as a pivot
         // and place it on the last position.
-        let mid = (start + end) / 2;
+        let mid = start + (end - start) / 2;
         if ($le(&vec[mid], &vec[start])) {
             vec.swap(start, mid);
         };
@@ -295,8 +295,9 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
     // An empty vector has no median. The check delegates to `median_u8`, whose own emptiness
     // assertion raises the module's canonical `EMedianOfEmptyVector`: a public macro expands in
     // the caller's module, where this module's private error constant is not visible, so the
-    // abort must come from a public function. `median_u8` validates before expanding this
-    // macro, which is what guarantees the call below always aborts instead of recursing.
+    // abort must come from a public function. Inside `median_u8`, that assertion runs before
+    // the code inlined from this macro, so the call below always aborts at runtime and can
+    // never recurse.
     if (vec.is_empty()) {
         median_u8(&vector[], rounding_mode);
     };
