@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_utils::faucet_tests;
 
 use openzeppelin_utils::faucet::{Self, new, issue_claim_cap, Faucet, ClaimCap};

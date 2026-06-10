@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_utils::staking_vault_tests;
 
 use openzeppelin_utils::rate_limiter;

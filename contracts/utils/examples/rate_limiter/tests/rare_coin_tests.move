@@ -1,3 +1,4 @@
+#[test_only]
 module openzeppelin_utils::rare_coin_tests;
 
 use openzeppelin_utils::rare_coin::{Self, RARE_COIN};
