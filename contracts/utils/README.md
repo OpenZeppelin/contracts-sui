@@ -10,7 +10,7 @@ Embeddable primitives for Sui smart contract development.
 
 ---
 
-## `rate_limiter` at a Glance
+## `Rate Limiter` at a Glance
 
 `RateLimiter` is a `store + drop` value the integrator embeds as a field inside their own object.
 
