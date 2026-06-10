@@ -122,7 +122,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 
         // Choose median-of-three (start, mid, pivot_index) as a pivot
         // and place it on the last position.
-        let mid = (start + end) / 2;
+        let mid = start + (end - start) / 2;
         if ($le(&vec[mid], &vec[start])) {
             vec.swap(start, mid);
         };
