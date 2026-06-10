@@ -232,7 +232,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 ///
 /// #### Example
 /// ```move
-/// use openzeppelin_math::rounding
+/// use openzeppelin_math::rounding;
 /// use openzeppelin_math::vector;
 ///
 /// let v = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
@@ -267,7 +267,7 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
 ///
 /// #### Example
 /// ```move
-/// use openzeppelin_math::rounding
+/// use openzeppelin_math::rounding;
 /// use openzeppelin_math::vector;
 ///
 /// let m = vector::median_u256(vector[10u256, 2, 8, 4], rounding::down());
