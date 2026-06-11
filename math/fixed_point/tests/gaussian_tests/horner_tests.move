@@ -99,6 +99,8 @@ fun signed_add_opposite_signs_a_smaller() {
     // (3, -) + (5, +) = (2, +)
     let r = signed_add(signed(3, true), pos(5));
     assert_eq!(r, pos(2));
+    // Mirror combo: (3, +) + (5, -) = (2, -) — result must take b's actual sign.
+    assert_eq!(signed_add(pos(3), signed(5, true)), signed(2, true));
 }
 
 #[test]
@@ -106,6 +108,8 @@ fun signed_add_opposite_signs_a_larger() {
     // (5, -) + (3, +) = (2, -)
     let r = signed_add(signed(5, true), pos(3));
     assert_eq!(r, signed(2, true));
+    // Mirror combo: (5, +) + (3, -) = (2, +) — result must keep a's actual sign.
+    assert_eq!(signed_add(pos(5), signed(3, true)), pos(2));
 }
 
 #[test]
@@ -206,6 +210,15 @@ fun signed_mul_wad_truncates_subwad_to_zero() {
     assert_eq!(horner::is_neg(&r), false);
 }
 
+#[test]
+fun signed_mul_wad_truncates_remainder_toward_zero() {
+    // 3 × (0.5 WAD + 1 wei) = 1.5e18 + 3 → floors to 1 wei; round-nearest would give 2.
+    let b = signed(500_000_000_000_000_001, false);
+    assert_eq!(signed_mul_wad(signed(3, false), b), pos(1));
+    // Same on the negative side: truncation is toward zero, not toward -infinity.
+    assert_eq!(signed_mul_wad(signed(3, true), b), signed(1, true));
+}
+
 // === mul_div_nearest_u256 (final WAD→10^9 ratio, half-up ties away from zero) ===
 
 #[test]
@@ -289,6 +302,20 @@ fun horner_eval_zero_polynomial_canonicalizes() {
     let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]));
     assert_eq!(r, signed_zero());
     assert_eq!(horner::is_neg(&r), false);
+}
+
+#[test]
+fun horner_eval_invokes_accessor_once_per_coefficient() {
+    // Doc contract: $coeff_at runs exactly once per coefficient.
+    let mags = vector[WAD, TWO_WAD, THREE_WAD];
+    let negs = vector[false, false, false];
+    let mut calls = 0u64;
+    let r = horner_eval!(pos(TWO_WAD), mags.length(), |i| {
+        calls = calls + 1;
+        (mags[i] as u128, negs[i])
+    });
+    assert_eq!(r, pos(SEVENTEEN_WAD));
+    assert_eq!(calls, 3);
 }
 
 #[test, expected_failure(abort_code = horner::EEmptyPolynomial)]

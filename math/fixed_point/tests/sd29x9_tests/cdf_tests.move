@@ -277,6 +277,33 @@ fun denominator_nonpositive_aborts() {
     );
 }
 
+#[test, expected_failure(abort_code = cdf::EInternalDenNonPositive)]
+fun denominator_zero_aborts() {
+    // A constant denominator of 0 evaluates to canonical zero, which must trip
+    // the `mag(d) > 0` half of the guard rather than reach the division.
+    let _ = cdf::eval_rational_for_test(
+        SCALE,
+        vector[ONE_WAD],
+        vector[false],
+        vector[0],
+        vector[false],
+    );
+}
+
+#[test]
+fun numerator_zero_passes_guard_returns_zero() {
+    // N(z) = 0 is non-negative: the integrity guard must pass and the
+    // ratio 0 / D(z) must come back as exactly 0.
+    let v = cdf::eval_rational_for_test(
+        SCALE,
+        vector[0],
+        vector[false],
+        vector[ONE_WAD],
+        vector[false],
+    );
+    assert_eq!(v, 0);
+}
+
 // === Method dispatch ===
 
 #[test]

@@ -55,6 +55,13 @@ fun saturation_above_max_z() {
     assert_eq!(fixed(7 * SCALE).cdf().unwrap(), ONE_RAW);
 }
 
+#[test]
+fun saturation_at_ud30x9_extreme() {
+    // ud30x9::max() is far above the saturation threshold; it must clamp
+    // cleanly without going through the rational path.
+    assert_eq!(ud30x9::max().cdf().unwrap(), ONE_RAW);
+}
+
 // === Output range ===
 
 #[test]
