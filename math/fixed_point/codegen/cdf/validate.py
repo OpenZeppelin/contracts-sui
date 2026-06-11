@@ -86,7 +86,7 @@ def _canonicalize(sm: SignedInt) -> SignedInt:
     return (0, False) if sm[0] == 0 else sm
 
 
-def signed_add(a: SignedInt, b: SignedInt) -> SignedInt:
+def add(a: SignedInt, b: SignedInt) -> SignedInt:
     am, an = a
     bm, bn = b
     if am == 0:
@@ -96,7 +96,7 @@ def signed_add(a: SignedInt, b: SignedInt) -> SignedInt:
     if an == bn:
         s = am + bm
         if s > U256_MAX:
-            raise RuntimeError(f"u256 overflow in signed_add: {am} + {bm}")
+            raise RuntimeError(f"u256 overflow in add: {am} + {bm}")
         return (s, an)
     if am > bm:
         return (am - bm, an)
@@ -105,13 +105,13 @@ def signed_add(a: SignedInt, b: SignedInt) -> SignedInt:
     return (0, False)  # exact cancellation
 
 
-def signed_mul_wad(a: SignedInt, b: SignedInt) -> SignedInt:
+def mul_wad(a: SignedInt, b: SignedInt) -> SignedInt:
     """`(a * b) / WAD` with floor-division on magnitudes (== mul_div with Down rounding)."""
     am, an = a
     bm, bn = b
     prod = am * bm
     if prod > U256_MAX:
-        raise RuntimeError(f"u256 overflow in signed_mul_wad: {am} * {bm}")
+        raise RuntimeError(f"u256 overflow in mul_wad: {am} * {bm}")
     mag = prod // WAD
     return _canonicalize((mag, an ^ bn))
 
@@ -121,8 +121,8 @@ def horner_eval(z: SignedInt, coeffs: list[SignedInt]) -> SignedInt:
         raise RuntimeError("empty polynomial")
     acc = coeffs[-1]
     for c in reversed(coeffs[:-1]):
-        acc = signed_mul_wad(acc, z)
-        acc = signed_add(acc, c)
+        acc = mul_wad(acc, z)
+        acc = add(acc, c)
     return acc
 
 

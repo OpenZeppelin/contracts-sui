@@ -13,44 +13,44 @@ from codegen.shared import constants
 WAD = constants.WAD
 
 
-# --- signed_add -------------------------------------------------------------
+# --- add --------------------------------------------------------------------
 
 
-def test_signed_add_same_sign():
-    assert v.signed_add((3, False), (5, False)) == (8, False)
-    assert v.signed_add((3, True), (5, True)) == (8, True)
+def test_add_same_sign():
+    assert v.add((3, False), (5, False)) == (8, False)
+    assert v.add((3, True), (5, True)) == (8, True)
 
 
-def test_signed_add_opposite_sign_inherits_larger():
-    assert v.signed_add((5, False), (3, True)) == (2, False)
-    assert v.signed_add((3, False), (5, True)) == (2, True)
+def test_add_opposite_sign_inherits_larger():
+    assert v.add((5, False), (3, True)) == (2, False)
+    assert v.add((3, False), (5, True)) == (2, True)
 
 
-def test_signed_add_exact_cancellation_is_canonical_zero():
-    assert v.signed_add((5, False), (5, True)) == (0, False)
+def test_add_exact_cancellation_is_canonical_zero():
+    assert v.add((5, False), (5, True)) == (0, False)
 
 
-def test_signed_add_zero_operand():
-    assert v.signed_add((0, False), (7, True)) == (7, True)
-    assert v.signed_add((7, True), (0, False)) == (7, True)
+def test_add_zero_operand():
+    assert v.add((0, False), (7, True)) == (7, True)
+    assert v.add((7, True), (0, False)) == (7, True)
 
 
-# --- signed_mul_wad ---------------------------------------------------------
+# --- mul_wad ----------------------------------------------------------------
 
 
-def test_signed_mul_wad_unit():
+def test_mul_wad_unit():
     # 2.0 * 3.0 at WAD scale = 6.0
-    assert v.signed_mul_wad((2 * WAD, False), (3 * WAD, False)) == (6 * WAD, False)
+    assert v.mul_wad((2 * WAD, False), (3 * WAD, False)) == (6 * WAD, False)
 
 
-def test_signed_mul_wad_sign_xor():
-    assert v.signed_mul_wad((2 * WAD, True), (3 * WAD, False)) == (6 * WAD, True)
-    assert v.signed_mul_wad((2 * WAD, True), (3 * WAD, True)) == (6 * WAD, False)
+def test_mul_wad_sign_xor():
+    assert v.mul_wad((2 * WAD, True), (3 * WAD, False)) == (6 * WAD, True)
+    assert v.mul_wad((2 * WAD, True), (3 * WAD, True)) == (6 * WAD, False)
 
 
-def test_signed_mul_wad_floor_to_zero_drops_sign():
+def test_mul_wad_floor_to_zero_drops_sign():
     # product floors below one WAD ULP -> canonical zero, sign dropped
-    assert v.signed_mul_wad((1, True), (1, False)) == (0, False)
+    assert v.mul_wad((1, True), (1, False)) == (0, False)
 
 
 # --- mul_div_nearest (half-up, ties away from zero) -------------------------

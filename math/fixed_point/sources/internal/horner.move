@@ -20,13 +20,13 @@ const EEmptyPolynomial: vector<u8> = "Polynomial must have at least one coeffici
 
 const WAD_U256: u256 = 1_000_000_000_000_000_000;
 
-// === Sign-Magnitude Value Type ===
+// === Structs ===
 
 /// Sign-magnitude representation used during Horner accumulation at WAD scale.
 ///
 /// The magnitude is `u256` so that the WAD-scale product `a × b` cannot
 /// overflow as long as callers keep magnitudes bounded (see the precondition on
-/// `signed_mul_wad`). The sign rides as a separate flag because Move lacks
+/// `mul_wad`). The sign rides as a separate flag because Move lacks
 /// signed integer types.
 ///
 /// Visibility note: the type is declared `public` because Move 2024 does not
@@ -44,22 +44,22 @@ public struct SignedScaled256 has copy, drop {
 // === Constructors ===
 
 /// The neutral additive element.
-public(package) fun signed_zero(): SignedScaled256 {
+public(package) fun zero(): SignedScaled256 {
     SignedScaled256 { mag: 0, neg: false }
 }
 
 /// Wrap a non-negative WAD-scaled magnitude.
-public(package) fun signed_from_unsigned(mag: u256): SignedScaled256 {
+public(package) fun from_unsigned(mag: u256): SignedScaled256 {
     SignedScaled256 { mag, neg: false }
 }
 
 /// Wrap a `(u128 magnitude, bool sign)` coefficient encoding, promoting the
 /// magnitude to `u256` and canonicalizing zero to `(0, false)`.
-public(package) fun signed_from_coeff(mag: u128, neg: bool): SignedScaled256 {
+public(package) fun from_coeff(mag: u128, neg: bool): SignedScaled256 {
     let mag_u256 = mag as u256;
     SignedScaled256 {
         mag: mag_u256,
-        neg: if (mag_u256 == 0) false else neg,
+        neg: mag_u256 != 0 && neg,
     }
 }
 
@@ -75,7 +75,7 @@ public(package) fun is_neg(x: &SignedScaled256): bool { x.neg }
 /// - Same-sign: add magnitudes, keep the sign.
 /// - Opposite-sign: subtract the smaller from the larger, inherit the larger's sign.
 /// - Exact cancellation: return canonical zero.
-public(package) fun signed_add(a: SignedScaled256, b: SignedScaled256): SignedScaled256 {
+public(package) fun add(a: SignedScaled256, b: SignedScaled256): SignedScaled256 {
     if (a.mag == 0) return b;
     if (b.mag == 0) return a;
     if (a.neg == b.neg) {
@@ -85,16 +85,16 @@ public(package) fun signed_add(a: SignedScaled256, b: SignedScaled256): SignedSc
     } else if (b.mag > a.mag) {
         SignedScaled256 { mag: b.mag - a.mag, neg: b.neg }
     } else {
-        signed_zero()
+        zero()
     }
 }
 
 /// Add a `(u128 magnitude, bool sign)` coefficient to `acc`, promoting the
 /// coefficient to `u256` and folding the cast + sign-magnitude add into a
-/// single step. Equivalent to `signed_add(acc, signed_from_coeff(mag, neg))`
+/// single step. Equivalent to `add(acc, from_coeff(mag, neg))`
 /// but avoids materializing the intermediate `SignedScaled256` — used on the
 /// `horner_eval!` hot inner loop.
-public(package) fun signed_add_coeff(acc: SignedScaled256, mag: u128, neg: bool): SignedScaled256 {
+public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): SignedScaled256 {
     let m = mag as u256;
     if (m == 0) return acc; // adding zero is a no-op (also covers canonicalization)
     if (acc.mag == 0) return SignedScaled256 { mag: m, neg };
@@ -105,7 +105,7 @@ public(package) fun signed_add_coeff(acc: SignedScaled256, mag: u128, neg: bool)
     } else if (m > acc.mag) {
         SignedScaled256 { mag: m - acc.mag, neg }
     } else {
-        signed_zero()
+        zero()
     }
 }
 
@@ -121,10 +121,9 @@ public(package) fun signed_add_coeff(acc: SignedScaled256, mag: u128, neg: bool)
 /// ~39 orders of magnitude below `u256::max ≈ 1.16 × 10^77`. A new consumer
 /// (e.g. `pdf`, `inverse_cdf`) with different coefficients or a wider input
 /// domain must re-establish this bound before reusing the evaluator.
-public(package) fun signed_mul_wad(a: SignedScaled256, b: SignedScaled256): SignedScaled256 {
+public(package) fun mul_wad(a: SignedScaled256, b: SignedScaled256): SignedScaled256 {
     let mag = (a.mag * b.mag) / WAD_U256;
-    let neg = if (mag == 0) false
-    else (a.neg != b.neg);
+    let neg = mag != 0 && a.neg != b.neg;
     SignedScaled256 { mag, neg }
 }
 
@@ -147,7 +146,7 @@ public(package) fun assert_polynomial_nonempty(len: u64) {
 /// All arithmetic is sign-magnitude `u256` at WAD; `$z` must already be WAD-scaled.
 ///
 /// #### Precondition
-/// Inherits `signed_mul_wad`'s bound: the caller must keep `$z` and the
+/// Inherits `mul_wad`'s bound: the caller must keep `$z` and the
 /// coefficients small enough that no intermediate `acc.mag × z.mag` exceeds
 /// `u256`. Satisfied for the CDF by the `|z| ≤ 6.3` saturation guard.
 ///
@@ -160,18 +159,18 @@ public(package) macro fun horner_eval(
 ): SignedScaled256 {
     let z = $z;
     let len = $len;
-    openzeppelin_fp_math::horner::assert_polynomial_nonempty(len);
+    assert_polynomial_nonempty(len);
 
     let last = len - 1;
     let (m_last, n_last) = $coeff_at(last);
-    let mut acc = openzeppelin_fp_math::horner::signed_from_coeff(m_last, n_last);
+    let mut acc = from_coeff(m_last, n_last);
 
     let mut i = last;
     while (i > 0) {
         i = i - 1;
-        acc = openzeppelin_fp_math::horner::signed_mul_wad(acc, z);
+        acc = mul_wad(acc, z);
         let (m_i, n_i) = $coeff_at(i);
-        acc = openzeppelin_fp_math::horner::signed_add_coeff(acc, m_i, n_i);
+        acc = add_coeff(acc, m_i, n_i);
     };
     acc
 }

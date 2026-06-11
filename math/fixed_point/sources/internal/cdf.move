@@ -43,7 +43,7 @@ const ONE_RAW: u128 = 1_000_000_000;
 /// Behavior:
 /// - Saturates to `ONE_RAW` (`10^9`) for `z_raw ≥ cdf_coefficients::max_z_raw()`
 ///   (`|z| ≥ 6.3`).
-/// - Returns `HALF_RAW` (`5 × 10^8`) bit-exactly for `z_raw == 0` (`Φ(0)`).
+/// - Returns `HALF_RAW` (`5 × 10^8`) exactly for `z_raw == 0` (`Φ(0)`).
 /// - Otherwise evaluates the AAA rational `N(z) / D(z)` from
 ///   `cdf_coefficients` via Horner at WAD scale and rounds the ratio back to
 ///   `UD30x9` scale in a single half-up step, clamping any last-ULP overshoot
@@ -76,7 +76,7 @@ fun eval_rational(
 ): u128 {
     // Promote |z| from UD30x9 (10^9) to WAD (10^18).
     let z_wad = (z_raw as u256) * (common::scale_u256!());
-    let z_signed = horner::signed_from_unsigned(z_wad);
+    let z_signed = horner::from_unsigned(z_wad);
 
     let n = horner::horner_eval!(z_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]));
     let d = horner::horner_eval!(z_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]));
