@@ -41,7 +41,7 @@ fun matches_sign_bit_at_boundary() {
     // The largest positive raw magnitude (2^127 - 1) must read as non-negative.
     let max_pos: u128 = 0x7FFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
     assert_eq!(sd29x9::wrap(max_pos, false).is_negative(), false);
-    // The smallest-magnitude negative value (raw bit pattern 1) — i.e.
-    // `-(2^127 - 1)` once two's complement is applied to `1` — must read as negative.
+    // The smallest-magnitude negative value (magnitude 1, i.e. -10^-9; raw bit
+    // pattern 0xFFFF...FF after two's complement) must read as negative.
     assert_eq!(sd29x9::wrap(1, true).is_negative(), true);
 }
