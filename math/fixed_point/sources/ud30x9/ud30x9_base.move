@@ -140,7 +140,7 @@ public fun abs(x: UD30x9): UD30x9 {
 /// #### Behavior
 /// - Saturates exactly to `1.0` for `z ≥ 6.3`. At that bound `Φ` is already
 ///   within `~10⁻¹⁰` of `1`, well below the output's `10⁻⁹` resolution.
-/// - `Φ(0)` is bit-exactly `0.5`.
+/// - `Φ(0)` is exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
 ///   worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
 /// - Monotone non-decreasing across the dense offline validation grid

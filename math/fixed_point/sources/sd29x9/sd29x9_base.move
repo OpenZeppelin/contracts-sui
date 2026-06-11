@@ -37,7 +37,7 @@ const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictl
 /// than `0.5`. Defense-in-depth against an AAA-fit regression.
 #[error(code = 5)]
 const EInternalNegSubUnderflow: vector<u8> =
-    "CDF sign-flip subtraction underflowed: cdf_nonneg_raw returned below 0.5";
+    "CDF sign-flip subtraction underflowed: internal evaluation returned a value below 0.5";
 
 // === Structs ===
 
@@ -159,10 +159,10 @@ public fun ceil(x: SD29x9): SD29x9 {
 /// - Saturates exactly to `0` for `z ≤ -6.3` and to `1` for `z ≥ 6.3`. At
 ///   those bounds `Φ` is already within `~10⁻¹⁰` of the saturated value,
 ///   well below the output's `10⁻⁹` resolution.
-/// - `Φ(0)` is bit-exactly `0.5`.
+/// - `Φ(0)` is exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale).
 ///   Empirical worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
-/// - `cdf(z) + cdf(z.negate())` is bit-exactly `1` for every input: both
+/// - `cdf(z) + cdf(z.negate())` is exactly `1` for every input: both
 ///   evaluations share the same `Φ(|z|)` value, which the negative branch
 ///   reflects as `1 - Φ(|z|)`.
 /// - Monotone non-decreasing across the dense offline validation grid
@@ -271,8 +271,7 @@ public fun is_zero(x: SD29x9): bool {
 /// - `x`: Input value.
 ///
 /// #### Returns
-/// - `true` if `x < 0`, otherwise `false`. Returns `false` for zero, positive
-///   values, and `max()`; returns `true` for any negative value including `min()`.
+/// - `true` if `x < 0`, otherwise `false`.
 public fun is_negative(x: SD29x9): bool {
     (x.unwrap() & common::sign_bit!()) != 0
 }
