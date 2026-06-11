@@ -119,7 +119,7 @@ def mul_wad(a: SignedInt, b: SignedInt) -> SignedInt:
 def horner_eval(z: SignedInt, coeffs: list[SignedInt]) -> SignedInt:
     if not coeffs:
         raise RuntimeError("empty polynomial")
-    acc = coeffs[-1]
+    acc = _canonicalize(coeffs[-1])
     for c in reversed(coeffs[:-1]):
         acc = mul_wad(acc, z)
         acc = add(acc, c)

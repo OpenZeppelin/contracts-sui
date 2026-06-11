@@ -91,6 +91,12 @@ def test_horner_eval_quadratic_with_signs():
     assert v.horner_eval((3 * WAD, False), coeffs) == (4 * WAD, False)
 
 
+def test_horner_eval_canonicalizes_zero_leading_coeff():
+    # Mirrors the Move `horner_eval_zero_polynomial_canonicalizes` test: the
+    # seed goes through canonicalization, so (0, True) must become (0, False).
+    assert v.horner_eval((WAD, False), [(0, True)]) == (0, False)
+
+
 def test_horner_eval_rejects_empty():
     with pytest.raises(RuntimeError):
         v.horner_eval((WAD, False), [])
