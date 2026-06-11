@@ -36,6 +36,13 @@ const HALF_RAW: u128 = 500_000_000;
 /// `Φ(+∞)` upper bound at the `UD30x9` raw scale (`10^9`).
 const ONE_RAW: u128 = 1_000_000_000;
 
+// === Accessors ===
+
+/// `Φ(0)` at the raw scale — the lower bound of `cdf_nonneg_raw`'s return
+/// range. Exposed so callers can check the `phi ≥ 0.5` contract against the
+/// same constant the evaluator uses.
+public(package) fun half_raw(): u128 { HALF_RAW }
+
 // === CDF Central-Domain Helper ===
 
 /// Self-contained Φ evaluator on `|z|_raw` at the `UD30x9` scale (`10^9`).
