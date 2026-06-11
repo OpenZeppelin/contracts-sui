@@ -22,7 +22,7 @@ public struct TestCase has copy, drop {
 }
 
 #[test]
-fun test_cdf_vectors() {
+fun cdf_vectors_match_oracle() {
     let cases = vector[
         TestCase { z_raw: 0, neg: false, expected: 500_000_000 },
         TestCase { z_raw: 250_000_000, neg: false, expected: 598_706_326 },
@@ -80,14 +80,10 @@ fun test_cdf_vectors() {
         TestCase { z_raw: 6_301_000_000, neg: true, expected: 0 },
         TestCase { z_raw: 7_000_000_000, neg: true, expected: 0 },
     ];
-    let mut i = 0;
-    let n = cases.length();
-    while (i < n) {
-        let case = cases[i];
+    cases.destroy!(|case| {
         let z = sd29x9::wrap(case.z_raw, case.neg);
         let actual = z.cdf().unwrap();
         let diff = if (actual >= case.expected) actual - case.expected else case.expected - actual;
         assert!(diff <= TOLERANCE, ETestCaseFailed);
-        i = i + 1;
-    };
+    });
 }

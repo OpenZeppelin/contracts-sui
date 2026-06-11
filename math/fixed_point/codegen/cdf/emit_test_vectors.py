@@ -156,20 +156,16 @@ public struct TestCase has copy, drop {{
 }}
 
 #[test]
-fun test_cdf_vectors() {{
+fun cdf_vectors_match_oracle() {{
     let cases = vector[
         {case_lines},
     ];
-    let mut i = 0;
-    let n = cases.length();
-    while (i < n) {{
-        let case = cases[i];
+    cases.destroy!(|case| {{
         let z = sd29x9::wrap(case.z_raw, case.neg);
         let actual = z.cdf().unwrap();
         let diff = if (actual >= case.expected) actual - case.expected else case.expected - actual;
         assert!(diff <= TOLERANCE, ETestCaseFailed);
-        i = i + 1;
-    }};
+    }});
 }}
 """
 
@@ -209,20 +205,16 @@ public struct TestCase has copy, drop {{
 }}
 
 #[test]
-fun test_cdf_vectors() {{
+fun cdf_vectors_match_oracle() {{
     let cases = vector[
         {case_lines},
     ];
-    let mut i = 0;
-    let n = cases.length();
-    while (i < n) {{
-        let case = cases[i];
+    cases.destroy!(|case| {{
         let z = ud30x9::wrap(case.z_raw);
         let actual = z.cdf().unwrap();
         let diff = if (actual >= case.expected) actual - case.expected else case.expected - actual;
         assert!(diff <= TOLERANCE, ETestCaseFailed);
-        i = i + 1;
-    }};
+    }});
 }}
 """
 
