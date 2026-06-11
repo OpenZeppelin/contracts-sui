@@ -103,8 +103,7 @@ fun output_range_bounded_by_unit_interval() {
     // and the central domain) and confirm every output stays in [0, 10^9].
     let n: u64 = 64;
     let step = 14 * SCALE / ((n - 1) as u128);
-    let mut i: u64 = 0;
-    while (i < n) {
+    n.do!(|i| {
         let offset = (i as u128) * step;
         // shift to negative half: when i < 32 → negative, else → positive
         let z = if (offset < 7 * SCALE) {
@@ -114,8 +113,7 @@ fun output_range_bounded_by_unit_interval() {
         };
         let v = z.cdf().unwrap();
         assert!(v <= ONE_RAW);
-        i = i + 1;
-    };
+    });
 }
 
 // === Last-ULP overshoot guard ===
@@ -132,13 +130,7 @@ fun no_overshoot_at_high_z() {
         6_000_000_000,
         5_500_000_000,
     ];
-    let mut i = 0;
-    let n = probes.length();
-    while (i < n) {
-        let v = pos(probes[i]).cdf().unwrap();
-        assert!(v <= ONE_RAW);
-        i = i + 1;
-    };
+    probes.destroy!(|raw| assert!(pos(raw).cdf().unwrap() <= ONE_RAW));
 }
 
 #[test]
@@ -165,8 +157,7 @@ fun monotonic_on_grid() {
     let n: u64 = 64;
     let step = (2 * MAX_Z_RAW) / ((n - 1) as u128);
     let mut prev: u128 = 0; // cdf at lower bound saturates to 0
-    let mut i: u64 = 0;
-    while (i < n) {
+    n.do!(|i| {
         let offset = (i as u128) * step;
         let z = if (offset < MAX_Z_RAW) {
             neg(MAX_Z_RAW - offset)
@@ -176,8 +167,7 @@ fun monotonic_on_grid() {
         let curr = z.cdf().unwrap();
         assert!(curr >= prev);
         prev = curr;
-        i = i + 1;
-    };
+    });
 }
 
 // === Symmetry ===
@@ -198,17 +188,13 @@ fun symmetry_on_well_known_points() {
         MAX_Z_RAW,
         7 * SCALE,
     ];
-    let mut i = 0;
-    let n = probes.length();
-    while (i < n) {
-        let raw = probes[i];
+    probes.destroy!(|raw| {
         let cdf_pos = pos(raw).cdf().unwrap();
         let cdf_neg = neg(raw).cdf().unwrap();
         // cdf(z) + cdf(-z) == 1 bit-exactly: both calls share the same Φ(|z|)
         // evaluation and the negative branch reflects it as 10^9 - Φ(|z|).
         assert_eq!(cdf_pos + cdf_neg, ONE_RAW);
-        i = i + 1;
-    };
+    });
 }
 
 // === Negative-branch near-zero (underflow guard) ===
@@ -220,13 +206,9 @@ fun negative_near_zero_no_underflow() {
     // well-known points (smallest 0.1) nor the Python sweep (smallest ≈ 6.3e-4)
     // probe this region; reaching the assert proves the guard did not fire.
     let probes: vector<u128> = vector[1, 100, 10_000, 1_000_000, 50_000_000];
-    let mut i = 0;
-    let n = probes.length();
-    while (i < n) {
-        let v = neg(probes[i]).cdf().unwrap();
-        assert!(v <= HALF_RAW); // Φ(−|z|) ≤ 0.5
-        i = i + 1;
-    };
+    probes.destroy!(|raw| {
+        assert!(neg(raw).cdf().unwrap() <= HALF_RAW); // Φ(−|z|) ≤ 0.5
+    });
     assert_within(neg(1).cdf().unwrap(), HALF_RAW, TOLERANCE);
 }
 

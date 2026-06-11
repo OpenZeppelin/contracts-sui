@@ -70,14 +70,11 @@ fun output_range_bounded_above_half() {
     // 64-point grid over [0, 7] and confirm every output is in [HALF_RAW, ONE_RAW].
     let n: u64 = 64;
     let step = 7 * SCALE / ((n - 1) as u128);
-    let mut i: u64 = 0;
-    while (i < n) {
-        let raw = (i as u128) * step;
-        let v = fixed(raw).cdf().unwrap();
+    n.do!(|i| {
+        let v = fixed((i as u128) * step).cdf().unwrap();
         assert!(v >= HALF_RAW);
         assert!(v <= ONE_RAW);
-        i = i + 1;
-    };
+    });
 }
 
 // === Last-ULP overshoot guard ===
@@ -94,13 +91,7 @@ fun no_overshoot_at_high_z() {
         6_000_000_000,
         5_500_000_000,
     ];
-    let mut i = 0;
-    let n = probes.length();
-    while (i < n) {
-        let v = fixed(probes[i]).cdf().unwrap();
-        assert!(v <= ONE_RAW);
-        i = i + 1;
-    };
+    probes.destroy!(|raw| assert!(fixed(raw).cdf().unwrap() <= ONE_RAW));
 }
 
 // === Monotonicity ===
@@ -112,14 +103,11 @@ fun monotonic_on_grid() {
     let n: u64 = 64;
     let step = MAX_Z_RAW / ((n - 1) as u128);
     let mut prev: u128 = HALF_RAW; // cdf at z = 0 is exactly 0.5
-    let mut i: u64 = 0;
-    while (i < n) {
-        let raw = (i as u128) * step;
-        let curr = fixed(raw).cdf().unwrap();
+    n.do!(|i| {
+        let curr = fixed((i as u128) * step).cdf().unwrap();
         assert!(curr >= prev);
         prev = curr;
-        i = i + 1;
-    };
+    });
 }
 
 // === Determinism ===
@@ -155,15 +143,11 @@ fun matches_sd29x9_cdf_on_positives() {
         MAX_Z_RAW + 1,
         7 * SCALE,
     ];
-    let mut i = 0;
-    let n = probes.length();
-    while (i < n) {
-        let raw = probes[i];
+    probes.destroy!(|raw| {
         let via_unsigned = fixed(raw).cdf().unwrap();
         let via_signed = pos(raw).cdf().unwrap();
         assert_eq!(via_unsigned, via_signed);
-        i = i + 1;
-    };
+    });
 }
 
 // === Method dispatch ===
