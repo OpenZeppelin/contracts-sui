@@ -12,9 +12,10 @@ mirrors the Move implementation exactly**:
     (ties away from zero) nearest rounding, mirroring the Move `Nearest` mode in
     `horner.move::mul_div_nearest_u256`.
 
-Asserts that the worst-case absolute error vs `scipy.stats.norm.cdf` over a
-10,000-point grid stays within `TARGET_ERROR_ULP` × 10^-9. Returns non-zero
-exit on failure, suitable for CI.
+Asserts, over a 10,000-point grid, that the worst-case absolute error vs
+`scipy.stats.norm.cdf` stays within `TARGET_ERROR_ULP` × 10^-9 and that the
+outputs are monotone non-decreasing. Returns non-zero exit on failure,
+suitable for CI.
 """
 from __future__ import annotations
 
@@ -199,9 +200,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     worst_err = 0.0
     worst_z = 0.0
     worst_neg = False
+    prev_phi_pos = 0
     for z in grid:
-        zf = float(z)
-        z_raw = int(round(zf * SCALE))
+        # Quantize first and measure against Φ at the quantized input, so the
+        # gate scores the on-chain function at its own representable inputs
+        # rather than folding input-quantization skew into the error.
+        z_raw = int(round(float(z) * SCALE))
+        zf = z_raw / SCALE
         phi_pos = cdf_simulate(z_raw, False, num, den, max_z_raw)
         # Also drive the negative branch: this exercises the reflection and the
         # INV-14 underflow guard inside cdf_simulate, neither of which the
@@ -214,6 +219,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+        # Monotonicity: Φ is non-decreasing, and in the far tail its true
+        # increment falls below the 10^-9 output resolution, so the fit's
+        # error wiggle could in principle invert neighboring outputs. Gate
+        # against any inversion at grid resolution.
+        if phi_pos < prev_phi_pos:
+            print(
+                f"FAIL: monotonicity broken at z_raw={z_raw}: "
+                f"Φ(z)={phi_pos} < previous {prev_phi_pos}",
+                file=sys.stderr,
+            )
+            return 1
+        prev_phi_pos = phi_pos
         for neg, phi_raw in ((False, phi_pos), (True, phi_neg)):
             ref = float(norm.cdf(-zf if neg else zf))
             err = abs(phi_raw / SCALE - ref)
@@ -225,6 +242,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
     sign = "-" if worst_neg else "+"
+    print(f"Monotonicity: non-decreasing across all {args.n} grid points ✓")
     print(f"Worst error: {worst_err:.3e} = {err_ulp} ULP at z={sign}{worst_z:.5f}")
     print(f"Target:      {target_abs:.3e} = {TARGET_ERROR_ULP} ULP")
     if worst_err <= target_abs:

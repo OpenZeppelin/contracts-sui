@@ -143,6 +143,11 @@ public fun abs(x: UD30x9): UD30x9 {
 /// - `Φ(0)` is bit-exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
 ///   worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
+/// - Monotone non-decreasing across the dense offline validation grid
+///   (enforced by the codegen CI gate). A 1-ULP local inversion between
+///   neighboring raw inputs is not formally excluded in the far tail
+///   (`z ≳ 5.7`), where the true `Φ` increment drops below the `10⁻⁹`
+///   output resolution.
 ///
 /// #### Aborts
 /// - Does not abort for any `UD30x9` input under the committed, validated

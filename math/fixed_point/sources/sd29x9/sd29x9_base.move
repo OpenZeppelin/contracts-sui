@@ -162,7 +162,14 @@ public fun ceil(x: SD29x9): SD29x9 {
 /// - `Φ(0)` is bit-exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale).
 ///   Empirical worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
-/// - `|cdf(z) + cdf(z.negate()) - 1| ≤ 5 ULP` for non-saturated inputs.
+/// - `cdf(z) + cdf(z.negate())` is bit-exactly `1` for every input: both
+///   evaluations share the same `Φ(|z|)` value, which the negative branch
+///   reflects as `1 - Φ(|z|)`.
+/// - Monotone non-decreasing across the dense offline validation grid
+///   (enforced by the codegen CI gate). A 1-ULP local inversion between
+///   neighboring raw inputs is not formally excluded in the far tail
+///   (`|z| ≳ 5.7`), where the true `Φ` increment drops below the `10⁻⁹`
+///   output resolution.
 ///
 /// #### Aborts
 /// - Does not abort for any `SD29x9` input under the committed, validated

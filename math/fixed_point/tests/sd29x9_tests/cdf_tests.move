@@ -184,7 +184,10 @@ fun monotonic_on_grid() {
 
 #[test]
 fun symmetry_on_well_known_points() {
+    // Probes span the zero special case, the rational central domain, and the
+    // saturated region — the reflection identity must hold on every branch.
     let probes: vector<u128> = vector[
+        0,
         100_000_000,
         500_000_000,
         SCALE,
@@ -192,6 +195,8 @@ fun symmetry_on_well_known_points() {
         3 * SCALE,
         5 * SCALE,
         6 * SCALE,
+        MAX_Z_RAW,
+        7 * SCALE,
     ];
     let mut i = 0;
     let n = probes.length();
@@ -199,9 +204,9 @@ fun symmetry_on_well_known_points() {
         let raw = probes[i];
         let cdf_pos = pos(raw).cdf().unwrap();
         let cdf_neg = neg(raw).cdf().unwrap();
-        // |cdf(z) + cdf(-z) - 1| ≤ 5 ULP
-        let sum = cdf_pos + cdf_neg;
-        assert_within(sum, ONE_RAW, TOLERANCE);
+        // cdf(z) + cdf(-z) == 1 bit-exactly: both calls share the same Φ(|z|)
+        // evaluation and the negative branch reflects it as 10^9 - Φ(|z|).
+        assert_eq!(cdf_pos + cdf_neg, ONE_RAW);
         i = i + 1;
     };
 }
