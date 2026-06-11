@@ -9,8 +9,8 @@ mirrors the Move implementation exactly**:
     sign-magnitude tracking and floor-division on the magnitude (matches
     `mul_div(..., Down)` in `math/core/sources/u256.move`).
   - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up
-    (ties away from zero) nearest rounding, mirroring the Move `Nearest` mode in
-    `horner.move::mul_div_nearest_u256`.
+    (ties away from zero) nearest rounding, mirroring the on-chain
+    `u256::mul_div(..., Nearest)` from `math/core/sources/u256.move`.
 
 Asserts, over a 10,000-point grid, that the worst-case absolute error vs
 `scipy.stats.norm.cdf` stays within `TARGET_ERROR_ULP` × 10^-9 and that the
@@ -127,8 +127,8 @@ def horner_eval(z: SignedInt, coeffs: list[SignedInt]) -> SignedInt:
 
 
 def mul_div_nearest(a: int, b: int, d: int) -> int:
-    """`(a * b) / d` rounded half-up (ties away from zero), structurally
-    mirroring the Move `horner::mul_div_nearest_u256` (round up iff
+    """`(a * b) / d` rounded half-up (ties away from zero), mirroring the
+    on-chain `u256::mul_div(..., Nearest)` from `math/core` (round up iff
     `rem >= d - rem`). Caller guarantees `d > 0`."""
     prod = a * b
     if prod > U256_MAX:

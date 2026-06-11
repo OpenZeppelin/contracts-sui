@@ -13,6 +13,8 @@ module openzeppelin_fp_math::cdf;
 use openzeppelin_fp_math::cdf_coefficients;
 use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::horner;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u256;
 
 // === Errors ===
 
@@ -85,13 +87,14 @@ fun eval_rational(
     assert!(!horner::is_neg(&d) && horner::mag(&d) > 0, EInternalDenNonPositive);
 
     // Final ratio: N(z) / D(z) at WAD, cast to UD30x9 (10^9) with a single
-    // nearest-rounding step. The full-width product `n.mag × 10^9` is bounded
-    // by ~10^29 on the central domain — well under u256 capacity.
-    let phi_raw_u256 = horner::mul_div_nearest_u256(
+    // nearest-rounding step. The result is bounded by ~10^29 on the central
+    // domain — well under u256 capacity, so `destroy_some` cannot abort.
+    let phi_raw_u256 = u256::mul_div(
         horner::mag(&n),
         common::scale_u256!(),
         horner::mag(&d),
-    );
+        rounding::nearest(),
+    ).destroy_some();
     // Last-ULP overshoot guard: rounding can produce ONE_RAW + 1 raw at z just
     // below max_z; clamp to keep the output a valid probability.
     if (phi_raw_u256 > (ONE_RAW as u256)) ONE_RAW

@@ -7,8 +7,7 @@
 /// consumer supplies its own coefficient table. Concretely it offers a
 /// `SignedScaled256` value, sign-aware add/multiply, and the `horner_eval!`
 /// macro that evaluates a polynomial via Horner's method given a `(u128, bool)`
-/// coefficient accessor, plus `mul_div_nearest_u256` for a final WAD→`10^9`
-/// ratio with half-up rounding.
+/// coefficient accessor.
 module openzeppelin_fp_math::horner;
 
 // === Errors ===
@@ -127,27 +126,6 @@ public(package) fun signed_mul_wad(a: SignedScaled256, b: SignedScaled256): Sign
     let neg = if (mag == 0) false
     else (a.neg != b.neg);
     SignedScaled256 { mag, neg }
-}
-
-// === Final-Ratio Helper ===
-
-/// Compute `(a × b) / d` rounded to the nearest integer, half-up (ties away
-/// from zero).
-///
-/// Used to cast a WAD-scale rational `N(z) / D(z)` to a `10^9`-scale value in a
-/// single rounding step. Caller guarantees `d > 0` and that the full-width
-/// product `a × b` fits in `u256`.
-///
-/// #### Aborts
-/// - Aborts if `d == 0`.
-public(package) fun mul_div_nearest_u256(a: u256, b: u256, d: u256): u256 {
-    let prod = a * b;
-    let quot = prod / d;
-    let rem = prod - quot * d;
-    // Half-up, ties away from zero. Compared as `rem ≥ d - rem` rather than
-    // `2 × rem ≥ d`: `rem < d`, so `d - rem` never underflows, and this avoids
-    // overflowing `rem × 2` when `d` is near `u256::max`.
-    if (rem >= d - rem) quot + 1 else quot
 }
 
 // === Horner Evaluator ===
