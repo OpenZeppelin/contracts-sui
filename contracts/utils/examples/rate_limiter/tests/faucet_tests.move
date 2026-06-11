@@ -1,11 +1,11 @@
 #[test_only]
 module openzeppelin_utils::faucet_tests;
 
-use openzeppelin_utils::faucet::{Self, new, issue_claim_cap, Faucet, ClaimCap};
+use openzeppelin_utils::faucet::{new, issue_claim_cap, Faucet, ClaimCap};
 use openzeppelin_utils::rare_coin::{Self, RARE_COIN};
 use openzeppelin_utils::rate_limiter;
 use std::unit_test::{destroy, assert_eq};
-use sui::coin::{Self, Coin};
+use sui::coin::Coin;
 use sui::test_scenario as ts;
 
 const HOUR: u64 = 60 * 60 * 1000;
@@ -46,7 +46,7 @@ fun users_claim_when_respecting_all_limits() {
     assert_eq!(faucet.global_allowance(&clock), 40);
     ts::return_shared(faucet);
 
-    // the faucet will still permit the other user to claim
+    // The faucet will still permit the other user to claim.
     scenario.next_tx(user_2);
 
     let mut faucet = scenario.take_shared<Faucet>();
@@ -55,10 +55,10 @@ fun users_claim_when_respecting_all_limits() {
     assert_eq!(cap_2.personal_allowance(&clock), 50);
     destroy(faucet.claim(&mut cap_2, 40, &clock, scenario.ctx()));
     assert_eq!(cap_2.personal_allowance(&clock), 10);
-    // The global window is now empty
+    // The global window is now empty.
     assert_eq!(faucet.global_allowance(&clock), 0);
 
-    // Confirm personal buckets refill appropriately
+    // Confirm personal buckets refill appropriately.
     clock.increment_for_testing(2_000);
     assert_eq!(cap_1.personal_allowance(&clock), 20);
     assert_eq!(cap_2.personal_allowance(&clock), 40);
@@ -98,7 +98,7 @@ fun personal_limit_binds_even_if_global_allows() {
     let mut cap = scenario.take_from_sender<ClaimCap>();
     // The personal allowance binds well below the 100 global window.
     assert_eq!(cap.personal_allowance(&clock), 60);
-    // But it hits the personal limit, thus aborting
+    // But it hits the personal limit, thus aborting.
     destroy(faucet.claim(&mut cap, 100, &clock, scenario.ctx()));
 
     abort
