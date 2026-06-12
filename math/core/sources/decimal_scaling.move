@@ -59,7 +59,7 @@ const MAX_DECIMALS: u8 = 24;
 ///
 /// #### Examples
 ///
-/// ```
+/// ```move
 /// // Scaling down: Ethereum to Sui (precision preserved for clean values)
 /// // 1.0 token with 18 decimals = 1000000000000000000
 /// // 1.0 token with 9 decimals = 1000000000
@@ -132,7 +132,7 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
 ///
 /// #### Examples
 ///
-/// ```
+/// ```move
 /// // Scaling up: Sui to Ethereum (no precision loss)
 /// // 1.0 token with 9 decimals = 1000000000
 /// // 1.0 token with 18 decimals = 1000000000000000000
@@ -155,7 +155,7 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 
 /// Internal helper to scale an amount between different decimal precisions.
 ///
-/// # Truncation Behavior
+/// #### Truncation Behavior
 ///
 /// When scaling down (source_decimals > target_decimals), this function uses
 /// integer division which TRUNCATES the result. Fractional parts are discarded,
@@ -177,10 +177,16 @@ public fun safe_upcast_balance(amount: u64, source_decimals: u8, target_decimals
 ///
 /// #### Examples
 ///
-/// - Scaling up: amount=1000000, source=6, target=9 → 1000000000 (no precision loss).
-/// - Scaling down: amount=1000000000, source=9, target=6 → 1000000.
-/// - Same decimals: amount=1000000000, source=9, target=9 → 1000000000 (no conversion).
-/// - Truncation example: amount=1999000000, source=9, target=0 → 1 (not 2).
+/// ```move
+/// // Scaling up (no precision loss): 1000000 at 6 decimals -> 1000000000 at 9 decimals.
+/// let up = scale_amount(1000000, 6, 9);
+/// // Scaling down: 1000000000 at 9 decimals -> 1000000 at 6 decimals.
+/// let down = scale_amount(1000000000, 9, 6);
+/// // Same decimals: no conversion.
+/// let same = scale_amount(1000000000, 9, 9);
+/// // Truncation: 1999000000 at 9 decimals -> 1 at 0 decimals (not 2).
+/// let truncated = scale_amount(1999000000, 9, 0);
+/// ```
 fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
     // Fast path: same decimals, no scaling needed.
     if (source_decimals == target_decimals) {

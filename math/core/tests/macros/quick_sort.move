@@ -823,3 +823,43 @@ fun quick_sort_by_median_of_three_crafted_inputs() {
     vector::quick_sort_by!(&mut vec3, |x: &u64, y: &u64| *x <= *y);
     assert_eq!(vec3, vector[2u64, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 30, 50, 60]);
 }
+
+#[random_test]
+fun quick_sort_random_is_sorted_and_preserves_elements(mut v: vector<u64>) {
+    // Oracle-free properties on arbitrary input: the output must be sorted, and it must be a
+    // permutation of the input (same length, same per-element occurrence counts). Together
+    // these pin down sorting exactly, without relying on any reference implementation.
+    //
+    // The occurrence-count check below is quadratic, so bound the length; randomized value
+    // patterns are the coverage target here, and large inputs are exercised by the fixed tests.
+    while (v.length() > 200) {
+        v.pop_back();
+    };
+
+    let mut sorted = v;
+    vector::quick_sort!(&mut sorted);
+
+    let len = sorted.length();
+    assert_eq!(len, v.length());
+
+    let mut i = 0;
+    while (i + 1 < len) {
+        assert!(sorted[i] <= sorted[i + 1]);
+        i = i + 1;
+    };
+
+    i = 0;
+    while (i < len) {
+        let value = sorted[i];
+        let mut count_original = 0u64;
+        let mut count_sorted = 0;
+        let mut j = 0;
+        while (j < len) {
+            if (v[j] == value) count_original = count_original + 1;
+            if (sorted[j] == value) count_sorted = count_sorted + 1;
+            j = j + 1;
+        };
+        assert_eq!(count_original, count_sorted);
+        i = i + 1;
+    };
+}
