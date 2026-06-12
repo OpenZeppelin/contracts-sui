@@ -453,6 +453,10 @@ fun median_u128_basics() {
         std::u128::max_value!() / 2,
     );
     assert_eq!(vector::median_u128(&vector[4u128, 1, 4, 4, 2, 4], rounding::down()), 4);
+    // width extreme: the 0.5 tie rounds up under `up` and `nearest`, and must not overflow
+    let max = std::u128::max_value!();
+    assert_eq!(vector::median_u128(&vector[0u128, max], rounding::up()), max / 2 + 1);
+    assert_eq!(vector::median_u128(&vector[0u128, max], rounding::nearest()), max / 2 + 1);
 }
 
 #[test]
@@ -468,6 +472,14 @@ fun median_u32_even_length_rounding_modes() {
     assert_eq!(vector::median_u32(&vector[1u32, 2, 5, 9], rounding::down()), 3);
     assert_eq!(vector::median_u32(&vector[1u32, 2, 5, 9], rounding::nearest()), 4);
     assert_eq!(vector::median_u32(&vector[1u32, 2, 5, 9], rounding::up()), 4);
+}
+
+#[test]
+fun median_u128_even_length_rounding_modes() {
+    // sorted: [1, 2, 5, 9]; central pair (2, 5) -> (2 + 5) / 2 = 3.5
+    assert_eq!(vector::median_u128(&vector[1u128, 2, 5, 9], rounding::down()), 3);
+    assert_eq!(vector::median_u128(&vector[1u128, 2, 5, 9], rounding::nearest()), 4);
+    assert_eq!(vector::median_u128(&vector[1u128, 2, 5, 9], rounding::up()), 4);
 }
 
 #[test]
