@@ -8,12 +8,16 @@ use openzeppelin_math::common;
 
 // === Errors ===
 
+/// Cross-limb addition produced a carry beyond the representable 512-bit range.
 #[error(code = 0)]
 const ECarryOverflow: vector<u8> = "Cross-limb addition overflowed";
+/// Subtraction borrowed past the high limb, underflowing the value.
 #[error(code = 1)]
 const EUnderflow: vector<u8> = "Borrow underflowed high limb";
+/// Division was attempted with a zero divisor.
 #[error(code = 2)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
+/// Post-division remainder retained non-zero high bits, violating its invariant.
 #[error(code = 3)]
 const EInvalidRemainder: vector<u8> = "High remainder bits must be zero";
 
