@@ -132,3 +132,28 @@ jobs:
           name: ${{ matrix.package }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  codegen:
+    name: Codegen (validate + drift + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install codegen
+        run: pip install -e "math/fixed_point/codegen[dev]"
+
+      - name: Validate committed CDF coefficients
+        run: python -m codegen.cdf.validate
+
+      - name: Check test vectors are in sync with the generator
+        run: python -m codegen.cdf.emit_test_vectors --check
+
+      - name: Run codegen unit tests
+        run: pytest math/fixed_point/codegen/tests -q

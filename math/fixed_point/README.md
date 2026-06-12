@@ -130,3 +130,15 @@ let one = ud30x9::wrap(1000000000); // 1.0
 let third_down = one.div_trunc(ud30x9::wrap(3000000000)); // 0.333333333
 let third_up = one.div_away(ud30x9::wrap(3000000000)); // 0.333333334
 ```
+
+## Generated code
+
+The standard-normal CDF (`cdf`) is backed by an AAA-rational approximation whose
+coefficients and test vectors are generated offline and must **not** be
+hand-edited (each carries an `AUTO-GENERATED` banner):
+
+- `sources/internal/cdf_coefficients.move`
+- `tests/{sd29x9_tests,ud30x9_tests}/cdf_test_vectors.move`
+
+To regenerate them — or to re-validate the committed coefficients against
+`scipy` — see [`codegen/`](codegen/README.md).

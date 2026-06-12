@@ -57,10 +57,14 @@ public use fun openzeppelin_fp_math::sd29x9_base::unchecked_sub as SD29x9.unchec
 public use fun openzeppelin_fp_math::sd29x9_base::eq as SD29x9.eq;
 public use fun openzeppelin_fp_math::sd29x9_base::gt as SD29x9.gt;
 public use fun openzeppelin_fp_math::sd29x9_base::gte as SD29x9.gte;
+public use fun openzeppelin_fp_math::sd29x9_base::is_negative as SD29x9.is_negative;
 public use fun openzeppelin_fp_math::sd29x9_base::is_zero as SD29x9.is_zero;
 public use fun openzeppelin_fp_math::sd29x9_base::lt as SD29x9.lt;
 public use fun openzeppelin_fp_math::sd29x9_base::lte as SD29x9.lte;
 public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
+
+// Gaussian functions
+public use fun openzeppelin_fp_math::sd29x9_base::cdf as SD29x9.cdf;
 
 // Cross-Type Casting
 public use fun openzeppelin_fp_math::sd29x9_base::into_UD30x9 as SD29x9.into_UD30x9;

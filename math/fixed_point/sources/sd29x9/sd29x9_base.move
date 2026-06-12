@@ -3,6 +3,7 @@
 /// Tailored to the signed `SD29x9` representation (two's complement stored in `u128` with 9 decimal places).
 module openzeppelin_fp_math::sd29x9_base;
 
+use openzeppelin_fp_math::cdf::{cdf_nonneg_raw, half_raw};
 use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
@@ -30,6 +31,13 @@ const ENegativeSqrt: vector<u8> = "Cannot compute square root of a negative valu
 /// Logarithm is undefined: input must be strictly positive
 #[error(code = 4)]
 const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictly positive";
+
+/// `cdf_nonneg_raw` returned a value below `Φ(0) = 0.5`, which would make the
+/// negative-input sign-flip subtraction `10^9 - phi` produce a result greater
+/// than `0.5`. Defense-in-depth against an AAA-fit regression.
+#[error(code = 5)]
+const EInternalNegSubUnderflow: vector<u8> =
+    "CDF sign-flip subtraction underflowed: internal evaluation returned a value below 0.5";
 
 // === Structs ===
 
@@ -132,6 +140,58 @@ public fun ceil(x: SD29x9): SD29x9 {
     result.wrap_components()
 }
 
+/// Standard-normal cumulative distribution function `Φ(z)`.
+///
+/// Returns the probability `Φ(z) ∈ [0, 1]` represented as a non-negative
+/// `SD29x9`. The implementation evaluates an AAA-rational approximation
+/// `N(|z|) / D(|z|)` at WAD scale via Horner's method on a sign-magnitude
+/// `u256` accumulator; the final ratio is cast back to `SD29x9` (`10^9`)
+/// in a single nearest-rounding step. Negative inputs reflect via
+/// `Φ(-z) = 1 - Φ(z)`.
+///
+/// #### Parameters
+/// - `z`: Input value.
+///
+/// #### Returns
+/// - The probability `Φ(z)` as a non-negative `SD29x9` in `[0, 1]`.
+///
+/// #### Behavior
+/// - Saturates exactly to `0` for `z ≤ -6.3` and to `1` for `z ≥ 6.3`. At
+///   those bounds `Φ` is already within `~10⁻¹⁰` of the saturated value,
+///   well below the output's `10⁻⁹` resolution.
+/// - `Φ(0)` is exactly `0.5`.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale).
+///   Empirical worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
+/// - `cdf(z) + cdf(z.negate())` is exactly `1` for every input: both
+///   evaluations share the same `Φ(|z|)` value, which the negative branch
+///   reflects as `1 - Φ(|z|)`.
+/// - Monotone non-decreasing across the dense offline validation grid
+///   (enforced by the codegen CI gate). A 1-ULP local inversion between
+///   neighboring raw inputs is not formally excluded in the far tail
+///   (`|z| ≳ 5.7`), where the true `Φ` increment drops below the `10⁻⁹`
+///   output resolution.
+///
+/// #### Aborts
+/// - Does not abort for any `SD29x9` input under the committed, validated
+///   coefficients. The implementation carries internal integrity asserts
+///   (`EInternalNegSubUnderflow` here, plus `cdf::EInternalNumNegative` /
+///   `cdf::EInternalDenNonPositive` in the evaluator) as defense-in-depth
+///   against a corrupted regenerated coefficient table; these cannot fire for
+///   the shipped coefficients.
+public fun cdf(z: SD29x9): SD29x9 {
+    let Components { mag, neg } = decompose(z.unwrap());
+    let phi = cdf_nonneg_raw(mag as u128);
+    let raw = if (neg) {
+        // Defense-in-depth: the AAA fit's `Φ(z) ≥ 0.5` mathematical
+        // contract is what makes `common::scale!() - phi` safe here.
+        assert!(phi >= half_raw(), EInternalNegSubUnderflow);
+        common::scale!() - phi
+    } else {
+        phi
+    };
+    wrap(raw, false)
+}
+
 /// Checks whether two `SD29x9` values are bitwise equal.
 ///
 /// #### Parameters
@@ -203,6 +263,17 @@ public fun gte(x: SD29x9, y: SD29x9): bool {
 /// - `true` if `x` is zero, otherwise `false`.
 public fun is_zero(x: SD29x9): bool {
     x.unwrap() == 0
+}
+
+/// Checks whether a value is strictly less than zero (sign bit set).
+///
+/// #### Parameters
+/// - `x`: Input value.
+///
+/// #### Returns
+/// - `true` if `x < 0`, otherwise `false`.
+public fun is_negative(x: SD29x9): bool {
+    (x.unwrap() & common::sign_bit!()) != 0
 }
 
 /// Computes the natural logarithm of an `SD29x9` value.

@@ -1,0 +1,26 @@
+[project]
+name = "openzeppelin-fp-codegen"
+version = "0.1.0"
+description = "Offline coefficient and test-vector generators for openzeppelin_fp_math (Sui Move)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mpmath>=1.3",
+    "scipy>=1.15", # scipy.interpolate.AAA was introduced in 1.15.0
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# The distribution root is `codegen/`, but the import package is also `codegen`,
+# so flat-layout auto-discovery (which scans *inside* this directory) can't find
+# it. Map the `codegen` package explicitly onto this directory; the `.cdf` and
+# `.shared` subpackages inherit the mapping (-> ./cdf, ./shared).
+[tool.setuptools]
+packages = ["codegen", "codegen.cdf", "codegen.shared"]
+package-dir = { "codegen" = "." }
