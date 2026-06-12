@@ -5,6 +5,7 @@ use openzeppelin_math::rounding::RoundingMode;
 
 // === Errors ===
 
+/// The median was requested for an empty vector, which is undefined.
 #[error(code = 0)]
 const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 

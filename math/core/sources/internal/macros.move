@@ -10,8 +10,10 @@ use openzeppelin_math::u512;
 
 // === Errors ===
 
+/// Division was attempted with a zero divisor.
 #[error(code = 0)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
+/// A modulo operation was attempted with a zero modulus.
 #[error(code = 1)]
 const EZeroModulus: vector<u8> = "Modulus must be non-zero";
 
