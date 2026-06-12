@@ -45,8 +45,6 @@ republish of the others — the package boundary is an audit boundary.
 
 - `sources/` — public modules; `sources/internal/` for package-private helpers
 - `tests/` — unit tests (mirrors the `sources/` grouping)
-- `codegen/` — generator for large constant tables, where applicable (math)
-- `artifacts/` — generated reference data, where applicable (math)
 
 ## Core design principles
 
@@ -67,13 +65,19 @@ that grow unboundedly. See `openzeppelin_access` for the canonical pattern.
 
 ### Composability first (PTB-friendly)
 
-- Functions **return objects** instead of self-transferring them. Returning lets
-  the caller chain the result into the next PTB command; an internal
+These are defaults that keep components reusable in PTBs — not absolutes. Some
+functions legitimately transfer (when transferring *is* the operation's
+semantic); treat those as documented exceptions, not reasons to drop the
+guideline.
+
+- Prefer functions that **return objects** over self-transferring them. Returning
+  lets the caller chain the result into the next PTB command; an internal
   `transfer::transfer` ends the value's life and breaks composition.
-- Mint/create functions return the created object, never transfer it internally.
+- Mint/create functions should return the created object rather than transferring
+  it internally.
 - Return excess coins (even zero-value) rather than transferring them internally.
-- Keep core logic **pure**: no `transfer::*` inside the business logic — push
-  transfers to the edges (entry functions / the integrator).
+- Keep core logic mostly free of `transfer::*` — push transfers to the edges
+  (entry functions / the integrator) where practical.
 
 ### Bounded state
 
@@ -110,20 +114,6 @@ be retracted. Design for forward compatibility from day one.
   can reject calls made against a stale version of the object.
 - **Keep extension-package interfaces unchanging** so a change never breaks the
   packages that depend on or extend them.
-
-## Generated code & artifacts (math packages)
-
-The math packages keep two non-Move directories alongside `sources/`:
-
-- `codegen/` — Python that generates Move lookup tables / large constant blocks
-  (e.g. the CDF table in `fixed_point`). The generator is the source of truth;
-  the generated `.move` is committed for reproducible builds.
-- `artifacts/` — generated reference data used to validate the Move
-  implementation against an independent computation.
-
-**Why generate?** Hand-writing large numeric tables is error-prone and
-unreviewable. Generating them from a readable Python spec makes the math
-auditable and lets reviewers regenerate and diff.
 
 ## Testing architecture
 

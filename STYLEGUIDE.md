@@ -122,8 +122,10 @@ Common ordering violations to watch for:
   // call: cap.update(&mut account, new_name)
   ```
 
-- Keep functions pure — avoid `transfer::transfer` inside core logic; return
-  objects instead
+- Prefer keeping core logic free of `transfer::*` — return objects instead and
+  push transfers to the edges. Exceptions exist where transferring *is* the
+  operation's semantic; document them rather than working around the guideline
+  (see [`ARCHITECTURE.md`](./ARCHITECTURE.md#core-design-principles)).
 - Accept payment by value — `fun pay(payment: Coin<SUI>)`, not
   `&mut Coin<SUI>` plus an `amount` — so the caller hands over exactly what they
   intend; a `&mut Coin` lets the callee draw an unbounded amount.

@@ -11,7 +11,7 @@ single sources of truth and lists the boundaries you need.
   exactly; do not invent conventions from generic internet patterns.
 - [`ARCHITECTURE.md`](./ARCHITECTURE.md) — **why** the library is shaped this
   way: package split, capability-based access control, owned vs. shared objects,
-  PTB composability, bounded state, codegen.
+  PTB composability, bounded state, upgrade safety.
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — PR workflow, build/test/lint commands,
   commit & PR conventions, coverage gate, and the dependency/package-split policy.
 
@@ -44,10 +44,9 @@ read the group and package READMEs (the single source of truth):
 ## Boundaries — do not touch
 
 - `**/build/` — compiler output (generated)
-- `**/artifacts/` — generated reference data; regenerate via `codegen/`, never
-  hand-edit
-- generated `.move` lookup tables — change the `codegen/` source instead
-- `audits/` — historical audit reports
+- `**/artifacts/` — generated reference data; never hand-edit
+- `audits/` — published audit reports; adding a new report is fine, but don't
+  modify or delete existing ones
 
 For commit & PR conventions and the dependency/package-split policy, see
 [`CONTRIBUTING.md`](./CONTRIBUTING.md#commit-and-pr-conventions).
