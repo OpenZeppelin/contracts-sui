@@ -53,7 +53,7 @@ commit there — require a new branch.
 
 If a path or package name was provided, expand it:
 
-- **Path** → glob `**/*.move` under it, excluding `build/`.
+- **Path** → glob `**/*.move` under it, excluding `build/` and `artifacts/`.
 - **Package name** → find the `Move.toml` whose `[package] name` matches, then
   glob `**/*.move` under its `sources/`, `tests/`, and `examples/`.
 
@@ -66,7 +66,11 @@ git diff --name-only ; git ls-files --others --exclude-standard   # uncommitted
 ```
 
 Filter to `*.move` under `contracts/` and `math/`, excluding `build/`,
-`vendor/`, and `.claude/`. If empty, report "no Move files in scope" and stop.
+`vendor/`, `.claude/`, `audits/`, `artifacts/`, and any committed/generated
+`.move` outputs (the `codegen/`-produced tables). These are do-not-touch per
+[`AGENTS.md`](../../AGENTS.md) / [`ARCHITECTURE.md`](../../ARCHITECTURE.md) — the
+command must never "fix" reproducible output. If empty, report "no Move files in
+scope" and stop.
 
 **Edition check.** For each package in scope, parse `edition` from the
 `[package]` table of its `Move.toml`. These conventions target **Move 2024**. If

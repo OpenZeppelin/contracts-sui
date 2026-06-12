@@ -64,7 +64,7 @@ Every file must use `// === <Name> ===` delimiters in this order:
 Within any section, feature-oriented sub-grouping comments are allowed and must
 be preserved:
 
-```
+```move
 // === Constructors ===
 // === Hot Path ===
 // === Scheduling / delay management ===
