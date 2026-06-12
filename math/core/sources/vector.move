@@ -419,6 +419,13 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
 /// The input vector is not mutated. See `median!` for the full contract and the bytecode
 /// vs. gas trade-off.
 ///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
 /// #### Aborts
 /// - `EMedianOfEmptyVector` if `vec` is empty.
 public fun median_u8(vec: &vector<u8>, rounding_mode: RoundingMode): u8 {
@@ -432,6 +439,13 @@ public fun median_u8(vec: &vector<u8>, rounding_mode: RoundingMode): u8 {
 /// but the selection bytecode lives in this module instead of being inlined at the call site.
 /// The input vector is not mutated. See `median!` for the full contract and the bytecode
 /// vs. gas trade-off.
+///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
 ///
 /// #### Aborts
 /// - `EMedianOfEmptyVector` if `vec` is empty.
@@ -447,6 +461,13 @@ public fun median_u16(vec: &vector<u16>, rounding_mode: RoundingMode): u16 {
 /// The input vector is not mutated. See `median!` for the full contract and the bytecode
 /// vs. gas trade-off.
 ///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
 /// #### Aborts
 /// - `EMedianOfEmptyVector` if `vec` is empty.
 public fun median_u32(vec: &vector<u32>, rounding_mode: RoundingMode): u32 {
@@ -460,6 +481,13 @@ public fun median_u32(vec: &vector<u32>, rounding_mode: RoundingMode): u32 {
 /// but the selection bytecode lives in this module instead of being inlined at the call site.
 /// The input vector is not mutated. See `median!` for the full contract and the bytecode
 /// vs. gas trade-off.
+///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
 ///
 /// #### Aborts
 /// - `EMedianOfEmptyVector` if `vec` is empty.
@@ -475,6 +503,13 @@ public fun median_u64(vec: &vector<u64>, rounding_mode: RoundingMode): u64 {
 /// The input vector is not mutated. See `median!` for the full contract and the bytecode
 /// vs. gas trade-off.
 ///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
 /// #### Aborts
 /// - `EMedianOfEmptyVector` if `vec` is empty.
 public fun median_u128(vec: &vector<u128>, rounding_mode: RoundingMode): u128 {
@@ -488,6 +523,13 @@ public fun median_u128(vec: &vector<u128>, rounding_mode: RoundingMode): u128 {
 /// but the selection bytecode lives in this module instead of being inlined at the call site.
 /// The input vector is not mutated. See `median!` for the full contract and the bytecode
 /// vs. gas trade-off.
+///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
 ///
 /// #### Aborts
 /// - `EMedianOfEmptyVector` if `vec` is empty.
