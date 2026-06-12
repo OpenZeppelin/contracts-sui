@@ -5,6 +5,9 @@ sui.keystore
 .trace
 .coverage_map.mvcov
 
+# Local node publish artifact
+Pub.local.toml
+
 # OS generated files
 .DS_Store
 ._*
