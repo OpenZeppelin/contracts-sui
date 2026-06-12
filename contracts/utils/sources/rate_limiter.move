@@ -19,6 +19,16 @@
 ///    `RateLimiter` with the desired field values (reading current state via `available`,
 ///    `capacity`, `window_start_ms`, `cooldown_end_ms`, etc.) and overwrites the field.
 ///
+/// # Examples
+///
+/// > **Warning:** These are **unaudited illustrations** of how the primitive can be integrated,
+/// > not production-ready code.
+///
+/// Integration examples live in https://github.com/OpenZeppelin/contracts-sui/tree/release-v1.3/contracts/utils/examples/rate_limiter:
+/// - `faucet` - a per-holder token bucket composed with a global window across two objects.
+/// - `staking_vault` - a cooldown armed as a one-shot timelock that gates claims until an unbonding delay elapses.
+/// - `mage_duel` - many limiters of mixed variants packed into one type: per-mage health and mana buckets plus per-spell cooldowns.
+///
 /// # Operator responsibilities
 ///
 /// Configs only need positivity; the implementation handles internal overflow safety
