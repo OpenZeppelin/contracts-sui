@@ -40,7 +40,8 @@ use sui::clock::Clock;
 
 const EZeroDuration: u64 = 0;
 const EInvalidCliff: u64 = 1;
-const ENotEnded: u64 = 2;
+const EScheduleOverflow: u64 = 2;
+const ENotEnded: u64 = 3;
 
 // === Types ===
 
@@ -72,6 +73,7 @@ public fun new<T>(
 ): VestingWallet<Linear, Params, T> {
     assert!(duration_ms > 0, EZeroDuration);
     assert!(cliff_ms <= duration_ms, EInvalidCliff);
+    assert!(duration_ms <= std::u64::max_value!() - start_ms, EScheduleOverflow);
 
     vesting_wallet::new(Params { start_ms, duration_ms, cliff_ms }, beneficiary, ctx)
 }
