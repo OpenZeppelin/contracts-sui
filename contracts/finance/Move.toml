@@ -1,0 +1,3 @@
+[package]
+name = "openzeppelin_finance"
+edition = "2024"
