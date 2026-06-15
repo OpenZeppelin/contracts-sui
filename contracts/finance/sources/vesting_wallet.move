@@ -157,7 +157,7 @@ public fun new<S: drop, P: copy + drop + store, C>(
     wallet
 }
 
-/// Mint a `VestedAmount<P>`. Witness-gated: callers must supply a value of type
+/// Mint a `VestedAmount<S>`. Witness-gated: callers must supply a value of type
 /// `P`, and only the module that declares `P` can construct one. The amount is
 /// unforgeable in any other module.
 public fun mint_vested<S: drop, P: copy + drop + store, C>(
@@ -175,7 +175,7 @@ public fun mint_vested<S: drop, P: copy + drop + store, C>(
     VestedAmount { amount }
 }
 
-/// Read the cumulative vested total recorded in a `VestedAmount<P>` without
+/// Read the cumulative vested total recorded in a `VestedAmount<S>` without
 /// consuming it.
 public fun amount<S>(vested: &VestedAmount<S>): u64 {
     vested.amount
@@ -203,7 +203,7 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     deposit(wallet, coin);
 }
 
-/// Consume a curve-supplied `VestedAmount<P>` and send the not-yet-released
+/// Consume a curve-supplied `VestedAmount<S>` and send the not-yet-released
 /// portion to the beneficiary. Permissionless: anyone holding wallet and
 /// vested-amount references can poke this. The recipient is always read fresh
 /// from `wallet.beneficiary` at call time.
@@ -260,12 +260,12 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(wallet: VestingWall
 
 // === Views and accessors ===
 
-/// What `release` would pay out if the supplied `VestedAmount<P>` were consumed
+/// What `release` would pay out if the supplied `VestedAmount<S>` were consumed
 /// now: `vested.amount - wallet.released`. Takes the witness by reference so the
 /// caller can still consume it in a subsequent `release`.
 public fun available<S: drop, P: copy + drop + store, C>(
     wallet: &VestingWallet<S, P, C>,
-    vested: &VestedAmount<P>,
+    vested: &VestedAmount<S>,
 ): u64 {
     vested.amount - wallet.released
 }
