@@ -237,8 +237,8 @@ public fun release<S: drop, P: copy + drop + store, C>(
 /// after this call have no path back — pair destruction with halting any
 /// upstream emissions that target this wallet.
 public fun destroy_empty<S: drop, P: copy + drop + store, C>(
-    _w: S,
     wallet: VestingWallet<S, P, C>,
+    _w: S,
 ): P {
     assert!(wallet.balance.value() == 0, ENotEmpty);
 

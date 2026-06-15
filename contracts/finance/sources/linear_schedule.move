@@ -123,9 +123,7 @@ public fun releasable<T>(wallet: &VestingWallet<Linear, Params, T>, clock: &Cloc
 /// Tear down a drained, ended linear wallet: reclaim storage and drop the
 /// `Linear` schedule. Wraps `vesting_wallet::destroy_empty`.
 public fun destroy<T>(wallet: VestingWallet<Linear, Params, T>, clock: &Clock) {
-    let Params { start_ms, duration_ms, cliff_ms: _ } = vesting_wallet::destroy_empty(
-        wallet,
-    );
+    let Params { start_ms, duration_ms, cliff_ms: _ } = wallet.destroy_empty(Linear {});
     // QUESTION: should we remove this check, as it might only matter that the balance == 0?
     assert!(clock.timestamp_ms() >= start_ms + duration_ms, ENotEnded);
 }
