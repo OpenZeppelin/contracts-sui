@@ -14,7 +14,7 @@
 /// `Linear` can construct a `Linear` value, and therefore only this module can
 /// build a `VestingWallet<Linear, Params, T>` (via `vesting_wallet::new`, which takes
 /// the schedule by value) or mint a `VestedAmount<Linear>` (via
-/// `vesting_wallet::mint_vested`). Keeping `Linear` in its own module — rather
+/// `vesting_wallet::mint_vested_amount`). Keeping `Linear` in its own module — rather
 /// than baking it into the primitive — leaves room for additional schedule
 /// types (cliff-only, stepped, exponential, …) that follow this same shape
 /// without bloating `vesting_wallet`.
@@ -94,14 +94,13 @@ public fun create_and_share<T>(
 
 /// The linear schedule curve evaluated at `clock.timestamp_ms()`. See the
 /// module docs for the piecewise definition.
-public fun vested<C>(
+public fun vested_amount<C>(
     wallet: &VestingWallet<Linear, Params, C>,
     clock: &Clock,
 ): VestedAmount<Linear> {
-    wallet.mint_vested(
+    wallet.mint_vested_amount(
         Linear {},
-        wallet.schedule_params(),
-        linear_amount(wallet, clock),
+        vested_amount_raw(wallet, clock),
     )
 }
 
@@ -112,14 +111,14 @@ public fun release<C>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let v = vested(wallet, clock);
-    wallet.release(v, ctx);
+    let v = vested_amount(wallet, clock);
+    wallet.release(&v, ctx);
 }
 
-/// How much `release` would pay out right now, without minting a
+/// Sugar for how much `release` would pay out right now, without minting a
 /// `VestedAmount`. The client-friendly "what can I claim?" query.
 public fun releasable<T>(wallet: &VestingWallet<Linear, Params, T>, clock: &Clock): u64 {
-    linear_amount(wallet, clock) - wallet.released()
+    wallet.releasable(&vested_amount(wallet, clock))
 }
 
 /// Tear down a drained, ended linear wallet: reclaim storage and drop the
@@ -153,8 +152,7 @@ public fun cliff<T>(wallet: &VestingWallet<Linear, Params, T>): u64 {
 // === Internal ===
 
 /// The linear curve's cumulative vested total at the current clock, as a `u64`.
-/// Shared by `vested` and `releasable`.
-fun linear_amount<T>(wallet: &VestingWallet<Linear, Params, T>, clock: &Clock): u64 {
+fun vested_amount_raw<T>(wallet: &VestingWallet<Linear, Params, T>, clock: &Clock): u64 {
     let now = clock.timestamp_ms();
     let Params { start_ms, duration_ms, cliff_ms } = wallet.schedule_params();
 

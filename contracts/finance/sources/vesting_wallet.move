@@ -26,7 +26,7 @@
 ///
 /// * build a `VestingWallet<C, C>` (via `new`, which takes the schedule by
 ///   value — the value itself is the authority proof), and
-/// * mint a `VestedAmount<C>` (via `mint_vested`).
+/// * mint a `VestedAmount<C>` (via `mint_vested_amount`).
 ///
 /// This makes "a wallet without parameters" and "a wallet with the wrong
 /// parameters" unrepresentable: the type system, not a runtime check, enforces
@@ -43,7 +43,7 @@
 /// 2. A constructor that validates params and calls
 ///    `vesting_wallet::new(MyCurve { .. }, beneficiary, start_ms, duration_ms, ctx)`.
 /// 3. A `vested(&VestingWallet<MyCurve, C>, &Clock): VestedAmount<MyCurve>` that
-///    ends in `vesting_wallet::mint_vested(MyCurve { .. }, amount)`.
+///    ends in `vesting_wallet::mint_vested_amount(MyCurve { .. }, amount)`.
 /// 4. A teardown that calls `vesting_wallet::destroy_empty`, which returns the
 ///    schedule for the curve module to destructure.
 ///
@@ -78,7 +78,7 @@ use sui::transfer::Receiving;
 // === Errors ===
 
 const ENotEmpty: u64 = 0;
-const EScheduleParamsMismatch: u64 = 1;
+const EWalletMismatch: u64 = 1;
 
 // === Types ===
 
@@ -98,8 +98,9 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 
 /// A vested-amount witness produced by curve `P`. Hot potato: no abilities, so
 /// it must be created and consumed in the same PTB. Only the module that
-/// declares `P` can mint one (via `mint_vested`).
-public struct VestedAmount<phantom S> {
+/// declares `P` can mint one (via `mint_vested_amount`).
+public struct VestedAmount<phantom S> has drop {
+    wallet_id: ID,
     amount: u64,
 }
 
@@ -160,19 +161,16 @@ public fun new<S: drop, P: copy + drop + store, C>(
 /// Mint a `VestedAmount<S>`. Witness-gated: callers must supply a value of type
 /// `P`, and only the module that declares `P` can construct one. The amount is
 /// unforgeable in any other module.
-public fun mint_vested<S: drop, P: copy + drop + store, C>(
+public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     wallet: &VestingWallet<S, P, C>,
     _w: S,
-    params: P,
     amount: u64,
 ): VestedAmount<S> {
-    // TODO: move this to appropriate docs/README place.
-    // Protects against potential exploit:
+    // QUESTION: Does this protect against potential exploit?
     // 1. Beneficiary creates a new wallet through the same schedule, but with modified parameters
     // 2. Beneficiary mints `VestedAmount` using the new schedule, i.e. not the one stored in the wallet
     // 3. Beneficiary releases more funds than the wallet would allow under the intended schedule
-    assert!(wallet.schedule_params == params, EScheduleParamsMismatch);
-    VestedAmount { amount }
+    VestedAmount { wallet_id: object::id(wallet), amount }
 }
 
 /// Read the cumulative vested total recorded in a `VestedAmount<S>` without
@@ -212,11 +210,14 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 /// call still consumes the hot potato but emits no event and transfers no coin.
 public fun release<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
-    vested: VestedAmount<S>,
+    vested: &VestedAmount<S>,
     ctx: &mut TxContext,
 ) {
-    let VestedAmount { amount: vested_total } = vested;
-    let releasable = vested_total - wallet.released;
+    let VestedAmount { wallet_id, amount: vested_amount } = vested;
+    assert!(wallet_id == object::id(wallet), EWalletMismatch);
+    assert!(*vested_amount >= wallet.released);
+
+    let releasable = *vested_amount - wallet.released;
     if (releasable == 0) return;
 
     wallet.released = wallet.released + releasable;
@@ -266,11 +267,13 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
 /// What `release` would pay out if the supplied `VestedAmount<S>` were consumed
 /// now: `vested.amount - wallet.released`. Takes the witness by reference so the
 /// caller can still consume it in a subsequent `release`.
-public fun available<S: drop, P: copy + drop + store, C>(
+public fun releasable<S: drop, P: copy + drop + store, C>(
     wallet: &VestingWallet<S, P, C>,
     vested: &VestedAmount<S>,
 ): u64 {
-    vested.amount - wallet.released
+    let VestedAmount { wallet_id, amount: vested_amount } = vested;
+    assert!(wallet_id == object::id(wallet), EWalletMismatch);
+    *vested_amount - wallet.released
 }
 
 /// Read the wallet's schedule (curve identity + parameters). Ungated: curve
