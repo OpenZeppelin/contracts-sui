@@ -276,7 +276,7 @@ public fun releasable<S: drop, P: copy + drop + store, C>(
     *vested_amount - wallet.released
 }
 
-/// Read the wallet's schedule (curve identity + parameters). Ungated: curve
+/// Read the wallet's schedule parameters. Ungated: curve
 /// parameters are public information.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params
