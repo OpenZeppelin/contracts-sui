@@ -4,7 +4,7 @@ module openzeppelin_math::decimal_scaling_tests;
 use openzeppelin_math::decimal_scaling;
 use std::unit_test::assert_eq;
 
-// === Test Helpers ===
+// === Test-Only Helpers ===
 
 /// Build a test value with specified base and decimal places.
 ///

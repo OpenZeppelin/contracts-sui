@@ -8,11 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+## 1.3.0 (15-06-2026)
+
 ### `openzeppelin_math`
 
 #### Added
 
-- Added `vector::median` macro for unsigned integer vectors with rounding for even lengths. Includes `vector::median_u256`. (#135)
+- Added `vector::median!` macro for unsigned integer vectors with rounding for even lengths. (#362)
 
 #### Changed
 

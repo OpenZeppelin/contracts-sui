@@ -8,25 +8,33 @@ use openzeppelin_math::common;
 
 // === Errors ===
 
+/// Raised when a cross-limb addition carry exceeds the representable range.
 #[error(code = 0)]
 const ECarryOverflow: vector<u8> = "Cross-limb addition overflowed";
+/// Raised when a subtraction borrow underflows the high limb.
 #[error(code = 1)]
 const EUnderflow: vector<u8> = "Borrow underflowed high limb";
+/// Raised when a division or modular operation is given a zero divisor.
 #[error(code = 2)]
 const EDivideByZero: vector<u8> = "Divisor must be non-zero";
+/// Raised when a division remainder leaves non-zero high bits, violating the result invariant.
 #[error(code = 3)]
 const EInvalidRemainder: vector<u8> = "High remainder bits must be zero";
 
 // === Constants ===
 
+/// Bit-width of each half-limb used when splitting a `u256` into two 128-bit halves.
 const HALF_BITS: u8 = 128;
+/// Bitmask selecting the low 128 bits of a `u256` value.
 const HALF_MASK: u256 = (1u256 << HALF_BITS) - 1;
 
 // === Structs ===
 
 /// Represents a 512-bit unsigned integer as two 256-bit words.
 public struct U512 has copy, drop, store {
+    /// Upper 256 bits.
     hi: u256,
+    /// Lower 256 bits.
     lo: u256,
 }
 
