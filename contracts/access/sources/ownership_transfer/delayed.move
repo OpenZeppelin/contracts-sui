@@ -137,7 +137,7 @@ public fun wrap<T: key + store>(
     transfer::transfer(wrapper, recipient);
 }
 
-/// Borrow the wrapped object immutably—useful for inspection without touching the schedule.
+/// Borrow the wrapped object immutably-useful for inspection without touching the schedule.
 ///
 /// #### Parameters
 /// - `self`: Wrapper holding the object.
@@ -295,7 +295,7 @@ public fun execute_transfer<T: key + store>(
     transfer::transfer(self, recipient);
 }
 
-/// Complete a previously scheduled unwrap after the delay—return the object and delete the wrapper
+/// Complete a previously scheduled unwrap after the delay-return the object and delete the wrapper
 /// so the owner regains full control.
 ///
 /// #### Parameters
