@@ -99,6 +99,26 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 /// A vested-amount witness produced by curve `P`. Hot potato: no abilities, so
 /// it must be created and consumed in the same PTB. Only the module that
 /// declares `P` can mint one (via `mint_vested_amount`).
+//
+// TODO(docs): `VestedAmount` splits two authorities, and that split is what lets
+// a third party wrap a `VestingWallet` without breaking encapsulation:
+//   * Attestation ("this much is vested") needs the witness `S`, so only the
+//     curve module can do it (`mint_vested_amount`, takes `&VestingWallet`).
+//   * Execution ("move the funds") needs only `&VestedAmount<S>` + `&mut wallet`
+//     — NOT `S`. So `release` can be called by code that has no access to `S`.
+//
+// A wrapper that nests the wallet (`inner: VestingWallet<..>`) and stays curve-
+// agnostic only needs to expose an *immutable* `&inner` (so any curve module can
+// mint an attestation) and keep `&mut inner` private. It re-exposes `release` as
+// its own fn that takes `&VestedAmount<S>` and delegates to `inner.release(..)`,
+// enforcing its own invariants first. Caller flow stays curve-agnostic:
+//     let v = some_curve::vested_amount(wrapper.inner(), clock);
+//     wrapper.release(&v, ctx);
+// `&inner` is safe to hand out: it only allows views + curve-gated minting (an
+// inert potato); no funds move without `&mut`, which the wrapper never exposes.
+// If `release` instead required `S`, this would be impossible — a curve-agnostic
+// wrapper can't construct `S`, so it would have to expose `&mut inner` and lose
+// all control over deposit/release.
 public struct VestedAmount<phantom S> has drop {
     wallet_id: ID,
     amount: u64,
@@ -161,6 +181,11 @@ public fun new<S: drop, P: copy + drop + store, C>(
 /// Mint a `VestedAmount<S>`. Witness-gated: callers must supply a value of type
 /// `P`, and only the module that declares `P` can construct one. The amount is
 /// unforgeable in any other module.
+///
+/// This pattern is necessary so that the `VestingWallet` can be used in a curve-agnostic
+/// way even through another protocol, or if gated behind another contract. It allows
+/// the module to interact with the vesting wallet indirectly. Without this, curve modules
+/// would need to be updated for each new protocol that wraps the `VestingWallet`.
 public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     wallet: &VestingWallet<S, P, C>,
     _w: S,
