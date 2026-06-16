@@ -24,10 +24,10 @@
 /// > **Warning:** These are **unaudited illustrations** of how the primitive can be integrated,
 /// > not production-ready code.
 ///
-/// Integration examples live in https://github.com/OpenZeppelin/contracts-sui/tree/release-v1.3/contracts/utils/examples/rate_limiter:
-/// - [`faucet`](https://github.com/OpenZeppelin/contracts-sui/tree/release-v1.3/contracts/utils/examples/rate_limiter/faucet.move) - a per-holder token bucket composed with a global window across two objects.
-/// - [`staking_vault`](https://github.com/OpenZeppelin/contracts-sui/tree/release-v1.3/contracts/utils/examples/rate_limiter/staking_vault.move) - a cooldown armed as a one-shot timelock that gates claims until an unbonding delay elapses.
-/// - [`mage_duel`](https://github.com/OpenZeppelin/contracts-sui/tree/release-v1.3/contracts/utils/examples/rate_limiter/mage_duel.move) - many limiters of mixed variants packed into one type: per-mage health and mana buckets plus per-spell cooldowns.
+/// Integration examples live in https://github.com/OpenZeppelin/contracts-sui/blob/release-v1.3/contracts/utils/examples/rate_limiter:
+/// - [`faucet`](https://github.com/OpenZeppelin/contracts-sui/blob/release-v1.3/contracts/utils/examples/rate_limiter/faucet.move) - a per-holder token bucket composed with a global window across two objects.
+/// - [`staking_vault`](https://github.com/OpenZeppelin/contracts-sui/blob/release-v1.3/contracts/utils/examples/rate_limiter/staking_vault.move) - a cooldown armed as a one-shot timelock that gates claims until an unbonding delay elapses.
+/// - [`mage_duel`](https://github.com/OpenZeppelin/contracts-sui/blob/release-v1.3/contracts/utils/examples/rate_limiter/mage_duel.move) - many limiters of mixed variants packed into one type: per-mage health and mana buckets plus per-spell cooldowns.
 ///
 /// # Operator responsibilities
 ///
