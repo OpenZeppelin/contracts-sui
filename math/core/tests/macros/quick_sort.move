@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_math::quick_sort;
 
 use openzeppelin_math::vector;
@@ -500,7 +499,6 @@ fun quick_sort_by_descending_already_sorted() {
     assert_eq!(vec, vector[10u32, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
 }
 
-#[test_only]
 public struct Transfer has copy, drop {
     id: u8, // Transfer identifier
     value: u64, // Transfer value in smallest unit

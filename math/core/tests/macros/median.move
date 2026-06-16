@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_math::median;
 
 use openzeppelin_math::macros;

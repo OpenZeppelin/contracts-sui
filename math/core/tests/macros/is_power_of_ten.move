@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_math::is_power_of_ten;
 
 use openzeppelin_math::macros;

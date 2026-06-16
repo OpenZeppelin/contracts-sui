@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_fp_math::ud30x9_casting_tests;
 
 use openzeppelin_fp_math::sd29x9;

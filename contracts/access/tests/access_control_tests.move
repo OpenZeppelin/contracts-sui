@@ -38,7 +38,6 @@ public struct RoleY {}
 /// Deploys an `AccessControl` rooted at `ACCESS_CONTROL_TESTS`, shares it,
 /// and advances to a fresh transaction so `take_shared` is immediately
 /// available.
-#[test_only]
 #[allow(lint(share_owned))]
 fun setup(deployer: address, delay: u64): Scenario {
     let mut scenario = test_scenario::begin(deployer);
@@ -54,7 +53,6 @@ fun setup(deployer: address, delay: u64): Scenario {
 
 /// Convenience: take the singleton registry from the current transaction.
 /// Wraps `test_scenario::take_shared` to keep test bodies tight.
-#[test_only]
 fun take_ac(scenario: &Scenario): AccessControl<ACCESS_CONTROL_TESTS> {
     scenario.take_shared<AccessControl<ACCESS_CONTROL_TESTS>>()
 }
