@@ -191,10 +191,20 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     _w: S,
     amount: u64,
 ): VestedAmount<S> {
-    // QUESTION: Does this protect against potential exploit?
-    // 1. Beneficiary creates a new wallet through the same schedule, but with modified parameters
-    // 2. Beneficiary mints `VestedAmount` using the new schedule, i.e. not the one stored in the wallet
-    // 3. Beneficiary releases more funds than the wallet would allow under the intended schedule
+    // `amount` is supplied by the caller and is NOT validated here. The primitive
+    // only stamps it with this wallet's id, binding the witness to the wallet it was
+    // minted against — `release`/`releasable` reject it against any other wallet. That
+    // stamp defeats the cross-wallet attack (mint a favorable amount from a side wallet
+    // built with modified params, then redeem it against the target): the side wallet's
+    // id won't match the target.
+    //
+    // What the stamp CANNOT check is whether `amount` is honest for *this* wallet. The
+    // curve module is responsible for that: `amount` must be a monotonically
+    // non-decreasing, `balance + released`-bounded function of this wallet's
+    // `schedule_params`. The wallet trusts the witness `S` and never re-derives the
+    // curve; a curve module that mints a dishonest amount against its own wallet would
+    // over-release (bounded only by the wallet's balance). Curve modules MUST uphold
+    // this invariant.
     VestedAmount { wallet_id: object::id(wallet), amount }
 }
 
