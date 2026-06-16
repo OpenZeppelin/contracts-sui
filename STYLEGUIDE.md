@@ -209,7 +209,12 @@ Examples of required rewrites:
   silently.
 - Prefer pinning exact values: `assert_eq!(result, exact)` over bound-only
   assertions (`assert!(r >= lo && r <= hi)`). For genuine property tests, use
-  Sui's `#[random_test]` attribute.
+  Sui's `#[random_test]` attribute. **Exception:** an approximation test that
+  checks an on-chain result against an off-chain mathematical reference within a
+  tolerance (e.g. `assert!(diff < epsilon)`) is *intentionally* bound-based — the
+  tolerance is the point. Do not convert these to `assert_eq!`; pinning the exact
+  on-chain output would only assert "the implementation returns what it returns"
+  and lose the closeness-to-truth check.
 - Prefer `assert!(cond)` over `assert!(cond, 0)` — Move 2024 auto-assigns abort
   codes when omitted; a literal `0` is meaningless boilerplate.
 - No cleanup in expected-failure tests — just `abort` at the failure boundary.
@@ -233,13 +238,22 @@ Examples of required rewrites:
 
 ## Documentation
 
+Doc-comments are the source of truth for the generated API reference
+(`sui move build --doc`) and for downstream AI-integrator tooling — treat them as
+part of the public API, not decoration. Keep them complete and accurate.
+
 - `///` for doc comments (renders in IDEs), `//` for inline technical notes
 - No JavaDoc-style `/** */`
 - Document struct fields, complex params, and return values
 - Use section headings `#### Parameters`, `#### Returns`, and `#### Aborts` when
   relevant; use `-` for list items (not `*`)
-- Document public functions with at least `Parameters` and `Returns`; include an
-  `Aborts` section whenever a function can abort
+- Document public functions: include `#### Parameters` and `#### Returns` where
+  they add detail beyond the one-line summary — a trivial getter whose summary
+  already states what it returns needs neither. Always include an `#### Aborts`
+  section whenever a function can abort, listing **every** error it can raise —
+  including errors propagated from internal calls
+- State caller preconditions explicitly and map each to the error it fails with
+  (e.g. "Aborts with `EUnauthorized` if the caller lacks the role")
 - Keep terminology consistent with the implementation (e.g. avoid documenting
   impossible paths)
 

@@ -33,8 +33,11 @@ const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictl
 
 // === Structs ===
 
+/// Sign-magnitude decomposition of a signed fixed-point value.
 public struct Components has copy, drop {
+    /// Whether the value is negative (`true`) or non-negative (`false`).
     neg: bool,
+    /// Absolute value (magnitude) in raw fixed-point units.
     mag: u256,
 }
 
