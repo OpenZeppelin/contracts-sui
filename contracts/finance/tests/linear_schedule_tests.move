@@ -584,11 +584,12 @@ fun retroactive_deposit_never_over_releases() {
 }
 
 // The only arithmetic that could lift the curve above the schedule is the
-// `balance + released` total. Releasing funds out and re-funding can drive that sum
-// past u64::MAX; Move aborts on the overflow rather than wrapping to a smaller total,
-// so the worst case is a bricked release (DoS), never an over-payment.
-#[test, expected_failure]
-fun balance_plus_released_overflow_bricks_release_not_overpays() {
+// `balance + released` total. Releasing funds out and re-funding could otherwise
+// drive that sum past u64::MAX; the `deposit` guard (`EOverflow`) rejects the
+// offending refund up front, so the sum can never overflow and the release path is
+// never bricked.
+#[test, expected_failure(abort_code = vesting_wallet::EOverflow)]
+fun overflowing_refund_is_rejected_at_deposit() {
     let (mut test, mut clk) = setup(0);
     let max = std::u64::max_value!();
 
@@ -596,11 +597,10 @@ fun balance_plus_released_overflow_bricks_release_not_overpays() {
     wallet.fund(max, test.ctx());
 
     clk.set_for_testing(1);
-    linear_schedule::release(&mut wallet, &clk, test.ctx()); // releases 1; balance = max - 1
-    wallet.fund(1, test.ctx()); // balance back to max, released = 1
+    linear_schedule::release(&mut wallet, &clk, test.ctx()); // releases 1; balance = max - 1, released = 1
 
-    // balance + released = max + 1: `vested_amount_raw` aborts computing the total.
-    clk.set_for_testing(max);
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    // balance + released == max already; refunding the released 1 would overflow it,
+    // so the deposit is rejected here rather than bricking a later release.
+    wallet.fund(1, test.ctx());
     abort
 }

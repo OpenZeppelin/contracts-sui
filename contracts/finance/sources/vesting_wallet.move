@@ -99,6 +99,10 @@ const EWalletMismatch: vector<u8> = "VestedAmount does not match this wallet";
 /// released - a stale attestation or a curve that regressed.
 #[error(code = 2)]
 const EVestedBelowReleased: vector<u8> = "Vested amount is below the amount already released";
+/// A `deposit` would push the wallet's lifetime total (`balance + released`) past
+/// `u64::MAX`, which the wallet's `u64` accounting cannot represent.
+#[error(code = 3)]
+const EOverflow: vector<u8> = "Deposit would overflow the wallet's lifetime total";
 
 // === Types ===
 
@@ -293,11 +297,19 @@ public fun amount<S>(vested: &VestedAmount<S>): u64 {
 
 /// Add a coin to the wallet's balance. Permissionless - the beneficiary's
 /// identity is data, not a capability, and anyone may fund.
+///
+/// #### Aborts
+/// - `EOverflow` if the deposit would push the wallet's lifetime total
+///   `balance + released` (== `Σ(deposits)`) past `u64::MAX`, which would
+///   indefinitely brick the release path.
 public fun deposit<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     coin: Coin<C>,
 ) {
     let amount = coin.value();
+
+    assert!(std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount, EOverflow);
+
     wallet.balance.join(coin.into_balance());
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
 }
@@ -305,6 +317,14 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 /// Claim a coin that an upstream emitter `public_transfer`'d to this wallet's
 /// object address, then funnel it through the standard deposit path. Used by
 /// emission schedules and payroll robots that don't hold a wallet reference.
+///
+/// #### Aborts
+/// - `EOverflow` if claiming the coin would overflow the wallet's
+///   lifetime total. Unlike a direct `deposit`, the coin was already transferred to
+///   the wallet's address by an earlier transaction, so an abort here leaves it
+///   parked at that address with no claim path - it is stranded (the same class as
+///   a coin sent after `destroy_empty`). High-volume emitters should track the
+///   wallet's `balance + released` headroom before transferring.
 public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     receiving: Receiving<Coin<C>>,

@@ -1,6 +1,6 @@
 ## Summary
 
-41 live invariants (INV-1..INV-39 plus INV-44, INV-45) across five categories.
+42 live invariants (INV-1..INV-39 plus INV-44, INV-45, INV-46) across five categories.
 The feature now spans **two modules**: the curve-agnostic primitive
 `vesting_wallet`, and the built-in linear-with-cliff curve `linear_schedule`
 (the reference curve and the template downstream schedule modules copy).
@@ -1403,6 +1403,51 @@ value — corrupting the curve and `ENotEnded` gate.
 
 ---
 
+### INV-46: `deposit` rejects a lifetime total that would overflow `u64` — **new**
+
+**Category:** Runtime / Economic (conservation bound)
+
+**Statement:** `vesting_wallet::deposit` aborts with `EOverflow` (= 3) if the coin
+would push the wallet's lifetime total `balance + released` (== `Σ(deposits)`, by
+INV-16) past `u64::MAX`. Concretely it asserts
+`u64::MAX - balance.value() - released >= coin.value()`. Because `released` and a
+curve's `VestedAmount.amount` are both `u64` — and the curve reads `balance +
+released` as the total it divides over — the wallet's accounting cannot represent a
+total greater than `u64::MAX`; the deposit is rejected rather than accepted into a
+state where `vested_amount` can no longer compute `balance + released`.
+
+**Applies to:** `vesting_wallet::deposit`, and transitively `receive_and_deposit`
+(which funnels through `deposit`).
+
+**Enforcement mechanism:**
+
+- Type system: none.
+- Runtime check: `assert!(std::u64::max_value!() - wallet.balance.value() -
+wallet.released >= amount, EOverflow)`, the first statement of `deposit`. The
+subtraction cannot underflow: `balance + released <= u64::MAX` holds inductively,
+since this guard is the only operation that grows `Σ(deposits)` and it maintains
+the bound.
+- Test: a direct `deposit` that would overflow aborts with `EOverflow`
+(`deposit_rejects_overflowing_total`); the end-to-end release-then-refund shape now
+aborts at the offending `deposit` rather than at a later `release`
+(`overflowing_refund_is_rejected_at_deposit`).
+
+**Violation scenario:** Without the guard, an overflowing deposit *succeeds*, after
+which `vested_amount_raw`'s `balance + released` aborts on every call — `release`,
+`releasable`, and `destroy` (balance ≠ 0) all become unreachable, **permanently
+trapping the entire balance**. `deposit` is permissionless, so on a wallet already
+near `u64::MAX` anyone could tip it over. The guard converts this into rejecting the
+single offending deposit: a direct depositor keeps their coin (the tx rolls back)
+and the wallet stays operational. For the `receive_and_deposit` path the
+already-transferred coin is instead stranded at the wallet's address (the same class
+as a coin sent after `destroy_empty`; see Out of Scope) — the guard still contains
+the blast radius to that one coin rather than bricking the whole wallet.
+
+**Severity:** Medium (prevents a permanent fund-trap; reachable only at
+`Σ(deposits) > u64::MAX`, astronomically large for real coins).
+
+---
+
 ## Invariant Coverage Matrix
 
 ### `vesting_wallet` (primitive)
@@ -1412,8 +1457,8 @@ value — corrupting the curve and `ENotEnded` gate.
 | `new<S, P, C>` | INV-1, INV-2, INV-3, INV-4, INV-8, INV-12, INV-14, INV-17, INV-32, INV-33, INV-37, INV-39 | Type + Runtime |
 | `mint_vested_amount<S, P, C>` | INV-37, INV-38, INV-39, INV-44 | Type (witness gate + PTB-confinement) + Runtime (wallet_id stamp) |
 | `amount<S>` (view on `&VestedAmount<S>`) | INV-38 (read does not consume) | Type |
-| `deposit<S, P, C>` | INV-2, INV-12, INV-16, INV-27, INV-28, INV-31 | Type + Runtime |
-| `receive_and_deposit<S, P, C>` | INV-2, INV-5, INV-12, INV-16, INV-27, INV-28, INV-31 | Type + Runtime |
+| `deposit<S, P, C>` | INV-2, INV-12, INV-16, INV-27, INV-28, INV-31, INV-46 | Type + Runtime |
+| `receive_and_deposit<S, P, C>` | INV-2, INV-5, INV-12, INV-16, INV-27, INV-28, INV-31, INV-46 | Type + Runtime |
 | `release<S, P, C>` | INV-11, INV-12, INV-15, INV-16, INV-18, INV-19, INV-28, INV-29, INV-30, INV-31, INV-34, INV-36, INV-38, INV-39, INV-44 | Type + Runtime |
 | `releasable<S, P, C>` (view) | INV-18, INV-19, INV-39, INV-44 | Type + Runtime |
 | `schedule_params<S, P, C>` | INV-14, INV-37 (ungated read, returns `P` by copy) | Type |
@@ -1451,10 +1496,15 @@ recovery.
 construction (INV-8); there is no wallet-level rotation. Consumers who need
 rotation use the Beneficiary-object pattern (Design Integration Pattern C). No
 invariant enforces non-sale.
-- **`u64` aggregate-deposit overflow boundaries** — at `Σ(deposits) > u64::MAX`,
-`balance::join` aborts (framework-level). No library invariant or typed error
-wraps this. Depositor must bound their own accumulation. (Note: the *schedule*
-end-time overflow IS covered — INV-45.)
+- **`u64` aggregate-deposit overflow** — a deposit that would push
+`balance + released` (== `Σ(deposits)`) past `u64::MAX` is now rejected up front
+with `EOverflow` (INV-46), so the sum stays representable and the release path
+cannot be bricked. A direct depositor keeps their coin on abort; a coin already
+`public_transfer`'d to the wallet's address (the `receive_and_deposit` path) is
+instead stranded at that address with no claim path — the same class as the "late
+deposits after `destroy_empty`" item above. High-volume emitters must bound their
+own cumulative funding. (The *schedule* end-time overflow is separately covered —
+INV-45.)
 - **Shared-object contention SLOs** — concurrent `release` finalizes correctly
 (INV-34) but the library makes no claim about throughput under contention.
 - **Off-chain time skew between `clock.timestamp_ms()` and wall-clock** — the
@@ -1507,9 +1557,12 @@ parameter, but `deposit`/`release`/`destroy_empty` emit them with the params typ
 (almost certainly `S` for all four) so indexers see a uniform tag. Consider a
 test-only helper that captures `event::events_by_type<E>()` per event shape and
 asserts cardinality + type arguments.
-- No `EOverflow` constant on the primitive — overflow protection lives in the
-built-in `vested_amount_raw` math (INV-26), the `EScheduleOverflow` construction
-guard (INV-45), and `balance::join`'s framework abort (out of scope above).
+- `EOverflow` (= 3) on the primitive guards the wallet's lifetime total at
+`deposit` (INV-46). Together with the built-in `vested_amount_raw` u128 math
+(INV-26) and the `EScheduleOverflow` construction guard (INV-45), every overflow
+the library can reason about now fails fast with a typed error rather than wrapping
+or bricking. (`balance::join`'s own per-balance overflow is subsumed: the INV-46
+sum guard is strictly tighter, so `join` can never be the one to abort.)
 
 ## Open Questions
 

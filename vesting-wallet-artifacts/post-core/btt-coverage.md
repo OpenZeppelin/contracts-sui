@@ -352,6 +352,18 @@ N/A — first BTT run for this project.
 - All 45 tests pass; `sui move test --build-env testnet` green;
   `sui move build --lint --warnings-are-errors` clean.
 
+> **Post-BTT addendum (basic review, 2026-06-17).** After this run the suite grew
+> to 50 tests: three early-release-resistance tests
+> (`release_before_cliff_moves_no_funds`, `retroactive_deposit_never_over_releases`,
+> and the overflow test below), plus a new INV-46 `deposit` overflow guard
+> (`EOverflow`, code=3) with two tests (`deposit_rejects_overflowing_total`,
+> `receive_and_deposit_rejects_overflowing_total`). The overflow test originally
+> authored as `balance_plus_released_overflow_bricks_release_not_overpays` was
+> **renamed to `overflowing_refund_is_rejected_at_deposit`** and now asserts the
+> abort happens at the offending `deposit` (typed `EOverflow`), not at a later
+> `release`. The 55-leaf tree above predates these and is not retabulated here; see
+> `tests.md` and `basic-review.md` INF-2 for the current coverage.
+
 ## Open Questions
 
 None blocking. The Cascade Plan edits to `invariants.md` / `tests.md` are

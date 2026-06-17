@@ -15,18 +15,20 @@ tags: [vesting, finance, linear-schedule, tests]
 ## Summary
 
 Two invariant-driven test modules cover the curve-agnostic primitive and the
-built-in linear curve: `contracts/finance/tests/vesting_wallet_tests.move` (20
+built-in linear curve: `contracts/finance/tests/vesting_wallet_tests.move` (22
 tests) drives the wallet-level accounting, conservation, event, and lifecycle
 invariants through a throwaway `TestCurve` that lets the tests mint
 `VestedAmount`s with arbitrary cumulative totals; `linear_schedule_tests.move`
-(25 tests) drives the schedule-shape math (pre-start / pre-cliff / cliff jump /
-linear mid / post-end clamp / u128 worst case), the construction guards, and
-release/teardown through the real curve. 45 tests, all passing, **100% line
-coverage** on both modules, lint clean under `--warnings-are-errors`. Type-level
-invariants that can only fail at compile time (INV-1, and the negative directions
-of INV-37/38/39) are covered positively and documented under Out of Scope rather
-than as runtime tests. The implementation is correct against every runtime and
-economic invariant — no code bugs were found.
+(28 tests) drives the schedule-shape math (pre-start / pre-cliff / cliff jump /
+linear mid / post-end clamp / u128 worst case), the construction guards,
+release/teardown, and early-release resistance through the real curve. 50 tests,
+all passing, **100% line coverage** on both modules, lint clean under
+`--warnings-are-errors`. Type-level invariants that can only fail at compile time
+(INV-1, and the negative directions of INV-37/38/39) are covered positively and
+documented under Out of Scope rather than as runtime tests. The implementation is
+correct against every runtime and economic invariant; the basic-review stage later
+added INV-46 (the `deposit` overflow guard, `EOverflow`) to prevent a permanent
+fund-trap on `balance + released` overflow — its tests are included below.
 
 ## Test Plan
 
@@ -54,6 +56,8 @@ economic invariant — no code bugs were found.
 | `released_coins_stay_with_beneficiary` | INV-30 | State | released coins never reduced by later wallet activity |
 | `beneficiary_can_be_object_address` | INV-33 | Edge | an object's address receives the release |
 | `owned_handoff_does_not_redirect_cashflow` | INV-29, 35 | Composability | wallet handed to Bob, Alice (the fixed beneficiary) still paid |
+| `deposit_rejects_overflowing_total` | INV-46 | Failure | `EOverflow` when a deposit would push `balance + released` past u64::MAX |
+| `receive_and_deposit_rejects_overflowing_total` | INV-46 | Failure | `EOverflow` on the receive path (funnels through `deposit`) |
 
 ### `linear_schedule_tests.move` — built-in linear-with-cliff curve
 
@@ -84,6 +88,9 @@ economic invariant — no code bugs were found.
 | `destroy_rejects_nonempty_balance` | INV-10 | Failure | `ENotEmpty` (balance gate fires before the ended gate) |
 | `create_deposit_release_in_one_flow` | INV-32 | Composability | new + deposit + release compose in one transaction |
 | `receive_and_deposit_then_release_in_one_flow` | INV-32, 5 | Composability | claim addressed coin + release in one transaction (emission/payroll path) |
+| `release_before_cliff_moves_no_funds` | INV-11, 21, 22 | Failure-resist | pre-start + in-cliff pokes move no funds, no `Released` event |
+| `retroactive_deposit_never_over_releases` | INV-27, 16, 36 | Edge | late deposit vests retroactively but stays balance-backed; never over-pays |
+| `overflowing_refund_is_rejected_at_deposit` | INV-46 | Failure | `EOverflow` — release-then-refund cycle rejected at the offending deposit |
 
 ## Coverage Matrix
 
@@ -113,12 +120,12 @@ negative is unrepresentable in-package — see Out of Scope).
 | INV-19 (released ≤ vested.amount; `≥` guard) | `release_pays_releasable_to_beneficiary` | — | `release_rejects_vested_below_released`, `releasable_rejects_vested_below_released` | — |
 | INV-20 (non-decreasing in time) | `vested_amount_is_nondecreasing_in_time` | — | — | — |
 | INV-21 (pre-start zero) | — | `vested_amount_pre_start_is_zero` | — | — |
-| INV-22 (pre-cliff zero) | — | `vested_amount_pre_cliff_is_zero` | — | — |
+| INV-22 (pre-cliff zero) | — | `vested_amount_pre_cliff_is_zero` | — | `release_before_cliff_moves_no_funds` |
 | INV-23 (cliff jump) | — | `vested_amount_at_cliff_jumps_to_proportional` | — | — |
 | INV-24 (post-end clamp) | — | `vested_amount_post_end_clamps_to_total` | — | `full_release_after_end_then_releasable_zero` |
 | INV-25 (linear mid) | `vested_amount_is_linear_mid_schedule` | `vested_amount_at_exact_start_is_zero` (elapsed 0 edge) | — | — |
 | INV-26 (u128 intermediate) | — | `vested_amount_uses_u128_intermediate_at_max` | — | — |
-| INV-27 (vests as if from start) | — | `deposit_vests_as_if_from_start` | — | — |
+| INV-27 (vests as if from start) | — | `deposit_vests_as_if_from_start` | — | `retroactive_deposit_never_over_releases` |
 | INV-28 (conservation) | `deposit_*`, `release_pays_*` | — | 🔒 `Balance` no drop; `release_aborts_when_vested_exceeds_total` | `release_is_monotone` |
 | INV-29 (pays fixed beneficiary) | `release_pays_releasable_to_beneficiary` | — | — | `owned_handoff`, `release_pays_linear_portion` |
 | INV-30 (released coins out of reach) | `released_coins_stay_with_beneficiary` | — | — | — |
@@ -133,6 +140,7 @@ negative is unrepresentable in-package — see Out of Scope).
 | INV-39 (`S` pins curve) | 🔒 `Linear` used throughout | — | 🔒 compile | — |
 | INV-44 (wallet binding) | `mint_stamps_*` | — | `release_rejects_vested_from_other_wallet`, `releasable_rejects_vested_from_other_wallet` | — |
 | INV-45 (end-time overflow) | — | `new_accepts_end_at_u64_max_boundary` | `new_rejects_schedule_overflow` | — |
+| INV-46 (deposit overflow guard) | — | — | `deposit_rejects_overflowing_total`, `receive_and_deposit_rejects_overflowing_total`, `overflowing_refund_is_rejected_at_deposit` | — |
 
 Every live invariant has at least one ✅ test or is 🔒 compile-enforced with
 positive coverage. No gaps.
@@ -178,27 +186,39 @@ positive coverage. No gaps.
 - **INV-34 two-transaction concurrent race.** Requires real consensus ordering;
   not deterministically reproducible in `test_scenario` (covered by the
   idempotency stand-in — see Test Notes).
-- **`u64` aggregate-deposit overflow (`balance::join`).** Out of scope in the
-  invariants doc (framework abort, no typed error); not tested. The *schedule*
-  end-time overflow (INV-45) is tested.
+- **`u64` aggregate-deposit overflow.** Now enforced and tested: a deposit that
+  would push `balance + released` past `u64::MAX` aborts with `EOverflow` (INV-46),
+  covered by `deposit_rejects_overflowing_total`,
+  `receive_and_deposit_rejects_overflowing_total`, and
+  `overflowing_refund_is_rejected_at_deposit`. (Previously out of scope as a
+  framework `balance::join` abort.) The *schedule* end-time overflow (INV-45) is
+  also tested.
 - **Custom-curve schedule shapes (downstream).** INV-20..27 are tested only for
   the built-in `Linear` curve; downstream curves owe their own shape tests
   (INV-36 is the only contract the wallet imposes).
 
 ## Dev Notes
 
-- All 45 tests pass; `sui move test --coverage` reports **100.00%** module
+- All 50 tests pass; `sui move test --coverage` reports **100.00%** module
   coverage for both `vesting_wallet` and `linear_schedule`;
-  `sui move build --lint --warnings-are-errors` is clean.
+  `sui move build --lint --warnings-are-errors` is clean. (Count grew from the
+  original 45 by three early-release-resistance tests and two `EOverflow` guard
+  tests; see INV-46 note below.)
 - The source changes are additive and test-only: four `#[test_only]` event
   constructors under a `// === Test-Only Helpers ===` section in
   `vesting_wallet.move`, plus a `#[test_only] test_params` constructor in the same
   section of `linear_schedule.move` (so tests can assert the linear `Created`
   payload, whose `Params` fields are module-private). No production code was
   modified.
-- No code bugs surfaced. Every assertion that could expose a math or accounting
-  error (cliff jump = 250, mid = 500/750, u128 worst case = MAX-1, ledger
+- No code bugs surfaced in this stage. Every assertion that could expose a math or
+  accounting error (cliff jump = 250, mid = 500/750, u128 worst case = MAX-1, ledger
   conservation after each step) holds exactly.
+- **INV-46 added in basic review (post-core).** The basic-review stage found that an
+  unbounded `balance + released` (reachable only via release-then-refund near
+  `u64::MAX`) would not just brick the curve but permanently trap the balance. A
+  `deposit`-time guard (`EOverflow`, code=3) now rejects the offending deposit; the
+  reframed `overflowing_refund_is_rejected_at_deposit` plus the two
+  `*_rejects_overflowing_total` tests pin it. See `post-core/basic-review.md` INF-2.
 
 ## Upstream Sync — applied to `invariants.md`
 

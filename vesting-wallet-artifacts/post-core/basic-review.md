@@ -20,9 +20,11 @@ all 41 live invariants, conserve funds on every path, and gate authority at the
 type level. 48/48 tests pass; `sui move build --lint --warnings-are-errors` is
 clean.
 
-Findings are 5 Informational (one safe-DoS edge already pinned by a test, one
-teardown-ordering nit, two code-style/doc items, one optional test) plus 4
-artifact-drift items in `invariants.md` / `tests.md` (doc sync, not code).
+Findings are 5 Informational, of which **INF-2 was fixed during review** (a
+permanent fund-trap on `balance + released` overflow — now guarded at `deposit` by
+the new INV-46 / `EOverflow`). The rest: a teardown-ordering nit, two
+code-style/doc items, one optional test. Plus artifact-drift items in
+`invariants.md` / `tests.md` (doc sync, not code).
 
 **Review scope note:** only `invariants.md` (stage 3), `tests.md` (stage 5), and
 `post-core/btt-coverage.md` were present — no research, design, code, or docs
@@ -76,6 +78,7 @@ All 41 enforced. Locations are `file:line` in `contracts/finance/sources/`.
 | INV-39 `S` pins curve | ✅ Type | shared `S` in release/releasable/mint | — |
 | INV-44 wallet binding | ✅ Runtime | `wallet_id` check vw:343 **and** vw:420; stamp vw:285 | — |
 | INV-45 end-time overflow | ✅ Runtime | ls:105 `EScheduleOverflow` | boundary tested |
+| INV-46 deposit overflow guard | ✅ Runtime | `deposit` `EOverflow` (vw, code=3) | added post-review; resolves INF-2 |
 
 **INV-38 note (resolves the doc's open concern):** the relaxation from "abilityless
 hot potato" to `drop`-only is intentional and safe. `release` reads `wallet.released`
@@ -126,27 +129,35 @@ narrows but cannot eliminate, since late deposits are out of scope anyway).
 
 ---
 
-#### INF-2: `total = balance + released` can overflow u64 → release bricks (safe DoS)
+#### INF-2: `balance + released` could overflow u64 → permanent fund-trap (RESOLVED)
 
-**Location:** `linear_schedule::vested_amount_raw()` ls:217
-**Invariant:** INV-26 / Out-of-Scope ("u64 aggregate-deposit overflow")
+**Location:** `vesting_wallet::deposit()` (guard); `linear_schedule::vested_amount_raw()` ls:217 (where it would have surfaced)
+**Invariant:** INV-46 (new) / INV-16
 
 **Issue:** `balance()` and `released()` each fit u64, but their **sum** is the
-invariant `Σ(deposits)` (INV-16). A release-then-redeposit cycle (release 1, then
-deposit 1 back) can push `balance + released` to `u64::MAX + 1`, overflowing the
-`+` at ls:217.
+invariant `Σ(deposits)` (INV-16). A release-then-redeposit cycle could push
+`balance + released` to `u64::MAX + 1`. Re-analysis during discussion found the
+failure mode is worse than a transient DoS: the overflowing deposit would *succeed*,
+then `vested_amount_raw`'s `balance + released` would abort on every subsequent call
+— `release`/`releasable`/`destroy` all unreachable — **permanently trapping the
+entire balance**. `deposit` is permissionless, so a near-`u64::MAX` wallet could be
+tipped over by anyone.
 
-**Impact:** Move aborts on the overflow rather than wrapping, so the release path is
-bricked (DoS) but **never over-pays** — the safe failure mode. Reaching it requires
-funding ~`u64::MAX` (≈1.8e10 whole tokens at 9 decimals) into the wallet, i.e.
-attacker-self-funded and unreachable for realistic supplies.
+**Resolution (implemented):** Added a `deposit`-time guard
+`assert!(u64::MAX - balance - released >= amount, EOverflow)` (`EOverflow`, code=3),
+codified as **INV-46**. The offending deposit is now rejected up front: a direct
+depositor keeps their coin (tx rolls back) and the wallet stays operational. Pinned
+by `vesting_wallet_tests::deposit_rejects_overflowing_total` and the reframed
+`linear_schedule_tests::overflowing_refund_is_rejected_at_deposit`.
 
-**Recommendation:** Accept as-is. This is already documented Out-of-Scope in
-`invariants.md` and is now directly pinned by the (uncommitted) test
-`balance_plus_released_overflow_bricks_release_not_overpays`. No code change
-recommended; surfaced so the acceptance is on record.
+**Residual (accepted, documented):** a coin already `public_transfer`'d to the
+wallet's address that overflows on `receive_and_deposit` is stranded at that address
+(`Receiving` doesn't expose the sender, and any permissionless extraction would be a
+funding-siphon). This is the same Out-of-Scope class as "late deposits after
+`destroy_empty`"; the guard contains the blast radius to that one coin. Documented on
+`receive_and_deposit` and in `invariants.md` Out of Scope.
 
-**Status:** Acknowledged
+**Status:** Fixed
 
 ---
 
