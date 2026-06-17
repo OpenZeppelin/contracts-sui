@@ -14,7 +14,7 @@ fun setup(t0: u64): (Scenario, Clock) {
 }
 
 fun teardown(test: Scenario, clk: Clock) {
-    destroy(clk);
+    clk.destroy_for_testing();
     test.end();
 }
 
