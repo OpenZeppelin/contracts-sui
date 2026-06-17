@@ -103,7 +103,7 @@ fun borrow_and_return_roundtrip() {
 
 #[test, expected_failure(abort_code = two_step_transfer::EWrongTwoStepTransferWrapper)]
 fun return_val_rejects_wrong_wrapper() {
-    // Borrow from one wrapper but attempt to return into another—should abort.
+    // Borrow from one wrapper but attempt to return into another-should abort.
     let owner = @0xB;
     let mut ctx = dummy_ctx_with_sender(owner);
     let first = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);

@@ -50,7 +50,7 @@ fun checked_shl_returns_same_for_zero_shift() {
 
 #[test]
 fun checked_shl_detects_high_bits() {
-    // Highest bit already set — shifting would overflow.
+    // Highest bit already set - shifting would overflow.
     let result = u128::checked_shl(1u128 << 127, 1);
     assert_eq!(result, option::none());
 }

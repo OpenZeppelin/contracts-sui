@@ -18,7 +18,7 @@ fun init_mints_fixed_supply_to_publisher() {
 
     let coins = scenario.take_from_sender<Coin<RARE_COIN>>();
     assert_eq!(coins.value(), 10_000);
-    // The whole supply lands in a single coin object — nothing else was minted to the publisher.
+    // The whole supply lands in a single coin object - nothing else was minted to the publisher.
     assert!(!scenario.has_most_recent_for_sender<Coin<RARE_COIN>>());
 
     destroy(coins);

@@ -953,7 +953,7 @@ fun reconfigure_fixed_window_via_construct_fresh_preserve_anchor() {
     let initial = if (projected < new_cap) projected else new_cap;
     rl = rate_limiter::new_fixed_window(new_cap, 100, anchor, initial, &clk);
 
-    // Same window as before — rollover still lands at t=100.
+    // Same window as before - rollover still lands at t=100.
     assert_eq!(rl.available(&clk), 3);
     clk.set_for_testing(99);
     assert_eq!(rl.available(&clk), 3);
@@ -1039,7 +1039,7 @@ fun consumes_at_one_timestamp_have_no_txn_scoped_accumulator() {
     assert!(split.try_consume(3, &clk));
     assert!(whole.try_consume(6, &clk));
 
-    // Identical committed state — the per-call decomposition leaves no residue.
+    // Identical committed state - the per-call decomposition leaves no residue.
     assert_eq!(split.available(&clk), whole.available(&clk));
     assert_eq!(split.available(&clk), 4);
 

@@ -79,7 +79,7 @@ fun second_fireball_aborts_before_cooldown_elapses() {
 }
 
 // A defeated mage ends the duel: the killing blow drives health to 0, `is_over` flips true, and
-// `DuelEnded` is emitted. Also exercises the overkill clamp — the final meteor's 30 damage is
+// `DuelEnded` is emitted. Also exercises the overkill clamp - the final meteor's 30 damage is
 // clamped to the defender's remaining 15 health by the `min` in `cast`.
 #[test]
 fun duel_ends_when_a_mage_is_defeated() {
@@ -103,7 +103,7 @@ fun duel_ends_when_a_mage_is_defeated() {
     assert!(!duel.is_over());
 
     // Advance CD_MS so the meteor cooldown releases and mana regenerates. Opponent regenerates
-    // 5 health (1 per 2s) to 15; the next meteor's 30 damage is clamped to that 15 — the killing blow.
+    // 5 health (1 per 2s) to 15; the next meteor's 30 damage is clamped to that 15 - the killing blow.
     clock.increment_for_testing(CD_MS);
     assert_eq!(duel.opponent_health(&clock), 15);
     duel.challenger_cast_meteor(&challenger_cap, &clock);
@@ -254,7 +254,7 @@ fun start_duel(scenario: &mut Scenario, clock: &Clock): (ID, ChallengerCap, Oppo
 }
 
 // Build two independent duels and return duel 2 (taken from the inventory) together with duel 1's
-// caps — so a cast against duel 2 with a duel-1 cap exercises the `EWrongDuel` guard. Duel 2's own
+// caps - so a cast against duel 2 with a duel-1 cap exercises the `EWrongDuel` guard. Duel 2's own
 // caps are discarded; the caller cleans up whichever duel-1 cap it does not use.
 fun two_duels_cross_caps(
     scenario: &mut Scenario,

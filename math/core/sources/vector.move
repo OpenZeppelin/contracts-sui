@@ -26,7 +26,7 @@ const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 ///
 /// #### Bytecode vs. gas trade-off
 ///
-/// As a macro, every call site inlines the full sorting algorithm — roughly 750 bytes of
+/// As a macro, every call site inlines the full sorting algorithm - roughly 750 bytes of
 /// compiled bytecode per call. This module ships no precompiled sorting wrappers, so if you
 /// sort the same element type from more than one place, wrap the macro in a small function in
 /// your own module (e.g. `fun sort(v: &mut vector<u64>) { vector::quick_sort!(v) }`) and call
@@ -70,7 +70,7 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 ///
 /// #### Bytecode vs. gas trade-off
 ///
-/// As a macro, every call site inlines the full sorting algorithm together with the comparator —
+/// As a macro, every call site inlines the full sorting algorithm together with the comparator -
 /// roughly 750 bytes of compiled bytecode per call. A precompiled wrapper cannot live in this
 /// library because the comparator is a compile-time lambda, which ordinary functions cannot
 /// accept as an argument. If you sort with the same element type and comparator from more than

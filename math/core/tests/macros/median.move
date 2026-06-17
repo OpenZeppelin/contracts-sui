@@ -285,7 +285,7 @@ fun median_even_length_rounds_up() {
 
 #[test]
 fun median_even_length_rounds_nearest_half_rounds_up() {
-    // (1 + 2) / 2 = 1.5 — rounding::nearest() rounds half-up
+    // (1 + 2) / 2 = 1.5 - rounding::nearest() rounds half-up
     assert_eq!(vector::median_u64(&vector[1u64, 2], rounding::nearest()), 2u64);
 }
 

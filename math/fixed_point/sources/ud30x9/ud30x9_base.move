@@ -269,7 +269,7 @@ public fun unchecked_lshift(x: UD30x9, bits: u8): UD30x9 {
 /// #### Aborts
 /// - `ELogUndefined` if `x` is zero.
 /// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
-///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
+///   and cannot be represented in `UD30x9` - use `SD29x9` instead).
 public fun ln(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
     assert!(raw > 0, ELogUndefined);
@@ -297,7 +297,7 @@ public fun ln(x: UD30x9): UD30x9 {
 /// #### Aborts
 /// - `ELogUndefined` if `x` is zero.
 /// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
-///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
+///   and cannot be represented in `UD30x9` - use `SD29x9` instead).
 public fun log10(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
     assert!(raw > 0, ELogUndefined);
@@ -328,7 +328,7 @@ public fun log10(x: UD30x9): UD30x9 {
 /// #### Aborts
 /// - `ELogUndefined` if `x` is zero.
 /// - `ELogResultUnrepresentable` if `x` is in `(0, 1)` (the result would be negative
-///   and cannot be represented in `UD30x9` — use `SD29x9` instead).
+///   and cannot be represented in `UD30x9` - use `SD29x9` instead).
 public fun log2(x: UD30x9): UD30x9 {
     let raw = x.unwrap();
     assert!(raw > 0, ELogUndefined);
