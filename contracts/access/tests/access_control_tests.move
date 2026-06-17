@@ -3,6 +3,12 @@
 // to satisfy the type checker on the `ac` / `clk` bindings without rewriting
 // every test as a by-value helper. Suppressed module-wide so individual
 // tests stay clean.
+// `#[test_only]` is required here, not redundant: this module constructs its
+// own OTW (`ACCESS_CONTROL_TESTS {}`) in `setup`. The Sui verifier only allows
+// manual OTW construction when the enclosing module/function carries the
+// `#[test]`/`#[test_only]` attribute - it keys off the attribute, not the
+// `tests/` directory - so dropping it reintroduces the "Invalid one-time
+// witness construction" error.
 #[test_only, allow(lint(abort_without_constant))]
 module openzeppelin_access::access_control_tests;
 
