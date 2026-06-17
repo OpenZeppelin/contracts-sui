@@ -104,7 +104,7 @@ const EVestedBelowReleased: vector<u8> = "Vested amount is below the amount alre
 #[error(code = 3)]
 const EOverflow: vector<u8> = "Deposit would overflow the wallet's lifetime total";
 
-// === Types ===
+// === Structs ===
 
 /// The vesting wallet. `schedule_params` and `beneficiary` are fixed at
 /// construction; only `balance` and `released` change over time. Curve modules
@@ -211,7 +211,7 @@ public struct Destroyed<phantom S, phantom C> has copy, drop {
     total_released: u64,
 }
 
-// === Primitive ===
+// === Public Functions ===
 
 /// Build a new wallet around a schedule and return it by value. Returning by value
 /// (rather than sharing internally) lets the caller chain creation, funding, and
@@ -330,7 +330,7 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     receiving: Receiving<Coin<C>>,
 ) {
     let coin = transfer::public_receive(&mut wallet.id, receiving);
-    deposit(wallet, coin);
+    wallet.deposit(coin);
 }
 
 /// Pay the not-yet-released portion attested by `vested` to the beneficiary.
@@ -419,7 +419,7 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
     schedule_params
 }
 
-// === Views and accessors ===
+// === View helpers ===
 
 /// What `release` would pay out for the supplied `VestedAmount<S>` right now:
 /// `vested.amount - wallet.released`. Borrows `vested`, so the same attestation can

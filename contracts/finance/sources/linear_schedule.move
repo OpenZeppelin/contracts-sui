@@ -51,7 +51,7 @@ const EScheduleOverflow: vector<u8> = "Schedule end (start + duration) would ove
 #[error(code = 3)]
 const ENotEnded: vector<u8> = "Schedule has not ended yet";
 
-// === Types ===
+// === Structs ===
 
 /// The schedule witness for the linear-with-cliff curve. Empty and `drop`-only: it
 /// carries no data and exists solely as the authority token `vesting_wallet`
@@ -179,7 +179,7 @@ public fun destroy<C>(wallet: VestingWallet<Linear, Params, C>, clock: &Clock) {
     let Params { .. } = wallet.destroy_empty(Linear {});
 }
 
-// === Accessors ===
+// === View helpers ===
 
 /// Timestamp (ms) at which vesting begins.
 public fun start<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
@@ -202,7 +202,7 @@ public fun cliff<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().cliff_ms
 }
 
-// === Internal ===
+// === Private Functions ===
 
 /// The linear curve's cumulative vested total at the current clock, as a `u64`.
 fun vested_amount_raw<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Clock): u64 {
