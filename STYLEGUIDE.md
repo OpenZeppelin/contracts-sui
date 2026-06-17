@@ -235,7 +235,7 @@ Examples of required rewrites:
 
 - `///` for doc comments (renders in IDEs), `//` for inline technical notes
 - No JavaDoc-style `/** */`
-- Use regular dashes (`-`) instead of em dashes (`—`) in all prose, comments,
+- Use regular dashes (`-`) instead of em dashes (`-`) in all prose, comments,
   and documentation
 - Document struct fields, complex params, and return values
 - Use section headings `#### Parameters`, `#### Returns`, and `#### Aborts` when

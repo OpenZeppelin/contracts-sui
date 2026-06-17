@@ -42,11 +42,11 @@ read the group and package READMEs (the single source of truth):
 - [`math/README.md`](./math/README.md) + each package's `README.md`
 
 For agents **integrating this library into a downstream project** (rather than
-contributing to this repo), [`llms.txt`](./llms.txt) is the discovery entry point —
+contributing to this repo), [`llms.txt`](./llms.txt) is the discovery entry point -
 it points to these catalogs, each package's `examples/`, the generated API reference,
 and `audits/`.
 
-## Boundaries — do not touch
+## Boundaries - do not touch
 
 - `**/build/` - compiler output (generated)
 - `**/artifacts/` - generated reference data; never hand-edit
