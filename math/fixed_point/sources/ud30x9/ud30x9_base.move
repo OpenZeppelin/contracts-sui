@@ -153,6 +153,8 @@ public fun abs(x: UD30x9): UD30x9 {
 ///   neighboring raw inputs is not formally excluded in the far tail
 ///   (`z ≳ 5.7`), where the true `Φ` increment drops below the `10⁻⁹`
 ///   output resolution.
+/// - Pure, deterministic, and object-free: identical inputs always produce
+///   identical outputs; touches no storage or Sui objects.
 ///
 /// #### Aborts
 /// - Does not abort for any `UD30x9` input under the committed, validated
@@ -160,6 +162,13 @@ public fun abs(x: UD30x9): UD30x9 {
 ///   (`cdf::EInternalNumNegative` / `cdf::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
+///
+/// #### Examples
+///
+/// ```move
+/// let z = ud30x9::wrap(1_000_000_000); // 1.0
+/// let p = z.cdf(); // 0.841344746
+/// ```
 public fun cdf(z: UD30x9): UD30x9 {
     wrap(cdf_nonneg_raw(z.unwrap()))
 }

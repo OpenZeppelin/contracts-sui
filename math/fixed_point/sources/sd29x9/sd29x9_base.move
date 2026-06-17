@@ -170,6 +170,8 @@ public fun ceil(x: SD29x9): SD29x9 {
 ///   neighboring raw inputs is not formally excluded in the far tail
 ///   (`|z| ≳ 5.7`), where the true `Φ` increment drops below the `10⁻⁹`
 ///   output resolution.
+/// - Pure, deterministic, and object-free: identical inputs always produce
+///   identical outputs; touches no storage or Sui objects.
 ///
 /// #### Aborts
 /// - Does not abort for any `SD29x9` input under the committed, validated
@@ -178,6 +180,13 @@ public fun ceil(x: SD29x9): SD29x9 {
 ///   `cdf::EInternalDenNonPositive` in the evaluator) as defense-in-depth
 ///   against a corrupted regenerated coefficient table; these cannot fire for
 ///   the shipped coefficients.
+///
+/// #### Examples
+///
+/// ```move
+/// let z = sd29x9::wrap(1_000_000_000, true); // -1.0
+/// let p = z.cdf(); // 0.158655254
+/// ```
 public fun cdf(z: SD29x9): SD29x9 {
     let Components { mag, neg } = decompose(z.unwrap());
     let phi = cdf_nonneg_raw(mag as u128);
