@@ -131,6 +131,14 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 /// `wallet_id` stamp binds the attestation to the wallet it was minted against;
 /// `release` and `releasable` reject it against any other wallet.
 ///
+/// `drop` (rather than abilityless forced consumption) is safe: it cannot be used
+/// to over-release. `release` pays out `amount - released`, reading the wallet's
+/// `released` *fresh* on each call and writing it back, so re-using or dropping the
+/// same attestation across multiple `release` calls pays nothing after the first.
+/// Combined with the `wallet_id` binding (a favorable attestation minted against a
+/// side wallet is rejected here), there is no double-spend to forbid - so requiring
+/// the caller to explicitly consume the attestation would buy no extra safety.
+///
 /// # Why minting and spending are separated
 ///
 /// `VestedAmount` deliberately splits two authorities, and that split is what lets
@@ -435,4 +443,42 @@ public fun released<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S
 /// Funds currently held by the wallet and not yet released.
 public fun balance<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.balance.value()
+}
+
+// === Test-Only Helpers ===
+
+/// Build a `Created` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_created<S, P, C>(
+    wallet_id: ID,
+    beneficiary: address,
+    schedule_params: P,
+): Created<S, P, C> {
+    Created { wallet_id, beneficiary, schedule_params }
+}
+
+/// Build a `Deposited` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_deposited<S, C>(wallet_id: ID, amount: u64): Deposited<S, C> {
+    Deposited { wallet_id, amount }
+}
+
+/// Build a `Released` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_released<S, C>(
+    wallet_id: ID,
+    beneficiary: address,
+    amount: u64,
+): Released<S, C> {
+    Released { wallet_id, beneficiary, amount }
+}
+
+/// Build a `Destroyed` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_destroyed<S, C>(
+    wallet_id: ID,
+    beneficiary: address,
+    total_released: u64,
+): Destroyed<S, C> {
+    Destroyed { wallet_id, beneficiary, total_released }
 }

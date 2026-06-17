@@ -224,3 +224,12 @@ fun vested_amount_raw<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
         }
     }
 }
+
+// === Test-Only Helpers ===
+
+/// Build a `Params` value for asserting against `event::events_by_type` (the
+/// `Params` fields are module-private, so tests cannot construct one directly).
+#[test_only]
+public fun test_params(start_ms: u64, cliff_ms: u64, duration_ms: u64): Params {
+    Params { start_ms, duration_ms, cliff_ms }
+}

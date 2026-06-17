@@ -413,17 +413,9 @@ full params struct (for the linear curve, `start_ms` / `duration_ms` /
 `receive_and_deposit` does NOT emit a separate `Received` event — it fans into
 `deposit`, which emits a single `Deposited` for the funded amount.
 
-> **Code note (flagged for the author).** The event structs are declared
-> `Created<phantom S, P, phantom C>`, `Deposited<phantom S, phantom C>`,
-> `Released<phantom S, phantom C>`, `Destroyed<phantom S, phantom C>`. `new`
-> emits `Created<S, P, C>` (schedule witness in the `S` slot), but `deposit`,
-> `release`, and `destroy_empty` emit `Deposited<P, C>` / `Released<P, C>` /
-> `Destroyed<P, C>` — they pass the **params** type `P` into the phantom `S`
-> slot. This is an inconsistency: the same wallet's events are indexed under two
-> different first-type-arguments (`S` for `Created`, `P` for the rest). Indexers
-> filtering by event type parameter will not see a uniform tag across the four
-> events. Not a fund-safety issue, but it should be made consistent (almost
-> certainly all four should use `S`).
+All four events carry the schedule witness `S` as their first type argument
+(`Created<S, P, C>`, `Deposited<S, C>`, `Released<S, C>`, `Destroyed<S, C>`), so a
+single wallet's events are indexed under one uniform tag for downstream indexers.
 
 **Applies to:** All event-emitting functions.
 
@@ -438,8 +430,7 @@ count + field values + type arguments.
 
 **Violation scenario:** Extra or missing events corrupt indexer state — duplicate
 `Created` would create phantom wallets in dashboards; missed `Released` would
-mis-account cashflow; an inconsistent type-argument tag (see code note) would
-make filtering brittle.
+mis-account cashflow.
 
 **Severity:** Medium (off-chain correctness; no on-chain fund risk).
 
@@ -646,8 +637,8 @@ released + releasable`.
 **Enforcement mechanism:**
 
 - Type system: none.
-- Runtime check: an explicit `assert!(*vested_amount >= wallet.released)` guards
-the subtraction (a bare assert — no named error constant), followed by
+- Runtime check: an explicit `assert!(*vested_amount >= wallet.released,
+EVestedBelowReleased)` guards the subtraction, followed by
 `let releasable = *vested_amount - wallet.released;` and
 `wallet.released = wallet.released + releasable;`. After the addition, `released`
 equals `vested.amount` exactly.
@@ -656,12 +647,10 @@ vested.amount` for the consumed witness. Negative test — mint a curve module t
 violates monotonicity (returns a `vested.amount < released`), call `release`,
 expect abort on the `>=` assert.
 
-> **Code note.** `release` guards the subtraction with an explicit `assert!`, but
-> `releasable` (the view) does the bare subtraction `*vested_amount -
-> wallet.released` with no preceding `>=` assert, so a `vested.amount <
-> released` witness aborts there on raw u64 underflow rather than a typed error.
-> Behaviour is safe either way (abort before any mutation); the asymmetry is
-> worth aligning.
+Both `release` and `releasable` guard the subtraction with the same
+`assert!(*vested_amount >= wallet.released, EVestedBelowReleased)`, so a
+`vested.amount < released` witness aborts with the typed error on either path,
+before any state mutation.
 
 **Violation scenario:** Over-release would mean the wallet pays out ahead of the
 schedule — cliff cheating, team grants leaking ahead of time. The `>=` assert
@@ -1426,7 +1415,7 @@ value — corrupting the curve and `ENotEnded` gate.
 | `deposit<S, P, C>` | INV-2, INV-12, INV-16, INV-27, INV-28, INV-31 | Type + Runtime |
 | `receive_and_deposit<S, P, C>` | INV-2, INV-5, INV-12, INV-16, INV-27, INV-28, INV-31 | Type + Runtime |
 | `release<S, P, C>` | INV-11, INV-12, INV-15, INV-16, INV-18, INV-19, INV-28, INV-29, INV-30, INV-31, INV-34, INV-36, INV-38, INV-39, INV-44 | Type + Runtime |
-| `releasable<S, P, C>` (view) | INV-18, INV-19 (bare subtraction), INV-39, INV-44 | Type + Runtime |
+| `releasable<S, P, C>` (view) | INV-18, INV-19, INV-39, INV-44 | Type + Runtime |
 | `schedule_params<S, P, C>` | INV-14, INV-37 (ungated read, returns `P` by copy) | Type |
 | `destroy_empty<S, P, C>` | INV-4, INV-10, INV-12, INV-28, INV-37 (witness-gated) | Type + Runtime |
 | `beneficiary`, `released`, `balance` (accessors) | INV-2, INV-8, INV-15, INV-17 (read-only) | Type |
@@ -1524,17 +1513,4 @@ guard (INV-45), and `balance::join`'s framework abort (out of scope above).
 
 ## Open Questions
 
-1. **Is `VestedAmount<S>`'s `drop` ability intentional?** The original design
-   specified an abilityless hot potato (strict forced consumption). The current
-   type has `drop`. This appears safe (INV-38, INV-44), but the code carries no
-   note explaining the change — confirm and document the rationale, or revert.
-2. **Should `linear_schedule::destroy` keep the `ENotEnded` gate?** A `QUESTION`
-   comment in the code asks whether only `balance == 0` should matter. Resolving
-   this decides whether INV-9 stays live or is retired.
-3. **Event type-argument consistency.** Decide whether the four events should be
-   tagged by `S` or `P` (see INV-12 code note) and make all four agree.
-
-These are code-level decisions surfaced while reconciling the invariants with the
-current implementation; none change the wallet-level safety guarantees
-(conservation, monotonic `released`, fixed beneficiary, per-wallet binding), which
-hold under either resolution.
+None.
