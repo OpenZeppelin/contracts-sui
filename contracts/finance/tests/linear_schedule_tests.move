@@ -520,3 +520,87 @@ fun receive_and_deposit_then_release_in_one_flow() {
     destroy(clk);
     test.end();
 }
+
+// === Early-release resistance ===
+
+// An attacker poking `release` before the schedule opens, and again inside the cliff
+// window, moves no funds: the curve reads 0 throughout that region, so `release`
+// short-circuits on a zero releasable - no payout, no `Released` event, balance
+// untouched. This is the direct "release before the curve vests anything" attempt.
+#[test]
+fun release_before_cliff_moves_no_funds() {
+    let (mut test, mut clk) = setup(0);
+
+    // Opens at 1000, cliff boundary at 1500, ends at 2000.
+    let mut wallet = new_linear(1000, 500, 1000, test.ctx());
+    wallet.fund(1_000_000, test.ctx());
+
+    clk.set_for_testing(999); // pre-start
+    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    clk.set_for_testing(1000); // at start, still inside the cliff
+    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    clk.set_for_testing(1499); // one ms before the cliff boundary
+    linear_schedule::release(&mut wallet, &clk, test.ctx());
+
+    assert_eq!(wallet.released(), 0);
+    assert_eq!(wallet.balance(), 1_000_000);
+    assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 0);
+
+    destroy(wallet);
+    teardown(test, clk);
+}
+
+// The subtlest "early release" shape: deposit more *after* a partial release, then
+// claim again at the same clock. The fresh deposit vests retroactively at the elapsed
+// proportion (documented behavior), but the payout is always exactly the live curve
+// over the current total and is fully balance-backed - the second release never
+// aborts and never pays more than the wallet holds. So nothing leaves ahead of the
+// curve; the late deposit simply funds its own (proportional) unlock.
+#[test]
+fun retroactive_deposit_never_over_releases() {
+    let (mut test, mut clk) = setup(0);
+
+    let mut wallet = new_linear(0, 0, 100, test.ctx());
+    wallet.fund(100, test.ctx());
+
+    clk.set_for_testing(50);
+    linear_schedule::release(&mut wallet, &clk, test.ctx()); // floor(100 * 50 / 100) = 50
+    assert_eq!(wallet.released(), 50);
+    assert_eq!(wallet.balance(), 50);
+
+    // Late deposit; total is now 200, re-derived fresh at call time.
+    wallet.fund(100, test.ctx());
+    let releasable = linear_schedule::releasable(&wallet, &clk);
+    assert_eq!(releasable, 50); // floor(200 * 50 / 100) = 100 cumulative, minus 50 already released
+    assert!(releasable <= wallet.balance()); // never exceeds the balance backing it
+
+    linear_schedule::release(&mut wallet, &clk, test.ctx()); // does not abort, does not over-pay
+    assert_eq!(wallet.released(), 100);
+    assert_eq!(wallet.balance(), 100);
+    assert_eq!(wallet.balance() + wallet.released(), 200); // conserved: nothing minted from nowhere
+
+    destroy(wallet);
+    teardown(test, clk);
+}
+
+// The only arithmetic that could lift the curve above the schedule is the
+// `balance + released` total. Releasing funds out and re-funding can drive that sum
+// past u64::MAX; Move aborts on the overflow rather than wrapping to a smaller total,
+// so the worst case is a bricked release (DoS), never an over-payment.
+#[test, expected_failure]
+fun balance_plus_released_overflow_bricks_release_not_overpays() {
+    let (mut test, mut clk) = setup(0);
+    let max = std::u64::max_value!();
+
+    let mut wallet = new_linear(0, 0, max, test.ctx());
+    wallet.fund(max, test.ctx());
+
+    clk.set_for_testing(1);
+    linear_schedule::release(&mut wallet, &clk, test.ctx()); // releases 1; balance = max - 1
+    wallet.fund(1, test.ctx()); // balance back to max, released = 1
+
+    // balance + released = max + 1: `vested_amount_raw` aborts computing the total.
+    clk.set_for_testing(max);
+    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    abort
+}
