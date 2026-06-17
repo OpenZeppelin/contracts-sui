@@ -1,11 +1,11 @@
-/// The built-in linear-with-cliff schedule for `vesting_wallet` — a reference curve
+/// The built-in linear-with-cliff schedule for `vesting_wallet` - a reference curve
 /// and the template downstream schedule modules copy.
 ///
 /// This module declares the `Linear` witness and its `Params`, plus the full
 /// integrator API around them (`new` / `vested_amount` / `release` / `destroy` and
 /// friends). It implements OpenZeppelin's linear-with-cliff curve on top of the
 /// curve-agnostic `vesting_wallet` primitive. An integrator who just wants linear
-/// vesting touches only this module — they never construct a bare wallet or mint a
+/// vesting touches only this module - they never construct a bare wallet or mint a
 /// `VestedAmount` by hand.
 ///
 /// # Why a separate module
@@ -15,7 +15,7 @@
 /// `VestingWallet<Linear, Params, C>` (via `vesting_wallet::new`, which takes the
 /// `Params` by value) or mint a `VestedAmount<Linear>` (via
 /// `vesting_wallet::mint_vested_amount`, which takes the `Linear` witness). Keeping
-/// the curve in its own module — rather than baking it into the primitive — leaves
+/// the curve in its own module - rather than baking it into the primitive - leaves
 /// room for additional schedule types (cliff-only, stepped, exponential, …) that
 /// follow this same shape without bloating `vesting_wallet`.
 ///
@@ -23,7 +23,7 @@
 ///
 /// - Pre-start (`now < start_ms`): zero.
 /// - Pre-cliff (`cliff_ms > 0` and `now < start_ms + cliff_ms`): zero. At the cliff
-///   boundary the value jumps directly to the linear-from-start proportion — the
+///   boundary the value jumps directly to the linear-from-start proportion - the
 ///   cliff gates the curve, it does not shift it.
 /// - Mid-schedule: linear in elapsed time, computed with a u128 intermediate.
 /// - Post-end: clamped to the wallet's total (`balance + released`).
@@ -141,7 +141,7 @@ public fun vested_amount<C>(
 }
 
 /// Evaluate the linear curve and release the not-yet-released portion in one
-/// call — the common path for the linear schedule.
+/// call - the common path for the linear schedule.
 public fun release<C>(
     wallet: &mut VestingWallet<Linear, Params, C>,
     clock: &Clock,

@@ -168,7 +168,7 @@ fun vested_amount_pre_start_is_zero() {
 }
 
 // Lower boundary: at now == start_ms with no cliff the elapsed time is 0,
-// so the curve reads exactly 0 — the lower edge of the linear branch.
+// so the curve reads exactly 0 - the lower edge of the linear branch.
 #[test]
 fun vested_amount_at_exact_start_is_zero() {
     let (mut test, mut clk) = setup(0);
@@ -297,7 +297,7 @@ fun vested_amount_uses_u128_intermediate_at_max() {
 }
 
 // A deposit made after start immediately participates in vesting at the
-// current proportion — the total is re-derived, not captured at construction.
+// current proportion - the total is re-derived, not captured at construction.
 #[test]
 fun deposit_vests_as_if_from_start() {
     let (mut test, mut clk) = setup(0);
@@ -487,7 +487,7 @@ fun create_deposit_release_in_one_flow() {
     teardown(test, clk);
 }
 
-// receive_and_deposit + release compose in a single transaction — the
+// receive_and_deposit + release compose in a single transaction - the
 // emission-schedule / payroll path where a coin is claimed from the wallet's address
 // and the vested portion is released in one go.
 #[test]

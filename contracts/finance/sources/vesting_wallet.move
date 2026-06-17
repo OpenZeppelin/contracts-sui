@@ -6,21 +6,21 @@
 /// tracks how much has already been paid out (`released`). It is parameterized by
 /// three types, all chosen at construction:
 ///
-/// - `S` — the *schedule witness*: a `drop`-only struct declared by a curve
+/// - `S` - the *schedule witness*: a `drop`-only struct declared by a curve
 ///   module. It carries no data; it exists so that only its declaring module can
 ///   mint a `VestedAmount<S>` or tear the wallet down.
-/// - `P` — the *schedule parameters*: a `copy + drop + store` struct declared by
+/// - `P` - the *schedule parameters*: a `copy + drop + store` struct declared by
 ///   the same curve module and held in the wallet's `schedule_params` field. It
 ///   stores the curve's configuration (start, duration, cliff, ...).
-/// - `C` — the *coin type* being vested.
+/// - `C` - the *coin type* being vested.
 ///
-/// The wallet itself never interprets the schedule — it only enforces release
+/// The wallet itself never interprets the schedule - it only enforces release
 /// accounting and conservation of funds. A curve module evaluates its curve for
 /// the current clock, mints a `VestedAmount<S>`, and `release` pays out the
 /// not-yet-released portion.
 ///
 /// This module ships no curve of its own. The built-in linear-with-cliff schedule
-/// lives in the sibling `linear_schedule` module — the reference curve, and the
+/// lives in the sibling `linear_schedule` module - the reference curve, and the
 /// template downstream schedule modules copy. An integrator who just wants linear
 /// vesting touches only `linear_schedule` and never constructs a bare wallet or
 /// mints a `VestedAmount` by hand.
@@ -28,13 +28,13 @@
 /// # Why the schedule is split across type parameters
 ///
 /// A `VestingWallet` is meaningless without a curve, so the curve cannot be an
-/// afterthought attached later — it is baked into the wallet's type at
+/// afterthought attached later - it is baked into the wallet's type at
 /// construction. Struct fields are module-private in Move, so only the module that
 /// declares the schedule structs `S` and `P` can construct values of those types,
 /// and therefore only that module can:
 ///
 /// - build a `VestingWallet<S, P, C>` (via `new`, which takes the parameters `P`
-///   by value — the value itself is the authority proof), and
+///   by value - the value itself is the authority proof), and
 /// - mint a `VestedAmount<S>` or call `destroy_empty` (both take the witness `S`
 ///   by value).
 ///
@@ -67,9 +67,9 @@
 /// `VestingWallet<S, P, C>` has `key + store`, so the consumer picks the topology
 /// after the constructor returns:
 ///
-/// - **Shared** (recommended): `transfer::public_share_object(wallet)` — anyone
+/// - **Shared** (recommended): `transfer::public_share_object(wallet)` - anyone
 ///   can poke `release`. `linear_schedule` exposes `create_and_share` sugar.
-/// - **Owned** (fast path): `transfer::public_transfer(wallet, addr)` — only the
+/// - **Owned** (fast path): `transfer::public_transfer(wallet, addr)` - only the
 ///   holder can pass the wallet by `&mut`, so funding and release are reachable
 ///   from the holder's transactions only. Outside parties fund it by
 ///   `public_transfer`ing a `Coin<C>` to the wallet's object address; the holder
@@ -96,7 +96,7 @@ const ENotEmpty: vector<u8> = "Wallet still holds a balance";
 #[error(code = 1)]
 const EWalletMismatch: vector<u8> = "VestedAmount does not match this wallet";
 /// A `VestedAmount` attests a cumulative total below what the wallet has already
-/// released — a stale attestation or a curve that regressed.
+/// released - a stale attestation or a curve that regressed.
 #[error(code = 2)]
 const EVestedBelowReleased: vector<u8> = "Vested amount is below the amount already released";
 
@@ -121,7 +121,7 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 }
 
 /// A transient attestation that curve `S` has vested a cumulative `amount` for a
-/// specific wallet. It has only `drop` — no `copy`, `store`, or `key` — so it
+/// specific wallet. It has only `drop` - no `copy`, `store`, or `key` - so it
 /// cannot be duplicated, stored, or held across transactions: it lives only within
 /// the PTB that mints it. It is *not* a hot potato; `release` and `releasable` take
 /// it by reference, so it is simply dropped at the end of the transaction.
@@ -148,7 +148,7 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 ///   curve module can produce it (`mint_vested_amount` takes `&VestingWallet` plus
 ///   an `S`).
 /// - *Execution* ("move the funds") needs only `&VestedAmount<S>` and `&mut wallet`
-///   — not `S` — so `release` can be called by code that has no access to `S`.
+///   - not `S` - so `release` can be called by code that has no access to `S`.
 ///
 /// A curve-agnostic wrapper that nests the wallet (`inner: VestingWallet<..>`) only
 /// needs to expose an immutable `&inner` (so any curve module can mint an
@@ -163,13 +163,13 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 ///
 /// Handing out `&inner` is safe: it only allows views and curve-gated minting of an
 /// inert attestation; no funds move without `&mut`, which the wrapper never
-/// exposes. If `release` instead required `S`, this would be impossible — a
+/// exposes. If `release` instead required `S`, this would be impossible - a
 /// curve-agnostic wrapper cannot construct `S`, so it would have to expose
 /// `&mut inner` and lose all control over deposits and releases.
 public struct VestedAmount<phantom S> has drop {
     /// Id of the wallet this attestation was minted for.
     wallet_id: ID,
-    /// Cumulative vested total at mint time — not the incremental releasable amount.
+    /// Cumulative vested total at mint time - not the incremental releasable amount.
     amount: u64,
 }
 
@@ -250,8 +250,8 @@ public fun new<S: drop, P: copy + drop + store, C>(
 /// module that declares `S` can construct one, so the `amount` is unforgeable in
 /// any other module.
 ///
-/// This indirection is what lets a `VestingWallet` be driven curve-agnostically —
-/// through another protocol, or gated behind another contract — without curve
+/// This indirection is what lets a `VestingWallet` be driven curve-agnostically -
+/// through another protocol, or gated behind another contract - without curve
 /// modules needing to know about every wrapper. See `VestedAmount` for the full
 /// rationale.
 ///
@@ -259,7 +259,7 @@ public fun new<S: drop, P: copy + drop + store, C>(
 /// - `wallet`: The wallet the attestation is bound to (by id).
 /// - `_w`: The curve witness `S`; proves the caller is the declaring curve module.
 /// - `amount`: The cumulative vested total this attestation asserts. Trusted, not
-///   validated here — see the note below.
+///   validated here - see the note below.
 ///
 /// #### Returns
 /// - A `VestedAmount<S>` stamped with this wallet's id.
@@ -270,7 +270,7 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
 ): VestedAmount<S> {
     // `amount` is supplied by the caller and is NOT validated here. The primitive
     // only stamps it with this wallet's id, binding the witness to the wallet it was
-    // minted against — `release`/`releasable` reject it against any other wallet. That
+    // minted against - `release`/`releasable` reject it against any other wallet. That
     // stamp defeats the cross-wallet attack (mint a favorable amount from a side wallet
     // built with modified params, then redeem it against the target): the side wallet's
     // id won't match the target.
@@ -291,7 +291,7 @@ public fun amount<S>(vested: &VestedAmount<S>): u64 {
     vested.amount
 }
 
-/// Add a coin to the wallet's balance. Permissionless — the beneficiary's
+/// Add a coin to the wallet's balance. Permissionless - the beneficiary's
 /// identity is data, not a capability, and anyone may fund.
 public fun deposit<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
@@ -331,7 +331,7 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 /// #### Aborts
 /// - `EWalletMismatch` if `vested` was not minted for this wallet.
 /// - `EVestedBelowReleased` if `vested.amount` is below the amount already released
-///   — a stale attestation or a curve that regressed (non-monotonic).
+///   - a stale attestation or a curve that regressed (non-monotonic).
 /// - Aborts if the balance cannot cover the releasable amount, i.e. the curve
 ///   attested more than `balance + released`.
 public fun release<S: drop, P: copy + drop + store, C>(
@@ -362,7 +362,7 @@ public fun release<S: drop, P: copy + drop + store, C>(
 /// parameters to the caller (the curve module destructures them). Witness-gated by
 /// `_w: S`, so only the declaring curve module can tear a wallet down. Coins
 /// `public_transfer`'d to a destroyed wallet's address after this call have no path
-/// back — pair destruction with halting any upstream emissions that target this
+/// back - pair destruction with halting any upstream emissions that target this
 /// wallet.
 ///
 /// #### Parameters
@@ -422,7 +422,7 @@ public fun releasable<S: drop, P: copy + drop + store, C>(
     *vested_amount - wallet.released
 }
 
-/// Read the wallet's schedule parameters. Ungated — curve parameters are public
+/// Read the wallet's schedule parameters. Ungated - curve parameters are public
 /// information.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params

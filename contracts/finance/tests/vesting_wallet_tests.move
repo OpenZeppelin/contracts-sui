@@ -7,7 +7,7 @@ use openzeppelin_finance::vesting_wallet::{
     Created,
     Deposited,
     Released,
-    Destroyed,
+    Destroyed
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
@@ -30,8 +30,15 @@ const PARAMS_TAG: u64 = 7;
 
 // === Test helpers ===
 
-fun new_wallet(beneficiary: address, ctx: &mut TxContext): VestingWallet<TestCurve, TestParams, USDC> {
-    vesting_wallet::new<TestCurve, TestParams, USDC>(TestParams { tag: PARAMS_TAG }, beneficiary, ctx)
+fun new_wallet(
+    beneficiary: address,
+    ctx: &mut TxContext,
+): VestingWallet<TestCurve, TestParams, USDC> {
+    vesting_wallet::new<TestCurve, TestParams, USDC>(
+        TestParams { tag: PARAMS_TAG },
+        beneficiary,
+        ctx,
+    )
 }
 
 fun mint(amount: u64, ctx: &mut TxContext): Coin<USDC> {
@@ -89,7 +96,7 @@ fun new_supports_owned_topology() {
 // === Deposit ===
 
 // A deposit increases the balance, emits `Deposited`, conserves value (none
-// created/destroyed), and is permissionless — the funding sender is unrelated to
+// created/destroyed), and is permissionless - the funding sender is unrelated to
 // the beneficiary.
 #[test]
 fun deposit_increases_balance_emits_and_is_permissionless() {
@@ -157,7 +164,7 @@ fun mint_stamps_wallet_id_and_amount_reads_without_consuming() {
     let wallet = new_wallet(BENEFICIARY, &mut ctx);
     let vested = wallet.mint_vested_amount(TestCurve {}, 123);
 
-    // Read twice — `amount` borrows, it does not consume.
+    // Read twice - `amount` borrows, it does not consume.
     assert_eq!(vested.amount(), 123);
     assert_eq!(vested.amount(), 123);
     // Stamp matches this wallet, so `releasable` accepts it.
@@ -229,7 +236,7 @@ fun release_pays_releasable_to_beneficiary() {
     scenario.end();
 }
 
-// A release with nothing newly vested is a no-op — no state change, no
+// A release with nothing newly vested is a no-op - no state change, no
 // `Released` event, no abort.
 #[test]
 fun release_is_noop_when_nothing_releasable() {
@@ -331,7 +338,7 @@ fun releasable_rejects_vested_below_released() {
 }
 
 // A curve that attests more than `balance + released`
-// aborts `release` at the framework `balance.split` — no payout, no `Released` event,
+// aborts `release` at the framework `balance.split` - no payout, no `Released` event,
 // atomic rollback. (Framework abort, so no library-typed code to match on.)
 #[test, expected_failure]
 fun release_aborts_when_vested_exceeds_total() {
@@ -406,7 +413,7 @@ fun beneficiary_params_and_id_are_immutable() {
 }
 
 // Released coins belong to the beneficiary and no later wallet operation
-// can reduce them — there is no clawback path.
+// can reduce them - there is no clawback path.
 #[test]
 fun released_coins_stay_with_beneficiary() {
     let mut scenario = test_scenario::begin(@0x1);
@@ -464,7 +471,7 @@ fun beneficiary_can_be_object_address() {
 }
 
 // In owned mode, handing the wallet object to a new holder does
-// not redirect cashflow — releases still pay the construction-time beneficiary.
+// not redirect cashflow - releases still pay the construction-time beneficiary.
 #[test]
 fun owned_handoff_does_not_redirect_cashflow() {
     let alice = @0xA11CE;
@@ -483,7 +490,7 @@ fun owned_handoff_does_not_redirect_cashflow() {
     wallet.release(&vested, scenario.ctx());
     destroy(wallet);
 
-    // Alice — not Bob — received the funds.
+    // Alice - not Bob - received the funds.
     scenario.next_tx(alice);
     let coin = scenario.take_from_sender<Coin<USDC>>();
     assert_eq!(coin.value(), 400);
