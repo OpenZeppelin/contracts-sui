@@ -137,8 +137,15 @@ python -m gaussian_codegen.cdf.emit_test_vectors # → tests/{sd29x9_tests,ud30x
 python -m gaussian_codegen.cdf.validate          # re-checks the committed coefficient module against scipy
 ```
 
-Or via the Makefile (`make -C scripts/gaussian_codegen <target>`): `regen` (the first three),
-`validate`, `check` (drift guard), `test` (pytest), `ci` (what CI runs).
+Or via the Makefile (`make -C scripts/gaussian_codegen <target>`): `regen` (the first
+three, then formats — see below), `validate`, `check` (drift guard), `test` (pytest),
+`ci` (what CI runs).
+
+`emit_coefficients` writes one vector element per line, but the committed
+`cdf_coefficients.move` is repacked by the repo's Move formatter
+(`@mysten/prettier-plugin-move`). After a manual `emit_coefficients`, run
+`prettier --write` on it; or just use `make regen`, which formats the generated
+files for you. (`emit_test_vectors` output is already formatter-compliant.)
 
 `derive.py` writes a JSON intermediate (`scripts/gaussian_codegen/cdf/.derive_output.json`,
 gitignored) that the `emit_*.py` scripts consume.
@@ -147,9 +154,14 @@ gitignored) that the `emit_*.py` scripts consume.
 
 Both emitters accept `--check`: they render to memory and compare against the
 committed Move file byte-for-byte, exiting non-zero on any difference (without
-writing). Output is deterministic — the banner carries no timestamp — so a
-no-op regeneration produces no diff. `emit_test_vectors --check` is standalone;
-`emit_coefficients --check` needs a prior `derive` run for the JSON input.
+writing). The banner carries no timestamp, so the output is deterministic.
+
+`emit_test_vectors --check` is exact — its output is already formatter-compliant,
+which is why it is the drift guard CI runs. `emit_coefficients --check`, by
+contrast, compares its one-per-line output against the formatter-packed committed
+file, so it reports a *formatting-only* difference even when the numbers are
+correct; the committed coefficient **values** are guarded by `validate.py`, not
+by this check. It also needs a prior `derive` run for the JSON input.
 
 ### What CI runs
 
