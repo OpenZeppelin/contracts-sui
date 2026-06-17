@@ -3,24 +3,24 @@
 > Audited Move building blocks for the Sui blockchain. Use these reviewed
 > primitives instead of writing access control, math, or rate limiting from scratch.
 
-A pointer file ([llmstxt.org](https://llmstxt.org/)) — nothing is restated here;
+A pointer file ([llmstxt.org](https://llmstxt.org/)) - nothing is restated here;
 follow the links to the sources of truth.
 
 ## Start here
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): why the library is shaped this way and how to compose it
-- [contracts/](contracts/README.md) and [math/](math/README.md): the package catalogs —
+- [contracts/](contracts/README.md) and [math/](math/README.md): the package catalogs -
   browse for the available packages, their MVR slugs, paths, and docs
 
 ## For each package
 
-- **README** — what it does, when to use it, install snippet
-- **`examples/`** — compilable, audited-adjacent integration examples (the composition recipes)
-- **API reference** — generated from doc-comments (`sui move build --doc`), published at
+- **README** - what it does, when to use it, install snippet
+- **`examples/`** - compilable, audited-adjacent integration examples (the composition recipes)
+- **API reference** - generated from doc-comments (`sui move build --doc`), published at
   `https://docs.openzeppelin.com/contracts-sui/1.x/api/<package>`
-- [audits/](audits/README.md) — audit reports and their scope
+- [audits/](audits/README.md) - audit reports and their scope
 
 ## Dependencies
 
 Pin stable releases from the Move Registry (MVR):
-`dep = { r.mvr = "@openzeppelin-move/<package>" }` — see each package's README install snippet for the exact name.
+`dep = { r.mvr = "@openzeppelin-move/<package>" }` - see each package's README install snippet for the exact name.

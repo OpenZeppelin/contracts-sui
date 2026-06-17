@@ -1,5 +1,5 @@
 /// A throwaway fixed-supply coin used solely to give the `faucet` example something
-/// concrete to hand out. Not part of the rate limiter itself — it just supplies the
+/// concrete to hand out. Not part of the rate limiter itself - it just supplies the
 /// `Balance` the faucet is funded with.
 ///
 /// # Disclaimer

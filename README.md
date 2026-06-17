@@ -36,7 +36,7 @@ sui move build --doc --path <module>
 ```
 
 **AI agents:** [`llms.txt`](./llms.txt) is the discovery entry point for integrating
-this library into a downstream project — it points to the package catalogs, examples,
+this library into a downstream project - it points to the package catalogs, examples,
 generated API reference, and audits.
 
 ## Notes
