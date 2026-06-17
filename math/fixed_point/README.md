@@ -141,4 +141,4 @@ hand-edited (each carries an `AUTO-GENERATED` banner):
 - `tests/{sd29x9_tests,ud30x9_tests}/cdf_test_vectors.move`
 
 To regenerate them — or to re-validate the committed coefficients against
-`scipy` — see [`codegen/`](codegen/README.md).
+`scipy` — see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).

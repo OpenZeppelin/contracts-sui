@@ -27,17 +27,17 @@ from typing import Sequence
 
 from mpmath import mp, mpf
 
-from codegen.shared import constants
-from codegen.shared.move_emit import (
+from gaussian_codegen.shared import constants
+from gaussian_codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
     rel_or_abs,
     write_move,
 )
-from codegen.shared.reference import DPS, SCALE_DECIMAL, phi as phi_oracle
+from gaussian_codegen.shared.reference import DPS, SCALE_DECIMAL, phi as phi_oracle
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 SD29X9_OUTPUT_PATH = (
     REPO_ROOT
@@ -124,7 +124,7 @@ def build_test_cases() -> list[tuple[int, bool, int]]:
 
 def emit_sd29x9_module(cases: list[tuple[int, bool, int]]) -> str:
     banner = auto_generated_banner(
-        "math/fixed_point/codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)"
+        "scripts/gaussian_codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)"
     )
 
     indent = "        "
@@ -173,7 +173,7 @@ fun cdf_vectors_match_oracle() {{
 def emit_ud30x9_module(cases: list[tuple[int, bool, int]]) -> str:
     """UD30x9 variant: positive-only cases, no `neg` field."""
     banner = auto_generated_banner(
-        "math/fixed_point/codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)"
+        "scripts/gaussian_codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)"
     )
 
     indent = "        "
@@ -248,7 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "test vectors are in sync"
             )
             return 0
-        print("FAIL: run `python -m codegen.cdf.emit_test_vectors` to regenerate", file=sys.stderr)
+        print("FAIL: run `python -m gaussian_codegen.cdf.emit_test_vectors` to regenerate", file=sys.stderr)
         return 1
 
     print(f"Generating {len(cases)} SD29x9 test vectors")

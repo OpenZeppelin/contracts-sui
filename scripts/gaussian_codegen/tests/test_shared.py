@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from codegen.shared import constants
-from codegen.shared.move_emit import (
+from gaussian_codegen.shared import constants
+from gaussian_codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
@@ -65,12 +65,12 @@ def test_fmt_u128_accepts_max_u128():
 
 
 def test_banner_is_deterministic_and_dateless():
-    b1 = auto_generated_banner("math/fixed_point/codegen/cdf/derive.py")
-    b2 = auto_generated_banner("math/fixed_point/codegen/cdf/derive.py")
+    b1 = auto_generated_banner("scripts/gaussian_codegen/cdf/derive.py")
+    b2 = auto_generated_banner("scripts/gaussian_codegen/cdf/derive.py")
     assert b1 == b2  # no timestamp -> stable output
     assert "Regenerated" not in b1
     assert "AUTO-GENERATED" in b1
-    assert "math/fixed_point/codegen/cdf/derive.py" in b1
+    assert "scripts/gaussian_codegen/cdf/derive.py" in b1
 
 
 # --- check_move drift guard -------------------------------------------------

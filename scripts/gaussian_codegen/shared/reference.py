@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from mpmath import mp, mpf, ncdf
 
-from codegen.shared.constants import DPS, SCALE_DECIMAL
+from gaussian_codegen.shared.constants import DPS, SCALE_DECIMAL
 
 # Set once at import time. Callers that change `mp.dps` should restore it
 # (or call `_ensure_dps()` before evaluating).

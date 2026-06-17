@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from codegen.cdf import validate as v
-from codegen.shared import constants
+from gaussian_codegen.cdf import validate as v
+from gaussian_codegen.shared import constants
 
 WAD = constants.WAD
 

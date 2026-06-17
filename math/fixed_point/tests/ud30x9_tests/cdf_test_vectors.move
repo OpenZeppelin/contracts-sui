@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not hand-edit.
-// Source: math/fixed_point/codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)
+// Source: scripts/gaussian_codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)
 
 /// Deterministic test vectors for `ud30x9_base::cdf`. Each row asserts the
 /// result of `ud30x9::wrap(z_raw).cdf()` matches `expected` to within

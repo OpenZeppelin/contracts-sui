@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not hand-edit.
-// Source: math/fixed_point/codegen/cdf/derive.py + math/fixed_point/codegen/cdf/emit_coefficients.py
+// Source: scripts/gaussian_codegen/cdf/derive.py + scripts/gaussian_codegen/cdf/emit_coefficients.py
 
 /// Numerator and denominator coefficients for the AAA-rational standard-normal
 /// CDF approximation on the central domain `[0, 6.3]`. All values are
@@ -11,7 +11,7 @@
 /// inside the Horner loop — avoiding a fresh constant load on every iteration.
 ///
 /// See `cdf` for the consumer API. This module is regenerated from the AAA fit
-/// in `math/fixed_point/codegen/cdf/`; do not hand-edit.
+/// in `scripts/gaussian_codegen/cdf/`; do not hand-edit.
 module openzeppelin_fp_math::cdf_coefficients;
 
 const NUM_MAGS: vector<u128> = vector[

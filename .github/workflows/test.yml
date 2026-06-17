@@ -147,13 +147,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install codegen
-        run: pip install -e "math/fixed_point/codegen[dev]"
+        run: pip install -e "scripts/gaussian_codegen[dev]"
 
       - name: Validate committed CDF coefficients
-        run: python -m codegen.cdf.validate
+        run: python -m gaussian_codegen.cdf.validate
 
       - name: Check test vectors are in sync with the generator
-        run: python -m codegen.cdf.emit_test_vectors --check
+        run: python -m gaussian_codegen.cdf.emit_test_vectors --check
 
       - name: Run codegen unit tests
-        run: pytest math/fixed_point/codegen/tests -q
+        run: pytest scripts/gaussian_codegen/tests -q

@@ -25,8 +25,8 @@ from mpmath import mp, mpf
 from scipy.interpolate import AAA
 from scipy.stats import norm
 
-from codegen.shared import constants
-from codegen.shared.reference import DPS
+from gaussian_codegen.shared import constants
+from gaussian_codegen.shared.reference import DPS
 
 # AAA emits a RuntimeWarning when it hits `max_terms` before satisfying `rtol`.
 # Our sweep deliberately caps `max_terms`, so the warning is expected noise.
@@ -36,7 +36,7 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 MAX_Z = mpf(constants.MAX_Z)
 MAX_Z_FLOAT = float(constants.MAX_Z)

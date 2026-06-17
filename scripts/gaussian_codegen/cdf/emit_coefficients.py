@@ -21,8 +21,8 @@ from typing import Sequence
 
 from mpmath import mp, mpf
 
-from codegen.shared import constants
-from codegen.shared.move_emit import (
+from gaussian_codegen.shared import constants
+from gaussian_codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
@@ -30,7 +30,7 @@ from codegen.shared.move_emit import (
     write_move,
 )
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 WAD = constants.WAD
 MAX_Z_RAW = constants.MAX_Z_RAW
@@ -64,7 +64,7 @@ def render_vector(name: str, ty: str, items: Sequence[str], indent: str = "    "
 
 def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str:
     banner = auto_generated_banner(
-        "math/fixed_point/codegen/cdf/derive.py + math/fixed_point/codegen/cdf/emit_coefficients.py"
+        "scripts/gaussian_codegen/cdf/derive.py + scripts/gaussian_codegen/cdf/emit_coefficients.py"
     )
 
     num_mag_items = [fmt_u128(m) for m, _ in num]
@@ -83,7 +83,7 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 /// inside the Horner loop — avoiding a fresh constant load on every iteration.
 ///
 /// See `cdf` for the consumer API. This module is regenerated from the AAA fit
-/// in `math/fixed_point/codegen/cdf/`; do not hand-edit.
+/// in `scripts/gaussian_codegen/cdf/`; do not hand-edit.
 module openzeppelin_fp_math::cdf_coefficients;
 
 {render_vector("NUM_MAGS", "u128", num_mag_items)}
@@ -130,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not args.input.exists():
-        print(f"FAIL: missing {args.input} — run `python -m codegen.cdf.derive` first", file=sys.stderr)
+        print(f"FAIL: missing {args.input} — run `python -m gaussian_codegen.cdf.derive` first", file=sys.stderr)
         return 1
 
     raw = json.loads(args.input.read_text(encoding="utf-8"))
@@ -143,7 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if check_move(args.output, text):
             print(f"OK: {rel_or_abs(args.output, REPO_ROOT)} is in sync")
             return 0
-        print("FAIL: run `python -m codegen.cdf.emit_coefficients` to regenerate", file=sys.stderr)
+        print("FAIL: run `python -m gaussian_codegen.cdf.emit_coefficients` to regenerate", file=sys.stderr)
         return 1
 
     print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at WAD")

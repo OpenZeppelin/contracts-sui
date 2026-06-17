@@ -28,9 +28,9 @@ from typing import Sequence
 import numpy as np
 from scipy.stats import norm
 
-from codegen.shared import constants
+from gaussian_codegen.shared import constants
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 WAD = constants.WAD
 SCALE = constants.SCALE_DECIMAL
