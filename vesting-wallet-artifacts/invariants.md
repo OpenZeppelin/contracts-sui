@@ -430,7 +430,7 @@ count + field values + type arguments.
 
 **Violation scenario:** Extra or missing events corrupt indexer state — duplicate
 `Created` would create phantom wallets in dashboards; missed `Released` would
-mis-account cashflow.
+misaccount cashflow.
 
 **Severity:** Medium (off-chain correctness; no on-chain fund risk).
 
