@@ -95,6 +95,10 @@ jobs:
         run: sui move build --test --lint --warnings-are-errors
         working-directory: ./${{ matrix.package }}
 
+      - name: Docgen clean
+        run: sui move build --doc
+        working-directory: ./${{ matrix.package }}
+
   test:
     name: Test ${{ matrix.package }}
     needs: [setup, lint]
