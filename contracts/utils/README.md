@@ -2,6 +2,13 @@
 
 Embeddable primitives for Sui smart contract development.
 
+## Install
+
+```toml
+[dependencies]
+openzeppelin_utils = { r.mvr = "@openzeppelin-move/utils" }
+```
+
 ## Module Snapshot
 
 | Module | Summary |
@@ -10,15 +17,15 @@ Embeddable primitives for Sui smart contract development.
 
 ---
 
-## `rate_limiter` at a Glance
+## Rate Limiter
 
 `RateLimiter` is a `store + drop` value the integrator embeds as a field inside their own object.
 
 Three strategies share the same API:
 
-- **Bucket** ([Wikipedia](https://en.wikipedia.org/wiki/Token_bucket)) — a bucket holds up to `capacity` tokens and refills at a steady rate. Each consume drains tokens; an empty bucket denies the call. Permits short bursts up to `capacity` on top of a sustained average rate, which is what most APIs and on-chain throughput controls actually want.
-- **Fixed window** — time is partitioned into back-to-back windows of `window_ms`, anchored at limiter creation. Each window allows up to `capacity` units and resets to full `capacity` at the boundary. Cheap and easy to reason about; the known trade-off is that a caller can spend the full quota at the end of one window and the full quota at the start of the next, yielding a `2 * capacity` burst across the boundary. Pick it when the quota is the contract (e.g. "100 mints per hour") and the boundary burst is acceptable.
-- **Cooldown** — after `capacity` units are drawn down, the limiter is gated for `cooldown_ms` before any further consumption is allowed; once the gate elapses, the full `capacity` is available again. Equivalent to a "recharge after use" pattern (think action cooldowns in games, or "wait 60s before retrying").
+- **Bucket** ([Wikipedia](https://en.wikipedia.org/wiki/Token_bucket)) - a bucket holds up to `capacity` tokens and refills at a steady rate. Each consume drains tokens; an empty bucket denies the call. Permits short bursts up to `capacity` on top of a sustained average rate, which is what most APIs and on-chain throughput controls actually want.
+- **Fixed window** - time is partitioned into back-to-back windows of `window_ms`, anchored at limiter creation. Each window allows up to `capacity` units and resets to full `capacity` at the boundary. Cheap and easy to reason about; the known trade-off is that a caller can spend the full quota at the end of one window and the full quota at the start of the next, yielding a `2 * capacity` burst across the boundary. Pick it when the quota is the contract (e.g. "100 mints per hour") and the boundary burst is acceptable.
+- **Cooldown** - after `capacity` units are drawn down, the limiter is gated for `cooldown_ms` before any further consumption is allowed; once the gate elapses, the full `capacity` is available again. Equivalent to a "recharge after use" pattern (think action cooldowns in games, or "wait 60s before retrying").
 
 | Variant | When to pick it |
 |---------|-----------------|
@@ -31,7 +38,7 @@ Three strategies share the same API:
 1. **Construct** - call `new_bucket`, `new_fixed_window`, or `new_cooldown` and store the result as a field on your object.
 2. **Consume** - on hot paths, call `consume_or_abort` or `try_consume`. Both project accrual / window rollover / cooldown release before the consume; the projection is committed on success and discarded on failure (state is untouched when `try_consume` returns `false` or `consume_or_abort` aborts).
 3. **Inspect** - `available` returns the consumable amount right now, projecting pending accrual / rollover / release on read. The result is correct regardless of whether the most recent `try_consume` succeeded.
-4. **Reconstruct** - this module deliberately does not provide in-place `reconfigure_*` functions. To change configuration or runtime state, read the current state via the getters, build a fresh `RateLimiter` with the desired field values, and overwrite the field. Every reconfigure policy - preserve anchor, project then re-anchor, full reset, freeze in-flight gate, etc. - is expressible in caller code.
+4. **Reconstruct** - this module deliberately does not provide in-place `reconfigure_*` functions. To change configuration or runtime state, read the current state via the getters, build a fresh `RateLimiter` with the desired field values, and overwrite the field. Every reconfigure policy - preserve anchor, project then re-anchor, full reset, proportional carry, freeze in-flight gate, etc. - is expressible in caller code.
 
 ### Usage
 
@@ -41,13 +48,13 @@ Pick the constructor that matches your policy; the consume and inspect calls are
 use openzeppelin_utils::rate_limiter::{Self, RateLimiter};
 use sui::clock::Clock;
 
-// Bucket — smooth throughput with bursts; cap 1 000, refills 100 units every 6 s, starting full.
+// Bucket - smooth throughput with bursts; cap 1 000, refills 100 units every 6 s, starting full.
 let limiter: RateLimiter = rate_limiter::new_bucket(1_000, 100, 6_000, clock.timestamp_ms(), 1_000, clock);
 
-// Fixed window — hard per-hour quota of 100 units, starting full at the current time.
+// Fixed window - hard per-hour quota of 100 units, starting full at the current time.
 let limiter: RateLimiter = rate_limiter::new_fixed_window(100, 3_600_000, clock.timestamp_ms(), 100, clock);
 
-// Cooldown — up to 1 000 units per batch, then a 60 s gate before the next batch.
+// Cooldown - up to 1 000 units per batch, then a 60 s gate before the next batch.
 let limiter: RateLimiter = rate_limiter::new_cooldown(1_000, 60_000, 0, 1_000, clock);
 
 // Identical hot-path API regardless of variant:
@@ -80,11 +87,19 @@ public fun withdraw(self: &mut Vault, amount: u64, clock: &Clock) {
 }
 ```
 
-### Operator Notes
+### Examples
 
-- Configs require positive values. For `Bucket`, internal accrual stays overflow-safe regardless of `capacity` and `refill_amount` magnitudes - no upper bounds need to be enforced beyond standard `u64` arithmetic.
-- `initial_available` may be `0` for `Bucket` (starts empty, must wait for the first refill) and `FixedWindow` (starts with no quota in the first window). For `Cooldown`, `initial_available == 0` is also allowed: pair it with `cooldown_end_ms == 0` (or any past value) to start with a full batch via the projected-release path, or with `cooldown_end_ms > now` to seed an in-flight gate when reconstructing a limiter mid-throttle. The one rejected combination is `initial_available > 0` together with `cooldown_end_ms > now` (`ECooldownArmedWithTokens`): the hot path consults the gate only when `available == 0`, so a seeded deadline paired with tokens would be silently dropped on the next drain.
-- For `Cooldown`, the gate deadline is computed as `now + cooldown_ms`. Operators must pick `cooldown_ms` such that this addition cannot overflow over the limiter's lifetime; any policy-meaningful value (seconds to years, expressed in ms) satisfies this trivially.
-- `consume_or_abort` aborts on `amount == 0` (`EInvalidAmount`), while `try_consume` returns `false` - matching the `try_` convention that the function never aborts. This makes `try_consume(self.available(clock), clock)` safe even when `available()` returns `0` (empty `Bucket`, exhausted `FixedWindow`, or gated `Cooldown`).
-- A failed `try_consume` (return `false`) is observably a no-op: no anchor advance, no balance change, no gate re-arm. This holds across all three variants. Integrators may probe the limiter with `try_consume(amount, _)` without skewing its internal state.
-- Reconfiguration is done by reconstruction (no `reconfigure_*` functions). Read the current state via the getters (`capacity`, `refill_amount`, `last_refill_ms`, `window_ms`, `window_start_ms`, `cooldown_ms`, `cooldown_end_ms`, `available`), compute the desired new field values, construct a fresh `RateLimiter`, and overwrite the field. The library only enforces structural validity on construction (positivity, `initial_available <= capacity`, anchors not in the future, the `ECooldownArmedWithTokens` exclusion); every reconfigure policy - preserve anchor, project then re-anchor, full reset, proportional carry, freeze in-flight gate - is expressible in caller code. Because accrual applies the current rate over the whole span since the anchor, carrying an old anchor across a change to `refill_amount`, `refill_interval_ms`, or `window_ms` re-prices already-elapsed time at the new rate and mints units instantly. To avoid this, any rate change should re-anchor to `clock.timestamp_ms()`.
+> [!Warning]
+> These are **unaudited illustrations** of how the primitive can be integrated, not production-ready code.
+
+Complete integration examples live in [`examples/rate_limiter/`](examples/rate_limiter):
+
+- [`faucet`](examples/rate_limiter/faucet.move) - two limiters of different variants composed across two objects: a per-holder token bucket layered on top of a global fixed window shared by all claimers.
+- [`staking_vault`](examples/rate_limiter/staking_vault.move) - a cooldown used as a one-shot timelock: unstaking arms a gate that releases after an unbonding delay, so the claim aborts until the delay has elapsed.
+- [`mage_duel`](examples/rate_limiter/mage_duel.move) - rate limiting can be used outside of DeFi; this example showcases many limiters of mixed variants packed into one type: a mage holds buckets for health and mana plus per-spell cooldowns, with limiters carried inside `store` structs.
+
+## Learn More
+
+- [Utils package overview](https://docs.openzeppelin.com/contracts-sui/1.x/utils)
+- [Utils API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/utils)
+- [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)

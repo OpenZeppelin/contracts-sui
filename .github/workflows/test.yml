@@ -16,7 +16,7 @@ permissions:
   pull-requests: write
 
 env:
-  SUI_VERSION: "1.72.2"
+  SUI_VERSION: "1.72.5"
 
 jobs:
   setup:
@@ -93,6 +93,10 @@ jobs:
 
       - name: Lint tests
         run: sui move build --test --lint --warnings-are-errors
+        working-directory: ./${{ matrix.package }}
+
+      - name: Docgen clean
+        run: sui move build --doc
         working-directory: ./${{ matrix.package }}
 
   test:

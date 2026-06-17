@@ -18,38 +18,31 @@ As a contributor, you are expected to fork this repository, work on your own for
 
 ## Code Quality Standards
 
-Your contribution must meet these requirements:
+Coding style and conventions for this repository live in
+[`STYLEGUIDE.md`](./STYLEGUIDE.md) (the single source of truth - naming, section
+ordering, idioms, testing, documentation), with the design rationale in
+[`ARCHITECTURE.md`](./ARCHITECTURE.md). Read those before opening a PR; the items
+below are the hard gates your contribution must clear:
 
 - **Test Coverage**: Minimum 90% coverage required
 - **Linting**: All code must pass strict linting (`sui move build --lint --warnings-are-errors`)
-- **Move Conventions**: Follow [Sui Move conventions](https://docs.sui.io/concepts/sui-move-concepts/conventions)
-- **Documentation**: Add inline documentation for public functions and modules
+- **Conventions**: Follow [`STYLEGUIDE.md`](./STYLEGUIDE.md), which builds on the
+  [Sui Move conventions](https://docs.sui.io/concepts/sui-move-concepts/conventions)
+- **Documentation**: Add inline documentation for public functions and modules,
+  formatted per [`STYLEGUIDE.md`](./STYLEGUIDE.md#documentation)
 
-## Documentation Style
+## Commit and PR conventions
 
-Use consistent documentation formatting across modules:
+The single source of truth for how changes land - humans and agents follow the
+same rules:
 
-- Use section headings as `#### Parameters`, `#### Returns`, and `#### Aborts` when relevant.
-- Use `-` for list items in doc comments (not `*`).
-- Prefer documenting public functions with at least `Parameters` and `Returns`.
-- Include an `Aborts` section whenever a function can abort.
-- Keep terminology consistent with implementation (for example, avoid documenting impossible paths).
-
-Example:
-
-```move
-/// Compute something.
-///
-/// #### Parameters
-/// - `value`: Input value.
-/// - `rounding_mode`: Rounding strategy.
-///
-/// #### Returns
-/// - Rounded output value.
-///
-/// #### Aborts
-/// - Aborts if `value` is zero.
-```
+- Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for
+  commit messages.
+- Never add a `Co-Authored-By` trailer to commits.
+- Do not include a "Test plan" section in PR descriptions.
+- Do not add dependencies or change the package split without explicit sign-off
+  - the package boundary is an audit boundary (see
+  [`ARCHITECTURE.md`](./ARCHITECTURE.md)).
 
 ## A typical workflow
 

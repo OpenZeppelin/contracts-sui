@@ -10,6 +10,7 @@ use openzeppelin_math::rounding::RoundingMode;
 
 // === Constants ===
 
+/// Bit width for `u8`.
 const BIT_WIDTH: u8 = 8;
 
 // === Public Functions ===

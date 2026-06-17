@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit reads this repo's conventions from STYLEGUIDE.md / ARCHITECTURE.md -
+# the single source of truth. This config only points CodeRabbit at them.
+reviews:
+  path_instructions:
+    - path: "**/*.move"
+      instructions: |
+        Review Move code against the conventions in STYLEGUIDE.md and the design
+        rationale in ARCHITECTURE.md at the repository root - treat them as the
+        single source of truth. Flag deviations from them; do not enforce rules
+        that are not written there. AGENTS.md is the gateway that links both.
+    - path: "**/*.md"
+      instructions: |
+        For STYLEGUIDE.md / ARCHITECTURE.md / AGENTS.md / CONTRIBUTING.md, watch
+        for duplication across files: each fact should have one home and the rest
+        should link to it.

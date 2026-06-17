@@ -2,6 +2,13 @@
 
 Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 
+## Install
+
+```toml
+[dependencies]
+openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
+```
+
 ## Types
 
 - `UD30x9`: Unsigned decimal fixed-point (internal: 0 to 2^128 - 1; decimal: 0 to ~3.4e29)
@@ -142,3 +149,9 @@ hand-edited (each carries an `AUTO-GENERATED` banner):
 
 To regenerate them — or to re-validate the committed coefficients against
 `scipy` — see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
+
+## Learn More
+
+- [Fixed-point math package overview](https://docs.openzeppelin.com/contracts-sui/1.x/fixed-point)
+- [Fixed-point math API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/fixed-point)
+- [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)

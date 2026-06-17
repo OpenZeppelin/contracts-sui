@@ -1,7 +1,7 @@
+/// Vector algorithms for unsigned integers: in-place quicksort and median selection.
 module openzeppelin_math::vector;
 
-use openzeppelin_math::macros;
-use openzeppelin_math::rounding::RoundingMode;
+use openzeppelin_math::rounding::{Self, RoundingMode};
 
 // === Errors ===
 
@@ -16,12 +16,23 @@ const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 ///
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
-/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
-/// pivot selection makes it much less likely for common inputs, while three-way partitioning
-/// improves practical performance when duplicate elements are present.
+/// average-case time complexity. The theoretical worst case is `O(n²)` and remains reachable
+/// for adversarially ordered inputs despite median-of-three pivot selection. Three-way
+/// partitioning improves practical performance when duplicate elements are present.
 ///
-/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
-/// it suitable for arbitrarily large vectors.
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros. Input
+/// size is still bounded by transaction gas and memory limits; avoid sorting unbounded vectors,
+/// especially when the caller can control the vector contents.
+///
+/// #### Bytecode vs. gas trade-off
+///
+/// As a macro, every call site inlines the full sorting algorithm - roughly 750 bytes of
+/// compiled bytecode per call. This module ships no precompiled sorting wrappers, so if you
+/// sort the same element type from more than one place, wrap the macro in a small function in
+/// your own module (e.g. `fun sort(v: &mut vector<u64>) { vector::quick_sort!(v) }`) and call
+/// that instead: the expansion is paid once, every additional call site costs only a regular
+/// function call with no measurable gas difference, and your module stays well within Sui's
+/// cap on the total compiled size of a published package.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -31,6 +42,8 @@ const EMedianOfEmptyVector: vector<u8> = "Median of empty vector is undefined";
 ///
 /// #### Example
 /// ```move
+/// use openzeppelin_math::vector;
+///
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
 /// vector::quick_sort!(&mut vec);
 /// // vec is now [1, 1, 2, 3, 4, 5, 6, 9]
@@ -45,13 +58,27 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 ///
 /// This macro implements the iterative quicksort algorithm with three-way partitioning
 /// (Dutch National Flag scheme), which efficiently sorts vectors in-place with `O(n log n)`
-/// average-case time complexity. The theoretical worst case is `O(n²)`, but median-of-three
-/// pivot selection makes it much less likely for common inputs, while three-way partitioning
-/// improves practical performance when duplicate elements are present. Using an incorrect
-/// comparator (see `$le` below) can also degrade performance.
+/// average-case time complexity. The theoretical worst case is `O(n²)` and remains reachable
+/// for adversarially ordered inputs despite median-of-three pivot selection. Three-way
+/// partitioning improves practical performance when duplicate elements are present. Using an
+/// incorrect comparator (see `$le` below) can also degrade performance or produce unsorted
+/// output.
 ///
-/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros, making
-/// it suitable for arbitrarily large vectors.
+/// The macro uses an explicit stack to avoid recursion limitations for `Move` macros. Input
+/// size is still bounded by transaction gas and memory limits; avoid sorting unbounded vectors,
+/// especially when the caller can control the vector contents.
+///
+/// #### Bytecode vs. gas trade-off
+///
+/// As a macro, every call site inlines the full sorting algorithm together with the comparator -
+/// roughly 750 bytes of compiled bytecode per call. A precompiled wrapper cannot live in this
+/// library because the comparator is a compile-time lambda, which ordinary functions cannot
+/// accept as an argument. If you sort with the same element type and comparator from more than
+/// one place, wrap the call in a small function in your own module (e.g.
+/// `fun sort_desc(v: &mut vector<u64>) { vector::quick_sort_by!(v, |a, b| *a >= *b) }`): the
+/// expansion is paid once, every additional call site costs only a regular function call with no
+/// measurable gas difference, and your module stays well within Sui's cap on the total compiled
+/// size of a published package.
 ///
 /// #### Generics
 /// - `$T`: Any type that can be compared using the provided comparison function.
@@ -59,14 +86,19 @@ public macro fun quick_sort<$Int>($vec: &mut vector<$Int>) {
 /// #### Parameters
 /// - `$vec`: A mutable reference to the vector to be sorted in-place.
 /// - `$le`: A comparison function that takes two references and returns `true` if the first
-///   element should be ordered before or equal to the second element. **Must implement
-///   non-strict ordering** (i.e., `<=` for ascending, `>=` for descending). Using a strict
-///   comparator (e.g., `<` instead of `<=`) defeats three-way partitioning, which can degrade
-///   performance to `O(n²)` when duplicate elements are present. Always use non-strict
-///   operators to ensure optimal behavior.
+///   element should be ordered before or equal to the second element. **Must implement a
+///   consistent total preorder** (i.e., non-strict `<=` for ascending, `>=` for descending).
+///   Using a strict comparator (e.g., `<` instead of `<=`) defeats three-way partitioning,
+///   which can degrade performance to `O(n²)` when duplicate elements are present. An
+///   inconsistent, non-transitive, or non-total comparator is not detected and can silently
+///   return a vector that is not sorted according to the intended order. The macro may invoke
+///   `$le` twice for a single element probe to distinguish equality from before/after ordering,
+///   so account for that when the comparator is expensive.
 ///
 /// #### Example
 /// ```move
+/// use openzeppelin_math::vector;
+///
 /// // Sort in ascending order
 /// let mut vec = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
 /// vector::quick_sort_by!(&mut vec, |x: &u64, y: &u64| *x <= *y);
@@ -104,6 +136,8 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             let mut i = start + 1;
             while (i < end) {
                 let mut j = i;
+                // The comparator is non-strict, so strict ordering is derived as:
+                // a < b iff a <= b and !(b <= a).
                 while (
                     j != start
                         && $le(&vec[j], &vec[j - 1])
@@ -122,7 +156,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 
         // Choose median-of-three (start, mid, pivot_index) as a pivot
         // and place it on the last position.
-        let mid = (start + end) / 2;
+        let mid = start + (end - start) / 2;
         if ($le(&vec[mid], &vec[start])) {
             vec.swap(start, mid);
         };
@@ -136,7 +170,8 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         // Three-way partition (Dutch National Flag) around the pivot.
         // Regions: [start, lt) ordered before pivot, [lt, i) equal to pivot, [i, gt) unprocessed,
         // [gt, pivot_index) ordered after pivot.
-        // The pivot value is at `pivot_index` (end - 1) and will be moved into the equal region after partitioning.
+        // The pivot value is held at `pivot_index` and will be swapped into `gt` after the
+        // scan, making the equal region contiguous as [lt, gt + 1).
         let mut lt = start;
         let mut i = start;
         let mut gt = pivot_index; // gt points to pivot_index initially; pivot is excluded from scan.
@@ -148,6 +183,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
                     i = i + 1;
                 } else {
                     // vec[i] ordered before pivot: swap to the before-pivot region.
+                    // When lt == i, this intentionally relies on swap(i, i) as a no-op.
                     vec.swap(lt, i);
                     lt = lt + 1;
                     i = i + 1;
@@ -155,6 +191,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
             } else {
                 // vec[i] ordered after pivot: swap to the after-pivot region.
                 gt = gt - 1;
+                // When i == gt, this intentionally relies on swap(i, i) as a no-op.
                 vec.swap(i, gt);
                 // Don't advance `i`; the swapped-in element needs to be examined.
             };
@@ -163,13 +200,14 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
         // Move the pivot from `pivot_index` into the equal region.
         // `gt` is now the start of the after-pivot region, and pivot is at `pivot_index` (== end - 1).
         // Swap pivot with vec[gt] to place it adjacent to the equal region.
+        // When gt == pivot_index, there is no after-pivot region and the swap is a no-op.
         vec.swap(gt, pivot_index);
         // After swap: [start, lt) before pivot, [lt, eq_end) equal to pivot, [eq_end, end) after pivot.
         let eq_end = gt + 1;
 
         // Push partitions: larger first, smaller second.
-        // Since we use pop_back, smaller will be processed first.
-        // Stack size will be no longer than O(log(n)).
+        // Since we use pop_back, smaller will be processed first. This ordering is what keeps
+        // the pending stack bounded by O(log(n)).
         let left_size = lt - start;
         let right_size = end - eq_end;
 
@@ -205,17 +243,28 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 
 /// Compute the median of an unsigned integer vector.
 ///
-/// For odd-length vectors, the median is the central order statistic and
-/// `$rounding_mode` has no effect on the result.
+/// For odd-length vectors, the median is the central order statistic and `$rounding_mode` has
+/// no effect on the result. For even-length vectors, the median is the arithmetic mean of the
+/// two central values, rounded according to `$rounding_mode`.
 ///
-/// For even-length vectors, the median is the arithmetic mean of the two central
-/// values, rounded according to `$rounding_mode`.
+/// The input vector is not mutated: the selection algorithm runs on an internal working copy,
+/// so the caller's vector keeps its original order.
 ///
-/// The input vector is not mutated.
+/// #### Bytecode vs. gas trade-off
 ///
-/// Median selection uses quickselect over a `u256` working vector instead of
-/// sorting the full input. Benchmarks show similar cost for tiny vectors and
-/// substantially lower cost than sorting as input size grows.
+/// This macro inlines the complete selection algorithm at every call site, which makes it the
+/// most gas-efficient form but adds roughly 750–870 bytes of compiled bytecode per call,
+/// depending on the integer width. The
+/// `median_u8` … `median_u256` functions expose the exact same algorithm precompiled once in
+/// this module: calling them costs only a regular function call at the call site. Prefer the
+/// wrappers by default; reach for the macro directly when a call site is gas-critical. This
+/// matters because Sui caps the total compiled size of a published package, so liberal use of
+/// the macro spends that budget quickly.
+///
+/// Average-case time complexity is `O(n)`, with `O(n)` extra storage for the working copy. The
+/// theoretical worst case is `O(n²)` and remains reachable for adversarially ordered inputs
+/// despite median-of-three pivot selection. Avoid computing the median of unbounded vectors,
+/// especially when the caller can control the vector contents.
 ///
 /// #### Generics
 /// - `$Int`: Any unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, or `u256`).
@@ -232,7 +281,7 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 ///
 /// #### Example
 /// ```move
-/// use openzeppelin_math::rounding
+/// use openzeppelin_math::rounding;
 /// use openzeppelin_math::vector;
 ///
 /// let v = vector[3u64, 1, 4, 1, 5, 9, 2, 6];
@@ -241,22 +290,137 @@ public macro fun quick_sort_by<$T>($vec: &mut vector<$T>, $le: |&$T, &$T| -> boo
 /// ```
 public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode): $Int {
     let vec = $vec;
-    let vec_u256 = vec.map_ref!(|x| *x as u256);
-    median_u256(vec_u256, $rounding_mode) as $Int
+    let rounding_mode = $rounding_mode;
+
+    // An empty vector has no median. The check delegates to `median_u8`, whose own emptiness
+    // assertion raises the module's canonical `EMedianOfEmptyVector`: a public macro expands in
+    // the caller's module, where this module's private error constant is not visible, so the
+    // abort must come from a public function. Inside `median_u8`, that assertion runs before
+    // the code inlined from this macro, so the call below always aborts at runtime and can
+    // never recurse.
+    if (vec.is_empty()) {
+        median_u8(&vector[], rounding_mode);
+    };
+
+    let len = vec.length();
+    let k = len / 2;
+
+    // Quickselect reorders the values it inspects, so work on a copy. Dereferencing copies the
+    // whole vector with a single instruction, which is far cheaper than an element-by-element
+    // loop.
+    let mut w = *vec;
+
+    // Find the k-th order statistic (the upper of the two central values when `len` is even)
+    // with iterative quickselect: partition the active range [start, end) around a pivot, then
+    // keep only the side that contains index `k`.
+    let mut start = 0;
+    let mut end = len;
+    let upper = loop {
+        if (start + 1 >= end) break w[k];
+
+        // Insertion sort is cheaper than partitioning once the active range is small.
+        if (end - start <= 10) {
+            let mut i = start + 1;
+            while (i < end) {
+                let mut j = i;
+                while (j != start && w[j] < w[j - 1]) {
+                    w.swap(j, j - 1);
+                    j = j - 1;
+                };
+                i = i + 1;
+            };
+            break w[k]
+        };
+
+        // Median-of-three pivot selection over (start, mid, end - 1); the median of those
+        // three values ends up at `pivot_index`.
+        let pivot_index = end - 1;
+        let mid = start + (end - start) / 2;
+        if (w[mid] <= w[start]) w.swap(start, mid);
+        if (w[pivot_index] <= w[start]) w.swap(start, pivot_index);
+        if (w[mid] <= w[pivot_index]) w.swap(mid, pivot_index);
+
+        // The pivot stays at `pivot_index` for the whole scan, so read it into a local once;
+        // an indexed read inside the loop would be paid again on every comparison.
+        let pivot = w[pivot_index];
+
+        // Three-way (Dutch National Flag) partition. During the scan:
+        //   [start, lt)        values less than the pivot
+        //   [lt, i)            values equal to the pivot
+        //   [i, gt)            unprocessed
+        //   [gt, pivot_index)  values greater than the pivot
+        let mut lt = start;
+        let mut i = start;
+        let mut gt = pivot_index;
+        while (i < gt) {
+            let current = w[i];
+            if (current <= pivot) {
+                if (pivot <= current) {
+                    i = i + 1;
+                } else {
+                    // When lt == i, this intentionally relies on swap(i, i) being a no-op.
+                    w.swap(lt, i);
+                    lt = lt + 1;
+                    i = i + 1;
+                }
+            } else {
+                gt = gt - 1;
+                // When i == gt, this intentionally relies on swap(i, i) being a no-op.
+                w.swap(i, gt);
+            };
+        };
+
+        // Move the pivot next to the equal region, making [lt, eq_end) exactly the
+        // pivot-equal values.
+        w.swap(gt, pivot_index);
+        let eq_end = gt + 1;
+
+        // Drop the partition that cannot contain index `k`; if `k` landed in the equal
+        // region, the pivot itself is the answer.
+        if (k < lt) {
+            end = lt;
+        } else if (k >= eq_end) {
+            start = eq_end;
+        } else {
+            break w[k]
+        };
+    };
+
+    if (len % 2 == 1) {
+        // Odd length: the median is the central order statistic and needs no rounding.
+        upper
+    } else {
+        // Even length: the median is the average of the two central values. Selecting index
+        // `k` left every preceding element less than or equal to `upper`, so the lower central
+        // value is the maximum of the (still unsorted) prefix.
+        let mut lower = w[0];
+        let mut i = 1;
+        while (i < k) {
+            if (lower < w[i]) lower = w[i];
+            i = i + 1;
+        };
+
+        // Average the two central values without overflow by anchoring on `lower` and adding
+        // half the gap. The fractional part is either zero or exactly one half, and one half
+        // rounds up under both `up` and `nearest`, so only `down` truncates.
+        let delta = upper - lower;
+        let mut result = lower + delta / 2;
+        if (delta % 2 == 1 && rounding_mode != rounding::down()) {
+            result = result + 1;
+        };
+        result
+    }
 }
 
-// === Concrete Public Functions ===
-
-/// Compute the median of a `u256` vector with configurable rounding.
+/// Compute the median of a `u8` vector with configurable rounding.
 ///
-/// This function consumes and partially reorders `vec`.
-///
-/// Median selection uses quickselect instead of sorting the full input.
-/// Benchmarks show similar cost for tiny vectors and substantially lower cost
-/// than sorting as input size grows.
+/// Precompiled wrapper around `median!`: same algorithm, same results, same abort behavior,
+/// but the selection bytecode lives in this module instead of being inlined at the call site.
+/// The input vector is not mutated. See `median!` for the full contract and the bytecode
+/// vs. gas trade-off.
 ///
 /// #### Parameters
-/// - `vec`: Vector whose median is desired (consumed).
+/// - `vec`: Reference to the vector whose median is desired.
 /// - `rounding_mode`: Rounding strategy, applied only when the length is even.
 ///
 /// #### Returns
@@ -264,137 +428,112 @@ public macro fun median<$Int>($vec: &vector<$Int>, $rounding_mode: RoundingMode)
 ///
 /// #### Aborts
 /// - `EMedianOfEmptyVector` if `vec` is empty.
+public fun median_u8(vec: &vector<u8>, rounding_mode: RoundingMode): u8 {
+    assert!(!vec.is_empty(), EMedianOfEmptyVector);
+    median!(vec, rounding_mode)
+}
+
+/// Compute the median of a `u16` vector with configurable rounding.
 ///
-/// #### Example
-/// ```move
-/// use openzeppelin_math::rounding
-/// use openzeppelin_math::vector;
+/// Precompiled wrapper around `median!`: same algorithm, same results, same abort behavior,
+/// but the selection bytecode lives in this module instead of being inlined at the call site.
+/// The input vector is not mutated. See `median!` for the full contract and the bytecode
+/// vs. gas trade-off.
 ///
-/// let m = vector::median_u256(vector[10u256, 2, 8, 4], rounding::down());
-/// // m == 6
-/// ```
-public fun median_u256(mut vec: vector<u256>, rounding_mode: RoundingMode): u256 {
-    let len = vec.length();
-    assert!(len != 0, EMedianOfEmptyVector);
-
-    let mid = len / 2;
-    if (len % 2 == 1) {
-        select_k_u256(&mut vec, mid)
-    } else {
-        let upper = select_k_u256(&mut vec, mid);
-        // Selecting index `mid` leaves all preceding elements less than or equal
-        // to `upper`, so the lower central statistic is the prefix maximum.
-        let lower = max_prefix_u256(&vec, mid);
-        macros::average!(lower, upper, rounding_mode)
-    }
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
+/// #### Aborts
+/// - `EMedianOfEmptyVector` if `vec` is empty.
+public fun median_u16(vec: &vector<u16>, rounding_mode: RoundingMode): u16 {
+    assert!(!vec.is_empty(), EMedianOfEmptyVector);
+    median!(vec, rounding_mode)
 }
 
-// === Internal Functions ===
-
-// Return the kth order statistic, partially partitioning `vec` in place.
-//
-// Quickselect repeatedly partitions the active range around a pivot and keeps
-// only the side that can contain index `k`. This avoids sorting the whole vector
-// while still placing the selected value at the same index it would occupy in
-// sorted order.
-fun select_k_u256(vec: &mut vector<u256>, k: u64): u256 {
-    let mut start = 0;
-    let mut end = vec.length();
-
-    loop {
-        if (start + 1 >= end) return vec[k];
-
-        // Use insertion sort as the quickselect base case for small active ranges.
-        if (end - start <= 10) {
-            insertion_sort_u256_range(vec, start, end);
-            return vec[k]
-        };
-
-        let pivot_index = end - 1;
-        let mid = start + (end - start) / 2;
-
-        // Median-of-three pivot selection using start, middle, and end - 1.
-        // The median of those three values is moved into `pivot_index`.
-        if (vec[mid] <= vec[start]) {
-            vec.swap(start, mid);
-        };
-        if (vec[pivot_index] <= vec[start]) {
-            vec.swap(start, pivot_index)
-        };
-        if (vec[mid] <= vec[pivot_index]) {
-            vec.swap(mid, pivot_index);
-        };
-
-        let mut lt = start;
-        let mut i = start;
-        let mut gt = pivot_index;
-
-        // Three-way partition around the pivot at `pivot_index`.
-        //
-        // During the scan:
-        // - [start, lt) contains values less than the pivot.
-        // - [lt, i) contains values equal to the pivot.
-        // - [i, gt) is unprocessed.
-        // - [gt, pivot_index) contains values greater than the pivot.
-        while (i < gt) {
-            if (vec[i] <= vec[pivot_index]) {
-                if (vec[pivot_index] <= vec[i]) {
-                    i = i + 1;
-                } else {
-                    vec.swap(lt, i);
-                    lt = lt + 1;
-                    i = i + 1;
-                }
-            } else {
-                gt = gt - 1;
-                vec.swap(i, gt);
-            };
-        };
-
-        // Move the pivot next to the equal region. After this, [lt, eq_end)
-        // contains exactly the pivot-equivalent values.
-        vec.swap(gt, pivot_index);
-        let eq_end = gt + 1;
-
-        // Discard the partitions that cannot contain the kth order statistic.
-        if (k < lt) {
-            end = lt;
-        } else if (k >= eq_end) {
-            start = eq_end;
-        } else {
-            return vec[k]
-        };
-    }
+/// Compute the median of a `u32` vector with configurable rounding.
+///
+/// Precompiled wrapper around `median!`: same algorithm, same results, same abort behavior,
+/// but the selection bytecode lives in this module instead of being inlined at the call site.
+/// The input vector is not mutated. See `median!` for the full contract and the bytecode
+/// vs. gas trade-off.
+///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
+/// #### Aborts
+/// - `EMedianOfEmptyVector` if `vec` is empty.
+public fun median_u32(vec: &vector<u32>, rounding_mode: RoundingMode): u32 {
+    assert!(!vec.is_empty(), EMedianOfEmptyVector);
+    median!(vec, rounding_mode)
 }
 
-// Sort a half-open sub-range [start, end). Used as the quickselect base case
-// for small active ranges.
-fun insertion_sort_u256_range(vec: &mut vector<u256>, start: u64, end: u64) {
-    let mut i = start + 1;
-    while (i < end) {
-        let mut j = i;
-        while (j != start && vec[j] < vec[j - 1]) {
-            vec.swap(j, j - 1);
-            j = j - 1;
-        };
-        i = i + 1;
-    };
+/// Compute the median of a `u64` vector with configurable rounding.
+///
+/// Precompiled wrapper around `median!`: same algorithm, same results, same abort behavior,
+/// but the selection bytecode lives in this module instead of being inlined at the call site.
+/// The input vector is not mutated. See `median!` for the full contract and the bytecode
+/// vs. gas trade-off.
+///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
+/// #### Aborts
+/// - `EMedianOfEmptyVector` if `vec` is empty.
+public fun median_u64(vec: &vector<u64>, rounding_mode: RoundingMode): u64 {
+    assert!(!vec.is_empty(), EMedianOfEmptyVector);
+    median!(vec, rounding_mode)
 }
 
-// Return the maximum value in vec[0..end).
-//
-// For even-length medians, selecting the upper middle index partitions the
-// vector enough to guarantee every earlier element is less than or equal to it,
-// but that prefix is not sorted. The lower middle value is therefore the maximum
-// of the prefix.
-fun max_prefix_u256(vec: &vector<u256>, end: u64): u256 {
-    let mut max = vec[0];
-    let mut i = 1;
-    while (i < end) {
-        if (max < vec[i]) {
-            max = vec[i];
-        };
-        i = i + 1;
-    };
-    max
+/// Compute the median of a `u128` vector with configurable rounding.
+///
+/// Precompiled wrapper around `median!`: same algorithm, same results, same abort behavior,
+/// but the selection bytecode lives in this module instead of being inlined at the call site.
+/// The input vector is not mutated. See `median!` for the full contract and the bytecode
+/// vs. gas trade-off.
+///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
+/// #### Aborts
+/// - `EMedianOfEmptyVector` if `vec` is empty.
+public fun median_u128(vec: &vector<u128>, rounding_mode: RoundingMode): u128 {
+    assert!(!vec.is_empty(), EMedianOfEmptyVector);
+    median!(vec, rounding_mode)
+}
+
+/// Compute the median of a `u256` vector with configurable rounding.
+///
+/// Precompiled wrapper around `median!`: same algorithm, same results, same abort behavior,
+/// but the selection bytecode lives in this module instead of being inlined at the call site.
+/// The input vector is not mutated. See `median!` for the full contract and the bytecode
+/// vs. gas trade-off.
+///
+/// #### Parameters
+/// - `vec`: Reference to the vector whose median is desired.
+/// - `rounding_mode`: Rounding strategy, applied only when the length is even.
+///
+/// #### Returns
+/// - The median of `vec`.
+///
+/// #### Aborts
+/// - `EMedianOfEmptyVector` if `vec` is empty.
+public fun median_u256(vec: &vector<u256>, rounding_mode: RoundingMode): u256 {
+    assert!(!vec.is_empty(), EMedianOfEmptyVector);
+    median!(vec, rounding_mode)
 }

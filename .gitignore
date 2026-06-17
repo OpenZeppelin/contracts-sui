@@ -5,6 +5,9 @@ sui.keystore
 .trace
 .coverage_map.mvcov
 
+# Local node publish artifact
+Pub.local.toml
+
 # OS generated files
 .DS_Store
 ._*
@@ -26,6 +29,10 @@ temp/
 # Everyone uses their own local dev environment config, so we should not force specific VS Code configs
 .vscode/
 
-# Claude Code
-.claude/
+# Claude Code: ignore local config, but track shared commands and skills.
+.claude/*
+!.claude/commands/
+!.claude/skills/
+
+# Git submodules
 .gitmodules

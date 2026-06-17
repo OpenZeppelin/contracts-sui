@@ -23,7 +23,7 @@ Sui smart contracts are written in Move leveraging the Sui Move framework.
 
 Follow the installation guide in the [Sui documentation](https://docs.sui.io/guides/developer/getting-started/sui-install).
 
-**Required version**: Sui CLI [1.72.2](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.72.2).
+**Required version**: Sui CLI [1.72.5](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.72.5).
 
 ## Docs
 
@@ -34,6 +34,10 @@ documentation locally using:
 # Generate and view documentation for a specific package
 sui move build --doc --path <module>
 ```
+
+**AI agents:** [`llms.txt`](./llms.txt) is the discovery entry point for integrating
+this library into a downstream project - it points to the package catalogs, examples,
+generated API reference, and audits.
 
 ## Notes
 

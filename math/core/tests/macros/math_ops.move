@@ -54,7 +54,7 @@ fun checked_shl_returns_some() {
 
 #[test]
 fun checked_shl_detects_high_bits() {
-    // Highest bit of u256 set — shifting would overflow the 256-bit range.
+    // Highest bit of u256 set - shifting would overflow the 256-bit range.
     let result = macros::checked_shl!(std::u256::max_value!(), 1);
     assert_eq!(result, option::none());
 }
