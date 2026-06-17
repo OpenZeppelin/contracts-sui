@@ -172,11 +172,11 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// - `ENotEmpty` if the wallet still holds a balance (from `destroy_empty`).
 /// - `ENotEnded` if called before the schedule's end (`start_ms + duration_ms`).
 public fun destroy<C>(wallet: VestingWallet<Linear, Params, C>, clock: &Clock) {
-    let Params { start_ms, duration_ms, cliff_ms: _ } = wallet.destroy_empty(Linear {});
     // Require the schedule to have ended before teardown: destruction is
     // permissionless, so otherwise an empty wallet could be destroyed ahead of a
     // pending deposit, front-running funding intended to arrive later.
-    assert!(clock.timestamp_ms() >= start_ms + duration_ms, ENotEnded);
+    assert!(clock.timestamp_ms() >= end(&wallet), ENotEnded);
+    let Params { .. } = wallet.destroy_empty(Linear {});
 }
 
 // === Accessors ===
