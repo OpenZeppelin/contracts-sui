@@ -31,7 +31,7 @@
 /// The total is re-derived on every call from `balance + released`, so deposits
 /// made at `t > start_ms` immediately participate in vesting at the current
 /// proportion.
-module openzeppelin_finance::linear_schedule;
+module openzeppelin_finance::vesting_wallet_linear;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
 use std::u64::mul_div;

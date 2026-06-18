@@ -1,7 +1,7 @@
 #[test_only]
-module openzeppelin_finance::stepped_schedule_tests;
+module openzeppelin_finance::vesting_wallet_stepped_tests;
 
-use openzeppelin_finance::stepped_schedule::{Self, Stepped, Params};
+use openzeppelin_finance::vesting_wallet_stepped::{Self, Stepped, Params};
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, Created, Released, Destroyed};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::{Self, Clock};
@@ -38,7 +38,7 @@ fun new_stepped(
     steps: u64,
     ctx: &mut TxContext,
 ): VestingWallet<Stepped, Params, USDC> {
-    stepped_schedule::new<USDC>(BENEFICIARY, start, cliff, period, steps, ctx)
+    vesting_wallet_stepped::new<USDC>(BENEFICIARY, start, cliff, period, steps, ctx)
 }
 
 fun fund(wallet: &mut VestingWallet<Stepped, Params, USDC>, amount: u64, ctx: &mut TxContext) {
@@ -47,13 +47,13 @@ fun fund(wallet: &mut VestingWallet<Stepped, Params, USDC>, amount: u64, ctx: &m
 
 /// The curve's cumulative vested total at the given clock.
 fun vested(wallet: &VestingWallet<Stepped, Params, USDC>, clk: &Clock): u64 {
-    stepped_schedule::vested_amount(wallet, clk).amount()
+    vesting_wallet_stepped::vested_amount(wallet, clk).amount()
 }
 
 // === Construction guards ===
 
 // A zero period is rejected.
-#[test, expected_failure(abort_code = stepped_schedule::EZeroPeriod)]
+#[test, expected_failure(abort_code = vesting_wallet_stepped::EZeroPeriod)]
 fun new_rejects_zero_period() {
     let mut ctx = tx_context::dummy();
     // `new` aborts before returning; `destroy` only satisfies the type checker.
@@ -61,14 +61,14 @@ fun new_rejects_zero_period() {
 }
 
 // A zero step count is rejected.
-#[test, expected_failure(abort_code = stepped_schedule::EZeroSteps)]
+#[test, expected_failure(abort_code = vesting_wallet_stepped::EZeroSteps)]
 fun new_rejects_zero_steps() {
     let mut ctx = tx_context::dummy();
     destroy(new_stepped(0, 0, 1000, 0, &mut ctx));
 }
 
 // A cliff longer than the schedule duration (period * steps) is rejected.
-#[test, expected_failure(abort_code = stepped_schedule::EInvalidCliff)]
+#[test, expected_failure(abort_code = vesting_wallet_stepped::EInvalidCliff)]
 fun new_rejects_cliff_exceeding_duration() {
     let mut ctx = tx_context::dummy();
     // duration = 1000 * 4 = 4000; cliff 4001 exceeds it.
@@ -76,14 +76,14 @@ fun new_rejects_cliff_exceeding_duration() {
 }
 
 // A schedule whose duration (period * steps) would overflow u64 is rejected.
-#[test, expected_failure(abort_code = stepped_schedule::EScheduleOverflow)]
+#[test, expected_failure(abort_code = vesting_wallet_stepped::EScheduleOverflow)]
 fun new_rejects_duration_overflow() {
     let mut ctx = tx_context::dummy();
     destroy(new_stepped(0, 0, std::u64::max_value!(), 2, &mut ctx));
 }
 
 // A schedule whose end (start + period * steps) would overflow u64 is rejected.
-#[test, expected_failure(abort_code = stepped_schedule::EScheduleOverflow)]
+#[test, expected_failure(abort_code = vesting_wallet_stepped::EScheduleOverflow)]
 fun new_rejects_end_overflow() {
     let mut ctx = tx_context::dummy();
     destroy(new_stepped(std::u64::max_value!() - 999, 0, 1000, 1, &mut ctx));
@@ -97,7 +97,7 @@ fun new_accepts_end_at_u64_max_boundary() {
     let max = std::u64::max_value!();
 
     let wallet = new_stepped(max - 1000, 0, 1000, 1, &mut ctx);
-    assert_eq!(stepped_schedule::end(&wallet), max);
+    assert_eq!(vesting_wallet_stepped::end(&wallet), max);
 
     destroy(wallet);
 }
@@ -131,12 +131,12 @@ fun new_sets_params_and_emits_created() {
 
     let wallet = new_stepped(100, 250, 1000, 4, test.ctx());
 
-    assert_eq!(stepped_schedule::start(&wallet), 100);
-    assert_eq!(stepped_schedule::cliff(&wallet), 250);
-    assert_eq!(stepped_schedule::period(&wallet), 1000);
-    assert_eq!(stepped_schedule::steps(&wallet), 4);
-    assert_eq!(stepped_schedule::duration(&wallet), 4000);
-    assert_eq!(stepped_schedule::end(&wallet), 4100);
+    assert_eq!(vesting_wallet_stepped::start(&wallet), 100);
+    assert_eq!(vesting_wallet_stepped::cliff(&wallet), 250);
+    assert_eq!(vesting_wallet_stepped::period(&wallet), 1000);
+    assert_eq!(vesting_wallet_stepped::steps(&wallet), 4);
+    assert_eq!(vesting_wallet_stepped::duration(&wallet), 4000);
+    assert_eq!(vesting_wallet_stepped::end(&wallet), 4100);
 
     let created = event::events_by_type<Created<Stepped, Params, USDC>>();
     assert_eq!(created.length(), 1);
@@ -145,7 +145,7 @@ fun new_sets_params_and_emits_created() {
         vesting_wallet::test_new_created<Stepped, Params, USDC>(
             object::id(&wallet),
             BENEFICIARY,
-            stepped_schedule::test_params(100, 250, 1000, 4),
+            vesting_wallet_stepped::test_params(100, 250, 1000, 4),
         ),
     );
 
@@ -158,12 +158,12 @@ fun new_sets_params_and_emits_created() {
 fun create_and_share_shares_wallet() {
     let (mut test, clk) = setup(0);
 
-    stepped_schedule::create_and_share<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
+    vesting_wallet_stepped::create_and_share<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
 
     test.next_tx(@0x1);
     let wallet = test.take_shared<VestingWallet<Stepped, Params, USDC>>();
     assert_eq!(wallet.beneficiary(), BENEFICIARY);
-    assert_eq!(stepped_schedule::duration(&wallet), 4000);
+    assert_eq!(vesting_wallet_stepped::duration(&wallet), 4000);
     test_scenario::return_shared(wallet);
 
     teardown(test, clk);
@@ -362,7 +362,7 @@ fun release_pays_step_portion_and_is_permissionless() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(2000); // two steps => 500
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
 
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
@@ -396,14 +396,14 @@ fun release_then_release_within_same_period_is_noop() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(1000); // one step => 250
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.released(), 250);
     assert_eq!(event::events_by_type<Released<Stepped, USDC>>().length(), 1);
 
     // Still in the same period: nothing new, no event, no change.
     test.next_tx(@0x1);
     clk.set_for_testing(1999);
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.released(), 250);
     assert_eq!(wallet.balance(), 750);
     assert_eq!(event::events_by_type<Released<Stepped, USDC>>().length(), 0);
@@ -422,10 +422,10 @@ fun releasable_view_matches_release() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(2000); // two steps => 500
-    assert_eq!(stepped_schedule::releasable(&wallet, &clk), 500);
+    assert_eq!(vesting_wallet_stepped::releasable(&wallet, &clk), 500);
 
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
-    assert_eq!(stepped_schedule::releasable(&wallet, &clk), 0);
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
+    assert_eq!(vesting_wallet_stepped::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
     teardown(test, clk);
@@ -440,10 +440,10 @@ fun full_release_after_end_then_releasable_zero() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(4000);
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.released(), 1000);
     assert_eq!(wallet.balance(), 0);
-    assert_eq!(stepped_schedule::releasable(&wallet, &clk), 0);
+    assert_eq!(vesting_wallet_stepped::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
     teardown(test, clk);
@@ -461,11 +461,11 @@ fun destroy_after_end_on_empty_wallet() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(4000);
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.balance(), 0);
 
     test.next_tx(@0x1);
-    stepped_schedule::destroy(wallet, &clk);
+    vesting_wallet_stepped::destroy(wallet, &clk);
 
     let destroyed = event::events_by_type<Destroyed<Stepped, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -478,13 +478,13 @@ fun destroy_after_end_on_empty_wallet() {
 }
 
 // Tearing down before the schedule end aborts, even on an empty wallet.
-#[test, expected_failure(abort_code = stepped_schedule::ENotEnded)]
+#[test, expected_failure(abort_code = vesting_wallet_stepped::ENotEnded)]
 fun destroy_rejects_before_end() {
     let (mut test, mut clk) = setup(0);
 
     let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     clk.set_for_testing(3999);
-    stepped_schedule::destroy(wallet, &clk);
+    vesting_wallet_stepped::destroy(wallet, &clk);
     abort
 }
 
@@ -497,7 +497,7 @@ fun destroy_rejects_nonempty_balance() {
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     wallet.fund(1, test.ctx());
     clk.set_for_testing(5000); // after end, so only the balance gate can fire
-    stepped_schedule::destroy(wallet, &clk);
+    vesting_wallet_stepped::destroy(wallet, &clk);
     abort
 }
 
@@ -511,7 +511,7 @@ fun create_deposit_release_in_one_flow() {
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     wallet.fund(1000, test.ctx());
     clk.set_for_testing(2000); // two steps => 500
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
 
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
@@ -535,11 +535,11 @@ fun release_before_first_step_moves_no_funds() {
     wallet.fund(1_000_000, test.ctx());
 
     clk.set_for_testing(999); // pre-start
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
     clk.set_for_testing(1000); // at start, first period, zero steps elapsed
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
     clk.set_for_testing(1999); // one ms before the first tranche
-    stepped_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_stepped::release(&mut wallet, &clk, test.ctx());
 
     assert_eq!(wallet.released(), 0);
     assert_eq!(wallet.balance(), 1_000_000);

@@ -17,7 +17,7 @@ use sui::test_scenario::{Self, Scenario};
 // A throwaway curve used to exercise the curve-agnostic primitive directly: it
 // lets the tests mint a `VestedAmount` with an arbitrary `amount`, so the
 // wallet-level accounting invariants can be driven without going through a real
-// curve's math. `linear_schedule_tests` covers the schedule-shape invariants.
+// curve's math. `vesting_wallet_linear_tests` covers the schedule-shape invariants.
 public struct TestCurve has drop {}
 
 public struct TestParams has copy, drop, store { tag: u64 }
@@ -77,7 +77,7 @@ fun new_initializes_fields_and_emits_created() {
 
 // `key + store` lets the consumer move the wallet into owned mode via
 // `public_transfer`. (The shared topology is covered by
-// `linear_schedule_tests::create_and_share_*`.)
+// `vesting_wallet_linear_tests::create_and_share_*`.)
 #[test]
 fun new_supports_owned_topology() {
     let mut scenario = test_scenario::begin(@0x1);

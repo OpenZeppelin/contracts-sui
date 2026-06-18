@@ -20,9 +20,9 @@
 /// not-yet-released portion.
 ///
 /// This module ships no curve of its own. The built-in linear-with-cliff schedule
-/// lives in the sibling `linear_schedule` module - the reference curve, and the
+/// lives in the sibling `vesting_wallet_linear` module - the reference curve, and the
 /// template downstream schedule modules copy. An integrator who just wants linear
-/// vesting touches only `linear_schedule` and never constructs a bare wallet or
+/// vesting touches only `vesting_wallet_linear` and never constructs a bare wallet or
 /// mints a `VestedAmount` by hand.
 ///
 /// # Why the schedule is split across type parameters
@@ -46,7 +46,7 @@
 /// # Custom schedules
 ///
 /// Downstream packages ship their own curve in their own module by following the
-/// `linear_schedule` pattern:
+/// `vesting_wallet_linear` pattern:
 ///
 /// 1. Declare a witness `public struct MyCurve has drop {}` and a parameters
 ///    struct `public struct MyParams has copy, drop, store { /* params */ }`.
@@ -68,7 +68,7 @@
 /// after the constructor returns:
 ///
 /// - **Shared** (recommended): `transfer::public_share_object(wallet)` - anyone
-///   can poke `release`. `linear_schedule` exposes `create_and_share` sugar.
+///   can poke `release`. `vesting_wallet_linear` exposes `create_and_share` sugar.
 /// - **Owned** (fast path): `transfer::public_transfer(wallet, addr)` - only the
 ///   holder can pass the wallet by `&mut`, so funding and release are reachable
 ///   from the holder's transactions only. Outside parties fund it by

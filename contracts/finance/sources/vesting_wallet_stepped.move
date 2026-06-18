@@ -3,7 +3,7 @@
 ///
 /// This module declares the `Stepped` witness and its `Params`, plus the full
 /// integrator API around them (`new` / `vested_amount` / `release` / `destroy` and
-/// friends). It is a sibling of `linear_schedule`: same shape, same authority
+/// friends). It is a sibling of `vesting_wallet_linear`: same shape, same authority
 /// model, a different curve. An integrator who wants tranche vesting touches only
 /// this module - they never construct a bare wallet or mint a `VestedAmount` by
 /// hand.
@@ -36,7 +36,7 @@
 ///
 /// The total is re-derived on every call from `balance + released`, so deposits
 /// made at `t > start_ms` immediately participate at the current step proportion.
-module openzeppelin_finance::stepped_schedule;
+module openzeppelin_finance::vesting_wallet_stepped;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
 use std::u64::mul_div;

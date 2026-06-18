@@ -1,7 +1,7 @@
 #[test_only]
-module openzeppelin_finance::linear_schedule_tests;
+module openzeppelin_finance::vesting_wallet_linear_tests;
 
-use openzeppelin_finance::linear_schedule::{Self, Linear, Params};
+use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params};
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, Created, Released, Destroyed};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::{Self, Clock};
@@ -37,7 +37,7 @@ fun new_linear(
     duration: u64,
     ctx: &mut TxContext,
 ): VestingWallet<Linear, Params, USDC> {
-    linear_schedule::new<USDC>(BENEFICIARY, start, cliff, duration, ctx)
+    vesting_wallet_linear::new<USDC>(BENEFICIARY, start, cliff, duration, ctx)
 }
 
 fun fund(wallet: &mut VestingWallet<Linear, Params, USDC>, amount: u64, ctx: &mut TxContext) {
@@ -46,13 +46,13 @@ fun fund(wallet: &mut VestingWallet<Linear, Params, USDC>, amount: u64, ctx: &mu
 
 /// The curve's cumulative vested total at the given clock.
 fun vested(wallet: &VestingWallet<Linear, Params, USDC>, clk: &Clock): u64 {
-    linear_schedule::vested_amount(wallet, clk).amount()
+    vesting_wallet_linear::vested_amount(wallet, clk).amount()
 }
 
 // === Construction guards ===
 
 // A zero duration is rejected.
-#[test, expected_failure(abort_code = linear_schedule::EZeroDuration)]
+#[test, expected_failure(abort_code = vesting_wallet_linear::EZeroDuration)]
 fun new_rejects_zero_duration() {
     let mut ctx = tx_context::dummy();
     // `new` aborts before returning; `destroy` only satisfies the type checker.
@@ -60,14 +60,14 @@ fun new_rejects_zero_duration() {
 }
 
 // A cliff longer than the duration is rejected.
-#[test, expected_failure(abort_code = linear_schedule::EInvalidCliff)]
+#[test, expected_failure(abort_code = vesting_wallet_linear::EInvalidCliff)]
 fun new_rejects_cliff_exceeding_duration() {
     let mut ctx = tx_context::dummy();
     destroy(new_linear(0, 1001, 1000, &mut ctx));
 }
 
 // A schedule whose end (start + duration) would overflow u64 is rejected.
-#[test, expected_failure(abort_code = linear_schedule::EScheduleOverflow)]
+#[test, expected_failure(abort_code = vesting_wallet_linear::EScheduleOverflow)]
 fun new_rejects_schedule_overflow() {
     let mut ctx = tx_context::dummy();
     destroy(new_linear(std::u64::max_value!(), 0, 1, &mut ctx));
@@ -81,7 +81,7 @@ fun new_accepts_end_at_u64_max_boundary() {
     let max = std::u64::max_value!();
 
     let wallet = new_linear(max - 1000, 0, 1000, &mut ctx);
-    assert_eq!(linear_schedule::end(&wallet), max);
+    assert_eq!(vesting_wallet_linear::end(&wallet), max);
 
     destroy(wallet);
 }
@@ -114,10 +114,10 @@ fun new_sets_params_and_emits_created() {
 
     let wallet = new_linear(100, 250, 1000, test.ctx());
 
-    assert_eq!(linear_schedule::start(&wallet), 100);
-    assert_eq!(linear_schedule::cliff(&wallet), 250);
-    assert_eq!(linear_schedule::duration(&wallet), 1000);
-    assert_eq!(linear_schedule::end(&wallet), 1100);
+    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::duration(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::end(&wallet), 1100);
 
     let created = event::events_by_type<Created<Linear, Params, USDC>>();
     assert_eq!(created.length(), 1);
@@ -126,7 +126,7 @@ fun new_sets_params_and_emits_created() {
         vesting_wallet::test_new_created<Linear, Params, USDC>(
             object::id(&wallet),
             BENEFICIARY,
-            linear_schedule::test_params(100, 250, 1000),
+            vesting_wallet_linear::test_params(100, 250, 1000),
         ),
     );
 
@@ -139,12 +139,12 @@ fun new_sets_params_and_emits_created() {
 fun create_and_share_shares_wallet() {
     let (mut test, clk) = setup(0);
 
-    linear_schedule::create_and_share<USDC>(BENEFICIARY, 0, 0, 1000, test.ctx());
+    vesting_wallet_linear::create_and_share<USDC>(BENEFICIARY, 0, 0, 1000, test.ctx());
 
     test.next_tx(@0x1);
     let wallet = test.take_shared<VestingWallet<Linear, Params, USDC>>();
     assert_eq!(wallet.beneficiary(), BENEFICIARY);
-    assert_eq!(linear_schedule::duration(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::duration(&wallet), 1000);
     test_scenario::return_shared(wallet);
 
     teardown(test, clk);
@@ -329,7 +329,7 @@ fun release_pays_linear_portion_and_is_permissionless() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(400);
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
 
     assert_eq!(wallet.released(), 400);
     assert_eq!(wallet.balance(), 600);
@@ -362,13 +362,13 @@ fun release_then_release_at_same_clock_is_noop() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(400);
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.released(), 400);
     assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 1);
 
     // Second release at the same clock: nothing new, no event, no change.
     test.next_tx(@0x1);
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.released(), 400);
     assert_eq!(wallet.balance(), 600);
     assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 0);
@@ -387,10 +387,10 @@ fun releasable_view_matches_release() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(400);
-    assert_eq!(linear_schedule::releasable(&wallet, &clk), 400);
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 400);
 
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
-    assert_eq!(linear_schedule::releasable(&wallet, &clk), 0);
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
     teardown(test, clk);
@@ -406,10 +406,10 @@ fun full_release_after_end_then_releasable_zero() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(1000);
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.released(), 1000);
     assert_eq!(wallet.balance(), 0);
-    assert_eq!(linear_schedule::releasable(&wallet, &clk), 0);
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
     teardown(test, clk);
@@ -428,11 +428,11 @@ fun destroy_after_end_on_empty_wallet() {
     wallet.fund(1000, test.ctx());
 
     clk.set_for_testing(1000);
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.balance(), 0);
 
     test.next_tx(@0x1);
-    linear_schedule::destroy(wallet, &clk);
+    vesting_wallet_linear::destroy(wallet, &clk);
 
     let destroyed = event::events_by_type<Destroyed<Linear, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -445,13 +445,13 @@ fun destroy_after_end_on_empty_wallet() {
 }
 
 // Tearing down before the schedule end aborts, even on an empty wallet.
-#[test, expected_failure(abort_code = linear_schedule::ENotEnded)]
+#[test, expected_failure(abort_code = vesting_wallet_linear::ENotEnded)]
 fun destroy_rejects_before_end() {
     let (mut test, mut clk) = setup(0);
 
     let wallet = new_linear(0, 0, 1000, test.ctx());
     clk.set_for_testing(999);
-    linear_schedule::destroy(wallet, &clk);
+    vesting_wallet_linear::destroy(wallet, &clk);
     abort
 }
 
@@ -464,7 +464,7 @@ fun destroy_rejects_nonempty_balance() {
     let mut wallet = new_linear(0, 0, 1000, test.ctx());
     wallet.fund(1, test.ctx());
     clk.set_for_testing(2000); // after end, so only the balance gate can fire
-    linear_schedule::destroy(wallet, &clk);
+    vesting_wallet_linear::destroy(wallet, &clk);
     abort
 }
 
@@ -478,7 +478,7 @@ fun create_deposit_release_in_one_flow() {
     let mut wallet = new_linear(0, 0, 1000, test.ctx());
     wallet.fund(1000, test.ctx());
     clk.set_for_testing(500);
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
 
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
@@ -511,7 +511,7 @@ fun receive_and_deposit_then_release_in_one_flow() {
     let receiving = test_scenario::receiving_ticket_by_id<coin::Coin<USDC>>(coin_id);
     wallet.receive_and_deposit(receiving);
     clk.set_for_testing(500);
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
 
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
@@ -536,11 +536,11 @@ fun release_before_cliff_moves_no_funds() {
     wallet.fund(1_000_000, test.ctx());
 
     clk.set_for_testing(999); // pre-start
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
     clk.set_for_testing(1000); // at start, still inside the cliff
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
     clk.set_for_testing(1499); // one ms before the cliff boundary
-    linear_schedule::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
 
     assert_eq!(wallet.released(), 0);
     assert_eq!(wallet.balance(), 1_000_000);
@@ -564,17 +564,17 @@ fun retroactive_deposit_never_over_releases() {
     wallet.fund(100, test.ctx());
 
     clk.set_for_testing(50);
-    linear_schedule::release(&mut wallet, &clk, test.ctx()); // floor(100 * 50 / 100) = 50
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx()); // floor(100 * 50 / 100) = 50
     assert_eq!(wallet.released(), 50);
     assert_eq!(wallet.balance(), 50);
 
     // Late deposit; total is now 200, re-derived fresh at call time.
     wallet.fund(100, test.ctx());
-    let releasable = linear_schedule::releasable(&wallet, &clk);
+    let releasable = vesting_wallet_linear::releasable(&wallet, &clk);
     assert_eq!(releasable, 50); // floor(200 * 50 / 100) = 100 cumulative, minus 50 already released
     assert!(releasable <= wallet.balance()); // never exceeds the balance backing it
 
-    linear_schedule::release(&mut wallet, &clk, test.ctx()); // does not abort, does not over-pay
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx()); // does not abort, does not over-pay
     assert_eq!(wallet.released(), 100);
     assert_eq!(wallet.balance(), 100);
     assert_eq!(wallet.balance() + wallet.released(), 200); // conserved: nothing minted from nowhere
@@ -597,7 +597,7 @@ fun overflowing_refund_is_rejected_at_deposit() {
     wallet.fund(max, test.ctx());
 
     clk.set_for_testing(1);
-    linear_schedule::release(&mut wallet, &clk, test.ctx()); // releases 1; balance = max - 1, released = 1
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx()); // releases 1; balance = max - 1, released = 1
 
     // balance + released == max already; refunding the released 1 would overflow it,
     // so the deposit is rejected here rather than bricking a later release.
