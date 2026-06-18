@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_finance::vesting_wallet_tests;
 
 use openzeppelin_finance::vesting_wallet::{
