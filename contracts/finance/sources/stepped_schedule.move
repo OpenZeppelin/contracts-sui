@@ -247,6 +247,7 @@ fun vested_amount_raw<C>(wallet: &VestingWallet<Stepped, Params, C>, clock: &Clo
     } else if (cliff_ms > 0 && now < start_ms + cliff_ms) {
         0
     } else {
+        // SAFETY: depositing has a check ensuring no balance overflow can occur.
         let total = wallet.balance() + wallet.released();
         // SAFETY: construction guarantees `period_ms * steps` and`start_ms + period_ms * steps`
         // fit in u64, so neither arithmetic here overflows.
