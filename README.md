@@ -35,6 +35,10 @@ documentation locally using:
 sui move build --doc --path <module>
 ```
 
+**AI agents:** [`llms.txt`](./llms.txt) is the discovery entry point for integrating
+this library into a downstream project - it points to the package catalogs, examples,
+generated API reference, and audits.
+
 ## Notes
 
 We strive to maintain consistency with other OpenZeppelin libraries as much as

@@ -53,7 +53,7 @@ fun checked_shl_returns_same_for_zero_shift() {
 
 #[test]
 fun checked_shl_detects_high_bits() {
-    // Highest bit already set — shifting again should fail.
+    // Highest bit already set - shifting again should fail.
     let result = u256::checked_shl(1u256 << 255, 1);
     assert_eq!(result, option::none());
 }
@@ -90,7 +90,7 @@ fun checked_shr_handles_top_bit() {
 
 #[test]
 fun checked_shr_detects_set_bits() {
-    // LSB set — shifting by one would drop it.
+    // LSB set - shifting by one would drop it.
     let result = u256::checked_shr(5, 1);
     assert_eq!(result, option::none());
 }

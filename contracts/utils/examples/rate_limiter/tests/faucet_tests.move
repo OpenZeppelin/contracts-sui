@@ -122,7 +122,7 @@ fun global_limit_binds_even_if_personal_allows() {
 
     scenario.next_tx(admin);
 
-    // Personal cap of 200 — deliberately above the 100 global window, so the global cap binds first.
+    // Personal cap of 200 - deliberately above the 100 global window, so the global cap binds first.
     issue_claim_cap(&admin_cap, user, 200, 10, 1_000, &clock, scenario.ctx());
 
     scenario.next_tx(user);

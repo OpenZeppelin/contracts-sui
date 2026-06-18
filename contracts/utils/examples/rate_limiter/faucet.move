@@ -3,7 +3,7 @@
 /// The shared `Faucet` carries one global fixed-window limiter that throttles *every*
 /// claimer collectively. On top of that global window, each holder is handed a `ClaimCap`
 /// carrying its own `RateLimiter` (a token bucket) that caps how much that specific holder
-/// can claim. A claim must satisfy both limiters — the holder's personal bucket and the
+/// can claim. A claim must satisfy both limiters - the holder's personal bucket and the
 /// global window.
 ///
 /// # Disclaimer

@@ -22,7 +22,7 @@ const ELogOfZero: vector<u8> = "Logarithm of zero is undefined";
 ///
 /// Error analysis: in the squaring loop, error in `y` grows ~2× per iteration
 /// (since `y_new = y_old^2 / internal`), but a wrong bit at iteration `i`
-/// only perturbs `frac` by `internal / 2^(i+1)` — exponentially decaying, so
+/// only perturbs `frac` by `internal / 2^(i+1)` - exponentially decaying, so
 /// late-iteration errors contribute little. Empirically the total `frac`
 /// error stays under `~10^3` at scale `10^18`, well below one user-facing
 /// ulp (unit in the last place, `10^9`). A 9-decimal variant would lack the
@@ -151,7 +151,7 @@ public(package) macro fun log10_2_e18(): u128 {
 ///   raw form.
 public(package) fun apply_log2_factor(log2_mag_e18: u128, factor_e18: u128): u128 {
     // `log2_mag_e18 < 2^67` and `factor_e18 < 2^60`, so the product reaches up
-    // to ~2^127 — right at the `u128` boundary. `u128::mul_div` widens the
+    // to ~2^127 - right at the `u128` boundary. `u128::mul_div` widens the
     // product to `u256` internally before dividing, so the intermediate value
     // never overflows; the final quotient (after `/ 10^27`) safely fits back
     // in `u128`.
@@ -186,12 +186,12 @@ public(package) fun apply_log2_factor(log2_mag_e18: u128, factor_e18: u128): u12
 /// - `x_raw >= scale` (`n_abs = floor(log2(x_raw / 10^9))`): the magnitude
 ///   is at most 2 user-facing ulps below the true magnitude, monotone-down.
 ///   The dominant loss is the `x_raw >> n_abs` truncation, which discards up
-///   to `n_abs` low-order bits — so the deficit grows with `n_abs` and
+///   to `n_abs` low-order bits - so the deficit grows with `n_abs` and
 ///   reaches the 2-ulp ceiling at `x_raw = u128::MAX`.
 /// - `x_raw < scale`: normalization is a lossless left shift, so the only
 ///   loss is the loop's round-down of `frac`. Since `frac` is subtracted
 ///   here, that round-down leaves the magnitude at or slightly above the
-///   true magnitude — a sub-ulp upward bias.
+///   true magnitude - a sub-ulp upward bias.
 ///
 /// The user-facing rounding this induces on negative results (toward zero,
 /// with rare 1-ulp edge cases) is documented on `SD29x9::log2`.
