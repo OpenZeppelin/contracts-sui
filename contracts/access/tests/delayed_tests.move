@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_access::delayed_tests;
 
 use openzeppelin_access::delayed_transfer;
@@ -7,12 +6,10 @@ use sui::clock;
 use sui::event;
 use sui::test_scenario;
 
-#[test_only]
 public struct DummyCap has key, store {
     id: object::UID,
 }
 
-#[test_only]
 fun new_cap(ctx: &mut TxContext): DummyCap {
     DummyCap { id: object::new(ctx) }
 }
