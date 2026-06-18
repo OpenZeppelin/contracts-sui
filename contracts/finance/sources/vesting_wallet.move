@@ -102,7 +102,7 @@ const EVestedBelowReleased: vector<u8> = "Vested amount is below the amount alre
 /// A `deposit` would push the wallet's lifetime total (`balance + released`) past
 /// `u64::MAX`, which the wallet's `u64` accounting cannot represent.
 #[error(code = 3)]
-const EOverflow: vector<u8> = "Deposit would overflow the wallet's lifetime total";
+const EBalanceOverflow: vector<u8> = "Deposit would overflow the wallet's lifetime total";
 
 // === Structs ===
 
@@ -299,7 +299,7 @@ public fun amount<S>(vested: &VestedAmount<S>): u64 {
 /// identity is data, not a capability, and anyone may fund.
 ///
 /// #### Aborts
-/// - `EOverflow` if the deposit would push the wallet's lifetime total
+/// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
 ///   `balance + released` (== `Σ(deposits)`) past `u64::MAX`, which would
 ///   indefinitely brick the release path.
 public fun deposit<S: drop, P: copy + drop + store, C>(
@@ -308,7 +308,10 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 ) {
     let amount = coin.value();
 
-    assert!(std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount, EOverflow);
+    assert!(
+        std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
+        EBalanceOverflow,
+    );
 
     wallet.balance.join(coin.into_balance());
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
@@ -319,7 +322,7 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 /// emission schedules and payroll robots that don't hold a wallet reference.
 ///
 /// #### Aborts
-/// - `EOverflow` if claiming the coin would overflow the wallet's
+/// - `EBalanceOverflow` if claiming the coin would overflow the wallet's
 ///   lifetime total. Unlike a direct `deposit`, the coin was already transferred to
 ///   the wallet's address by an earlier transaction, so an abort here leaves it
 ///   parked at that address with no claim path - it is stranded (the same class as
@@ -350,8 +353,7 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 ///
 /// #### Aborts
 /// - `EWalletMismatch` if `vested` was not minted for this wallet.
-/// - `EVestedBelowReleased` if `vested.amount` is below the amount already released
-///   - a stale attestation or a curve that regressed (non-monotonic).
+/// - `EVestedBelowReleased` if `vested.amount` is below the amount already released.
 /// - Aborts if the balance cannot cover the releasable amount, i.e. the curve
 ///   attested more than `balance + released`.
 public fun release<S: drop, P: copy + drop + store, C>(
