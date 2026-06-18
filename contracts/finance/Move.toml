@@ -1,6 +1,3 @@
 [package]
 name = "openzeppelin_finance"
 edition = "2024"
-
-[dependencies]
-openzeppelin_math = { local = "../../math/core" }

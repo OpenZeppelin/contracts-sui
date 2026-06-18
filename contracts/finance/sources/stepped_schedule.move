@@ -39,8 +39,7 @@
 module openzeppelin_finance::stepped_schedule;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
-use openzeppelin_math::rounding;
-use openzeppelin_math::u64::mul_div;
+use std::u64::mul_div;
 use sui::clock::Clock;
 
 // === Errors ===
@@ -257,7 +256,7 @@ fun vested_amount_raw<C>(wallet: &VestingWallet<Stepped, Params, C>, clock: &Clo
             let elapsed_steps = (now - start_ms) / period_ms;
             // SAFETY: `now < start_ms + period_ms * steps`, so `elapsed_steps < steps`:
             // the staircase value stays strictly below `total` until the post-end clamp.
-            mul_div(total, elapsed_steps, steps, rounding::down()).destroy_some()
+            mul_div(total, elapsed_steps, steps)
         }
     }
 }
