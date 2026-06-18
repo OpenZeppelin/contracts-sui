@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_fp_math::ud30x9_arithmetic_tests;
 
 use openzeppelin_fp_math::ud30x9_base;

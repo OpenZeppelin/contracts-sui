@@ -3,6 +3,12 @@
 // to satisfy the type checker on the `ac` / `clk` bindings without rewriting
 // every test as a by-value helper. Suppressed module-wide so individual
 // tests stay clean.
+// `#[test_only]` is required here, not redundant: this module constructs its
+// own OTW (`ACCESS_CONTROL_TESTS {}`) in `setup`. The Sui verifier only allows
+// manual OTW construction when the enclosing module/function carries the
+// `#[test]`/`#[test_only]` attribute - it keys off the attribute, not the
+// `tests/` directory - so dropping it reintroduces the "Invalid one-time
+// witness construction" error.
 #[test_only, allow(lint(abort_without_constant))]
 module openzeppelin_access::access_control_tests;
 
@@ -38,7 +44,6 @@ public struct RoleY {}
 /// Deploys an `AccessControl` rooted at `ACCESS_CONTROL_TESTS`, shares it,
 /// and advances to a fresh transaction so `take_shared` is immediately
 /// available.
-#[test_only]
 #[allow(lint(share_owned))]
 fun setup(deployer: address, delay: u64): Scenario {
     let mut scenario = test_scenario::begin(deployer);
@@ -54,7 +59,6 @@ fun setup(deployer: address, delay: u64): Scenario {
 
 /// Convenience: take the singleton registry from the current transaction.
 /// Wraps `test_scenario::take_shared` to keep test bodies tight.
-#[test_only]
 fun take_ac(scenario: &Scenario): AccessControl<ACCESS_CONTROL_TESTS> {
     scenario.take_shared<AccessControl<ACCESS_CONTROL_TESTS>>()
 }

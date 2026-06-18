@@ -1,8 +1,7 @@
-#[test_only]
 module openzeppelin_finance::vesting_wallet_linear_tests;
 
-use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params};
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, Created, Released, Destroyed};
+use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::{Self, Clock};
 use sui::coin;

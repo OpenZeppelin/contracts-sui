@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_math::u64_tests;
 
 use openzeppelin_math::macros;
