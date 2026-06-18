@@ -156,7 +156,7 @@ fun receive_and_deposit_claims_addressed_coin() {
 // rejected up front with `EOverflow` - the wallet's u64 accounting cannot represent a
 // larger total. The funds already held stay releasable rather than the deposit
 // bricking the curve, and the direct depositor keeps their coin (the tx rolls back).
-#[test, expected_failure(abort_code = vesting_wallet::EOverflow)]
+#[test, expected_failure(abort_code = vesting_wallet::EBalanceOverflow)]
 fun deposit_rejects_overflowing_total() {
     let mut ctx = tx_context::dummy();
     let max = std::u64::max_value!();
@@ -178,7 +178,7 @@ fun deposit_rejects_overflowing_total() {
 // u64::MAX aborts with `EOverflow`. (In production the already-transferred coin is
 // then stranded at the wallet's address - see the function's docs; here the abort
 // just rolls the claim back.)
-#[test, expected_failure(abort_code = vesting_wallet::EOverflow)]
+#[test, expected_failure(abort_code = vesting_wallet::EBalanceOverflow)]
 fun receive_and_deposit_rejects_overflowing_total() {
     let mut scenario = test_scenario::begin(@0x1);
     let max = std::u64::max_value!();
@@ -391,9 +391,10 @@ fun releasable_rejects_vested_below_released() {
 }
 
 // A curve that attests more than `balance + released`
-// aborts `release` at the framework `balance.split` - no payout, no `Released` event,
-// atomic rollback. (Framework abort, so no library-typed code to match on.)
-#[test, expected_failure]
+// aborts `release` with the library-typed `EInsufficientBalance` - no payout, no
+// `Released` event, atomic rollback. The local guard fires before the framework
+// `balance.split`, so consumers see the typed error rather than a generic abort.
+#[test, expected_failure(abort_code = vesting_wallet::EInsufficientBalance)]
 fun release_aborts_when_vested_exceeds_total() {
     let mut ctx = tx_context::dummy();
 
@@ -401,10 +402,48 @@ fun release_aborts_when_vested_exceeds_total() {
     wallet.deposit(mint(100, &mut ctx));
 
     // Attest more than balance + released (= 100). `release` clears the wallet_id and
-    // `>= released` guards, then `balance.split(200)` aborts before any coin is minted.
+    // `>= released` guards, then `EInsufficientBalance` aborts before any coin is minted.
     let vested = wallet.mint_vested_amount(TestCurve {}, 200);
     wallet.release(&vested, &mut ctx);
     abort
+}
+
+// The local balance guard fires even after prior releases: once funds are partially
+// drained, a curve attesting more than the *remaining* balance (`balance + released`)
+// aborts with `EInsufficientBalance` rather than the framework split.
+#[test, expected_failure(abort_code = vesting_wallet::EInsufficientBalance)]
+fun release_aborts_when_releasable_exceeds_remaining_balance() {
+    let mut ctx = tx_context::dummy();
+
+    let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
+    wallet.deposit(mint(100, &mut ctx));
+
+    // Drain part of the balance: released = 60, balance = 40.
+    let first = wallet.mint_vested_amount(TestCurve {}, 60);
+    wallet.release(&first, &mut ctx);
+
+    // Attest 150 > balance + released (= 100); releasable = 90 > balance (= 40).
+    let second = wallet.mint_vested_amount(TestCurve {}, 150);
+    wallet.release(&second, &mut ctx);
+    abort
+}
+
+// A release that exactly drains the balance (releasable == balance) is allowed - the
+// guard uses `<=`, so the boundary case succeeds rather than tripping the abort.
+#[test]
+fun release_allows_draining_exact_balance() {
+    let mut ctx = tx_context::dummy();
+
+    let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
+    wallet.deposit(mint(100, &mut ctx));
+
+    let vested = wallet.mint_vested_amount(TestCurve {}, 100);
+    wallet.release(&vested, &mut ctx);
+
+    assert_eq!(wallet.released(), 100);
+    assert_eq!(wallet.balance(), 0);
+
+    destroy(wallet);
 }
 
 // === Teardown ===

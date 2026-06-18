@@ -588,7 +588,7 @@ fun retroactive_deposit_never_over_releases() {
 // drive that sum past u64::MAX; the `deposit` guard (`EOverflow`) rejects the
 // offending refund up front, so the sum can never overflow and the release path is
 // never bricked.
-#[test, expected_failure(abort_code = vesting_wallet::EOverflow)]
+#[test, expected_failure(abort_code = vesting_wallet::EBalanceOverflow)]
 fun overflowing_refund_is_rejected_at_deposit() {
     let (mut test, mut clk) = setup(0);
     let max = std::u64::max_value!();
