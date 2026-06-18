@@ -34,6 +34,7 @@
 module openzeppelin_finance::linear_schedule;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
+use std::u64::mul_div;
 use sui::clock::Clock;
 
 // === Errors ===
@@ -214,13 +215,16 @@ fun vested_amount_raw<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
     } else if (cliff_ms > 0 && now < start_ms + cliff_ms) {
         0
     } else {
+        // SAFETY: depositing has a check ensuring no balance overflow can occur.
         let total = wallet.balance() + wallet.released();
+        // SAFETY: construction guarantees `start_ms + duration_ms` fit in u64.
         if (now >= start_ms + duration_ms) {
             total
         } else {
-            let elapsed = (now - start_ms) as u128;
-            let v = ((total as u128) * elapsed) / (duration_ms as u128);
-            v as u64
+            let elapsed = now - start_ms;
+            // SAFETY: `now < start_ms + duration_ms`, so `elapsed < duration_ms`:
+            // the result stays strictly below `total` until the end.
+            mul_div(total, elapsed, duration_ms)
         }
     }
 }
