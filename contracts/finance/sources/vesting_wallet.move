@@ -103,6 +103,10 @@ const EVestedBelowReleased: vector<u8> = "Vested amount is below the amount alre
 /// `u64::MAX`, which the wallet's `u64` accounting cannot represent.
 #[error(code = 3)]
 const EBalanceOverflow: vector<u8> = "Deposit would overflow the wallet's lifetime total";
+/// A `release` attests more than the wallet's funded total (`balance + released`),
+/// so the current balance cannot cover the releasable amount.
+#[error(code = 4)]
+const EInsufficientBalance: vector<u8> = "Releasable amount exceeds the wallet's balance";
 
 // === Structs ===
 
@@ -354,8 +358,8 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 /// #### Aborts
 /// - `EWalletMismatch` if `vested` was not minted for this wallet.
 /// - `EVestedBelowReleased` if `vested.amount` is below the amount already released.
-/// - Aborts if the balance cannot cover the releasable amount, i.e. the curve
-///   attested more than `balance + released`.
+/// - `EInsufficientBalance` if the balance cannot cover the releasable amount, i.e.
+///   the curve attested more than `balance + released`.
 public fun release<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     vested: &VestedAmount<S>,
@@ -367,6 +371,7 @@ public fun release<S: drop, P: copy + drop + store, C>(
 
     let releasable = *vested_amount - wallet.released;
     if (releasable == 0) return;
+    assert!(releasable <= wallet.balance.value(), EInsufficientBalance);
 
     wallet.released = wallet.released + releasable;
     let coin = coin::from_balance(wallet.balance.split(releasable), ctx);
