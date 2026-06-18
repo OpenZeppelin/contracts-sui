@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_fp_math::raw_log2_tests;
 
 use openzeppelin_fp_math::common;

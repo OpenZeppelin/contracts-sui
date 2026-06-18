@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_fp_math::sd29x9_test_helpers;
 
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
