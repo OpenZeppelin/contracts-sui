@@ -218,7 +218,7 @@ public fun mul_mod(a: u32, b: u32, modulus: u32): u32 {
 
 /// Returns `true` if `n` is a power of ten.
 ///
-/// For `u32`, valid powers of ten are: 1, 10, 100, ..., 10^9 (1000000000).
+/// For `u32`, valid powers of ten range from 10^0 to 10^9.
 ///
 /// #### Parameters
 /// - `n`: Input value.

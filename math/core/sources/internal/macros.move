@@ -96,8 +96,7 @@ public(package) macro fun average<$Int>($a: $Int, $b: $Int, $rounding_mode: Roun
 /// - `option::none()`.
 ///
 /// #### Aborts
-/// - Does not emit custom errors, but inherits the Move abort that occurs when `$shift` is
-///   greater than or equal to the bit-width of `$Int`.
+/// - Move shift overflow if `$shift` is greater than or equal to the bit-width of `$Int`.
 public(package) macro fun checked_shl<$Int>($value: $Int, $shift: u8): Option<$Int> {
     let (value, shift) = ($value, $shift);
     if (shift == 0) {
@@ -134,8 +133,7 @@ public(package) macro fun checked_shl<$Int>($value: $Int, $shift: u8): Option<$I
 /// - `option::none()`.
 ///
 /// #### Aborts
-/// - Does not emit custom errors, but inherits the Move abort that occurs when `$shift` is
-///   greater than or equal to the bit-width of `$Int`.
+/// - Move shift overflow if `$shift` is greater than or equal to the bit-width of `$Int`.
 public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$Int> {
     let (value, shift) = ($value, $shift);
     let mask = (1_u256 << shift) - 1;
@@ -767,7 +765,7 @@ public(package) fun round_division_result(
 ///
 /// #### Parameters
 /// - `value`: The value being tested (already cast to u256).
-/// - `floor_log`: The floor of log2(value), i.e., log2(value)⌋.
+/// - `floor_log`: The floor of log2(value), i.e., ⌊log2(value)⌋.
 ///
 /// Given `floor_log = ⌊log2(x)⌋`, we decide whether to round up to `floor_log + 1`
 /// or keep `floor_log` by comparing `x` to the midpoint of the interval
@@ -783,7 +781,7 @@ public(package) fun round_division_result(
 ///   - if `x² ≥ 2^threshold_exp` → round up (`floor_log + 1`)
 ///   - else                      → round down (`floor_log`)
 ///
-/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+/// Tie-break: equality goes up (`≥`), i.e., "round half up".
 ///
 /// #### Returns
 /// - The rounded base-2 logarithm: `floor_log + 1` when the midpoint threshold is met,
@@ -827,7 +825,7 @@ public(package) fun round_log2_to_nearest(value: u256, floor_log: u16): u16 {
 ///   - if `x ≥ 2^threshold_exp` → round up (`floor_log + 1`)
 ///   - else                     → round down (`floor_log`)
 ///
-/// Tie-break: equality goes up (`≥`), i.e., “round half up”.
+/// Tie-break: equality goes up (`≥`), i.e., "round half up".
 ///
 /// #### Returns
 /// - The rounded base-256 logarithm: `floor_log + 1` when the midpoint threshold is met,

@@ -115,7 +115,7 @@ public fun mul_shr(a: u256, b: u256, shift: u8, rounding_mode: RoundingMode): Op
     }
 }
 
-/// Count the number of leading zero bits in the value.
+/// Count the number of leading zero bits in `value`.
 ///
 /// #### Parameters
 /// - `value`: Input value.

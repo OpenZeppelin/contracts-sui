@@ -52,7 +52,7 @@ const ELogResultUnrepresentable: vector<u8> =
 /// - The `SD29x9` representation of `x`.
 ///
 /// #### Aborts
-/// - Aborts if `x` is greater than max positive `SD29x9` value.
+/// - `ECannotBeConvertedToSD29x9` if `x` is greater than max positive `SD29x9` value.
 public fun into_SD29x9(x: UD30x9): SD29x9 {
     let value = x.unwrap();
     assert!(value <= common::max_sd29x9_magnitude!(), ECannotBeConvertedToSD29x9);
@@ -85,7 +85,7 @@ public fun try_into_SD29x9(x: UD30x9): Option<SD29x9> {
 /// - The sum `x + y`.
 ///
 /// #### Aborts
-/// - Aborts if the sum exceeds the representable `UD30x9` range.
+/// - `EOverflow` if the sum exceeds the representable `UD30x9` range.
 public fun add(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     wrap_u256(x + y)
@@ -135,7 +135,7 @@ public fun abs(x: UD30x9): UD30x9 {
 /// - `x` rounded up (ceiling) at integer precision.
 ///
 /// #### Aborts
-/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+/// - `EOverflow` if the rounded result exceeds the representable `UD30x9` range.
 public fun ceil(x: UD30x9): UD30x9 {
     let value = x.unwrap() as u256;
     let scale = common::scale_u256!();
@@ -223,8 +223,8 @@ public fun is_zero(x: UD30x9): bool {
 /// - The result of shifting the `x`'s raw bits left by `bits`.
 ///
 /// #### Aborts
-/// - Aborts if `bits >= 128`.
-/// - Aborts if the result overflows `u128`.
+/// - `EInvalidShiftSize` if `bits >= 128`.
+/// - `EOverflow` if the result overflows `u128`.
 public fun lshift(x: UD30x9, bits: u8): UD30x9 {
     assert!(bits < 128, EInvalidShiftSize);
     let raw = x.unwrap();
@@ -393,7 +393,7 @@ public fun mod(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The product `x * y`, rounded toward zero.
 ///
 /// #### Aborts
-/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+/// - `EOverflow` if the resulting value exceeds the representable `UD30x9` range.
 public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
     x.mul_trunc(y)
 }
@@ -410,7 +410,7 @@ public fun mul(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The product `x * y`, rounded toward zero.
 ///
 /// #### Aborts
-/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+/// - `EOverflow` if the resulting value exceeds the representable `UD30x9` range.
 public fun mul_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     wrap_u256(x * y / common::scale_u256!())
@@ -429,7 +429,7 @@ public fun mul_trunc(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The product `x * y`, rounded away from zero when inexact.
 ///
 /// #### Aborts
-/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+/// - `EOverflow` if the rounded result exceeds the representable `UD30x9` range.
 public fun mul_away(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     wrap_u256(common::div_away_u256(x * y, common::scale_u256!()))
@@ -449,7 +449,7 @@ public fun mul_away(x: UD30x9, y: UD30x9): UD30x9 {
 ///
 /// #### Aborts
 /// - `EDivideByZero` if `y` is zero.
-/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+/// - `EOverflow` if the resulting value exceeds the representable `UD30x9` range.
 public fun div(x: UD30x9, y: UD30x9): UD30x9 {
     x.div_trunc(y)
 }
@@ -466,8 +466,8 @@ public fun div(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The quotient `x / y`, rounded toward zero.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
-/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+/// - `EDivideByZero` if `y` is zero.
+/// - `EOverflow` if the resulting value exceeds the representable `UD30x9` range.
 public fun div_trunc(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     assert!(y != 0, EDivideByZero);
@@ -491,8 +491,8 @@ public fun div_trunc(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The quotient `x / y`, rounded away from zero when inexact.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
-/// - Aborts if the rounded result exceeds the representable `UD30x9` range.
+/// - `EDivideByZero` if `y` is zero.
+/// - `EOverflow` if the rounded result exceeds the representable `UD30x9` range.
 public fun div_away(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap() as u256, y.unwrap() as u256);
     assert!(y != 0, EDivideByZero);
@@ -522,7 +522,7 @@ public fun div_away(x: UD30x9, y: UD30x9): UD30x9 {
 /// - An approximation of `x^exp` computed using binary exponentiation and fixed-point truncation.
 ///
 /// #### Aborts
-/// - Aborts if the resulting value exceeds the representable `UD30x9` range.
+/// - `EOverflow` if the resulting value exceeds the representable `UD30x9` range.
 public fun pow(x: UD30x9, exp: u8): UD30x9 {
     if (exp == 0) {
         return one()
@@ -615,7 +615,7 @@ public fun or(x: UD30x9, y: UD30x9): UD30x9 {
 /// - The result of shifting the `x`'s raw bits right by `bits`.
 ///
 /// #### Aborts
-/// - Aborts if `bits >= 128`.
+/// - `EInvalidShiftSize` if `bits >= 128`.
 public fun rshift(x: UD30x9, bits: u8): UD30x9 {
     assert!(bits < 128, EInvalidShiftSize);
     wrap(x.unwrap() >> bits)
@@ -651,7 +651,7 @@ public fun unchecked_rshift(x: UD30x9, bits: u8): UD30x9 {
 /// - The difference `x - y`.
 ///
 /// #### Aborts
-/// - Aborts if `y > x`.
+/// - `EUnderflow` if `y > x`.
 public fun sub(x: UD30x9, y: UD30x9): UD30x9 {
     let (x, y) = (x.unwrap(), y.unwrap());
     assert!(x >= y, EUnderflow);

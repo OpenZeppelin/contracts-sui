@@ -46,7 +46,7 @@ public fun from_u64(x: u64): UD30x9 {
 /// - The `UD30x9` representation of `x.0`.
 ///
 /// #### Aborts
-/// - Aborts if `x * 10^9` would overflow the `UD30x9` raw representation.
+/// - `EOverflow` if `x * 10^9` would overflow the `UD30x9` raw representation.
 public fun from_u128(x: u128): UD30x9 {
     assert!(x <= common::max_ud30x9_whole!(), EOverflow);
     ud30x9::wrap(x * common::scale!())
@@ -92,7 +92,7 @@ public fun to_u128_trunc(x: UD30x9): u128 {
 /// - The whole-number portion of `x`, provided it fits in `u64`.
 ///
 /// #### Aborts
-/// - Aborts if the truncated whole-number portion exceeds `u64::MAX`.
+/// - `EIntegerOverflow` if the truncated whole-number portion exceeds `u64::MAX`.
 public fun to_u64_trunc(x: UD30x9): u64 {
     let whole = to_u128_trunc(x);
     assert!(whole <= (std::u64::max_value!() as u128), EIntegerOverflow);

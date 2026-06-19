@@ -218,7 +218,7 @@ public fun mul_mod(a: u64, b: u64, modulus: u64): u64 {
 
 /// Returns `true` if `n` is a power of ten.
 ///
-/// For `u64`, valid powers of ten are: 1, 10, 100, ..., 10^19 (10000000000000000000).
+/// For `u64`, valid powers of ten range from 10^0 to 10^19.
 ///
 /// #### Parameters
 /// - `n`: Input value.
