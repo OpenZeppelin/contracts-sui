@@ -451,6 +451,30 @@ fun releasable_view_matches_release() {
     test.end();
 }
 
+// The `releasable` view reads zero before the schedule opens (pre-start) and while
+// the cliff still gates it (pre-cliff), asserted directly on the view rather than
+// transitively through `release`. The wallet is funded and the cliff spans several
+// periods, so a non-gated curve would report a non-zero amount - the zero is the gate
+// doing its job, not an empty balance.
+#[test]
+fun releasable_is_zero_pre_start_and_pre_cliff() {
+    let (mut test, mut clk) = setup(0);
+
+    // Opens at 1000; cliff at start + 3000 spans 3 full periods.
+    let mut wallet = new_stepped(1000, 3000, 1000, 8, test.ctx());
+    wallet.fund(8000, test.ctx());
+
+    clk.set_for_testing(999); // pre-start
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
+
+    clk.set_for_testing(3000); // past start, 2 periods elapsed, still before the cliff (4000)
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
+
+    destroy(wallet);
+    destroy(clk);
+    test.end();
+}
+
 // After the end the whole total is releasable, and once drained nothing more is.
 #[test]
 fun full_release_after_end_then_releasable_zero() {

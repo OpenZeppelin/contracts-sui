@@ -179,6 +179,58 @@ fun receive_and_deposit_claims_addressed_coin() {
     scenario.end();
 }
 
+// A deposit of a zero-value coin is a no-op: balance and ledger are untouched and
+// no `Deposited` event is emitted (mirroring a release that pays out nothing).
+#[test]
+fun deposit_zero_value_coin_is_noop() {
+    let mut scenario = test_scenario::begin(@0xCAFE);
+
+    let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    wallet.deposit(mint(0, scenario.ctx()));
+
+    assert_eq!(wallet.balance(), 0);
+    assert_eq!(wallet.released(), 0);
+    assert_eq!(event::events_by_type<Deposited<TestCurve, USDC>>().length(), 0);
+
+    destroy(wallet);
+    scenario.end();
+}
+
+// The documented owned-mode fast path: the wallet lives in a holder's inventory
+// (never shared), an upstream emitter sends a coin to its object address, and the
+// holder claims it with `receive_and_deposit` from their own transaction.
+#[test]
+fun receive_and_deposit_claims_addressed_coin_owned() {
+    let holder = @0xA11CE;
+    let mut scenario = test_scenario::begin(@0x1);
+
+    // Hand the wallet to a holder as an owned object (no share).
+    let wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    let wallet_id = object::id(&wallet);
+    let wallet_addr = object::id_address(&wallet);
+    transfer::public_transfer(wallet, holder);
+
+    // An upstream emitter sends a coin to the wallet's object address.
+    scenario.next_tx(@0x1);
+    let coin = mint(1000, scenario.ctx());
+    let coin_id = object::id(&coin);
+    transfer::public_transfer(coin, wallet_addr);
+
+    // The holder takes their owned wallet and claims the coin through the deposit path.
+    scenario.next_tx(holder);
+    let mut wallet = scenario.take_from_sender<VestingWallet<TestCurve, TestParams, USDC>>();
+    let receiving = test_scenario::receiving_ticket_by_id<Coin<USDC>>(coin_id);
+    wallet.receive_and_deposit(receiving);
+
+    assert_eq!(wallet.balance(), 1000);
+    let deposited = event::events_by_type<Deposited<TestCurve, USDC>>();
+    assert_eq!(deposited.length(), 1);
+    assert_eq!(deposited[0], vesting_wallet::test_new_deposited<TestCurve, USDC>(wallet_id, 1000));
+
+    destroy(wallet);
+    scenario.end();
+}
+
 // A deposit that would push the lifetime total `balance + released` past u64::MAX is
 // rejected up front with `EOverflow` - the wallet's u64 accounting cannot represent a
 // larger total. The funds already held stay releasable rather than the deposit
