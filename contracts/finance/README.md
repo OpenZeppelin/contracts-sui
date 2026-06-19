@@ -251,6 +251,28 @@ has only `drop`, so it cannot be copied, stored, or held across transactions, an
 curve-agnostic wrapper safely hand out `&inner`: the worst a holder can do is mint an
 inert attestation; no funds move without `&mut`, which the wrapper keeps private.
 
+## Examples
+
+> [!Warning]
+> These are **unaudited illustrations** of how the primitive can be integrated, not production-ready code.
+
+Complete integration examples live in [`examples/vesting_wallet/`](examples/vesting_wallet),
+one per integration boundary described above:
+
+- [`vesting_quadratic`](examples/vesting_wallet/vesting_quadratic.move) - the **custom
+  schedule** pattern: a backloaded `vested = total * (elapsed / duration)^2` curve that
+  ships *only* the two operations requiring the schedule's private types (`params` and
+  `vested_amount`) and lets the integrator drive `new`, `deposit`, and `release` against
+  `vesting_wallet` directly. The minimal shape of a new curve.
+- [`pausable_grant`](examples/vesting_wallet/pausable_grant.move) - the **curve-agnostic
+  wrapper** pattern: a shared grant that nests a wallet, stays generic over `S`/`P`,
+  hands out `&inner` while keeping `&mut` private, and re-exposes `release` behind a
+  cap-gated pause check. Works with any present or future curve.
+- [`splitter`](examples/vesting_wallet/splitter.move) - the **beneficiary-as-object**
+  pattern: point a wallet's `beneficiary` at a shared `Beneficiary` object so each
+  release lands as a `Receiving<Coin<C>>` that anyone can `disperse` to many receivers
+  by fixed weights. Composes with any curve and topology.
+
 ## Security Notes
 
 - **Release and deposit are permissionless.** Anyone can fund a wallet or trigger a
