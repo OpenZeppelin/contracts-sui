@@ -54,8 +54,8 @@ const MAX_DECIMALS: u8 = 24;
 /// - The scaled balance as `u64`.
 ///
 /// #### Aborts
-/// - `EInvalidDecimals`: If either decimal value exceeds `MAX_DECIMALS` (24).
-/// - `ESafeDowncastOverflowedInt`: If scaled amount exceeds `std::u64::max_value!()`.
+/// - `EInvalidDecimals` if either decimal value exceeds `MAX_DECIMALS` (24).
+/// - `ESafeDowncastOverflowedInt` if scaled amount exceeds `std::u64::max_value!()`.
 ///
 /// #### Examples
 ///
@@ -128,7 +128,7 @@ public fun safe_downcast_balance(raw_amount: u256, source_decimals: u8, target_d
 /// - The scaled balance as `u256`.
 ///
 /// #### Aborts
-/// - `EInvalidDecimals`: If either decimal value exceeds `MAX_DECIMALS` (24).
+/// - `EInvalidDecimals` if either decimal value exceeds `MAX_DECIMALS` (24).
 ///
 /// #### Examples
 ///
@@ -216,7 +216,7 @@ fun scale_amount(amount: u256, source_decimals: u8, target_decimals: u8): u256 {
 /// - `decimals_b`: Second decimal value to validate.
 ///
 /// #### Aborts
-/// - Aborts with `EInvalidDecimals` if either decimal exceeds `MAX_DECIMALS`.
+/// - `EInvalidDecimals` if either decimal exceeds `MAX_DECIMALS`.
 fun validate_decimals(decimals_a: u8, decimals_b: u8) {
     assert!(decimals_a <= MAX_DECIMALS, EInvalidDecimals);
     assert!(decimals_b <= MAX_DECIMALS, EInvalidDecimals);

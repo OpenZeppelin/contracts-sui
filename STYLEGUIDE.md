@@ -252,10 +252,11 @@ part of the public API, not decoration. Keep them complete and accurate.
 - Document public functions: include `#### Parameters` and `#### Returns` where
   they add detail beyond the one-line summary - a trivial getter whose summary
   already states what it returns needs neither. Always include an `#### Aborts`
-  section whenever a function can abort, listing **every** error it can raise -
-  including errors propagated from internal calls
-- State caller preconditions explicitly and map each to the error it fails with
-  (e.g. "Aborts with `EUnauthorized` if the caller lacks the role")
+  section whenever a function can abort, listing **every** cause it can raise -
+  including native aborts (e.g. arithmetic overflow, division by zero) and
+  errors propagated from internal calls
+- State caller preconditions explicitly and map each to the error it fails with,
+  one bullet per cause (e.g. "`EUnauthorized` if the caller lacks the role")
 - Keep terminology consistent with the implementation (e.g. avoid documenting
   impossible paths)
 
@@ -270,5 +271,6 @@ part of the public API, not decoration. Keep them complete and accurate.
   /// - Rounded output value.
   ///
   /// #### Aborts
-  /// - Aborts if `value` is zero.
+  /// - `EZeroValue` if `value` is zero.
+  /// - Arithmetic overflow if the scaled result exceeds the type's range.
   ```

@@ -167,7 +167,7 @@ public(package) macro fun checked_shr<$Int>($value: $Int, $shift: u8): Option<$I
 ///   and `result` carries the rounded value when no overflow occurred.
 ///
 /// #### Aborts
-/// - Propagates the same error codes as the underlying helpers (`EDivideByZero`).
+/// - `EDivideByZero` if `$denominator` is zero.
 public(package) macro fun mul_div<$Int>(
     $a: $Int,
     $b: $Int,
@@ -201,9 +201,6 @@ public(package) macro fun mul_div<$Int>(
 /// #### Returns
 /// - `(overflow, result)` where `overflow` reports that the rounded value cannot fit in 256 bits,
 ///   and `result` contains the rounded quotient when no overflow occurs.
-///
-/// #### Aborts
-/// - Does not emit custom errors.
 public(package) macro fun mul_shr<$Int>(
     $a: $Int,
     $b: $Int,

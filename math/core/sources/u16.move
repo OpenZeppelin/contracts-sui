@@ -87,7 +87,7 @@ public fun checked_shr(value: u16, shift: u8): Option<u16> {
 /// - `option::none()` when the rounded quotient cannot be represented as `u16`.
 ///
 /// #### Aborts
-/// - Aborts if `denominator` is zero.
+/// - `EDivideByZero` if `denominator` is zero.
 public fun mul_div(a: u16, b: u16, denominator: u16, rounding_mode: RoundingMode): Option<u16> {
     let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
     result.try_as_u16()
@@ -195,7 +195,7 @@ public fun sqrt(value: u16, rounding_mode: RoundingMode): u16 {
 /// - `option::none()` when `value` and `modulus` are not co-prime, or when `modulus` is 1.
 ///
 /// #### Aborts
-/// - Aborts if `modulus` is zero.
+/// - `EZeroModulus` if `modulus` is zero.
 public fun inv_mod(value: u16, modulus: u16): Option<u16> {
     macros::inv_mod!(value, modulus)
 }
@@ -211,7 +211,7 @@ public fun inv_mod(value: u16, modulus: u16): Option<u16> {
 /// - `(a * b) mod modulus`.
 ///
 /// #### Aborts
-/// - Aborts if `modulus` is zero.
+/// - `EZeroModulus` if `modulus` is zero.
 public fun mul_mod(a: u16, b: u16, modulus: u16): u16 {
     macros::mul_mod!(a, b, modulus)
 }
