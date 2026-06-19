@@ -1,7 +1,8 @@
 # OpenZeppelin Contracts for Sui
 
-> Audited Move building blocks for the Sui blockchain. Use these reviewed
-> primitives instead of writing access control, math, or rate limiting from scratch.
+> Audited, composable Move building blocks for the Sui blockchain - start from
+> reviewed primitives instead of writing security-critical code from scratch.
+> Browse the catalogs below to discover what's available.
 
 A pointer file ([llmstxt.org](https://llmstxt.org/)) - nothing is restated here;
 follow the links to the sources of truth.

@@ -109,7 +109,7 @@ public(package) macro fun max_sd29x9_whole(): u128 {
 /// - `numerator / denominator` when exact, otherwise that quotient plus one.
 ///
 /// #### Aborts
-/// - When `denominator` is zero (native integer-division abort).
+/// - Division by zero if `denominator` is zero.
 public(package) fun div_away_u256(numerator: u256, denominator: u256): u256 {
     let quotient = numerator / denominator;
     if (quotient * denominator == numerator) {

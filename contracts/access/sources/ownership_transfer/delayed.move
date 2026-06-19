@@ -59,7 +59,12 @@ public struct PendingTransfer has drop, store {
 
 /// Hot potato to ensure a wrapped object was returned after being taken using
 /// the `borrow_val` call.
-public struct Borrow { wrapper_id: ID, object_id: ID }
+public struct Borrow {
+    /// ID of the `DelayedTransferWrapper` the object was taken from.
+    wrapper_id: ID,
+    /// ID of the borrowed object that must be returned.
+    object_id: ID,
+}
 
 // === Events ===
 
