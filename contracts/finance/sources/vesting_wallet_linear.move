@@ -55,6 +55,8 @@ use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
 use std::u64::mul_div;
 use sui::clock::Clock;
 
+// === Imports ===
+
 // === Errors ===
 
 /// `period_ms` was zero; each tranche must span a positive period.
@@ -99,6 +101,8 @@ public struct Params has copy, drop, store {
     /// for the periods elapsed so far.
     cliff_ms: u64,
 }
+
+// === Public Functions ===
 
 // === Constructors ===
 
@@ -225,9 +229,24 @@ public fun new_continuous<C>(
     vesting_wallet::new(params_continuous(start_ms, cliff_ms, duration_ms), beneficiary, ctx)
 }
 
-/// Sugar for the common case: build a stepped wallet and immediately share it.
-/// Parameters and aborts are identical to `new`; the wallet is made shared via
-/// `transfer::public_share_object` instead of being returned.
+/// Sugar for the common case: build a stepped wallet and immediately share it. The
+/// wallet is made shared via `transfer::public_share_object` instead of being
+/// returned.
+///
+/// #### Parameters
+/// - `beneficiary`: Address that every release pays out to.
+/// - `start_ms`: Timestamp (ms) at which vesting begins.
+/// - `cliff_ms`: Cliff length (ms from `start_ms`); `0` for no cliff.
+/// - `period_ms`: Length of each tranche period (ms).
+/// - `steps`: Number of equal tranches.
+/// - `ctx`: Transaction context.
+///
+/// #### Aborts
+/// - `EZeroPeriod` if `period_ms == 0`.
+/// - `EZeroSteps` if `steps == 0`.
+/// - `EScheduleOverflow` if `period_ms * steps`, or `start_ms` plus that duration,
+///   would overflow `u64`.
+/// - `EInvalidCliff` if `cliff_ms > period_ms * steps`.
 public fun create_and_share<C>(
     beneficiary: address,
     start_ms: u64,
@@ -246,6 +265,10 @@ public fun create_and_share<C>(
 /// cumulative vested total as a `VestedAmount<Linear>`. See the module docs for the
 /// piecewise curve definition.
 ///
+/// #### Parameters
+/// - `wallet`: The wallet whose curve to evaluate.
+/// - `clock`: Sui `Clock`, read for the current timestamp.
+///
 /// #### Returns
 /// - A `VestedAmount<Linear>` for `wallet` at the current clock, ready to pass to
 ///   `vesting_wallet::release` (or this module's `release`).
@@ -260,7 +283,13 @@ public fun vested_amount<C>(
 }
 
 /// Evaluate the stepped curve and release the not-yet-released portion in one
-/// call - the common path for the stepped schedule.
+/// call - the common path for the stepped schedule. If nothing new has vested since
+/// the last release, the call is a no-op.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to release from.
+/// - `clock`: Sui `Clock`, read for the current timestamp.
+/// - `ctx`: Transaction context, used to mint the payout coin.
 public fun release<C>(
     wallet: &mut VestingWallet<Linear, Params, C>,
     clock: &Clock,
@@ -272,6 +301,10 @@ public fun release<C>(
 
 /// How much `release` would pay out right now, without the caller minting a
 /// `VestedAmount`. The client-friendly "what can I claim?" query.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+/// - `clock`: Sui `Clock`, read for the current timestamp.
 ///
 /// #### Returns
 /// - The amount currently releasable to the beneficiary at `clock.timestamp_ms()`.
@@ -298,9 +331,9 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// - `ctx`: Transaction context, used to check the caller is the beneficiary.
 ///
 /// #### Aborts
-/// - `ENotEmpty` if the wallet still holds a balance (from `destroy_empty`).
 /// - `ENotEnded` if called before the schedule's end (`start_ms + period_ms * steps`).
 /// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
+/// - `ENotEmpty` if the wallet still holds a balance (from `destroy_empty`).
 public fun destroy<C>(
     wallet: VestingWallet<Linear, Params, C>,
     clock: &Clock,
@@ -314,33 +347,69 @@ public fun destroy<C>(
 // === View helpers ===
 
 /// Timestamp (ms) at which vesting begins.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The timestamp (ms) at which vesting begins.
 public fun start<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().start_ms
 }
 
 /// Length of each tranche period (ms).
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The length of each tranche period (ms).
 public fun period<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().period_ms
 }
 
 /// Number of equal tranches.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The number of equal tranches.
 public fun steps<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().steps
 }
 
 /// Length of the vesting period (ms): `period_ms * steps`.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The length of the vesting period (ms): `period_ms * steps`.
 public fun duration<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     let params = wallet.schedule_params();
     params.period_ms * params.steps
 }
 
 /// Timestamp (ms) at which the schedule ends (`start_ms + period_ms * steps`).
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The timestamp (ms) at which the schedule ends (`start_ms + period_ms * steps`).
 public fun end<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     let params = wallet.schedule_params();
     params.start_ms + params.period_ms * params.steps
 }
 
 /// Read the configured cliff length (ms from `start_ms`). `0` means no cliff.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The configured cliff length (ms from `start_ms`); `0` means no cliff.
 public fun cliff<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().cliff_ms
 }

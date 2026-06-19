@@ -310,12 +310,6 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     VestedAmount { wallet_id: object::id(wallet), amount }
 }
 
-/// Read the cumulative vested total recorded in a `VestedAmount<S>` without
-/// consuming it.
-public fun amount<S>(vested: &VestedAmount<S>): u64 {
-    vested.amount
-}
-
 /// Add a coin to the wallet's balance. Permissionless - the beneficiary's
 /// identity is data, not a capability, and anyone may fund.
 ///
@@ -474,13 +468,7 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
     let beneficiary = wallet.beneficiary;
     let total_released = wallet.released;
 
-    let VestingWallet {
-        id,
-        beneficiary: _,
-        released: _,
-        balance,
-        schedule_params,
-    } = wallet;
+    let VestingWallet { id, balance, schedule_params, .. } = wallet;
     balance.destroy_zero();
     id.delete();
 
@@ -494,6 +482,10 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
 /// What `release` would pay out for the supplied `VestedAmount<S>` right now:
 /// `vested.amount - wallet.released`. Borrows `vested`, so the same attestation can
 /// still be passed to a subsequent `release`.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+/// - `vested`: A `VestedAmount<S>` minted for this wallet by its curve module.
 ///
 /// #### Returns
 /// - The releasable amount: the attested cumulative total minus what has already
@@ -512,13 +504,37 @@ public fun releasable<S: drop, P: copy + drop + store, C>(
     *vested_amount - wallet.released
 }
 
+/// Read the cumulative vested total recorded in a `VestedAmount<S>` without
+/// consuming it.
+///
+/// #### Parameters
+/// - `vested`: The `VestedAmount<S>` to read.
+///
+/// #### Returns
+/// - The cumulative vested total recorded in `vested`.
+public fun amount<S>(vested: &VestedAmount<S>): u64 {
+    vested.amount
+}
+
 /// Read the wallet's schedule parameters. Ungated - curve parameters are public
 /// information.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The wallet's stored schedule parameters.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params
 }
 
 /// Address that receives every `release`.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The address that receives every `release`.
 public fun beneficiary<S: drop, P: copy + drop + store, C>(
     wallet: &VestingWallet<S, P, C>,
 ): address {
@@ -526,11 +542,23 @@ public fun beneficiary<S: drop, P: copy + drop + store, C>(
 }
 
 /// Cumulative amount released so far.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The cumulative amount released so far.
 public fun released<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.released
 }
 
 /// Funds currently held by the wallet and not yet released.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The funds currently held by the wallet and not yet released.
 public fun balance<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.balance.value()
 }
