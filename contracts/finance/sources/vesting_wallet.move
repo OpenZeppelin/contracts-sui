@@ -195,7 +195,8 @@ public struct Created<phantom S, P, phantom C> has copy, drop {
     schedule_params: P,
 }
 
-/// Emitted by `deposit` (and `receive_and_deposit`) when funds are added.
+/// Emitted by `deposit` (and `receive_and_deposit`) when a non-zero amount is
+/// added. A deposit of a zero-value coin emits no event.
 public struct Deposited<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
     /// Amount added to the balance by this deposit.
@@ -315,6 +316,9 @@ public fun amount<S>(vested: &VestedAmount<S>): u64 {
 /// Add a coin to the wallet's balance. Permissionless - the beneficiary's
 /// identity is data, not a capability, and anyone may fund.
 ///
+/// A deposit of a zero-value coin is a no-op: the (empty) balance is consumed but
+/// nothing changes and no `Deposited` event is emitted.
+///
 /// #### Aborts
 /// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
 ///   `balance + released` (== `Σ(deposits)`) past `u64::MAX`, which would
@@ -331,6 +335,7 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
     );
 
     wallet.balance.join(coin.into_balance());
+    if (amount == 0) return;
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
 }
 
