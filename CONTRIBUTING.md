@@ -43,6 +43,18 @@ same rules:
 - Do not add dependencies or change the package split without explicit sign-off
   - the package boundary is an audit boundary (see
   [`ARCHITECTURE.md`](./ARCHITECTURE.md)).
+- When you add a new package (a new `Move.toml` directory under `contracts/` or
+  `math/`), register it in the CI package matrix in the same PR - add its path to
+  the `PACKAGES` array in
+  [`.github/workflows/test.yml`](./.github/workflows/test.yml). The matrix is the
+  only thing that builds, lints, and tests a package in CI; a package missing from
+  it is silently never checked, so its tests do not gate merges.
+- When you add a new public-facing component (a new package, or a new public
+  capability of an existing one), ship a runnable example in the same PR - add a
+  minimal program under the package's `examples/` that exercises it end to end.
+  Examples are the integration-facing source of truth for AI agents and
+  downstream integrators, the same way doc-comments are the source of truth for
+  the generated API reference.
 
 ## A typical workflow
 
