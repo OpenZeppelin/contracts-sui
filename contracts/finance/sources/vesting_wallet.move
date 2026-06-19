@@ -236,9 +236,14 @@ public struct Destroyed<phantom S, phantom C> has copy, drop {
 
 /// Build a new wallet around a schedule and return it by value. Returning by value
 /// (rather than sharing internally) lets the caller chain creation, funding, and
-/// topology selection in a single PTB. The parameters `P` are taken by value: since
-/// only the declaring curve module can construct a `P`, supplying one is the
-/// authority proof that the caller is that curve module.
+/// topology selection in a single PTB.
+///
+/// The type parameters are:
+/// - `S` - the curve's `drop`-only schedule witness
+/// - `P` - the curve's `copy + drop + store` parameters struct
+/// - `C` - the coin type being vested
+///
+/// See the module overview for the full rationale.
 ///
 /// #### Parameters
 /// - `schedule_params`: The curve's stored configuration, opaque to the wallet.
