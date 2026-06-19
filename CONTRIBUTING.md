@@ -43,6 +43,12 @@ same rules:
 - Do not add dependencies or change the package split without explicit sign-off
   — the package boundary is an audit boundary (see
   [`ARCHITECTURE.md`](./ARCHITECTURE.md)).
+- When you add a new package (a new `Move.toml` directory under `contracts/` or
+  `math/`), register it in the CI package matrix in the same PR - add its path to
+  the `PACKAGES` array in
+  [`.github/workflows/test.yml`](./.github/workflows/test.yml). The matrix is the
+  only thing that builds, lints, and tests a package in CI; a package missing from
+  it is silently never checked, so its tests do not gate merges.
 
 ## A typical workflow
 
