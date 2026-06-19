@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_allowance`
+
+#### Added
+
+- New `spend_vault` module: a shared vault that escrows multiple coin types and grants per-`(cap, coin)` spending allowances to capability holders, with capped, optionally expiring, revocable delegated spend and owner-side revoke / suspend controls. (#402)
+
 ## 1.3.0 (15-06-2026)
 
 ### `openzeppelin_math`
