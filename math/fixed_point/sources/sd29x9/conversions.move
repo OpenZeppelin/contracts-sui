@@ -59,7 +59,7 @@ public fun from_u64(x: u64, is_negative: bool): SD29x9 {
 /// - The `SD29x9` representation of `x.0` or `-x.0`.
 ///
 /// #### Aborts
-/// - Aborts if `x * 10^9` would overflow the `SD29x9` raw representation.
+/// - `EOverflow` if `x * 10^9` would overflow the `SD29x9` raw representation.
 public fun from_u128(x: u128, is_negative: bool): SD29x9 {
     assert!(x <= common::max_sd29x9_whole!(), EOverflow);
     sd29x9::wrap(x * common::scale!(), is_negative)
@@ -116,7 +116,7 @@ public fun to_parts_trunc(x: SD29x9): (u128, bool) {
 /// - The whole-number portion of `x`.
 ///
 /// #### Aborts
-/// - Aborts if `x` is negative.
+/// - `ENegativeValue` if `x` is negative.
 public fun to_u128_trunc(x: SD29x9): u128 {
     let bits = x.unwrap();
     assert!((bits & common::sign_bit!()) == 0, ENegativeValue);
@@ -150,8 +150,8 @@ public fun try_to_u128_trunc(x: SD29x9): Option<u128> {
 /// - The whole-number portion of `x`, provided it fits in `u64`.
 ///
 /// #### Aborts
-/// - Aborts if `x` is negative.
-/// - Aborts if the truncated whole-number portion exceeds `u64::MAX`.
+/// - `ENegativeValue` if `x` is negative.
+/// - `EIntegerOverflow` if the truncated whole-number portion exceeds `u64::MAX`.
 public fun to_u64_trunc(x: SD29x9): u64 {
     let whole = to_u128_trunc(x);
     assert!(whole <= (std::u64::max_value!() as u128), EIntegerOverflow);
