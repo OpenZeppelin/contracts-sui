@@ -509,8 +509,8 @@ fun destroy_after_end_on_empty_wallet() {
     vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.balance(), 0);
 
-    test.next_tx(@0x1);
-    vesting_wallet_linear::destroy(wallet, &clk);
+    test.next_tx(BENEFICIARY);
+    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
 
     let destroyed = event::events_by_type<Destroyed<Linear, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -530,20 +530,35 @@ fun destroy_rejects_before_end() {
 
     let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     clk.set_for_testing(3999);
-    vesting_wallet_linear::destroy(wallet, &clk);
+    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
     abort
 }
 
-// Tearing down a wallet that still holds a balance aborts (the empty-balance
-// gate from the primitive fires before the ended gate).
+// Tearing down a wallet that still holds a balance aborts. Clock is after end and
+// the caller is the beneficiary, so neither the ended nor the beneficiary gate can
+// fire - only the empty-balance gate from the primitive.
 #[test, expected_failure(abort_code = vesting_wallet::ENotEmpty)]
 fun destroy_rejects_nonempty_balance() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     wallet.fund(1, test.ctx());
-    clk.set_for_testing(5000); // after end, so only the balance gate can fire
-    vesting_wallet_linear::destroy(wallet, &clk);
+    clk.set_for_testing(5000); // after end, so the ended gate cannot fire
+    test.next_tx(BENEFICIARY);
+    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    abort
+}
+
+// Only the beneficiary may tear down the wallet; any other caller aborts even on a
+// drained, ended wallet.
+#[test, expected_failure(abort_code = vesting_wallet_linear::ENotBeneficiary)]
+fun destroy_rejects_non_beneficiary() {
+    let (mut test, mut clk) = setup(0);
+
+    let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
+    clk.set_for_testing(5000); // after end, so the ended gate cannot fire
+    test.next_tx(@0xCAFE); // not the beneficiary
+    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
     abort
 }
 

@@ -64,6 +64,9 @@ const EScheduleOverflow: vector<u8> = "Schedule end (start + period * steps) wou
 /// `destroy` was called before the schedule's end (`start_ms + period_ms * steps`).
 #[error(code = 4)]
 const ENotEnded: vector<u8> = "Schedule has not ended yet";
+/// `destroy` was called by an address other than the wallet's beneficiary.
+#[error(code = 5)]
+const ENotBeneficiary: vector<u8> = "Only the beneficiary may destroy the wallet";
 
 // === Structs ===
 
@@ -220,20 +223,29 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 
 /// Tear down a drained, ended stepped wallet: reclaim its storage rebate and drop
 /// the `Linear` schedule. Wraps `vesting_wallet::destroy_empty` and additionally
-/// requires the schedule to have ended.
+/// requires the schedule to have ended and the caller to be the beneficiary.
+///
+/// Both extra gates guard against stranding an in-flight deposit. The ended gate
+/// stops an empty wallet being destroyed ahead of a pending deposit, front-running
+/// funding intended to arrive later. The beneficiary gate addresses the residual
+/// case: a coin `public_transfer`'d to the wallet's address but not yet
+/// `receive_and_deposit`'d is invisible to `destroy_empty`'s empty check, so a
+/// permissionless teardown would let an arbitrary actor strand such a deposit and
+/// pocket the storage rebate. Restricting teardown to the beneficiary keeps both the
+/// strand risk and the rebate with the only party harmed by it.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to destroy. Must hold a zero balance.
 /// - `clock`: Sui `Clock`, used to check the schedule has ended.
+/// - `ctx`: Transaction context, used to check the caller is the beneficiary.
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the wallet still holds a balance (from `destroy_empty`).
 /// - `ENotEnded` if called before the schedule's end (`start_ms + period_ms * steps`).
-public fun destroy<C>(wallet: VestingWallet<Linear, Params, C>, clock: &Clock) {
-    // Require the schedule to have ended before teardown: destruction is
-    // permissionless, so otherwise an empty wallet could be destroyed ahead of a
-    // pending deposit, front-running funding intended to arrive later.
+/// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
+public fun destroy<C>(wallet: VestingWallet<Linear, Params, C>, clock: &Clock, ctx: &TxContext) {
     assert!(clock.timestamp_ms() >= end(&wallet), ENotEnded);
+    assert!(ctx.sender() == wallet.beneficiary(), ENotBeneficiary);
     let Params { .. } = wallet.destroy_empty(Linear {});
 }
 
