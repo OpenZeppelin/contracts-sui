@@ -344,16 +344,13 @@ fun vested_amount_is_nondecreasing_in_time() {
     let mut wallet = new_stepped(0, 1000, 1000, 4, test.ctx());
     wallet.fund(1000, test.ctx());
 
-    let samples = vector[0u64, 500, 1000, 1500, 2000, 3000, 4000, 5000];
     let mut prev = 0;
-    let mut i = 0;
-    while (i < samples.length()) {
-        clk.set_for_testing(samples[i]);
+    vector[0u64, 500, 1000, 1500, 2000, 3000, 4000, 5000].do!(|sample| {
+        clk.set_for_testing(sample);
         let current = wallet.vested(&clk);
         assert!(current >= prev);
         prev = current;
-        i = i + 1;
-    };
+    });
 
     destroy(wallet);
     destroy(clk);
