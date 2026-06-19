@@ -20,7 +20,7 @@ openzeppelin_finance = { r.mvr = "@openzeppelin-move/finance" }
 | Module | Use it when |
 | --- | --- |
 | [`vesting_wallet_linear`](https://docs.openzeppelin.com/contracts-sui/1.x/api/finance#vesting_wallet_linear) | You want standard token-grant vesting: a linear unlock, or `N` equal tranches, with an optional cliff. **Most integrators only need this module.** |
-| [`vesting_wallet`](https://docs.openzeppelin.com/contracts-sui/1.x/api/finance#vesting_wallet) | You're building a custom vesting curve (milestone unlocks, oracle-gated release, exotic cliff shapes) on top of a safe release-accounting core. |
+| [`vesting_wallet`](https://docs.openzeppelin.com/contracts-sui/1.x/api/finance#vesting_wallet) | You're authoring a custom curve (milestone unlocks, oracle-gated release, exotic cliff shapes) on a safe release-accounting core or building a protocol that drives vesting wallets **curve-agnostically** - wrapping or gating release without committing to a schedule. |
 
 ## Linear Vesting
 
@@ -127,12 +127,13 @@ and you pick the topology:
 The `beneficiary` is fixed at construction. To rotate the recipient, point
 `beneficiary` at a consumer-owned object and rotate ownership of that object instead.
 
-## Custom Schedules
+## Building on the Core
 
 `vesting_wallet` is the curve-agnostic core. It never interprets the schedule - it
-only enforces release accounting and conservation of funds - so any curve can be
-built on top of it. `VestingWallet<S, P, C>` is parameterized by three types chosen
-at construction:
+only enforces release accounting and conservation of funds - so it serves two kinds
+of integrator: protocols that **drive vesting wallets without committing to a curve**,
+and authors of a **new curve**. `VestingWallet<S, P, C>` is parameterized by three
+types chosen at construction:
 
 - `S` - the **schedule witness**: a `drop`-only struct declared by the curve module.
   It carries no data; minting a vested attestation or tearing the wallet down
@@ -146,7 +147,63 @@ and `P` can build a `VestingWallet<S, P, C>` or advance it. This makes "a wallet
 without a curve" and "a wallet with the wrong parameters" unrepresentable - the type
 system, not a runtime check, binds every wallet to exactly its curve.
 
-To write a curve, follow the `vesting_wallet_linear` pattern:
+### Curve-agnostic protocols (recommended)
+
+A protocol that wraps, gates, or routes vesting - a DAO-gated grant, a treasury, an
+escrow, a vesting factory - should build on `vesting_wallet` and stay **generic over
+the curve** (`S`, `P`), rather than depend on `vesting_wallet_linear` or any single
+schedule. This keeps one integration working for every present and future curve.
+
+The core is designed for exactly this. Releasing funds needs only `&VestedAmount<S>`
+and `&mut wallet` - it does **not** need the witness `S` - so a wrapper can nest a
+`VestingWallet`, hand out an immutable `&inner` (enough for any curve module to mint
+an attestation), keep `&mut inner` private, and re-expose `release` behind its own
+checks:
+
+```move
+module my_protocol::gated_vault;
+
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
+
+/// Adds protocol gating around any vesting curve - note it stays generic over `S`, `P`.
+public struct GatedVault<phantom S: drop, P: copy + drop + store, phantom C> has key {
+    id: UID,
+    inner: VestingWallet<S, P, C>,
+    // ... protocol state: pause flag, approval gate, ...
+}
+
+/// Hand out a read-only view so any curve module can mint an attestation against it.
+public fun inner<S: drop, P: copy + drop + store, C>(
+    self: &GatedVault<S, P, C>,
+): &VestingWallet<S, P, C> {
+    &self.inner
+}
+
+/// Re-expose release behind protocol checks, then delegate. `&mut inner` never escapes.
+public fun release<S: drop, P: copy + drop + store, C>(
+    self: &mut GatedVault<S, P, C>,
+    vested: &VestedAmount<S>,
+    ctx: &mut TxContext,
+) {
+    // ... enforce protocol invariants (not paused, caller approved, ...) ...
+    self.inner.release(vested, ctx);
+}
+```
+
+The caller picks the curve module at the call site; the vault never knows which curve it holds:
+
+```move
+let v = vesting_wallet_linear::vested_amount(vault.inner(), clock);
+vault.release(&v, ctx);
+```
+
+If `release` instead required the witness `S`, this would be impossible: a wrapper
+that doesn't own `S` could not call it, so it would have to expose `&mut inner` and
+lose all control over deposits and releases.
+
+### Custom schedules
+
+To author a new curve, follow the `vesting_wallet_linear` pattern:
 
 1. Declare a witness `public struct MyCurve has drop {}` and a parameters struct
    `public struct MyParams has copy, drop, store { /* ... */ }`.
@@ -162,6 +219,10 @@ The curve **must be monotonically non-decreasing in time and bounded above by
 state changes - funds stay safe, but the release path is bricked until the curve is
 fixed.
 
+A reconfigurable curve can additionally wrap `set_schedule_params` (witness-gated); a
+curve that omits it - like `vesting_wallet_linear` - leaves its wallets' parameters
+permanently immutable on chain.
+
 ### The `VestedAmount` attestation
 
 `vested_amount` mints a `VestedAmount<S>` - a transient record that curve `S` has
@@ -169,14 +230,9 @@ vested a given cumulative total for a specific wallet. It is **not a hot potato*
 has only `drop`, so it cannot be copied, stored, or held across transactions, and
 `release` borrows it (it does not consume it). It cannot be used to over-release -
 `release` pays `attested - released` and reads `released` fresh each call - and its
-`wallet_id` stamp rejects it against any other wallet.
-
-This split - minting needs the witness `S`, spending needs only `&VestedAmount<S>` -
-is what lets a third party wrap a `VestingWallet` (e.g. a DAO-gated grant) without
-the curve module knowing about the wrapper. A reconfigurable curve can additionally
-wrap `set_schedule_params` (witness-gated); a curve that omits it - like
-`vesting_wallet_linear` - leaves its wallets' parameters permanently immutable on
-chain.
+`wallet_id` stamp rejects it against any other wallet. That stamp is also what lets a
+curve-agnostic wrapper safely hand out `&inner`: the worst a holder can do is mint an
+inert attestation; no funds move without `&mut`, which the wrapper keeps private.
 
 ## Security Notes
 
