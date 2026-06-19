@@ -1,3 +1,6 @@
 [package]
 name = "openzeppelin_finance"
 edition = "2024"
+
+[addresses]
+openzeppelin_finance = "0x0"
