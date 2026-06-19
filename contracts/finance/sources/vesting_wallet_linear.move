@@ -301,7 +301,11 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// - `ENotEmpty` if the wallet still holds a balance (from `destroy_empty`).
 /// - `ENotEnded` if called before the schedule's end (`start_ms + period_ms * steps`).
 /// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
-public fun destroy<C>(wallet: VestingWallet<Linear, Params, C>, clock: &Clock, ctx: &TxContext) {
+public fun destroy<C>(
+    wallet: VestingWallet<Linear, Params, C>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
     assert!(clock.timestamp_ms() >= end(&wallet), ENotEnded);
     assert!(ctx.sender() == wallet.beneficiary(), ENotBeneficiary);
     let Params { .. } = wallet.destroy_empty(Linear {});
