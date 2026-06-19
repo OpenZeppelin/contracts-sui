@@ -25,11 +25,6 @@ fun setup(t0: u64): (Scenario, Clock) {
     (test, clk)
 }
 
-fun teardown(test: Scenario, clk: Clock) {
-    destroy(clk);
-    test.end();
-}
-
 fun new_stepped(
     start: u64,
     cliff: u64,
@@ -130,7 +125,8 @@ fun new_accepts_cliff_equal_to_duration() {
     assert_eq!(wallet.vested(&clk), 1000); // cliff boundary == end: full total
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Construction state & topology ===
@@ -162,7 +158,8 @@ fun new_sets_params_and_emits_created() {
     );
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // `create_and_share` puts the wallet into the shared topology.
@@ -178,7 +175,8 @@ fun create_and_share_shares_wallet() {
     assert_eq!(vesting_wallet_linear::duration(&wallet), 4000);
     test_scenario::return_shared(wallet);
 
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Curve shape ===
@@ -195,7 +193,8 @@ fun vested_amount_pre_start_is_zero() {
     assert_eq!(wallet.vested(&clk), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The staircase: the value is flat within a period and steps up at each boundary.
@@ -228,7 +227,8 @@ fun vested_amount_is_a_staircase() {
     assert_eq!(wallet.vested(&clk), 750);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // With a cliff shorter than one period, the staircase is gated to zero until the
@@ -252,7 +252,8 @@ fun vested_amount_pre_cliff_is_zero() {
     assert_eq!(wallet.vested(&clk), 250);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The key cliff behavior: a cliff spanning several periods releases those tranches
@@ -275,7 +276,8 @@ fun vested_amount_at_cliff_jumps_to_catch_up() {
     assert_eq!(wallet.vested(&clk), 4000);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // At and after the end the curve clamps to the wallet total.
@@ -295,7 +297,8 @@ fun vested_amount_post_end_clamps_to_total() {
     assert_eq!(wallet.vested(&clk), 1000);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The curve is non-decreasing as the clock advances.
@@ -318,7 +321,8 @@ fun vested_amount_is_nondecreasing_in_time() {
     };
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The curve math uses a u128 intermediate, so the worst case
@@ -338,7 +342,8 @@ fun vested_amount_uses_u128_intermediate_at_max() {
     assert_eq!(wallet.vested(&clk), max / 2);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // A deposit made after start immediately participates at the current step
@@ -357,7 +362,8 @@ fun deposit_vests_as_if_from_start() {
     assert_eq!(wallet.vested(&clk), 500);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Release ===
@@ -421,7 +427,8 @@ fun release_then_release_within_same_period_is_noop() {
     assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The `releasable` view matches what `release` actually pays, and reads zero
@@ -440,7 +447,8 @@ fun releasable_view_matches_release() {
     assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // After the end the whole total is releasable, and once drained nothing more is.
@@ -458,7 +466,8 @@ fun full_release_after_end_then_releasable_zero() {
     assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Teardown ===
@@ -486,7 +495,8 @@ fun destroy_after_end_on_empty_wallet() {
         vesting_wallet::test_new_destroyed<Linear, USDC>(wallet_id, BENEFICIARY, 1000),
     );
 
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // Tearing down before the schedule end aborts, even on an empty wallet.
@@ -529,7 +539,8 @@ fun create_deposit_release_in_one_flow() {
     assert_eq!(wallet.balance(), 500);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Early-release resistance ===
@@ -558,7 +569,8 @@ fun release_before_first_step_moves_no_funds() {
     assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // ====================================================================
@@ -617,7 +629,8 @@ fun new_continuous_sets_period_one_and_steps_duration() {
     assert_eq!(vesting_wallet_linear::end(&wallet), 1100);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Curve shape ===
@@ -635,7 +648,8 @@ fun vested_amount_continuous_at_exact_start_is_zero() {
     assert_eq!(wallet.vested(&clk), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The key cliff behavior: at the cliff boundary the curve jumps from 0 to the
@@ -654,7 +668,8 @@ fun vested_amount_continuous_at_cliff_jumps_to_proportional() {
     assert_eq!(wallet.vested(&clk), 250);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // Between cliff and end the curve is linear from start.
@@ -671,7 +686,8 @@ fun vested_amount_continuous_is_linear_mid_schedule() {
     assert_eq!(wallet.vested(&clk), 750); // 1000 * 3000 / 4000
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The curve math uses a u128 intermediate, so the worst case
@@ -689,7 +705,8 @@ fun vested_amount_continuous_uses_u128_intermediate_at_max() {
     assert_eq!(wallet.vested(&clk), max - 1);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Composability ===
@@ -760,7 +777,8 @@ fun retroactive_deposit_never_over_releases() {
     assert_eq!(wallet.balance() + wallet.released(), 200); // conserved: nothing minted from nowhere
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The only arithmetic that could lift the curve above the schedule is the
