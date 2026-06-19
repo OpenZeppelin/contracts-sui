@@ -3,6 +3,7 @@ module openzeppelin_finance::vesting_wallet_tests;
 use openzeppelin_finance::vesting_wallet::{
     Self,
     VestingWallet,
+    VestedAmount,
     Created,
     Deposited,
     Released,
@@ -25,6 +26,16 @@ public struct TestParams has copy, drop, store { tag: u64 }
 /// Phantom coin marker for the vested asset.
 public struct USDC has drop {}
 
+/// A minimal curve-agnostic third-party wrapper, as documented in `VestedAmount`'s
+/// "Why minting and spending are separated" note: it nests the wallet, exposes only
+/// an immutable `&inner` (so any curve module can mint a `VestedAmount` against it),
+/// keeps `&mut inner` private, and re-exposes `release` as its own function that
+/// delegates to the nested wallet. It never hands out `&mut inner`.
+public struct Wrapper has key, store {
+    id: UID,
+    inner: VestingWallet<TestCurve, TestParams, USDC>,
+}
+
 const BENEFICIARY: address = @0xB0B;
 const PARAMS_TAG: u64 = 7;
 
@@ -43,6 +54,22 @@ fun new_wallet(
 
 fun mint(amount: u64, ctx: &mut TxContext): Coin<USDC> {
     coin::mint_for_testing<USDC>(amount, ctx)
+}
+
+fun wrap(inner: VestingWallet<TestCurve, TestParams, USDC>, ctx: &mut TxContext): Wrapper {
+    Wrapper { id: object::new(ctx), inner }
+}
+
+/// Immutable view onto the nested wallet - the only access the wrapper exposes for
+/// curve modules to mint a `VestedAmount`.
+fun inner(wrapper: &Wrapper): &VestingWallet<TestCurve, TestParams, USDC> {
+    &wrapper.inner
+}
+
+/// The wrapper's own `release`: takes a `&VestedAmount` (no witness) and delegates to
+/// the private `&mut inner`.
+fun release(wrapper: &mut Wrapper, vested: &VestedAmount<TestCurve>, ctx: &mut TxContext) {
+    wrapper.inner.release(vested, ctx);
 }
 
 // === Construction & topology ===
@@ -586,6 +613,39 @@ fun beneficiary_can_be_object_address() {
     scenario.next_tx(@0x1);
     let coin = scenario.take_from_address<Coin<USDC>>(object_addr);
     assert_eq!(coin.value(), 1000);
+
+    destroy(coin);
+    scenario.end();
+}
+
+// === Third-party wrapper ===
+
+// The documented wrapper use case, driven directly: a curve-agnostic wrapper nests
+// the wallet, mints a `VestedAmount` against the immutable `&inner` (the only access
+// it exposes), and releases through its own `release` that delegates to the private
+// `&mut inner`. An unrelated sender drives it, the funds flow to the construction-time
+// beneficiary, and the wrapper never exposes `&mut inner`.
+#[test]
+fun release_through_third_party_wrapper() {
+    let mut scenario = test_scenario::begin(@0xCAFE); // unrelated sender drives the wrapper
+
+    let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    wallet.deposit(mint(1000, scenario.ctx()));
+    let mut wrapper = wrap(wallet, scenario.ctx());
+
+    // Curve-agnostic flow: mint against `&inner`, release through the wrapper.
+    let vested = wrapper.inner().mint_vested_amount(TestCurve {}, 400);
+    wrapper.release(&vested, scenario.ctx());
+
+    assert_eq!(wrapper.inner().released(), 400);
+    assert_eq!(wrapper.inner().balance(), 600);
+
+    destroy(wrapper);
+
+    // The construction-time beneficiary received the released coin.
+    scenario.next_tx(BENEFICIARY);
+    let coin = scenario.take_from_sender<Coin<USDC>>();
+    assert_eq!(coin.value(), 400);
 
     destroy(coin);
     scenario.end();

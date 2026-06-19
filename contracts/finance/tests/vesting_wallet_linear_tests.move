@@ -614,6 +614,26 @@ fun new_continuous_accepts_end_at_u64_max_boundary() {
     destroy(wallet);
 }
 
+// Accept boundary (continuous): cliff == duration is allowed; nothing vests until
+// the end, then the curve jumps straight to the full total. Mirrors the stepped
+// `new_accepts_cliff_equal_to_duration`.
+#[test]
+fun new_continuous_accepts_cliff_equal_to_duration() {
+    let (mut test, mut clk) = setup(0);
+
+    let mut wallet = new_continuous(0, 1000, 1000, test.ctx());
+    wallet.fund(1000, test.ctx());
+
+    clk.set_for_testing(999);
+    assert_eq!(wallet.vested(&clk), 0); // still gated by the cliff
+    clk.set_for_testing(1000);
+    assert_eq!(wallet.vested(&clk), 1000); // cliff boundary == end: full total
+
+    destroy(wallet);
+    destroy(clk);
+    test.end();
+}
+
 // `new_continuous` is the `period = 1`, `steps = duration` limit of the stepped curve.
 #[test]
 fun new_continuous_sets_period_one_and_steps_duration() {
