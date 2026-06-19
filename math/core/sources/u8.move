@@ -87,7 +87,7 @@ public fun checked_shr(value: u8, shift: u8): Option<u8> {
 /// - `option::none()` when the rounded quotient cannot be represented as `u8`.
 ///
 /// #### Aborts
-/// - Aborts if `denominator` is zero.
+/// - `EDivideByZero` if `denominator` is zero.
 public fun mul_div(a: u8, b: u8, denominator: u8, rounding_mode: RoundingMode): Option<u8> {
     let (_, result) = macros::mul_div!(a, b, denominator, rounding_mode);
     result.try_as_u8()
@@ -195,7 +195,7 @@ public fun sqrt(value: u8, rounding_mode: RoundingMode): u8 {
 /// - `option::none()` when `value` and `modulus` are not co-prime, or when `modulus` is 1.
 ///
 /// #### Aborts
-/// - Aborts if `modulus` is zero.
+/// - `EZeroModulus` if `modulus` is zero.
 public fun inv_mod(value: u8, modulus: u8): Option<u8> {
     macros::inv_mod!(value, modulus)
 }
@@ -211,14 +211,14 @@ public fun inv_mod(value: u8, modulus: u8): Option<u8> {
 /// - `(a * b) mod modulus`.
 ///
 /// #### Aborts
-/// - Aborts if `modulus` is zero.
+/// - `EZeroModulus` if `modulus` is zero.
 public fun mul_mod(a: u8, b: u8, modulus: u8): u8 {
     macros::mul_mod!(a, b, modulus)
 }
 
 /// Returns `true` if `n` is a power of ten.
 ///
-/// For `u8`, valid powers of ten are: 1, 10, 100.
+/// For `u8`, valid powers of ten range from 10^0 to 10^2.
 ///
 /// #### Parameters
 /// - `n`: Input value.

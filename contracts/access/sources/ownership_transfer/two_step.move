@@ -86,10 +86,18 @@ public struct PendingOwnershipTransfer<phantom T: key + store> has key {
 }
 
 /// Hot potato used to ensure a wrapped object was returned after being taken using `borrow_val`.
-public struct Borrow { wrapper_id: ID, object_id: ID }
+public struct Borrow {
+    /// ID of the `TwoStepTransferWrapper` the object was taken from.
+    wrapper_id: ID,
+    /// ID of the borrowed object that must be returned.
+    object_id: ID,
+}
 
 /// Hot potato used to ensure a wrapper was returned to its request after `request_borrow_val`.
-public struct RequestBorrow { wrapper_id: ID }
+public struct RequestBorrow {
+    /// ID of the `TwoStepTransferWrapper` that must be returned to its request.
+    wrapper_id: ID,
+}
 
 // === Events ===
 
