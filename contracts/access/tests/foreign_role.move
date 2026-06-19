@@ -3,7 +3,6 @@
 /// address with `access_control_tests` but differs in `module_string`, which
 /// is exactly the case the library's home-module check (`assert_home_module`)
 /// rejects with `EForeignRole`.
-#[test_only]
 module openzeppelin_access::foreign_role;
 
 public struct ForeignRole {}

@@ -19,7 +19,7 @@
 ///    Foreign role types are rejected at the boundary; they cannot be
 ///    introduced into the non-root role map. The check uses
 ///    `type_name::with_original_ids`, which compares the package's *original*
-///    publish address — so role types introduced in later upgrades to the same
+///    publish address - so role types introduced in later upgrades to the same
 ///    module in the same package pass the check too. The home-module rule
 ///    restricts roles to the same original package and module, not to the same
 ///    package version.
@@ -120,7 +120,7 @@ const EDefaultAdminTransferToSelf: vector<u8> = "Cannot transfer default admin t
 
 // === Constants ===
 
-/// Upper bound on `default_admin_delay_ms` — the configured timelock for
+/// Upper bound on `default_admin_delay_ms` - the configured timelock for
 /// root role transfer / renounce.
 ///
 /// Value: 60 days (≈ 2 calendar months) in milliseconds.
@@ -135,7 +135,7 @@ const MAX_DEFAULT_ADMIN_DELAY_MS: u64 = 60 * 24 * 60 * 60 * 1_000;
 /// increase: for example, raising the delay from 1 day to 60 days would
 /// otherwise mean waiting the full 60 days before the new delay is in force.
 ///
-/// Decreases follow a different rule — see `begin_default_admin_delay_change`.
+/// Decreases follow a different rule - see `begin_default_admin_delay_change`.
 ///
 /// Value: 48 hours in milliseconds.
 const MAX_DELAY_INCREASE_WAIT_MS: u64 = 48 * 60 * 60 * 1_000;
@@ -178,7 +178,7 @@ public struct AccessControl<phantom RootRole> has key, store {
     /// Stored as a dedicated field (not inside `roles`) to express the
     /// singleton constraint directly and simplify transfer and renounce paths.
     default_admin: Option<address>,
-    /// Pending change to the default admin — either a transfer to a specific
+    /// Pending change to the default admin - either a transfer to a specific
     /// new admin or a renounce. See `PendingAdminTransfer`.
     pending_default_admin: Option<PendingAdminTransfer>,
     /// Pending change to `default_admin_delay_ms`. The change becomes effective
@@ -201,10 +201,10 @@ public struct RoleData has store {
 
 /// Snapshot of a pending change to the default admin.
 ///
-/// `new_admin = some(addr)` represents a pending transfer — `addr` accepts
+/// `new_admin = some(addr)` represents a pending transfer - `addr` accepts
 /// after the delay via `accept_default_admin_transfer`.
 ///
-/// `new_admin = none` represents a pending renounce — the current default admin
+/// `new_admin = none` represents a pending renounce - the current default admin
 /// finalizes after the delay via `accept_default_admin_renounce`. The same
 /// pending slot is reused so a transfer and a renounce are mutually
 /// exclusive: scheduling either cancels and overwrites the other.
@@ -231,7 +231,7 @@ public struct PendingDelayChange has drop, store {
 
 /// Emitted when a role is granted to an account.
 ///
-/// Role identifiers are `TypeName`s — they embed the defining package address
+/// Role identifiers are `TypeName`s - they embed the defining package address
 /// and module name of the role struct, so events from independently-published
 /// consumer protocols are distinguishable off-chain.
 public struct RoleGranted<phantom RootRole> has copy, drop {
@@ -241,7 +241,7 @@ public struct RoleGranted<phantom RootRole> has copy, drop {
 
 /// Emitted when a role is removed from an account.
 ///
-/// Role identifiers are `TypeName`s — they embed the defining package address
+/// Role identifiers are `TypeName`s - they embed the defining package address
 /// and module name of the role struct, so events from independently-published
 /// consumer protocols are distinguishable off-chain.
 public struct RoleRevoked<phantom RootRole> has copy, drop {
@@ -251,7 +251,7 @@ public struct RoleRevoked<phantom RootRole> has copy, drop {
 
 /// Emitted when a role's admin role is reconfigured.
 ///
-/// Role identifiers are `TypeName`s — they embed the defining package address
+/// Role identifiers are `TypeName`s - they embed the defining package address
 /// and module name of each role struct, so events from independently-published
 /// consumer protocols are distinguishable off-chain.
 public struct RoleAdminChanged<phantom RootRole> has copy, drop {
@@ -300,7 +300,7 @@ public struct DefaultAdminDelayChangeCancelled<phantom RootRole> has copy, drop 
 /// sender as the initial default admin.
 ///
 /// The caller passes their module's One-Time Witness as `otw`. The runtime
-/// `is_one_time_witness` check confirms the value is genuine — this is what
+/// `is_one_time_witness` check confirms the value is genuine - this is what
 /// enforces Invariant 1 (one registry per module, initialized at first
 /// publish). The transaction sender automatically becomes the default admin.
 /// Prefer this constructor when the publishing transaction sender should be the
@@ -508,7 +508,7 @@ public fun revoke_role<RootRole, Role>(
 }
 
 /// Voluntarily relinquish role `Role`.
-/// No-op if the caller does not hold `Role`. **Blocked on the root role** —
+/// No-op if the caller does not hold `Role`. **Blocked on the root role** -
 /// use `begin_default_admin_renounce` + `accept_default_admin_renounce`
 /// instead, so the protocol gets the configured timelock and a cancel window
 /// before the registry becomes unmanaged.
@@ -589,7 +589,7 @@ public fun set_role_admin<RootRole, Role, AdminRole>(
 ///
 /// Caller must hold the root role. The transfer cannot be accepted until
 /// `default_admin_delay_ms` has elapsed. An existing pending transfer or
-/// renounce is cancelled and overwritten — the caller can correct a wrong
+/// renounce is cancelled and overwritten - the caller can correct a wrong
 /// target (or switch between transfer and renounce) without cancelling first.
 /// If a pending delay change has elapsed, it is applied before scheduling.
 ///
@@ -774,13 +774,13 @@ public fun cancel_default_admin_transfer<RootRole>(
 /// - **Increase** (`new_delay_ms > current`):
 ///   wait = `min(new_delay_ms, MAX_DELAY_INCREASE_WAIT_MS)`.
 ///   The cap exists so a large increase doesn't force you to wait the
-///   entire new value before it takes effect — see `MAX_DELAY_INCREASE_WAIT_MS`.
+///   entire new value before it takes effect - see `MAX_DELAY_INCREASE_WAIT_MS`.
 /// - **Decrease** (`new_delay_ms < current`):
 ///   wait = `current - new_delay_ms`.
 ///   The freed time forces the admin to commit to the change for that
 ///   period before they can schedule new transfers under the shorter delay,
 ///   preserving the protection level of the current delay. (In-flight
-///   transfers / renounces aren't affected by the change anyway — they use
+///   transfers / renounces aren't affected by the change anyway - they use
 ///   the delay they were scheduled under.)
 /// - **No change** (`new_delay_ms == current`): wait = 0.
 ///
@@ -925,7 +925,7 @@ public fun default_admin_delay_ms<RootRole>(ac: &AccessControl<RootRole>, clock:
     effective_default_admin_delay_ms(ac, clock)
 }
 
-/// Whether there is any pending action on the root role — either a
+/// Whether there is any pending action on the root role - either a
 /// transfer or a renounce.
 ///
 /// #### Parameters
@@ -1096,7 +1096,7 @@ fun cancel_pending_default_admin<RootRole>(ac: &mut AccessControl<RootRole>) {
     };
 }
 
-/// Membership check by `TypeName` — used internally when the admin role is
+/// Membership check by `TypeName` - used internally when the admin role is
 /// known only as a `TypeName` value, not as a type parameter. Root role
 /// membership is stored separately as the current default admin.
 fun has_role_by_name<RootRole>(
@@ -1121,7 +1121,7 @@ fun get_role_admin_name<RootRole>(ac: &AccessControl<RootRole>, role: TypeName):
 /// Asserts `Role` and `RootRole` come from the same package + module.
 ///
 /// Uses `with_original_ids` so role types introduced in later upgrades to the
-/// same module still match — the address compared is the package's original
+/// same module still match - the address compared is the package's original
 /// publish ID, which is stable across upgrades. This is the runtime arm of
 /// Invariant 2.
 fun assert_home_module<RootRole, Role>() {

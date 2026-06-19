@@ -160,7 +160,7 @@ public fun wrap<T: key + store>(obj: T, ctx: &mut TxContext): TwoStepTransferWra
     wrapper
 }
 
-/// Borrow the wrapped object immutably—useful for read-only inspection without touching the
+/// Borrow the wrapped object immutably-useful for read-only inspection without touching the
 /// transfer flow.
 ///
 /// #### Parameters

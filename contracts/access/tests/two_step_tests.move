@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_access::two_step_tests;
 
 use openzeppelin_access::two_step_transfer;
@@ -6,18 +5,15 @@ use std::unit_test::assert_eq;
 use sui::event;
 use sui::test_scenario;
 
-#[test_only]
 public struct DummyCap has key, store {
     id: object::UID,
 }
 
-#[test_only]
 public fun dummy_ctx_with_sender(sender: address): TxContext {
     let tx_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
     tx_context::new(sender, tx_hash, 0, 0, 0)
 }
 
-#[test_only]
 fun new_cap(ctx: &mut TxContext): DummyCap {
     DummyCap { id: object::new(ctx) }
 }
@@ -107,7 +103,7 @@ fun borrow_and_return_roundtrip() {
 
 #[test, expected_failure(abort_code = two_step_transfer::EWrongTwoStepTransferWrapper)]
 fun return_val_rejects_wrong_wrapper() {
-    // Borrow from one wrapper but attempt to return into another—should abort.
+    // Borrow from one wrapper but attempt to return into another-should abort.
     let owner = @0xB;
     let mut ctx = dummy_ctx_with_sender(owner);
     let first = two_step_transfer::wrap(new_cap(&mut ctx), &mut ctx);

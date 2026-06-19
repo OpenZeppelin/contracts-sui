@@ -4,7 +4,7 @@ The single source of truth for coding style and conventions in this repository.
 It serves humans and AI agents alike: contributors follow it by hand, and every
 Dev3 stage and code-review tool reads it instead of restating the rules.
 
-> Scope: **how** we write Move in this repo — naming, ordering, idioms, testing,
+> Scope: **how** we write Move in this repo - naming, ordering, idioms, testing,
 > documentation. For **why** the library is shaped the way it is (design
 > decisions, package layout, object model), see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
@@ -16,7 +16,7 @@ These conventions target **Move 2024** (module label syntax, receiver syntax,
 
 - **Error constants**: `EPascalCase`, declared with `#[error(code = N)]`, type
   `vector<u8>`, plain `"..."` string literal (NOT `b"..."`). Codes are sequential
-  from 0 and **append-only** — never renumber existing errors when adding new
+  from 0 and **append-only** - never renumber existing errors when adding new
   ones. Callers (frontends, integrators, tests in other packages) may match on
   the numeric abort code; renumbering silently breaks them. New errors go at the
   bottom with `code = N+1`.
@@ -27,17 +27,17 @@ These conventions target **Move 2024** (module label syntax, receiver syntax,
 - **CRUD**: `new`/`create`, `empty`, `borrow`/`borrow_mut`, `add`/`remove`,
   `exists`/`contains`, `drop`/`destroy`/`destroy_empty`, `to_name`/`from_name`
 - **Dynamic field keys**: positional struct with `Key` suffix
-- **Generic type parameters**: `T`, `U` — use descriptive names only when they
+- **Generic type parameters**: `T`, `U` - use descriptive names only when they
   materially aid readability
 - No "Potato" in hot-potato struct names
 
 ## Module & Package
 
-- `module my_package::my_module;` — no braces, 2024 edition label syntax
+- `module my_package::my_module;` - no braces, 2024 edition label syntax
 - One module per object/data structure
 - PascalCase package names, snake_case named addresses; prefix named addresses
   with the project name (`openzeppelin_*`)
-- Since Sui 1.45, Sui / MoveStdlib / Bridge / SuiSystem are implicitly imported —
+- Since Sui 1.45, Sui / MoveStdlib / Bridge / SuiSystem are implicitly imported -
   no manual dep declaration needed
 
 ## Section ordering
@@ -48,12 +48,12 @@ Every file must use `// === <Name> ===` delimiters in this order:
 2. `// === Errors ===`
 3. `// === Constants ===`
 4. `// === Structs ===`
-5. `// === Events ===` — placed **after** Structs when both are present in the
+5. `// === Events ===` - placed **after** Structs when both are present in the
    same module; in a dedicated events module, this is the only struct-family
    section and Structs is omitted
-6. `// === Method Exports ===` (if any) — `public use fun ...` receiver-syntax
+6. `// === Method Exports ===` (if any) - `public use fun ...` receiver-syntax
    aliases exposed by this module
-7. `// === Init ===` (if an `init` function is present — place it first)
+7. `// === Init ===` (if an `init` function is present - place it first)
 8. `// === Public Functions ===`
 9. `// === View helpers ===`
 10. `// === Admin Functions ===` (if any)
@@ -70,20 +70,20 @@ be preserved:
 // === Scheduling / delay management ===
 ```
 
-These are intentional organisation aids — do **not** remove them.
+These are intentional organisation aids - do **not** remove them.
 
 Common ordering violations to watch for:
 
 - Constants section appearing before Errors
 - View helpers appearing after Private Functions
 - Witness structs placed in `// === Init ===` instead of `// === Structs ===`
-- `// === Test only helpers ===` (wrong capitalisation — must be
+- `// === Test only helpers ===` (wrong capitalisation - must be
   `// === Test-Only Helpers ===`)
 
 ## Imports
 
 - Don't write `use pkg::mod::{Self};` on its own line when other members of
-  `pkg::mod` are imported elsewhere — merge into a single grouped import:
+  `pkg::mod` are imported elsewhere - merge into a single grouped import:
   `use pkg::mod::{Self, OtherMember};`. A lone `use pkg::mod;` (without `{}`) is
   fine when only the module itself is needed.
 
@@ -93,7 +93,7 @@ Common ordering violations to watch for:
 
 ## Functions
 
-- Use `public` OR `entry` — never combine as `public entry`
+- Use `public` OR `entry` - never combine as `public entry`
 - Write composable functions that return values (for PTB usage); mint/create
   functions should return the object, not transfer it internally
 - Parameter order: **self (receiver object) first → capability second → other
@@ -102,11 +102,11 @@ Common ordering violations to watch for:
   syntax `self.fn(&cap, other_obj, ...)` keeps the cap visible at the call site.
 
   ```move
-  // good — self, cap, rest
+  // good - self, cap, rest
   public fun set_name(account: &mut Account, _: &AdminCap, new_name: String) { ... }
   // call: account.set_name(&cap, new_name)
 
-  // good — self, cap, other object, primitives, Clock, ctx
+  // good - self, cap, other object, primitives, Clock, ctx
   public fun authorize_transfer(
       pool: &mut Pool,
       cap: &AdminCap,
@@ -117,19 +117,19 @@ Common ordering violations to watch for:
   ) { ... }
   // call: pool.authorize_transfer(&cap, &account, amount, &clock, ctx)
 
-  // bad — reversed associativity, reads backwards at the call site
+  // bad - reversed associativity, reads backwards at the call site
   public fun update(_: &AdminCap, account: &mut Account, new_name: String) { ... }
   // call: cap.update(&mut account, new_name)
   ```
 
-- Prefer keeping core logic free of `transfer::*` — return objects instead and
+- Prefer keeping core logic free of `transfer::*` - return objects instead and
   push transfers to the edges. Exceptions exist where transferring *is* the
   operation's semantic; document them rather than working around the guideline
   (see [`ARCHITECTURE.md`](./ARCHITECTURE.md#core-design-principles)).
-- Accept payment by value — `fun pay(payment: Coin<SUI>)`, not
-  `&mut Coin<SUI>` plus an `amount` — so the caller hands over exactly what they
+- Accept payment by value - `fun pay(payment: Coin<SUI>)`, not
+  `&mut Coin<SUI>` plus an `amount` - so the caller hands over exactly what they
   intend; a `&mut Coin` lets the callee draw an unbounded amount.
-- Use `public(package)` or private visibility liberally — only expose the stable
+- Use `public(package)` or private visibility liberally - only expose the stable
   external API as `public`. A `public` signature is permanent across package
   upgrades (see [`ARCHITECTURE.md`](./ARCHITECTURE.md#upgrade-safety)).
 
@@ -152,22 +152,22 @@ Examples of required rewrites:
 - `string::length(&s)` → `s.length()`
 - `vector::length(&v)` → `v.length()`
 
-**Cases that CANNOT use receiver syntax — keep the module-qualified form:**
+**Cases that CANNOT use receiver syntax - keep the module-qualified form:**
 
-- `event::emit(e)` — generic function with no native method binding; always
+- `event::emit(e)` - generic function with no native method binding; always
   write `event::emit(e)`
 - `transfer::transfer(obj, recipient)` / `transfer::public_transfer(...)` /
-  `transfer::share_object(obj)` / `transfer::freeze_object(obj)` — Sui transfer
+  `transfer::share_object(obj)` / `transfer::freeze_object(obj)` - Sui transfer
   builtins have no method aliases by default; keep module-qualified
-- `object::id(&obj)` / `object::id_address(&obj)` — no method alias is
+- `object::id(&obj)` / `object::id_address(&obj)` - no method alias is
   registered for these generic `key` functions; keep as `object::id(&obj)`
 - `dynamic_field::add/borrow/borrow_mut/remove` and
-  `dynamic_object_field::*` — no method alias is registered on `UID`; keep
+  `dynamic_object_field::*` - no method alias is registered on `UID`; keep
   module-qualified (e.g. `dof::add(&mut uid, key, val)`)
 - Constructor / factory free functions where no instance exists yet (e.g.
   `MyStruct::new(...)`)
 - Any free function whose first parameter is a primitive (`u8`..`u256`, `bool`,
-  `address`) — `public use fun fn as u64.method` is rejected by the compiler when
+  `address`) - `public use fun fn as u64.method` is rejected by the compiler when
   the type is from a different package (stdlib). There is no correct workaround
   short of the function being defined in stdlib itself. Do NOT add non-public
   `use fun` workarounds in test modules as a substitute.
@@ -188,7 +188,7 @@ Examples of required rewrites:
 
 ## Collections & object size
 
-- Objects max 250 KB — transactions abort if exceeded
+- Objects max 250 KB - transactions abort if exceeded
 - Use `vector` / `VecSet` / `VecMap` only for bounded collections ≤ 1000 items
 - Use `Table` / `Bag` / `ObjectBag` / `ObjectTable` / `LinkedTable` for large or
   unbounded collections
@@ -203,7 +203,7 @@ Examples of required rewrites:
   `#[test_only]` helpers (compiled only in test mode) and `#[test]` functions
   that exercise private items unreachable from `tests/`. Place all `#[test_only]`
   and `#[test]` items under the `// === Test-Only Helpers ===` section (item 13).
-- Combine attributes: `#[test, expected_failure(abort_code = EMyError)]` —
+- Combine attributes: `#[test, expected_failure(abort_code = EMyError)]` -
   **always reference the error constant by name**, never by numeric literal.
   `abort_code = 5` is brittle: renumbering the error const breaks the test
   silently.
@@ -211,46 +211,48 @@ Examples of required rewrites:
   assertions (`assert!(r >= lo && r <= hi)`). For genuine property tests, use
   Sui's `#[random_test]` attribute. **Exception:** an approximation test that
   checks an on-chain result against an off-chain mathematical reference within a
-  tolerance (e.g. `assert!(diff < epsilon)`) is *intentionally* bound-based — the
+  tolerance (e.g. `assert!(diff < epsilon)`) is *intentionally* bound-based - the
   tolerance is the point. Do not convert these to `assert_eq!`; pinning the exact
   on-chain output would only assert "the implementation returns what it returns"
   and lose the closeness-to-truth check.
-- Prefer `assert!(cond)` over `assert!(cond, 0)` — Move 2024 auto-assigns abort
+- Prefer `assert!(cond)` over `assert!(cond, 0)` - Move 2024 auto-assigns abort
   codes when omitted; a literal `0` is meaningless boilerplate.
-- No cleanup in expected-failure tests — just `abort` at the failure boundary.
+- No cleanup in expected-failure tests - just `abort` at the failure boundary.
 - In `_tests` modules: no `test_` prefix on function names; use descriptive names.
 - Use `tx_context::dummy()` for simple tests instead of TestScenario overhead.
 - Use `assert_eq!` (from `std::unit_test`) not `assert!` with abort codes (abort
   codes collide with app errors). Import with `use std::unit_test::assert_eq;`.
 - Use `use std::unit_test::destroy` as the black hole instead of
-  `destroy_for_testing()` (note: `sui::test_utils::destroy` is deprecated — the
+  `destroy_for_testing()` (note: `sui::test_utils::destroy` is deprecated - the
   current Sui compiler emits `E04037` and points to `std::unit_test::destroy`).
 
 ## Lint suppression
 
 - **Do not add `#[allow(lint(...))]` attributes.** Every lint warning must be
   resolved by fixing the underlying code, not by silencing it.
-- If a lint warning cannot be addressed, stop and escalate — do not suppress.
+- If a lint warning cannot be addressed, stop and escalate - do not suppress.
 - An existing `#[allow(lint(...))]` is itself a violation: remove the attribute
   and fix the code it was hiding. If the fix is non-trivial, surface it.
 - `#[allow(...)]` for non-lint diagnostics (e.g. `unused_const`, `unused_use`) is
-  similarly disallowed — fix or remove the offending item.
+  similarly disallowed - fix or remove the offending item.
 
 ## Documentation
 
 Doc-comments are the source of truth for the generated API reference
-(`sui move build --doc`) and for downstream AI-integrator tooling — treat them as
+(`sui move build --doc`) and for downstream AI-integrator tooling - treat them as
 part of the public API, not decoration. Keep them complete and accurate.
 
 - `///` for doc comments (renders in IDEs), `//` for inline technical notes
 - No JavaDoc-style `/** */`
+- Use regular dashes (`-`) instead of em dashes (`—`) in all prose, comments,
+  and documentation
 - Document struct fields, complex params, and return values
 - Use section headings `#### Parameters`, `#### Returns`, and `#### Aborts` when
   relevant; use `-` for list items (not `*`)
 - Document public functions: include `#### Parameters` and `#### Returns` where
-  they add detail beyond the one-line summary — a trivial getter whose summary
+  they add detail beyond the one-line summary - a trivial getter whose summary
   already states what it returns needs neither. Always include an `#### Aborts`
-  section whenever a function can abort, listing **every** error it can raise —
+  section whenever a function can abort, listing **every** error it can raise -
   including errors propagated from internal calls
 - State caller preconditions explicitly and map each to the error it fails with
   (e.g. "Aborts with `EUnauthorized` if the caller lacks the role")

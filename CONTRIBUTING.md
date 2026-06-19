@@ -19,7 +19,7 @@ As a contributor, you are expected to fork this repository, work on your own for
 ## Code Quality Standards
 
 Coding style and conventions for this repository live in
-[`STYLEGUIDE.md`](./STYLEGUIDE.md) (the single source of truth — naming, section
+[`STYLEGUIDE.md`](./STYLEGUIDE.md) (the single source of truth - naming, section
 ordering, idioms, testing, documentation), with the design rationale in
 [`ARCHITECTURE.md`](./ARCHITECTURE.md). Read those before opening a PR; the items
 below are the hard gates your contribution must clear:
@@ -33,7 +33,7 @@ below are the hard gates your contribution must clear:
 
 ## Commit and PR conventions
 
-The single source of truth for how changes land — humans and agents follow the
+The single source of truth for how changes land - humans and agents follow the
 same rules:
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for
@@ -41,14 +41,8 @@ same rules:
 - Never add a `Co-Authored-By` trailer to commits.
 - Do not include a "Test plan" section in PR descriptions.
 - Do not add dependencies or change the package split without explicit sign-off
-  — the package boundary is an audit boundary (see
+  - the package boundary is an audit boundary (see
   [`ARCHITECTURE.md`](./ARCHITECTURE.md)).
-- When you add a new package (a new `Move.toml` directory under `contracts/` or
-  `math/`), register it in the CI package matrix in the same PR - add its path to
-  the `PACKAGES` array in
-  [`.github/workflows/test.yml`](./.github/workflows/test.yml). The matrix is the
-  only thing that builds, lints, and tests a package in CI; a package missing from
-  it is silently never checked, so its tests do not gate merges.
 
 ## A typical workflow
 

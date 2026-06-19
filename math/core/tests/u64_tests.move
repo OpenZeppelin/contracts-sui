@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_math::u64_tests;
 
 use openzeppelin_math::macros;
@@ -51,7 +50,7 @@ fun checked_shl_returns_same_for_zero_shift() {
 
 #[test]
 fun checked_shl_detects_high_bits() {
-    // Top bit already set — shifting would overflow.
+    // Top bit already set - shifting would overflow.
     let result = u64::checked_shl(1 << 63, 1);
     assert_eq!(result, option::none());
 }

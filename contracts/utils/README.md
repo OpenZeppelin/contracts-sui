@@ -23,9 +23,9 @@ openzeppelin_utils = { r.mvr = "@openzeppelin-move/utils" }
 
 Three strategies share the same API:
 
-- **Bucket** ([Wikipedia](https://en.wikipedia.org/wiki/Token_bucket)) — a bucket holds up to `capacity` tokens and refills at a steady rate. Each consume drains tokens; an empty bucket denies the call. Permits short bursts up to `capacity` on top of a sustained average rate, which is what most APIs and on-chain throughput controls actually want.
-- **Fixed window** — time is partitioned into back-to-back windows of `window_ms`, anchored at limiter creation. Each window allows up to `capacity` units and resets to full `capacity` at the boundary. Cheap and easy to reason about; the known trade-off is that a caller can spend the full quota at the end of one window and the full quota at the start of the next, yielding a `2 * capacity` burst across the boundary. Pick it when the quota is the contract (e.g. "100 mints per hour") and the boundary burst is acceptable.
-- **Cooldown** — after `capacity` units are drawn down, the limiter is gated for `cooldown_ms` before any further consumption is allowed; once the gate elapses, the full `capacity` is available again. Equivalent to a "recharge after use" pattern (think action cooldowns in games, or "wait 60s before retrying").
+- **Bucket** ([Wikipedia](https://en.wikipedia.org/wiki/Token_bucket)) - a bucket holds up to `capacity` tokens and refills at a steady rate. Each consume drains tokens; an empty bucket denies the call. Permits short bursts up to `capacity` on top of a sustained average rate, which is what most APIs and on-chain throughput controls actually want.
+- **Fixed window** - time is partitioned into back-to-back windows of `window_ms`, anchored at limiter creation. Each window allows up to `capacity` units and resets to full `capacity` at the boundary. Cheap and easy to reason about; the known trade-off is that a caller can spend the full quota at the end of one window and the full quota at the start of the next, yielding a `2 * capacity` burst across the boundary. Pick it when the quota is the contract (e.g. "100 mints per hour") and the boundary burst is acceptable.
+- **Cooldown** - after `capacity` units are drawn down, the limiter is gated for `cooldown_ms` before any further consumption is allowed; once the gate elapses, the full `capacity` is available again. Equivalent to a "recharge after use" pattern (think action cooldowns in games, or "wait 60s before retrying").
 
 | Variant | When to pick it |
 |---------|-----------------|
@@ -48,13 +48,13 @@ Pick the constructor that matches your policy; the consume and inspect calls are
 use openzeppelin_utils::rate_limiter::{Self, RateLimiter};
 use sui::clock::Clock;
 
-// Bucket — smooth throughput with bursts; cap 1 000, refills 100 units every 6 s, starting full.
+// Bucket - smooth throughput with bursts; cap 1 000, refills 100 units every 6 s, starting full.
 let limiter: RateLimiter = rate_limiter::new_bucket(1_000, 100, 6_000, clock.timestamp_ms(), 1_000, clock);
 
-// Fixed window — hard per-hour quota of 100 units, starting full at the current time.
+// Fixed window - hard per-hour quota of 100 units, starting full at the current time.
 let limiter: RateLimiter = rate_limiter::new_fixed_window(100, 3_600_000, clock.timestamp_ms(), 100, clock);
 
-// Cooldown — up to 1 000 units per batch, then a 60 s gate before the next batch.
+// Cooldown - up to 1 000 units per batch, then a 60 s gate before the next batch.
 let limiter: RateLimiter = rate_limiter::new_cooldown(1_000, 60_000, 0, 1_000, clock);
 
 // Identical hot-path API regardless of variant:

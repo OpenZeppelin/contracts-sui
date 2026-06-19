@@ -1,8 +1,14 @@
 // `abort 999` sentinels appear after each known-aborting call in the
-// `expected_failure` tests — they're deliberate, unreachable, and exist only
+// `expected_failure` tests - they're deliberate, unreachable, and exist only
 // to satisfy the type checker on the `ac` / `clk` bindings without rewriting
 // every test as a by-value helper. Suppressed module-wide so individual
 // tests stay clean.
+// `#[test_only]` is required here, not redundant: this module constructs its
+// own OTW (`ACCESS_CONTROL_TESTS {}`) in `setup`. The Sui verifier only allows
+// manual OTW construction when the enclosing module/function carries the
+// `#[test]`/`#[test_only]` attribute - it keys off the attribute, not the
+// `tests/` directory - so dropping it reintroduces the "Invalid one-time
+// witness construction" error.
 #[test_only, allow(lint(abort_without_constant))]
 module openzeppelin_access::access_control_tests;
 
@@ -16,7 +22,7 @@ use sui::test_scenario::{Self, Scenario};
 
 // === Test fixtures ===
 //
-// `ACCESS_CONTROL_TESTS` is the OTW for this module — its name matches the
+// `ACCESS_CONTROL_TESTS` is the OTW for this module - its name matches the
 // module name, so `is_one_time_witness` accepts it as the root role even when
 // constructed manually inside a test. `NotAnOtw` deliberately violates the
 // OTW name convention to exercise the rejection path. The phantom role
@@ -38,7 +44,6 @@ public struct RoleY {}
 /// Deploys an `AccessControl` rooted at `ACCESS_CONTROL_TESTS`, shares it,
 /// and advances to a fresh transaction so `take_shared` is immediately
 /// available.
-#[test_only]
 #[allow(lint(share_owned))]
 fun setup(deployer: address, delay: u64): Scenario {
     let mut scenario = test_scenario::begin(deployer);
@@ -54,7 +59,6 @@ fun setup(deployer: address, delay: u64): Scenario {
 
 /// Convenience: take the singleton registry from the current transaction.
 /// Wraps `test_scenario::take_shared` to keep test bodies tight.
-#[test_only]
 fun take_ac(scenario: &Scenario): AccessControl<ACCESS_CONTROL_TESTS> {
     scenario.take_shared<AccessControl<ACCESS_CONTROL_TESTS>>()
 }
@@ -236,7 +240,7 @@ fun grant_role_idempotent() {
     let count_after_first = event::events_by_type<
         access_control::RoleGranted<ACCESS_CONTROL_TESTS>,
     >().length();
-    // Second grant to the same account is a no-op — no new event, no abort.
+    // Second grant to the same account is a no-op - no new event, no abort.
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
     let count_after_second = event::events_by_type<
         access_control::RoleGranted<ACCESS_CONTROL_TESTS>,
@@ -346,7 +350,7 @@ fun revoke_role_idempotent_non_member() {
         access_control::RoleRevoked<ACCESS_CONTROL_TESTS>,
     >().length();
 
-    // Carol never had the role — revoking is a no-op.
+    // Carol never had the role - revoking is a no-op.
     ac.revoke_role<_, AdminA>(@0xC, scenario.ctx());
     assert_eq!(
         event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>().length(),
@@ -437,7 +441,7 @@ fun renounce_role_happy_path() {
     scenario.end();
 }
 
-// Direct `renounce_role` on the root role is blocked — the only way to
+// Direct `renounce_role` on the root role is blocked - the only way to
 // relinquish the root role is the timelocked `begin_default_admin_renounce`
 // + `accept_default_admin_renounce` flow. Without this block, a stray
 // renounce call could leave the registry permanently unmanaged with no
@@ -459,7 +463,7 @@ fun renounce_role_idempotent_non_member() {
     scenario.next_tx(alice);
     let mut ac = take_ac(&scenario);
 
-    // alice never held AdminA — renounce is a no-op, no event.
+    // alice never held AdminA - renounce is a no-op, no event.
     ac.renounce_role<_, AdminA>(scenario.ctx());
     assert_eq!(
         event::events_by_type<access_control::RoleRevoked<ACCESS_CONTROL_TESTS>>().length(),
@@ -470,7 +474,7 @@ fun renounce_role_idempotent_non_member() {
     scenario.end();
 }
 
-// Renounce idempotency: role entry exists, but the caller is not a member —
+// Renounce idempotency: role entry exists, but the caller is not a member -
 // the second early-return path. Distinct from the "no role entry" path covered
 // by the test above.
 #[test]
@@ -481,11 +485,11 @@ fun renounce_role_idempotent_existing_role_non_member() {
     let mut scenario = setup(deployer, 0);
     let mut ac = take_ac(&scenario);
 
-    // Grant AdminA to alice — the role entry now exists.
+    // Grant AdminA to alice - the role entry now exists.
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
     test_scenario::return_shared(ac);
 
-    // Carol is not a member of AdminA — exercises the "role entry exists, not
+    // Carol is not a member of AdminA - exercises the "role entry exists, not
     // member" early-return branch.
     scenario.next_tx(carol);
     let mut ac = take_ac(&scenario);
@@ -534,7 +538,7 @@ fun set_role_admin_happy_path() {
     assert_eq!(changed[0], expected);
 
     // Grant AdminA to alice. alice can now grant RoleX (chain in effect),
-    // but the deployer (root) no longer can — RoleX's admin is now AdminA.
+    // but the deployer (root) no longer can - RoleX's admin is now AdminA.
     ac.grant_role<_, AdminA>(alice, scenario.ctx());
     test_scenario::return_shared(ac);
 
@@ -561,7 +565,7 @@ fun set_role_admin_lazy_create() {
     scenario.end();
 }
 
-// set_role_admin against a role that already has an entry — exercises
+// set_role_admin against a role that already has an entry - exercises
 // the "update existing admin_role" branch (the lazy-create branch is covered
 // by the test above) and asserts the event reports previous = old admin
 // rather than empty / fresh-default.
@@ -576,7 +580,7 @@ fun set_role_admin_updates_existing_role() {
     ac.grant_role<_, RoleX>(alice, scenario.ctx());
     assert_eq!(ac.get_role_admin<_, RoleX>(), with_original_ids<ACCESS_CONTROL_TESTS>());
 
-    // Re-target RoleX's admin to AdminA — exercises the "update existing
+    // Re-target RoleX's admin to AdminA - exercises the "update existing
     // entry" branch (the lazy-create branch is covered by the test above).
     ac.set_role_admin<_, RoleX, AdminA>(scenario.ctx());
 
@@ -634,7 +638,7 @@ fun set_role_admin_rejects_non_admin_existing_entry() {
     ac.set_role_admin<_, RoleX, AdminA>(scenario.ctx());
 
     // Second call hits the update-existing branch. `previous_admin_role` is
-    // now AdminA — deployer holds root but NOT AdminA, so this must abort.
+    // now AdminA - deployer holds root but NOT AdminA, so this must abort.
     ac.set_role_admin<_, RoleX, AdminB>(scenario.ctx());
     abort 999
 }
@@ -699,7 +703,7 @@ fun assert_has_role_passes_for_member() {
     let deployer = @0xA;
     let scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
-    // Deployer holds root — assert_has_role on root must not abort.
+    // Deployer holds root - assert_has_role on root must not abort.
     ac.assert_has_role<_, ACCESS_CONTROL_TESTS>(deployer);
     test_scenario::return_shared(ac);
     scenario.end();
@@ -719,7 +723,7 @@ fun get_role_admin_defaults_to_root() {
     let deployer = @0xA;
     let scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
-    // RoleX has no entry — get_role_admin returns the protected root.
+    // RoleX has no entry - get_role_admin returns the protected root.
     assert_eq!(ac.get_role_admin<_, RoleX>(), with_original_ids<ACCESS_CONTROL_TESTS>());
     test_scenario::return_shared(ac);
     scenario.end();
@@ -1283,7 +1287,7 @@ fun role_hierarchy_chain() {
 
 // Companion to `role_hierarchy_chain`: pins that `set_role_admin`
 // *transfers* grant authority rather than duplicating it. After RoleX's admin
-// is shifted to AdminA, the deployer — who still holds root but not AdminA —
+// is shifted to AdminA, the deployer - who still holds root but not AdminA -
 // must no longer be able to grant RoleX. Without this negative assertion, a
 // regression where the previous admin retained grant power would slip past the
 // happy-path test.
@@ -1320,7 +1324,7 @@ fun begin_admin_renounce_happy_path() {
     assert!(ac.has_pending_default_admin_transfer());
     assert!(ac.is_pending_default_admin_renounce());
     assert_eq!(ac.default_admin(), option::some(deployer));
-    // Renounce has no incoming admin — `pending_default_admin_new_admin`
+    // Renounce has no incoming admin - `pending_default_admin_new_admin`
     // returns `none` for both "no pending" and "pending renounce". Use
     // `is_pending_default_admin_renounce` to disambiguate (above).
     assert!(ac.pending_default_admin_new_admin().is_none());
@@ -1366,7 +1370,7 @@ fun begin_admin_renounce_rejects_non_root() {
 }
 
 // Scheduling a renounce cancels and overwrites an existing pending transfer
-// (and vice versa). The two are mutually exclusive — they share
+// (and vice versa). The two are mutually exclusive - they share
 // `pending_default_admin`.
 #[test]
 fun begin_admin_renounce_overwrites_pending_transfer() {
@@ -1532,7 +1536,7 @@ fun accept_admin_renounce_rejects_no_pending() {
 }
 
 // `accept_default_admin_renounce` rejects when the pending action is a
-// transfer (not a renounce) — the caller must use the matching accept path.
+// transfer (not a renounce) - the caller must use the matching accept path.
 #[test, expected_failure(abort_code = access_control::ENotPendingRenounce)]
 fun accept_admin_renounce_rejects_pending_transfer() {
     let deployer = @0xA;
@@ -1545,7 +1549,7 @@ fun accept_admin_renounce_rejects_pending_transfer() {
 }
 
 // `accept_default_admin_transfer` rejects when the pending action is a
-// renounce (not a transfer) — symmetric with the above.
+// renounce (not a transfer) - symmetric with the above.
 #[test, expected_failure(abort_code = access_control::ENotPendingTransfer)]
 fun accept_admin_transfer_rejects_pending_renounce() {
     let deployer = @0xA;
@@ -1990,7 +1994,7 @@ fun delay_change_getters_when_no_pending() {
 
 // A pending admin transfer was scheduled under the old delay. A delay change
 // then becomes effective. The pending transfer's `execute_after_ms` must not
-// change — in-flight transfers honor the delay they were scheduled under,
+// change - in-flight transfers honor the delay they were scheduled under,
 // regardless of subsequent delay changes.
 #[test]
 fun delay_change_does_not_affect_pending_transfer() {
