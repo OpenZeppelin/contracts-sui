@@ -189,6 +189,14 @@ public struct VestedAmount<phantom S> has drop {
     amount: u64,
 }
 
+/// Carries a destroyed wallet's params back to its curve. A HOT POTATO - no abilities -
+/// so it cannot be dropped, stored, or copied: it MUST be consumed before the tx ends,
+/// and only `consume_receipt` (witness-gated) can consume it. This is what drags the
+/// curve into the PTB to finalize, and lets it veto by aborting.
+public struct DestroyReceipt<phantom S, P> {
+    params: P,
+}
+
 // === Events ===
 
 /// Emitted by `new` when a wallet is created.
@@ -431,6 +439,8 @@ public fun release<S: drop, P: copy + drop + store, C>(
 ///
 /// #### Returns
 /// - The parameters previously stored in the wallet.
+// TODO: THIS ISN'T CURVE-AGNOSTIC WHEN A WRAPPER AROUND WALLET IS CREATED, AS IT WOULD
+// REQUIRE THE WRAPPER TO EXPOSE `&mut inner` TO WORK. FIND A REDESIGN.
 public fun set_schedule_params<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     _w: S,
@@ -465,8 +475,7 @@ public fun set_schedule_params<S: drop, P: copy + drop + store, C>(
 /// - `ENotEmpty` if the wallet still holds a balance.
 public fun destroy_empty<S: drop, P: copy + drop + store, C>(
     wallet: VestingWallet<S, P, C>,
-    _w: S,
-): P {
+): DestroyReceipt<S, P> {
     assert!(wallet.balance.value() == 0, ENotEmpty);
 
     let wallet_id = object::id(&wallet);
@@ -479,7 +488,18 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
 
     event::emit(Destroyed<S, C> { wallet_id, beneficiary, total_released });
 
-    schedule_params
+    DestroyReceipt { params: schedule_params }
+}
+
+/// Witness-gated unwrap. Only the declaring curve can call this, so it - and only it -
+/// sees the real `P`, runs teardown logic, and aborts (reverting the whole teardown)
+/// if destruction should not be accepted.
+public fun consume_receipt<S: drop, P: copy + drop + store>(
+    receipt: DestroyReceipt<S, P>,
+    _w: S,
+): P {
+    let DestroyReceipt { params } = receipt;
+    params
 }
 
 // === View helpers ===
