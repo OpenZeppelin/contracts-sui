@@ -201,14 +201,31 @@ If `release` instead required the witness `S`, this would be impossible: a wrapp
 that doesn't own `S` could not call it, so it would have to expose `&mut inner` and
 lose all control over deposits and releases.
 
+**Constructing the wallet.** The wrapper either accepts an already-built
+`VestingWallet<S, P, C>` from the caller, or builds one itself. To build it without
+depending on a curve's `new`, take a validated `P` from the curve module's `params`
+constructor and call the core directly - so the protocol owns topology and nesting
+while the curve module still owns validation. For the linear curve:
+
+```move
+let params = vesting_wallet_linear::params(start_ms, cliff_ms, period_ms, steps);
+let inner = vesting_wallet::new<Linear, Params, C>(params, beneficiary, ctx);
+let vault = GatedVault { id: object::new(ctx), inner, /* ... */ };
+```
+
+Every curve following the pattern exposes an analogous `params` constructor, so the
+protocol stays one integration wide across curves.
+
 ### Custom schedules
 
 To author a new curve, follow the `vesting_wallet_linear` pattern:
 
 1. Declare a witness `public struct MyCurve has drop {}` and a parameters struct
    `public struct MyParams has copy, drop, store { /* ... */ }`.
-2. A constructor that validates the parameters and calls
-   `vesting_wallet::new<MyCurve, MyParams, C>(MyParams { .. }, beneficiary, ctx)`.
+2. A public `params` constructor that validates and returns a `MyParams`, plus a
+   `new` that is sugar over `vesting_wallet::new<MyCurve, MyParams, C>(params(..),
+   beneficiary, ctx)`. Exposing `params` separately lets a curve-agnostic protocol
+   build the wallet itself without routing through `new`.
 3. A `vested_amount(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
    that evaluates the curve and ends in `wallet.mint_vested_amount(MyCurve {}, amount)`.
 4. A teardown that calls `wallet.destroy_empty(MyCurve {})` and destructures the

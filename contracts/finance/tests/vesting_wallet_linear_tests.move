@@ -153,13 +153,48 @@ fun new_sets_params_and_emits_created() {
         vesting_wallet::test_new_created<Linear, Params, USDC>(
             object::id(&wallet),
             BENEFICIARY,
-            vesting_wallet_linear::test_params(100, 250, 1000, 4),
+            vesting_wallet_linear::params(100, 250, 1000, 4),
         ),
     );
 
     destroy(wallet);
     destroy(clk);
     test.end();
+}
+
+// `params` is the seam for a curve-agnostic protocol: it hands out a validated
+// `Params` that drives the bare `vesting_wallet` primitive directly, producing a
+// wallet equivalent to one built by `new` - the accessors and curve read the same.
+#[test]
+fun params_drives_bare_primitive() {
+    let (mut test, mut clk) = setup(0);
+
+    let p = vesting_wallet_linear::params(100, 250, 1000, 4);
+    let mut wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
+    wallet.fund(1000, test.ctx());
+
+    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::period(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::steps(&wallet), 4);
+    assert_eq!(vesting_wallet_linear::end(&wallet), 4100);
+
+    // The curve evaluates identically to a `new`-built wallet: one step elapsed at
+    // t = 1100 (100 start + 1000 period), so 1000 * 1 / 4 = 250.
+    clk.set_for_testing(1100);
+    assert_eq!(wallet.vested(&clk), 250);
+
+    destroy(wallet);
+    destroy(clk);
+    test.end();
+}
+
+// The construction guards in `params` are exercised through `new` above; `new`
+// delegates validation to `params`, so a guard reached via `params` directly aborts
+// with the same code.
+#[test, expected_failure(abort_code = vesting_wallet_linear::EZeroPeriod)]
+fun params_rejects_zero_period() {
+    vesting_wallet_linear::params(0, 0, 0, 4);
 }
 
 // `create_and_share` puts the wallet into the shared topology.
@@ -690,6 +725,33 @@ fun new_continuous_sets_period_one_and_steps_duration() {
     destroy(wallet);
     destroy(clk);
     test.end();
+}
+
+// `params_continuous` is the curve-agnostic seam for a continuous schedule: it yields
+// the `period = 1`, `steps = duration` `Params` that drives the bare primitive
+// directly, equivalent to a `new_continuous`-built wallet.
+#[test]
+fun params_continuous_drives_bare_primitive() {
+    let (mut test, clk) = setup(0);
+
+    let p = vesting_wallet_linear::params_continuous(100, 250, 1000);
+    let wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
+
+    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::period(&wallet), 1);
+    assert_eq!(vesting_wallet_linear::steps(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::end(&wallet), 1100);
+
+    destroy(wallet);
+    destroy(clk);
+    test.end();
+}
+
+// A zero duration is rejected, mirroring `new_continuous`.
+#[test, expected_failure(abort_code = vesting_wallet_linear::EZeroSteps)]
+fun params_continuous_rejects_zero_duration() {
+    vesting_wallet_linear::params_continuous(0, 0, 0);
 }
 
 // === Curve shape ===

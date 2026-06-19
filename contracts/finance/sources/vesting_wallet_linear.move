@@ -3,12 +3,15 @@
 /// linear-with-cliff vesting available as its `period_ms = 1` limit.
 ///
 /// This module declares the `Linear` witness and its `Params`, plus the full
-/// integrator API around them (`new` / `new_continuous` / `vested_amount` /
-/// `release` / `destroy` and friends). It implements the curve on top of the
-/// curve-agnostic `vesting_wallet` primitive: `new` builds a tranche schedule
-/// (`period_ms`, `steps`) and `new_continuous` is sugar for the continuous linear
-/// case. An integrator who wants either touches only this module - they never
-/// construct a bare wallet or mint a `VestedAmount` by hand.
+/// integrator API around them (`params` / `params_continuous` / `new` /
+/// `new_continuous` / `vested_amount` / `release` / `destroy` and friends). It
+/// implements the curve on top of the curve-agnostic `vesting_wallet` primitive:
+/// `params` validates and builds a tranche schedule (`period_ms`, `steps`), `new` is
+/// sugar that hands that `Params` to `vesting_wallet::new`, and `params_continuous` /
+/// `new_continuous` are the continuous linear (`period_ms = 1`) analogs. An integrator who wants the wallet built for them touches only this module -
+/// they never construct a bare wallet or mint a `VestedAmount` by hand. A
+/// curve-agnostic protocol that drives the bare `vesting_wallet` primitive itself
+/// takes only `params` and mints the wallet on its own (see "Why a separate module").
 ///
 /// # Why a separate module
 ///
@@ -18,6 +21,12 @@
 /// `Params` by value) or mint a `VestedAmount<Linear>` (via
 /// `vesting_wallet::mint_vested_amount`, which takes the `Linear` witness). See
 /// `vesting_wallet`'s docs for the full rationale.
+///
+/// The public `params` constructor is the seam this gives an external protocol: it
+/// hands out a *validated* `Params` without surrendering the witness, so a
+/// curve-agnostic wrapper can call `vesting_wallet::new<Linear, Params, C>` itself -
+/// choosing its own topology and nesting - while curve evaluation and teardown, which
+/// need `Linear`, stay gated to this module.
 ///
 /// # The curve
 ///
@@ -93,6 +102,66 @@ public struct Params has copy, drop, store {
 
 // === Constructors ===
 
+/// Build a validated `Params` value for the stepped (tranche) schedule, running the
+/// same construction guards as `new`. This is the only way to obtain a `Params`
+/// outside this module (its fields are module-private), so a curve-agnostic protocol
+/// that drives the bare `vesting_wallet` primitive directly can mint the wallet
+/// itself - `vesting_wallet::new<Linear, Params, C>(params(..), beneficiary, ctx)` -
+/// without routing wallet creation through this module's `new`. `new` is sugar over
+/// exactly this path.
+///
+/// #### Parameters
+/// - `start_ms`: Timestamp (ms) at which vesting begins.
+/// - `cliff_ms`: Cliff length (ms from `start_ms`); `0` for no cliff.
+/// - `period_ms`: Length of each tranche period (ms).
+/// - `steps`: Number of equal tranches.
+///
+/// #### Returns
+/// - A validated `Params` for the stepped schedule.
+///
+/// #### Aborts
+/// - `EZeroPeriod` if `period_ms == 0`.
+/// - `EZeroSteps` if `steps == 0`.
+/// - `EScheduleOverflow` if `period_ms * steps`, or `start_ms` plus that duration,
+///   would overflow `u64`.
+/// - `EInvalidCliff` if `cliff_ms > period_ms * steps`.
+public fun params(start_ms: u64, cliff_ms: u64, period_ms: u64, steps: u64): Params {
+    assert!(period_ms > 0, EZeroPeriod);
+    assert!(steps > 0, EZeroSteps);
+
+    let max = std::u64::max_value!();
+    assert!(period_ms <= max / steps, EScheduleOverflow);
+    let duration = period_ms * steps;
+    assert!(cliff_ms <= duration, EInvalidCliff);
+    assert!(duration <= max - start_ms, EScheduleOverflow);
+
+    Params { start_ms, period_ms, steps, cliff_ms }
+}
+
+/// Build a validated `Params` value for the continuous linear-with-cliff schedule:
+/// the stepped curve in the `period_ms = 1` limit (`steps = duration_ms`). The
+/// `params_continuous`-to-`params` relationship mirrors `new_continuous`-to-`new`, so
+/// a curve-agnostic protocol can drive `vesting_wallet::new` with a continuous
+/// schedule without routing through this module's `new_continuous`.
+///
+/// #### Parameters
+/// - `start_ms`: Timestamp (ms) at which vesting begins.
+/// - `cliff_ms`: Cliff length (ms from `start_ms`); `0` for no cliff.
+/// - `duration_ms`: Length of the vesting period (ms).
+///
+/// #### Returns
+/// - A validated `Params` for the continuous linear schedule.
+///
+/// #### Aborts
+/// - `EZeroSteps` if `duration_ms == 0`.
+/// - `EInvalidCliff` if `cliff_ms > duration_ms`.
+/// - `EScheduleOverflow` if `start_ms + duration_ms` would overflow `u64`.
+public fun params_continuous(start_ms: u64, cliff_ms: u64, duration_ms: u64): Params {
+    // The continuous curve is the stepped curve with one tranche per millisecond.
+    // A zero `duration_ms` becomes zero `steps`, so `params` rejects it with `EZeroSteps`.
+    params(start_ms, cliff_ms, 1, duration_ms)
+}
+
 /// Build a `VestingWallet<Linear, Params, C>` on the stepped (tranche) schedule.
 /// Returns the wallet by value so the caller can chain deposit and topology
 /// selection in one PTB. Use `create_and_share` for the common "share immediately"
@@ -123,16 +192,7 @@ public fun new<C>(
     steps: u64,
     ctx: &mut TxContext,
 ): VestingWallet<Linear, Params, C> {
-    assert!(period_ms > 0, EZeroPeriod);
-    assert!(steps > 0, EZeroSteps);
-
-    let max = std::u64::max_value!();
-    assert!(period_ms <= max / steps, EScheduleOverflow);
-    let duration = period_ms * steps;
-    assert!(cliff_ms <= duration, EInvalidCliff);
-    assert!(duration <= max - start_ms, EScheduleOverflow);
-
-    vesting_wallet::new(Params { start_ms, period_ms, steps, cliff_ms }, beneficiary, ctx)
+    vesting_wallet::new(params(start_ms, cliff_ms, period_ms, steps), beneficiary, ctx)
 }
 
 /// Sugar for a continuous linear-with-cliff schedule: the stepped curve in the
@@ -162,9 +222,7 @@ public fun new_continuous<C>(
     duration_ms: u64,
     ctx: &mut TxContext,
 ): VestingWallet<Linear, Params, C> {
-    // The continuous curve is the stepped curve with one tranche per millisecond.
-    // A zero `duration_ms` becomes zero `steps`, so `new` rejects it with `EZeroSteps`.
-    new(beneficiary, start_ms, cliff_ms, 1, duration_ms, ctx)
+    vesting_wallet::new(params_continuous(start_ms, cliff_ms, duration_ms), beneficiary, ctx)
 }
 
 /// Sugar for the common case: build a stepped wallet and immediately share it.
@@ -308,13 +366,4 @@ fun vested_amount_raw<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
             mul_div(total, elapsed_steps, steps)
         }
     }
-}
-
-// === Test-Only Helpers ===
-
-/// Build a `Params` value for asserting against `event::events_by_type` (the
-/// `Params` fields are module-private, so tests cannot construct one directly).
-#[test_only]
-public fun test_params(start_ms: u64, cliff_ms: u64, period_ms: u64, steps: u64): Params {
-    Params { start_ms, period_ms, steps, cliff_ms }
 }

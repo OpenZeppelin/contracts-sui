@@ -50,8 +50,11 @@
 ///
 /// 1. Declare a witness `public struct MyCurve has drop {}` and a parameters
 ///    struct `public struct MyParams has copy, drop, store { /* params */ }`.
-/// 2. A constructor that validates the parameters and calls
-///    `vesting_wallet::new<MyCurve, MyParams, C>(MyParams { .. }, beneficiary, ctx)`.
+/// 2. A public `params` constructor that validates and returns a `MyParams`, with
+///    `new` as sugar over
+///    `vesting_wallet::new<MyCurve, MyParams, C>(params(..), beneficiary, ctx)`.
+///    Exposing `params` separately lets a curve-agnostic protocol build the wallet
+///    itself (calling `vesting_wallet::new` directly) without routing through `new`.
 /// 3. A `vested(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
 ///    that ends in `vesting_wallet::mint_vested_amount(wallet, MyCurve {}, amount)`.
 /// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet, MyCurve {})`,
