@@ -81,9 +81,9 @@
 ///   `public_transfer`ing a `Coin<C>` to the wallet's object address; the holder
 ///   then claims each with `receive_and_deposit`.
 ///
-/// The `beneficiary` is fixed at construction (mirroring OpenZeppelin's
-/// `VestingWallet`). To rotate the recipient, point `beneficiary` at a
-/// consumer-owned object and rotate ownership of that object instead.
+/// The `beneficiary` is fixed at construction. To rotate the recipient, point
+/// `beneficiary` at a consumer-owned object and rotate ownership of that object
+/// instead.
 module openzeppelin_finance::vesting_wallet;
 
 use sui::balance::{Self, Balance};
