@@ -96,7 +96,7 @@ fun new_rejects_end_overflow() {
     destroy(new_stepped(std::u64::max_value!() - 999, 0, 1000, 1, &mut ctx));
 }
 
-// Boundary: a schedule whose end is exactly u64::MAX is valid and `end()`
+// Boundary: a schedule whose end is exactly u64::MAX is valid and `end_ms()`
 // does not abort.
 #[test]
 fun new_accepts_end_at_u64_max_boundary() {
@@ -104,7 +104,7 @@ fun new_accepts_end_at_u64_max_boundary() {
     let max = std::u64::max_value!();
 
     let wallet = new_stepped(max - 1000, 0, 1000, 1, &mut ctx);
-    assert_eq!(vesting_wallet_linear::end(&wallet), max);
+    assert_eq!(vesting_wallet_linear::end_ms(&wallet), max);
 
     destroy(wallet);
 }
@@ -139,12 +139,12 @@ fun new_sets_params_and_emits_created() {
 
     let wallet = new_stepped(100, 250, 1000, 4, test.ctx());
 
-    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
-    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
-    assert_eq!(vesting_wallet_linear::period(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::start_ms(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff_ms(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::period_ms(&wallet), 1000);
     assert_eq!(vesting_wallet_linear::steps(&wallet), 4);
-    assert_eq!(vesting_wallet_linear::duration(&wallet), 4000);
-    assert_eq!(vesting_wallet_linear::end(&wallet), 4100);
+    assert_eq!(vesting_wallet_linear::duration_ms(&wallet), 4000);
+    assert_eq!(vesting_wallet_linear::end_ms(&wallet), 4100);
 
     let created = event::events_by_type<Created<Linear, Params, USDC>>();
     assert_eq!(created.length(), 1);
@@ -173,11 +173,11 @@ fun params_drives_bare_primitive() {
     let mut wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
     wallet.fund(1000, test.ctx());
 
-    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
-    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
-    assert_eq!(vesting_wallet_linear::period(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::start_ms(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff_ms(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::period_ms(&wallet), 1000);
     assert_eq!(vesting_wallet_linear::steps(&wallet), 4);
-    assert_eq!(vesting_wallet_linear::end(&wallet), 4100);
+    assert_eq!(vesting_wallet_linear::end_ms(&wallet), 4100);
 
     // The curve evaluates identically to a `new`-built wallet: one step elapsed at
     // t = 1100 (100 start + 1000 period), so 1000 * 1 / 4 = 250.
@@ -207,7 +207,7 @@ fun create_and_share_shares_wallet() {
     test.next_tx(@0x1);
     let wallet = test.take_shared<VestingWallet<Linear, Params, USDC>>();
     assert_eq!(wallet.beneficiary(), BENEFICIARY);
-    assert_eq!(vesting_wallet_linear::duration(&wallet), 4000);
+    assert_eq!(vesting_wallet_linear::duration_ms(&wallet), 4000);
     test_scenario::return_shared(wallet);
 
     destroy(clk);
@@ -542,7 +542,8 @@ fun destroy_after_end_on_empty_wallet() {
     assert_eq!(wallet.balance(), 0);
 
     test.next_tx(BENEFICIARY);
-    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
 
     let destroyed = event::events_by_type<Destroyed<Linear, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -562,7 +563,8 @@ fun destroy_rejects_before_end() {
 
     let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     clk.set_for_testing(3999);
-    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
     abort
 }
 
@@ -577,7 +579,8 @@ fun destroy_rejects_nonempty_balance() {
     wallet.fund(1, test.ctx());
     clk.set_for_testing(5000); // after end, so the ended gate cannot fire
     test.next_tx(BENEFICIARY);
-    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
     abort
 }
 
@@ -590,7 +593,8 @@ fun destroy_rejects_non_beneficiary() {
     let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     clk.set_for_testing(5000); // after end, so the ended gate cannot fire
     test.next_tx(@0xCAFE); // not the beneficiary
-    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
     abort
 }
 
@@ -672,7 +676,7 @@ fun new_continuous_rejects_schedule_overflow() {
     destroy(new_continuous(std::u64::max_value!(), 0, 1, &mut ctx));
 }
 
-// Boundary: a schedule whose end is exactly u64::MAX is valid and `end()`
+// Boundary: a schedule whose end is exactly u64::MAX is valid and `end_ms()`
 // does not abort.
 #[test]
 fun new_continuous_accepts_end_at_u64_max_boundary() {
@@ -680,7 +684,7 @@ fun new_continuous_accepts_end_at_u64_max_boundary() {
     let max = std::u64::max_value!();
 
     let wallet = new_continuous(max - 1000, 0, 1000, &mut ctx);
-    assert_eq!(vesting_wallet_linear::end(&wallet), max);
+    assert_eq!(vesting_wallet_linear::end_ms(&wallet), max);
 
     destroy(wallet);
 }
@@ -712,12 +716,12 @@ fun new_continuous_sets_period_one_and_steps_duration() {
 
     let wallet = new_continuous(100, 250, 1000, test.ctx());
 
-    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
-    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
-    assert_eq!(vesting_wallet_linear::period(&wallet), 1);
+    assert_eq!(vesting_wallet_linear::start_ms(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff_ms(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::period_ms(&wallet), 1);
     assert_eq!(vesting_wallet_linear::steps(&wallet), 1000);
-    assert_eq!(vesting_wallet_linear::duration(&wallet), 1000);
-    assert_eq!(vesting_wallet_linear::end(&wallet), 1100);
+    assert_eq!(vesting_wallet_linear::duration_ms(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::end_ms(&wallet), 1100);
 
     destroy(wallet);
     destroy(clk);
@@ -734,11 +738,11 @@ fun params_continuous_drives_bare_primitive() {
     let p = vesting_wallet_linear::params_continuous(100, 250, 1000);
     let wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
 
-    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
-    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
-    assert_eq!(vesting_wallet_linear::period(&wallet), 1);
+    assert_eq!(vesting_wallet_linear::start_ms(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff_ms(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::period_ms(&wallet), 1);
     assert_eq!(vesting_wallet_linear::steps(&wallet), 1000);
-    assert_eq!(vesting_wallet_linear::end(&wallet), 1100);
+    assert_eq!(vesting_wallet_linear::end_ms(&wallet), 1100);
 
     destroy(wallet);
     destroy(clk);
