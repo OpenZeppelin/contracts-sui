@@ -66,6 +66,17 @@ public struct Service has key {
 /// cap-borrowing entrypoint accepts. Returning the `Service` rather than sharing it
 /// here keeps the flow composable: a `Service` is `key`-only, so the caller must use
 /// this module's `share` to make it shared.
+///
+/// #### Parameters
+/// - `vault_id`: The id of the one `Vault` this service serves; pin it up front so the
+///   `register` binding check is meaningful.
+/// - `ctx`: Transaction context; the sender becomes the operator.
+///
+/// #### Returns
+/// - A `key`-only `Service` by value; consume it with this module's `share`.
+///
+/// #### Aborts
+/// - Never.
 public fun create(vault_id: ID, ctx: &mut TxContext): Service {
     Service {
         id: object::new(ctx),
@@ -86,6 +97,14 @@ public fun share(service: Service) {
 /// The binding check is the custody-boundary rule for ANY protocol that accepts a
 /// `SpenderCap`: validate `spender_cap_vault_id` against the vault you intend to
 /// spend from, on-chain, BEFORE taking the cap.
+///
+/// #### Parameters
+/// - `s`: The service taking the cap into custody.
+/// - `cap`: The `SpenderCap` to custody (consumed by value), keyed by the sender.
+/// - `ctx`: Transaction context; the sender is the custody key.
+///
+/// #### Aborts
+/// - `EWrongVaultForService` if `cap` is bound to a different vault than `s` serves.
 public fun register(s: &mut Service, cap: SpenderCap, ctx: &mut TxContext) {
     assert!(cap.spender_cap_vault_id() == s.vault_id, EWrongVaultForService);
     s.caps.add(ctx.sender(), cap);
@@ -99,6 +118,28 @@ public fun register(s: &mut Service, cap: SpenderCap, ctx: &mut TxContext) {
 ///
 /// SENDER-GATED: the operator check below is the security boundary. The library
 /// never checks who calls `spend`, so the custody layer must.
+///
+/// #### Parameters
+/// - `s`: The service custodying `user`'s cap.
+/// - `v`: The vault to spend against; must be the one `s` serves and the cap is bound to.
+/// - `user`: The address whose custodied cap is charged.
+/// - `amount`: Units of coin `T` to draw; must be positive.
+/// - `clock`: Reference to the Sui `Clock`, used to evaluate expiry.
+/// - `ctx`: Transaction context; the sender must be the operator.
+///
+/// #### Returns
+/// - A `Balance<T>` of exactly `amount`; the caller must consume it.
+///
+/// #### Aborts
+/// - `ENotOperator` if the caller is not the service operator.
+/// - `ENotRegistered` if `user` has no cap in custody.
+/// - `EWrongVault` if `v` is not the vault the cap is bound to (from `spend`).
+/// - `ENoAllowance` if there is no `(cap, T)` entry (from `spend`).
+/// - `EAllowanceExpired` if the grant has expired (from `spend`).
+/// - `EZeroAmount` if `amount == 0` (from `spend`).
+/// - `EAllowanceExceeded` if `amount` exceeds the remaining budget (from `spend`).
+/// - `InsufficientFundsForWithdraw` (Sui execution status, not a Move abort code) if the
+///   settled pool is below `amount`; surfaced via effects / a dry run.
 public fun execute_topup<T>(
     s: &mut Service,
     v: &mut Vault,
@@ -116,6 +157,16 @@ public fun execute_topup<T>(
 
 /// Take a cap back out of custody. The grant is untouched: it stays live in the
 /// vault; only custody of the cap changes hands.
+///
+/// #### Parameters
+/// - `s`: The service releasing the cap.
+/// - `ctx`: Transaction context; the sender must have a cap in custody.
+///
+/// #### Returns
+/// - The caller's `SpenderCap`, removed from custody.
+///
+/// #### Aborts
+/// - `ENotRegistered` if the sender has no cap in custody.
 public fun unregister(s: &mut Service, ctx: &mut TxContext): SpenderCap {
     assert!(s.caps.contains(ctx.sender()), ENotRegistered);
     s.caps.remove(ctx.sender())

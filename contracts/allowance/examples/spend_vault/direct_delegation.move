@@ -38,6 +38,23 @@ use sui::coin::Coin;
 ///
 /// Returning the objects rather than self-wiring them keeps the flow composable: the
 /// enclosing PTB decides every destination.
+///
+/// #### Parameters
+/// - `funding`: The `Coin<T>` deposited into the new vault's pool (consumed by value).
+/// - `budget`: The `(cap, T)` spend budget granted to the minted cap; `u64::MAX` is
+///   the unlimited sentinel.
+/// - `expires_at_ms`: Grant expiry in ms; pass `std::u64::max_value!()` for no expiry.
+/// - `clock`: Reference to the Sui `Clock`, used to validate `expires_at_ms`.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - `(Vault, SpenderCap, OwnerCap)` by value, unattached, for the caller to share and
+///   route in the same PTB.
+///
+/// #### Aborts
+/// - `EZeroAmount` if `funding` has zero value (from `deposit`).
+/// - `EExpiryInPast` if `expires_at_ms` is finite and not strictly in the future (from
+///   `set_allowance`).
 public fun open_allowance<T>(
     funding: Coin<T>,
     budget: u64,
@@ -75,6 +92,25 @@ public fun open_allowance<T>(
 ///
 /// Note `ctx: &mut TxContext`: both `into_coin` (to mint the Coin) and `spend` take
 /// `&mut TxContext`, so one parameter serves both.
+///
+/// #### Parameters
+/// - `vault`: The vault to spend against.
+/// - `cap`: The `SpenderCap` bound to `vault` whose `(cap, T)` budget is charged.
+/// - `amount`: Units of coin `T` to draw; must be positive.
+/// - `clock`: Reference to the Sui `Clock`, used to evaluate expiry.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - A `Coin<T>` of exactly `amount`.
+///
+/// #### Aborts
+/// - `EWrongVault` if `cap` is bound to a different vault (from `spend`).
+/// - `ENoAllowance` if there is no `(cap, T)` entry (from `spend`).
+/// - `EAllowanceExpired` if the grant has expired (from `spend`).
+/// - `EZeroAmount` if `amount == 0` (from `spend`).
+/// - `EAllowanceExceeded` if `amount` exceeds the remaining budget (from `spend`).
+/// - `InsufficientFundsForWithdraw` (Sui execution status, not a Move abort code) if the
+///   settled pool is below `amount`; surfaced via effects / a dry run.
 public fun spend_to_wallet<T>(
     vault: &mut Vault,
     cap: &SpenderCap,
@@ -91,6 +127,22 @@ public fun spend_to_wallet<T>(
 /// Raise / lower / renew with the race-free CAS idiom: read, then write with
 /// `expected = Some(current)` in the SAME PTB. If a spend was sequenced between the
 /// read and the write, the call aborts `EUnexpectedAllowance` instead of clobbering.
+///
+/// #### Parameters
+/// - `vault`: The vault whose ledger is updated.
+/// - `owner_cap`: The `OwnerCap` bound to `vault`.
+/// - `cap_id`: The `SpenderCap` object id whose `(cap_id, T)` budget is changed.
+/// - `new_budget`: New `remaining` budget; `0` suspends, `u64::MAX` is unlimited.
+/// - `new_expires_at_ms`: New expiry in ms; `u64::MAX` is the no-expiry sentinel.
+/// - `clock`: Reference to the Sui `Clock`, used to validate `new_expires_at_ms`.
+/// - `ctx`: Transaction context.
+///
+/// #### Aborts
+/// - `EWrongOwnerCap` if `owner_cap` is bound to a different vault (from `set_allowance`).
+/// - `EExpiryInPast` if `new_expires_at_ms` is finite and not strictly future (from
+///   `set_allowance`).
+/// - `EUnexpectedAllowance` if a spend was sequenced between the read and the CAS write
+///   (from `set_allowance`).
 public fun change_budget<T>(
     vault: &mut Vault,
     owner_cap: &OwnerCap,
@@ -115,6 +167,17 @@ public fun change_budget<T>(
 /// Suspend a grant without removing it: zero the budget but keep the entry + cap
 /// alive. The next `spend<T>` aborts `EAllowanceExceeded` (NOT `ENoAllowance`), so
 /// the spender knows to ask the owner to raise rather than to ask for a new grant.
+///
+/// #### Parameters
+/// - `vault`: The vault whose ledger is updated.
+/// - `owner_cap`: The `OwnerCap` bound to `vault`.
+/// - `cap_id`: The `SpenderCap` object id whose `(cap_id, T)` budget is suspended.
+/// - `clock`: Reference to the Sui `Clock` (unused for the zero-budget path; required by
+///   `set_allowance`).
+/// - `ctx`: Transaction context.
+///
+/// #### Aborts
+/// - `EWrongOwnerCap` if `owner_cap` is bound to a different vault (from `set_allowance`).
 public fun suspend<T>(
     vault: &mut Vault,
     owner_cap: &OwnerCap,
@@ -136,6 +199,18 @@ public fun suspend<T>(
 
 /// Owner kill-switch for one coin. Idempotent: returns whether anything was removed
 /// (`false` is the typo'd-cap_id / wrong-coin signal). Cannot be raced into failure.
+///
+/// #### Parameters
+/// - `vault`: The vault whose ledger entry is removed.
+/// - `owner_cap`: The `OwnerCap` bound to `vault`.
+/// - `cap_id`: The `SpenderCap` object id whose `(cap_id, T)` entry is targeted.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - `true` if an entry was present and removed; `false` if there was none.
+///
+/// #### Aborts
+/// - `EWrongOwnerCap` if `owner_cap` is bound to a different vault (from `revoke`).
 public fun revoke_one_coin<T>(
     vault: &mut Vault,
     owner_cap: &OwnerCap,
@@ -151,6 +226,21 @@ public fun revoke_one_coin<T>(
 /// Run this in its OWN tx, never in the same PTB as a `spend` / `withdraw` on this
 /// vault: a same-checkpoint pool drop makes the settled read over-ask and abort (the
 /// settled-vs-live pool skew), retry-safe next checkpoint.
+///
+/// #### Parameters
+/// - `vault`: The vault whose settled `T` pool is drained.
+/// - `owner_cap`: The `OwnerCap` bound to `vault`.
+/// - `root`: The `AccumulatorRoot` (`0xacc`), read for the settled pool value.
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - A possibly-zero `Balance<T>` holding the drained settled pool; the caller must
+///   consume it.
+///
+/// #### Aborts
+/// - `EWrongOwnerCap` if `owner_cap` is bound to a different vault (from `withdraw_all`).
+/// - `InsufficientFundsForWithdraw` (Sui execution status, not a Move abort code) if the
+///   live pool fell below the settled snapshot earlier in this checkpoint; retry-safe.
 public fun drain_one_coin<T>(
     vault: &mut Vault,
     owner_cap: &OwnerCap,
@@ -164,6 +254,14 @@ public fun drain_one_coin<T>(
 /// `withdraw_all<T>` (enumerate types off-chain with `suix_getAllBalances`), or any
 /// remaining funds strand permanently at the dead vault address. `destroy` drains
 /// only the budget ledger and deletes the UIDs; it does not touch the pool.
+///
+/// #### Parameters
+/// - `vault`: The vault to tear down (consumed by value).
+/// - `owner_cap`: The `OwnerCap` bound to `vault` (consumed by value).
+/// - `ctx`: Transaction context.
+///
+/// #### Aborts
+/// - `EWrongOwnerCap` if `owner_cap` is bound to a different vault (from `destroy`).
 public fun tear_down(vault: Vault, owner_cap: OwnerCap, ctx: &mut TxContext) {
     vault.destroy(owner_cap, ctx);
 }
