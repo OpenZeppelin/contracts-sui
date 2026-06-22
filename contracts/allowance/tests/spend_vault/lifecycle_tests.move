@@ -218,6 +218,29 @@ fun destroy_fresh_empty_vault_same_tx() {
     s.end();
 }
 
+#[test]
+// Pins the documented DANGER: `destroy` succeeds with coins still in the pool.
+// There is NO on-chain guard that blocks a premature destroy of a funded vault,
+// so this teardown of a vault holding 1_000 USDC in its address-balance pool
+// completes and emits exactly one VaultDestroyed. Those coins then strand at the
+// dead vault address, but the UID is gone, so the stranded balance is NOT
+// observable in a unit test and is therefore not asserted here.
+fun destroy_with_funded_pool_succeeds() {
+    let mut s = ts::begin(OWNER);
+    {
+        let (v, oc) = spend_vault::new(s.ctx());
+        let vid = object::id(&v);
+        // Fund a non-zero pool, then destroy without draining it.
+        spend_vault::deposit(&v, sui::coin::mint_for_testing<USDC>(1_000, s.ctx()), s.ctx());
+        spend_vault::destroy(v, oc, s.ctx()); // SUCCEEDS despite the funded pool
+
+        let evs = event::events_by_type<spend_vault::VaultDestroyed>();
+        assert_eq!(evs.length(), 1);
+        assert_eq!(evs[0], spend_vault::test_new_vault_destroyed(vid, OWNER));
+    };
+    s.end();
+}
+
 // === destroy: shared vault, canonical teardown ===
 
 #[test]

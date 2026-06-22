@@ -3,9 +3,11 @@ module openzeppelin_allowance::direct_delegation_tests;
 use openzeppelin_allowance::direct_delegation;
 use openzeppelin_allowance::example_coin::{Self, EXAMPLE_COIN};
 use openzeppelin_allowance::spend_vault::{Self, Vault};
+use std::type_name;
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::{Self, Clock};
 use sui::coin::Coin;
+use sui::event;
 use sui::test_scenario as ts;
 
 const OWNER: address = @0xACE;
@@ -195,4 +197,101 @@ fun spend_over_budget_aborts() {
     };
 
     abort
+}
+
+// Integrator confirmation pattern: when an owner UPDATES a grant they believe
+// already exists, they should confirm `AllowanceSet.was_created == false`.
+//
+// `set_allowance` keys the budget on a bare `cap_id: ID` that the library never
+// validates against a live cap. If the owner passes a `cap_id` that matches NO
+// existing (cap, T) grant - the classic cause is a typo'd id - `set_allowance`
+// does not abort: it silently CREATES a brand-new budget and emits
+// `AllowanceSet { was_created: true }`. The intended grant is left untouched and
+// a budget is now provisioned against an id that may belong to no cap at all.
+//
+// The defense is to read `was_created` (or call `contains<T>` first): on a known
+// update it MUST be `false`. A surprise `true` is the silent-create signal -
+// stop and re-check the id before trusting the write. This test pins both edges:
+// a fresh create reports `true`, and a same-(cap, T) overwrite reports `false`.
+#[test]
+fun was_created_confirms_intended_cap() {
+    let mut scenario = ts::begin(OWNER);
+
+    // Tx 1 (OWNER): mint the example coin supply, then build a vault + one cap.
+    example_coin::init_for_testing(scenario.ctx());
+
+    scenario.next_tx(OWNER);
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(NOW_MS);
+
+    let (mut vault, owner_cap) = spend_vault::new(scenario.ctx());
+    let vault_id = object::id(&vault);
+    let cap = vault.mint_cap(&owner_cap, scenario.ctx());
+    let cap_id = object::id(&cap);
+
+    // Tx A: CREATE the (cap, EXAMPLE_COIN) grant. No CAS guard on a fresh create,
+    // so `expected` is `option::none()`. The emitted event must report
+    // `was_created == true`: this id matched no prior grant, a budget was minted.
+    vault.set_allowance<EXAMPLE_COIN>(
+        &owner_cap,
+        cap_id,
+        400,
+        NO_EXPIRY,
+        option::none(),
+        &clk,
+        scenario.ctx(),
+    );
+    let create_evs = event::events_by_type<spend_vault::AllowanceSet>();
+    assert_eq!(create_evs.length(), 1);
+    assert_eq!(
+        create_evs[0],
+        spend_vault::test_new_allowance_set(
+            vault_id,
+            cap_id,
+            type_name::with_defining_ids<EXAMPLE_COIN>(),
+            400,
+            NO_EXPIRY,
+            false, // cas_was_provided: none() passed
+            true, // was_created: this is the create branch
+            OWNER,
+        ),
+    );
+
+    // Tx B: UPDATE the SAME (cap, EXAMPLE_COIN) grant to a new budget. Because the
+    // id and coin type match the existing entry, `set_allowance` overwrites in
+    // place and the event reports `was_created == false` - the confirmation an
+    // integrator looks for before trusting an owner-side update.
+    scenario.next_tx(OWNER);
+    vault.set_allowance<EXAMPLE_COIN>(
+        &owner_cap,
+        cap_id,
+        600,
+        NO_EXPIRY,
+        option::none(),
+        &clk,
+        scenario.ctx(),
+    );
+    let update_evs = event::events_by_type<spend_vault::AllowanceSet>();
+    assert_eq!(update_evs.length(), 1); // only Tx B's event lives in this tx
+    assert_eq!(
+        update_evs[0],
+        spend_vault::test_new_allowance_set(
+            vault_id,
+            cap_id,
+            type_name::with_defining_ids<EXAMPLE_COIN>(),
+            600,
+            NO_EXPIRY,
+            false,
+            false, // was_created: the overwrite branch - the intended grant existed
+            OWNER,
+        ),
+    );
+
+    // Teardown: no funds were deposited, so the pool is empty and `destroy` needs
+    // no prior drain. Dispose the cap and clock, then tear the vault down.
+    destroy(cap);
+    clk.destroy_for_testing();
+    vault.destroy(owner_cap, scenario.ctx());
+
+    scenario.end();
 }

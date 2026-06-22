@@ -4,7 +4,7 @@
 /// > instrument: whoever can present `&SpenderCap` to `spend` exercises the
 /// > FULL spend authority of EVERY per-coin budget that cap holds, up to each
 /// > budget's limits: holder, borrower, custodian protocol, or thief alike.
-/// > One untyped cap now spans N coin budgets, so a leaked cap
+/// > One untyped cap spans N coin budgets, so a leaked cap
 /// > exposes the SUM across all coins the owner granted it. The library never
 /// > inspects holder identity, provenance, or intent; transfer of the cap is
 /// > transfer of authority, and sending it to the wrong party hands that party
@@ -61,7 +61,7 @@
 ///   matchable Move `#[error]` code. Integrator preflight must account for it,
 ///   not only this module's codes.
 /// - **Ceiling, not guarantee.** The sum of `remaining` across live entries may
-///   exceed the pool, by design (over-subscription is sound, now across coins).
+///   exceed the pool, by design (over-subscription is sound across coins).
 ///   A live, unexpired, within-budget `spend` can still fail with the
 ///   `InsufficientFundsForWithdraw` execution status if the owner withdrew first
 ///   or sibling spenders drained the pool. No funds are reserved per entry;
@@ -199,7 +199,7 @@ const EUnexpectedAllowance: vector<u8> = "Current allowance does not match expec
 ///
 /// The pool is NOT a field here: per-coin funds live as
 /// object-owned address balances at `object::id(v).to_address()`.
-/// Key-only therefore no longer conserves the escrow directly: it protects
+/// Key-only therefore does not conserve the escrow directly: it protects
 /// `id` (the `&mut v.id` spend authority) and the ledger, and forces
 /// every teardown through `destroy` (the one path where the drain discipline
 /// can be required).
