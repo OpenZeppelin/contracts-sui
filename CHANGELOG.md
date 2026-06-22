@@ -14,6 +14,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - New `spend_vault` module: a shared vault that escrows multiple coin types and grants per-`(cap, coin)` spending allowances to capability holders, with capped, optionally expiring, revocable delegated spend and owner-side revoke / suspend controls. (#402)
 
+### `openzeppelin_finance`
+
+#### Added
+
+- `vesting_wallet` module: a curve-agnostic release-accounting core that conserves `Balance<C>` funds and lets you author custom vesting curves.
+- `vesting_wallet_linear` module: built-in linear/stepped vesting in `steps` equal tranches with an optional cliff, plus `new_continuous` for continuous linear vesting.
+
 ## 1.3.0 (15-06-2026)
 
 ### `openzeppelin_math`
