@@ -33,9 +33,10 @@ fun direct_delegation_full_lifecycle() {
     example_coin::init_for_testing(scenario.ctx());
 
     // Tx 2 (OWNER): open a funded, budgeted allowance for the delegate. The wrapper
-    // creates the vault, deposits the funding, mints a cap to the delegate, grants a
-    // budget, shares the vault, and returns the OwnerCap. A clock is created + shared
-    // so the later txs can reach it as a shared input.
+    // creates the vault, deposits the funding, mints a cap, and grants a budget, then
+    // returns `(vault, cap, owner_cap)` for the caller to wire: share the vault,
+    // transfer the cap to the delegate, and keep the OwnerCap. A clock is created +
+    // shared so the later txs can reach it as a shared input.
     scenario.next_tx(OWNER);
     let (cap_id, owner_cap) = {
         let mut funding = scenario.take_from_sender<Coin<EXAMPLE_COIN>>();
@@ -44,24 +45,24 @@ fun direct_delegation_full_lifecycle() {
 
         // Fund the allowance with 1_000 units; keep the rest in the owner's wallet.
         let stake = funding.split(1_000, scenario.ctx());
-        let owner_cap = direct_delegation::open_allowance<EXAMPLE_COIN>(
+        let (vault, cap, owner_cap) = direct_delegation::open_allowance<EXAMPLE_COIN>(
             stake,
-            DELEGATE,
             400,
             NOW_MS + 30 * DAY_MS,
             &clk,
             scenario.ctx(),
         );
+        let cap_id = object::id(&cap);
+
+        // Compose the edges in this tx: share the vault, hand the cap to the delegate.
+        spend_vault::share(vault);
+        transfer::public_transfer(cap, DELEGATE);
 
         transfer::public_transfer(funding, OWNER);
         clk.share_for_testing();
 
-        // Recover the cap id from the share / transfer the wrapper performed.
         scenario.next_tx(OWNER);
-        (
-            ts::most_recent_id_for_address<spend_vault::SpenderCap>(DELEGATE).destroy_some(),
-            owner_cap,
-        )
+        (cap_id, owner_cap)
     };
 
     // Tx 3 (DELEGATE): spend 150 to the delegate's wallet through the cap.
@@ -157,14 +158,15 @@ fun spend_over_budget_aborts() {
         let mut clk = clock::create_for_testing(scenario.ctx());
         clk.set_for_testing(NOW_MS);
 
-        let owner_cap = direct_delegation::open_allowance<EXAMPLE_COIN>(
+        let (vault, cap, owner_cap) = direct_delegation::open_allowance<EXAMPLE_COIN>(
             funding, // fund with the whole supply: the pool is not the limit here
-            DELEGATE,
             400,
             NO_EXPIRY,
             &clk,
             scenario.ctx(),
         );
+        spend_vault::share(vault);
+        transfer::public_transfer(cap, DELEGATE);
         transfer::public_transfer(owner_cap, OWNER);
         clk.share_for_testing();
     };

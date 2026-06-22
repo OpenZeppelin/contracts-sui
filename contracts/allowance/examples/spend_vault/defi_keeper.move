@@ -61,19 +61,24 @@ public struct Service has key {
 
 // === Public Functions ===
 
-/// Create and share a service pinned to `vault_id`. The creator becomes the
-/// operator, the only address the cap-borrowing entrypoint accepts. Returns the
-/// service's object id so callers can address the shared object.
-public fun create(vault_id: ID, ctx: &mut TxContext): ID {
-    let service = Service {
+/// Create a service pinned to `vault_id` and return it for the caller to configure
+/// and then `share`. The creator becomes the operator, the only address the
+/// cap-borrowing entrypoint accepts. Returning the `Service` rather than sharing it
+/// here keeps the flow composable: a `Service` is `key`-only, so the caller must use
+/// this module's `share` to make it shared.
+public fun create(vault_id: ID, ctx: &mut TxContext): Service {
+    Service {
         id: object::new(ctx),
         operator: ctx.sender(),
         vault_id,
         caps: table::new(ctx),
-    };
-    let service_id = object::id(&service);
+    }
+}
+
+/// Share the service so users can register caps against it. Two-step
+/// create-then-share keeps the flow composable (mirrors `spend_vault::share`).
+public fun share(service: Service) {
     transfer::share_object(service);
-    service_id
 }
 
 /// Hand a cap into the service's custody, keyed by the registering sender.

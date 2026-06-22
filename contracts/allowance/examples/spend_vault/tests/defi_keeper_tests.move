@@ -44,10 +44,12 @@ fun setup(): (Scenario, ID, ID) {
         vault_id
     };
 
-    // Tx 3 (OPERATOR): create the keeper service pinned to that vault.
+    // Tx 3 (OPERATOR): create the keeper service pinned to that vault, then share it.
+    // `create` now returns the Service for the caller to share (two-step pattern).
     scenario.next_tx(OPERATOR);
     {
-        defi_keeper::create(vault_id, scenario.ctx());
+        let service = defi_keeper::create(vault_id, scenario.ctx());
+        defi_keeper::share(service);
     };
 
     // Tx 4 (USER): mint a cap, grant an EXAMPLE_COIN budget, and hand it straight

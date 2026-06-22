@@ -24,39 +24,41 @@ use sui::coin::Coin;
 
 // === Owner setup ===
 
-/// One PTB that creates the vault, funds it, mints a cap for `delegate`, grants a
-/// budget, shares the vault, and returns the OwnerCap for the caller to keep or route.
+/// Build a funded, budgeted allowance and return its three objects unattached, for
+/// the caller to wire into the surrounding PTB. Creates the vault, deposits the
+/// funding, mints a fresh cap, and grants it `budget` of `T`: then hands back
+/// `(Vault, SpenderCap, OwnerCap)` without sharing or transferring anything.
 ///
-/// Order matters: every fund / mint / grant step must precede `share`, because the
-/// Vault is only addressable as a shared input in LATER transactions. The Vault has
-/// no `drop`, so the tx fails unless it is consumed by `share` (or `destroy`).
+/// The caller composes the edges in the SAME tx: share the vault with
+/// `spend_vault::share(vault)`, `transfer::public_transfer` the `SpenderCap` to the
+/// delegate, and keep or route the `OwnerCap`. The Vault has no `drop`, so it must be
+/// shared (or destroyed) in this tx or execution aborts. Sharing must also come last:
+/// the Vault is only addressable as a shared input in LATER transactions, so every
+/// fund / mint / grant step here precedes the caller's `share`.
 ///
-/// Returns the `OwnerCap` by value rather than self-transferring it, so the caller
-/// (or the enclosing PTB) decides its destination: composable.
+/// Returning the objects rather than self-wiring them keeps the flow composable: the
+/// enclosing PTB decides every destination.
 public fun open_allowance<T>(
     funding: Coin<T>,
-    delegate: address,
     budget: u64,
     expires_at_ms: u64, // pass std::u64::max_value!() for "no expiry"
     clock: &Clock,
     ctx: &mut TxContext,
-): OwnerCap {
+): (Vault, SpenderCap, OwnerCap) {
     let (mut vault, owner_cap) = spend_vault::new(ctx);
 
     // Permissionless top-up. Confers no rights; the funds become the owner's pool.
     vault.deposit(funding, ctx);
 
-    // Bare cap, no budget yet. Returned by value, so we choose its destination.
+    // Bare cap, no budget yet. Returned by value, so the caller chooses its destination.
     let cap = vault.mint_cap(&owner_cap, ctx);
     let cap_id = object::id(&cap);
-    transfer::public_transfer(cap, delegate);
 
     // Create the (cap, T) budget. `option::none()` = no CAS guard on a fresh create.
     vault.set_allowance<T>(&owner_cap, cap_id, budget, expires_at_ms, option::none(), clock, ctx);
 
-    // Make the vault spendable, then hand owner authority back to the caller.
-    vault.share();
-    owner_cap
+    // Hand the objects back; the caller shares the vault and routes the caps.
+    (vault, cap, owner_cap)
 }
 
 // === Delegate spends ===
