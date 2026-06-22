@@ -64,7 +64,7 @@ fun release_flows_through_wrapper_to_beneficiary() {
 
     destroy(paid);
     ts::return_shared(grant);
-    sui::clock::destroy_for_testing(clock);
+    destroy(clock);
     scenario.end();
 }
 
@@ -117,7 +117,7 @@ fun resume_restores_releases() {
     destroy(paid);
     destroy(cap);
     ts::return_shared(grant);
-    sui::clock::destroy_for_testing(clock);
+    destroy(clock);
     scenario.end();
 }
 
@@ -152,7 +152,7 @@ fun unwrap_then_curve_teardown() {
     let receipt = wallet.destroy_empty();
     linear::destroy(receipt, &clock, scenario.ctx());
 
-    sui::clock::destroy_for_testing(clock);
+    destroy(clock);
     scenario.end();
 }
 

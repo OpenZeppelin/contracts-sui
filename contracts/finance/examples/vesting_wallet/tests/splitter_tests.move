@@ -64,7 +64,7 @@ fun release_to_splitter_fans_out_by_weight() {
     destroy(to_alice);
     destroy(to_bob);
     destroy(to_carol);
-    sui::clock::destroy_for_testing(clock);
+    destroy(clock);
     scenario.end();
 }
 

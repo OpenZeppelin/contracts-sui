@@ -75,7 +75,7 @@ fun compose_create_fund_and_release_across_modules() {
     destroy(paid);
     destroy(paid_2);
     ts::return_shared(wallet);
-    sui::clock::destroy_for_testing(clock);
+    destroy(clock);
     scenario.end();
 }
 
@@ -102,7 +102,7 @@ fun curve_is_monotonic() {
     };
 
     ts::return_shared(wallet);
-    sui::clock::destroy_for_testing(clock);
+    destroy(clock);
     scenario.end();
 }
 
@@ -125,7 +125,7 @@ fun late_deposit_vests_at_current_proportion() {
     assert_eq!(quadratic::releasable(&wallet, &clock), 2 * TOTAL / 4);
 
     ts::return_shared(wallet);
-    sui::clock::destroy_for_testing(clock);
+    destroy(clock);
     scenario.end();
 }
 
@@ -175,7 +175,7 @@ fun compose_destroy_after_drain() {
     assert_eq!(paid.value(), TOTAL);
 
     destroy(paid);
-    sui::clock::destroy_for_testing(clock);
+    destroy(clock);
     scenario.end();
 }
 
