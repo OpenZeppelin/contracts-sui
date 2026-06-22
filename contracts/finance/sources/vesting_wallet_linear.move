@@ -51,7 +51,7 @@
 /// made at `t > start_ms` immediately participate at the current step proportion.
 module openzeppelin_finance::vesting_wallet_linear;
 
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount, DestroyReceipt};
 use std::u64::mul_div;
 use sui::clock::Clock;
 
@@ -310,36 +310,37 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
     wallet.releasable(&vested_amount(wallet, clock))
 }
 
-/// Tear down a drained, ended stepped wallet: reclaim its storage rebate and drop
-/// the `Linear` schedule. Wraps `vesting_wallet::destroy_empty` and additionally
-/// requires the schedule to have ended and the caller to be the beneficiary.
+/// Finalize teardown of a drained, ended `Linear` wallet by consuming the
+/// `DestroyReceipt<Linear, Params>` that `vesting_wallet::destroy_empty` returns.
+/// `destroy_empty` is permissionless and is what actually reclaims the storage rebate;
+/// this call is the witness-gated other half - only this module holds `Linear`, so
+/// only it can unwrap the receipt - and it additionally requires the schedule to have
+/// ended and the caller to be the beneficiary. Because the receipt is a hot potato
+/// consumed in the same PTB that produced it, a failed gate here aborts and reverts
+/// the whole teardown, including the `destroy_empty` call.
 ///
-/// Both extra gates guard against stranding an in-flight deposit. The ended gate
-/// stops an empty wallet being destroyed ahead of a pending deposit, front-running
-/// funding intended to arrive later. The beneficiary gate addresses the residual
-/// case: a coin `public_transfer`'d to the wallet's address but not yet
-/// `receive_and_deposit`'d is invisible to `destroy_empty`'s empty check, so a
-/// permissionless teardown would let an arbitrary actor strand such a deposit and
-/// pocket the storage rebate. Restricting teardown to the beneficiary keeps both the
-/// strand risk and the rebate with the only party harmed by it.
+/// Both extra gates guard against stranding an in-flight deposit. The ended gate stops
+/// a wallet being torn down ahead of a pending deposit, front-running funding intended
+/// to arrive later. The beneficiary gate addresses the residual case: a coin
+/// `public_transfer`'d to the wallet's address but not yet `receive_and_deposit`'d is
+/// invisible to `destroy_empty`'s empty check, so - since `destroy_empty` is
+/// permissionless - an arbitrary actor could otherwise strand such a deposit and
+/// pocket the storage rebate. Restricting this final step to the beneficiary keeps both
+/// the strand risk and the rebate with the only party harmed by it.
 ///
 /// #### Parameters
-/// - `wallet`: The wallet to destroy. Must hold a zero balance.
+/// - `receipt`: The `DestroyReceipt<Linear, Params>` returned by
+///   `vesting_wallet::destroy_empty`.
 /// - `clock`: Sui `Clock`, used to check the schedule has ended.
 /// - `ctx`: Transaction context, used to check the caller is the beneficiary.
 ///
 /// #### Aborts
 /// - `ENotEnded` if called before the schedule's end (`start_ms + period_ms * steps`).
 /// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
-/// - `ENotEmpty` if the wallet still holds a balance (from `destroy_empty`).
-public fun destroy<C>(
-    wallet: VestingWallet<Linear, Params, C>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    assert!(clock.timestamp_ms() >= end(&wallet), ENotEnded);
-    assert!(ctx.sender() == wallet.beneficiary(), ENotBeneficiary);
-    let Params { .. } = wallet.destroy_empty(Linear {});
+public fun destroy(receipt: DestroyReceipt<Linear, Params>, clock: &Clock, ctx: &mut TxContext) {
+    let (beneficiary, params) = vesting_wallet::consume_receipt(receipt, Linear {});
+    assert!(clock.timestamp_ms() >= params.calculate_end(), ENotEnded);
+    assert!(ctx.sender() == beneficiary, ENotBeneficiary);
 }
 
 // === View helpers ===
@@ -397,8 +398,7 @@ public fun duration<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
 /// #### Returns
 /// - The timestamp (ms) at which the schedule ends (`start_ms + period_ms * steps`).
 public fun end<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
-    let params = wallet.schedule_params();
-    params.start_ms + params.period_ms * params.steps
+    wallet.schedule_params().calculate_end()
 }
 
 /// Read the configured cliff length (ms from `start_ms`). `0` means no cliff.
@@ -413,6 +413,12 @@ public fun cliff<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
 }
 
 // === Private Functions ===
+
+/// The schedule's end timestamp (ms), `start_ms + period_ms * steps`, derived from
+/// `Params` alone so `destroy` can check it after the wallet is already gone.
+fun calculate_end(params: &Params): u64 {
+    params.start_ms + params.period_ms * params.steps
+}
 
 /// The stepped curve's cumulative vested total at the current clock, as a `u64`.
 fun vested_amount_raw<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Clock): u64 {

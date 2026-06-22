@@ -35,8 +35,9 @@
 ///
 /// - build a `VestingWallet<S, P, C>` (via `new`, which takes the parameters `P`
 ///   by value - the value itself is the authority proof), and
-/// - mint a `VestedAmount<S>` or call `destroy_empty` (both take the witness `S`
-///   by value).
+/// - mint a `VestedAmount<S>` (via `mint_vested_amount`) or finalize a teardown by
+///   consuming the `DestroyReceipt<S, P>` that `destroy_empty` returns (via
+///   `consume_receipt`) - both take the witness `S` by value.
 ///
 /// This makes "a wallet without parameters" and "a wallet with the wrong
 /// parameters" unrepresentable: the type system, not a runtime check, enforces
@@ -57,13 +58,10 @@
 ///    itself (calling `vesting_wallet::new` directly) without routing through `new`.
 /// 3. A `vested(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
 ///    that ends in `vesting_wallet::mint_vested_amount(wallet, MyCurve {}, amount)`.
-/// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet, MyCurve {})`,
-///    which returns the parameters for the curve module to destructure.
-///
-/// A curve that needs to be reconfigurable after creation may additionally wrap
-/// `vesting_wallet::set_schedule_params(wallet, MyCurve {}, new_params)`. This is the
-/// only path to mutate `schedule_params`, and it is witness-gated, so a curve that
-/// omits the wrapper makes its wallets' parameters permanently immutable on chain.
+/// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet)` to get a
+///    `DestroyReceipt<MyCurve, MyParams>`, then
+///    `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover the
+///    beneficiary and parameters for the curve module to destructure.
 ///
 /// The curve must be monotonically non-decreasing in time and bounded above by
 /// `balance + released`; violating either makes `release` abort before any state
@@ -188,11 +186,13 @@ public struct VestedAmount<phantom S> has drop {
     amount: u64,
 }
 
-/// Carries a destroyed wallet's params back to its curve. A HOT POTATO - no abilities -
-/// so it cannot be dropped, stored, or copied: it MUST be consumed before the tx ends,
-/// and only `consume_receipt` (witness-gated) can consume it. This is what drags the
-/// curve into the PTB to finalize, and lets it veto by aborting.
+/// Carries a destroyed wallet's beneficiary and schedule params back to its curve. A
+/// HOT POTATO - no abilities - so it cannot be dropped, stored, or copied: it MUST be
+/// consumed before the tx ends, and only `consume_receipt` (witness-gated) can consume
+/// it. This is what drags the curve into the PTB to finalize, and lets it veto by
+/// aborting.
 public struct DestroyReceipt<phantom S, P> {
+    beneficiary: address,
     params: P,
 }
 
@@ -404,19 +404,26 @@ public fun release<S: drop, P: copy + drop + store, C>(
     });
 }
 
-/// Consume a drained wallet to reclaim its storage rebate and return its schedule
-/// parameters to the caller (the curve module destructures them). Witness-gated by
-/// `_w: S`, so only the declaring curve module can tear a wallet down. Coins
-/// `public_transfer`'d to a destroyed wallet's address after this call have no path
-/// back - pair destruction with halting any upstream emissions that target this
+/// Consume a drained wallet to reclaim its storage rebate, emit `Destroyed`, and hand
+/// its beneficiary and schedule parameters back as a `DestroyReceipt<S, P>`.
+///
+/// This call is permissionless - it takes no witness - so a curve-agnostic holder of
+/// the wallet can tear it down without access to `S`. The receipt is a hot potato that
+/// only the declaring curve can unwrap (via `consume_receipt`), so the curve is still
+/// dragged into the teardown PTB and can veto it by aborting. This is the same authority
+/// split as `VestedAmount`: one half stays callable without the witness, the curve gates
+/// the other.
+///
+/// Coins `public_transfer`'d to a destroyed wallet's address after this call have no
+/// path back - pair destruction with halting any upstream emissions that target this
 /// wallet.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to destroy. Must hold a zero balance.
-/// - `_w`: The curve witness `S`.
 ///
 /// #### Returns
-/// - The wallet's schedule parameters `P`, for the curve module to destructure.
+/// - A `DestroyReceipt<S, P>` carrying the wallet's beneficiary and schedule
+///   parameters, to be passed to `consume_receipt`.
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the wallet still holds a balance.
@@ -435,18 +442,28 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
 
     event::emit(Destroyed<S, C> { wallet_id, beneficiary, total_released });
 
-    DestroyReceipt { params: schedule_params }
+    DestroyReceipt { beneficiary, params: schedule_params }
 }
 
-/// Witness-gated unwrap. Only the declaring curve can call this, so it - and only it -
-/// sees the real `P`, runs teardown logic, and aborts (reverting the whole teardown)
-/// if destruction should not be accepted.
+/// Unwrap a `DestroyReceipt<S, P>` to recover the destroyed wallet's beneficiary and
+/// schedule parameters. Witness-gated by `_w: S`: only the declaring curve can call
+/// this, so it - and only it - sees the real `P`, runs any teardown logic, and can
+/// abort (reverting the whole teardown, since the wallet was destroyed in the same
+/// PTB) if destruction should not be accepted.
+///
+/// #### Parameters
+/// - `receipt`: The `DestroyReceipt<S, P>` returned by `destroy_empty`.
+/// - `_w`: The curve witness `S`.
+///
+/// #### Returns
+/// - The destroyed wallet's `beneficiary` and its schedule parameters `P`, for the
+///   curve module to use and destructure.
 public fun consume_receipt<S: drop, P: copy + drop + store>(
     receipt: DestroyReceipt<S, P>,
     _w: S,
-): P {
-    let DestroyReceipt { params } = receipt;
-    params
+): (address, P) {
+    let DestroyReceipt { beneficiary, params } = receipt;
+    (beneficiary, params)
 }
 
 // === View helpers ===
@@ -571,4 +588,18 @@ public fun test_new_destroyed<S, C>(
     total_released: u64,
 ): Destroyed<S, C> {
     Destroyed { wallet_id, beneficiary, total_released }
+}
+
+/// Read a `DestroyReceipt`'s `beneficiary` for test assertions; the receipt is
+/// otherwise opaque (a hot potato with private fields).
+#[test_only]
+public fun test_receipt_beneficiary<S, P>(receipt: &DestroyReceipt<S, P>): address {
+    receipt.beneficiary
+}
+
+/// Read a `DestroyReceipt`'s `params` for test assertions; the receipt is otherwise
+/// opaque (a hot potato with private fields).
+#[test_only]
+public fun test_receipt_params<S, P: copy>(receipt: &DestroyReceipt<S, P>): P {
+    receipt.params
 }
