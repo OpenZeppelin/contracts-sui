@@ -352,7 +352,7 @@ public fun destroy(receipt: DestroyReceipt<Linear, Params>, clock: &Clock, ctx: 
 ///
 /// #### Returns
 /// - The timestamp (ms) at which vesting begins.
-public fun start<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
+public fun start_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().start_ms
 }
 
@@ -363,7 +363,7 @@ public fun start<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
 ///
 /// #### Returns
 /// - The length of each tranche period (ms).
-public fun period<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
+public fun period_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().period_ms
 }
 
@@ -385,7 +385,7 @@ public fun steps<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
 ///
 /// #### Returns
 /// - The length of the vesting period (ms): `period_ms * steps`.
-public fun duration<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
+public fun duration_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     let params = wallet.schedule_params();
     params.period_ms * params.steps
 }
@@ -397,7 +397,7 @@ public fun duration<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
 ///
 /// #### Returns
 /// - The timestamp (ms) at which the schedule ends (`start_ms + period_ms * steps`).
-public fun end<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
+public fun end_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().calculate_end()
 }
 
@@ -408,7 +408,7 @@ public fun end<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
 ///
 /// #### Returns
 /// - The configured cliff length (ms from `start_ms`); `0` means no cliff.
-public fun cliff<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
+public fun cliff_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().cliff_ms
 }
 

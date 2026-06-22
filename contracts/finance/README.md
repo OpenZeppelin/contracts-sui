@@ -55,8 +55,7 @@ is not required up front.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
    not-yet-released portion to the beneficiary. Permissionless and idempotent: if
    nothing new has vested it is a no-op.
-4. **Inspect** - `releasable` returns what `release` would pay right now; `start`,
-   `period`, `steps`, `duration`, `end`, and `cliff` read the schedule.
+4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`, `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
 5. **Tear down** - once drained, `vesting_wallet::destroy_empty` reclaims the storage
    rebate and returns a `DestroyReceipt`; hand that to `vesting_wallet_linear::destroy`,
    which requires the schedule to have ended and the caller to be the beneficiary
