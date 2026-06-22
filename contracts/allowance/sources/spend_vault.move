@@ -18,7 +18,7 @@
 /// A `Vault` is a single UNTYPED shared escrow that holds N coin types at once.
 /// Its pool is NOT a struct field: per-coin funds live as object-owned
 /// **address balances** at the vault's own object address
-/// (`object::id(v).to_address()`). Authority to spend the pool is possession of
+/// (`object::id_address(&v)`). Authority to spend the pool is possession of
 /// `&mut v.id`, which only this module produces and, for any fund egress, only
 /// ever behind a cap gate: there is no EOA signer. (The one ungated `&mut v.id`
 /// use is `squash`, which is permissionless but strictly funds-in.) Owner
@@ -30,7 +30,7 @@
 ///
 /// #### When to use which
 ///
-/// ```text
+/// 
 /// You want to...                                Call
 /// ------------------------------------------   -----------------------------
 /// issue a cap now, set the budget later         mint_cap (bare; transfer/embed it)
@@ -43,77 +43,73 @@
 /// recover a stray Coin sent to the vault        squash<T> (permissionless)
 /// emergency stop                                revoke_all (tx1), then withdraw_all<T> (tx2, retry-safe)
 /// tear down the vault                           withdraw_all<T> every coin, THEN destroy
-/// ```
+/// 
 ///
 /// #### Core semantics
 ///
-/// - **Untyped, multi-coin.** No phantom type. Cross-coin
-///   safety is a RUNTIME gate: the ledger is keyed by
-///   `BudgetKey{cap_id, coin_type}` and `spend<T>` resolves the `(cap, T)`
-///   entry by that key. The coin type is always
-///   `type_name::with_defining_ids<T>()`: never the deprecated `get` (mixing
-///   the two fragments the ledger).
+/// - **Untyped, multi-coin.** There is no phantom type; cross-coin safety is a
+///   runtime gate. The ledger is keyed by `BudgetKey{cap_id, coin_type}`, and
+///   `spend<T>` looks up the `(cap, T)` entry by that key. The coin type is
+///   always `type_name::with_defining_ids<T>()`, never the deprecated `get`
+///   (mixing the two would fragment the ledger).
 /// - **Mixed error model.** This module's own aborts are dense codes 0..7. The
-///   pool-short case is NOT among them: it surfaces as the Sui execution status
+///   pool-short case is not one of them: it surfaces as the Sui execution status
 ///   `InsufficientFundsForWithdraw` (a funds-accumulator `ExecutionFailureStatus`)
 ///   raised at `redeem_funds` when the object's settled balance is below the
-///   amount, recognized by status in transaction effects / a dry run, NOT a
-///   matchable Move `#[error]` code. Integrator preflight must account for it,
-///   not only this module's codes.
-/// - **Ceiling, not guarantee.** The sum of `remaining` across live entries may
-///   exceed the pool, by design (over-subscription is sound across coins).
-///   A live, unexpired, within-budget `spend` can still fail with the
-///   `InsufficientFundsForWithdraw` execution status if the owner withdrew first
-///   or sibling spenders drained the pool. No funds are reserved per entry;
-///   competing spenders are resolved purely by consensus sequencing: first
-///   sequenced, first served.
-/// - **Exact-amount-or-abort `spend`.** Success delivers exactly
-///   `amount` and decrements `remaining` by exactly `amount`, unless
-///   `remaining == u64::MAX`, the UNLIMITED sentinel, which is never
-///   decremented. On any abort, every entry and the pool are
-///   bit-identical to pre-call (the pre-decrement is rolled back by Move's
-///   atomic revert).
-/// - **`u64::MAX` sentinels.** `remaining == u64::MAX` => unlimited;
-///   `expires_at_ms == u64::MAX` => no expiry. Tested by equality only; no
-///   arithmetic ever touches them. Cost: a deliberate finite grant of exactly
-///   `u64::MAX` is unrepresentable, and SDKs must exclude `remaining ==
-///   u64::MAX` from volume math.
-/// - **Bare mint, upsert set.** `mint_cap` creates NO ledger
-///   entry: it returns a budgetless, untyped cap by value for the caller to
-///   transfer or embed. `set_allowance<T>` is a per-`(cap, coin)` UPSERT:
-///   creates if absent (recording the coin in `granted_coin_types`), else
-///   overwrites in place. Re-setting a key OVERWRITES; it never adds. The only
-///   way to get two summing budgets for one person is two caps.
-/// - **`cap_id` stable across `set_allowance`.** Owner-side changes
-///   mutate the entry IN PLACE, keyed by `cap_id`; the cap object, its ID, and
-///   every downstream embedding survive unlimited owner updates. This is the
-///   load-bearing composition property of the cap-keyed architecture.
-/// - **Suspension idiom.** `set_allowance<T>(..., 0, ...)` zeroes the
-///   budget but keeps the entry and cap alive; `spend<T>` aborts
-///   `EAllowanceExceeded` (not `ENoAllowance`). Spend-to-zero is equally lazy:
-///   entries are removed only by `revoke`, `revoke_all`, `renounce`, or
-///   `destroy`.
-/// - **Opt-in CAS on `set_allowance`.** Pass `expected = Some(e)` on
-///   ANY read-derived update. The race-free idiom is `allowance<T>()` ->
-///   `set_allowance<T>(..., expected = Some(result), ...)` in one PTB: the shared
-///   Vault is locked for the tx, so the pair is atomic. `Some(e)` on an absent
-///   entry aborts (you cannot CAS-match a value that does not exist).
-/// - **Unconditional owner exit.** `withdraw`, `withdraw_all`, and
-///   `destroy` consult only the OwnerCap binding and the pool, never the ledger,
-///   so no spender or ledger state can block defunding or teardown.
-///   `withdraw_all<T>` drains the SETTLED (start-of-checkpoint) pool via
-///   `settled_funds_value` (a self-tracked counter would desync against
-///   permissionless top-ups). It CAN fail with the `InsufficientFundsForWithdraw`
-///   execution status if the live pool fell earlier in the SAME checkpoint (the
-///   settled-vs-live skew; retry-safe next checkpoint), but never on
-///   spender/ledger state.
-/// - **Owner-enumerated teardown.** `destroy` drains the ledger and
-///   UIDs and returns NOTHING: it cannot iterate runtime coin types to drain
-///   heterogeneous address balances. The owner MUST `withdraw_all<T>` every
-///   coin first, enumerating types OFF-CHAIN via
-///   `suix_getAllBalances(vault_address)` (complete: it lists every
-///   address-balance type plus loose coins), or those funds strand at the dead
-///   vault address.
+///   amount. You see it as a status in transaction effects or a dry run, not as a
+///   matchable Move `#[error]` code, so integrator preflight must handle it on top
+///   of this module's codes.
+/// - **Ceiling, not guarantee.** Allowances are spending limits, not
+///   reservations: the live `remaining` values may sum to more than the pool, by
+///   design (over-subscription across coins is sound). So a live, unexpired,
+///   within-budget `spend` can still fail with `InsufficientFundsForWithdraw` if
+///   the owner withdrew first or sibling spenders drained the pool. Nothing is
+///   reserved per entry; competing spenders are served in consensus order, first
+///   sequenced first served.
+/// - **Exact-amount-or-abort `spend`.** A successful `spend` delivers exactly
+///   `amount` and decrements `remaining` by exactly `amount` (the `u64::MAX`
+///   unlimited sentinel is never decremented). On any abort, every entry and the
+///   pool are left bit-identical to the pre-call state, since Move's atomic revert
+///   rolls back the pre-decrement.
+/// - **`u64::MAX` sentinels.** `remaining == u64::MAX` means unlimited and
+///   `expires_at_ms == u64::MAX` means no expiry. Both are tested by equality
+///   only; no arithmetic ever touches them. The trade-off: a deliberate finite
+///   grant of exactly `u64::MAX` is unrepresentable, and SDKs must exclude
+///   `remaining == u64::MAX` from volume math.
+/// - **Bare mint, upsert set.** `mint_cap` creates no ledger entry: it returns a
+///   budgetless, untyped cap by value for the caller to transfer or embed.
+///   `set_allowance<T>` is a per-`(cap, coin)` upsert: it creates the entry if
+///   absent (recording the coin in `granted_coin_types`), otherwise overwrites it
+///   in place. Re-setting a key overwrites, it never adds, so the only way to give
+///   one person two summing budgets is two caps.
+/// - **`cap_id` stable across `set_allowance`.** Owner-side changes mutate the
+///   entry in place, keyed by `cap_id`; the cap object, its id, and every
+///   downstream embedding survive any number of owner updates. This is the
+///   load-bearing composition property of the cap-keyed design.
+/// - **Suspension idiom.** `set_allowance<T>(..., 0, ...)` zeroes the budget but
+///   keeps the entry and cap alive, so the next `spend<T>` aborts
+///   `EAllowanceExceeded` rather than `ENoAllowance`. Removal is lazy too: entries
+///   go away only on `revoke`, `revoke_all`, `renounce`, or `destroy`, never by
+///   spending to zero.
+/// - **Opt-in CAS on `set_allowance`.** Pass `expected = Some(e)` on any
+///   read-derived update. The race-free idiom is `allowance<T>()` then
+///   `set_allowance<T>(..., Some(result), ...)` in one PTB: the shared Vault is
+///   locked for the tx, so the read/write pair is atomic. `Some(e)` on an absent
+///   entry aborts, since there is no value to match.
+/// - **Unconditional owner exit.** `withdraw`, `withdraw_all`, and `destroy`
+///   consult only the OwnerCap binding and the pool, never the ledger, so no
+///   spender or ledger state can block defunding or teardown. `withdraw_all<T>`
+///   drains the settled (start-of-checkpoint) pool via `settled_funds_value`
+///   (a self-tracked counter would desync against permissionless top-ups). It can
+///   still fail with `InsufficientFundsForWithdraw` if the live pool fell earlier
+///   in the same checkpoint (the settled-vs-live skew, retry-safe next
+///   checkpoint), but never on spender or ledger state.
+/// - **Owner-enumerated teardown.** `destroy` drains the ledger and the UIDs and
+///   returns nothing: it cannot iterate runtime coin types to drain the
+///   heterogeneous address balances. The owner must `withdraw_all<T>` every coin
+///   first, enumerating the types off-chain via
+///   `suix_getAllBalances(vault_address)` (which lists every address-balance type
+///   plus loose coins), or those funds strand at the dead vault address.
 module openzeppelin_allowance::spend_vault;
 
 use std::type_name::{Self, TypeName};
@@ -190,21 +186,15 @@ const EUnexpectedAllowance: vector<u8> = "Current allowance does not match expec
 // === Structs ===
 
 /// Shared, UNTYPED escrow + per-`(cap, coin)` allowance ledger. One vault holds
-/// N coin types at once.
+/// N coin types at once; its lifecycle is exactly `new -> share` or
+/// `new -> destroy`.
 ///
-/// `key`-only by design: a Vault returned by `new` cannot be silently
-/// discarded (no `drop`), and external modules cannot wrap or re-share it (no
-/// `store`). Its lifecycle is exactly `new -> share` or `new -> destroy`,
-/// controlled solely by this module.
+/// The pool is NOT a struct field: per-coin funds live as object-owned address
+/// balances at `object::id_address(&v)`. The `key`-only ability protects `id`
+/// (the `&mut v.id` spend authority) and the ledger, and forces every teardown
+/// through `destroy`.
 ///
-/// The pool is NOT a field here: per-coin funds live as
-/// object-owned address balances at `object::id(v).to_address()`.
-/// Key-only therefore does not conserve the escrow directly: it protects
-/// `id` (the `&mut v.id` spend authority) and the ledger, and forces
-/// every teardown through `destroy` (the one path where the drain discipline
-/// can be required).
-///
-/// - `allowances`: a `LinkedTable` (not `Table`) so `destroy`/`revoke_all`/
+/// - `allowances`: a `LinkedTable` so `destroy`/`revoke_all`/
 ///   `renounce` can drain entries and recover each per-entry storage rebate;
 ///   the cost is O(n) drains and ~66 B of neighbour links per entry.
 /// - `granted_coin_types`: the OWNER-WRITABLE enumeration handle that
@@ -225,11 +215,7 @@ public struct Vault has key {
     granted_coin_types: VecSet<TypeName>,
 }
 
-/// Composite ledger key: one entry per `(cap, coin type)`. Must be
-/// `copy + drop + store` to be a `LinkedTable` key: `store` to live in the
-/// table, `copy` to rebuild the same key for lookup without consuming a held
-/// value, `drop` to discard a lookup key that is not inserted. Well-formed
-/// because both components (`ID`, `TypeName`) are themselves copy+drop+store.
+/// Composite ledger key: one entry per `(cap, coin type)`.
 /// `coin_type` is always `type_name::with_defining_ids<T>()`.
 public struct BudgetKey has copy, drop, store {
     cap_id: ID,
@@ -264,20 +250,16 @@ public struct SpenderCap has key, store {
     vault_id: ID,
 }
 
-/// Private ledger entry for one `(cap, coin)` grant. Not an object: reachable
-/// exclusively through this module's functions on the owning Vault, and the
-/// single source of truth for the grant's state (the cap carries no budget).
-/// The coin type is in the `BudgetKey`, not here, so the entry holds
-/// exactly two scalars and one cap has N independent `Allowance` values.
-///
-/// `remaining`: `u64::MAX` is the UNLIMITED sentinel (never decremented);
-/// `0` is a live-but-suspended entry; anything else is the raw drawable
-/// budget. `expires_at_ms`: `u64::MAX` is the NO-EXPIRY sentinel; any finite
-/// value must be strictly future at `set_allowance` time. `store` lets it live
-/// as a `LinkedTable` value; `drop` allows clean disposal during `pop_front`
-/// drains.
+/// Private ledger entry for one `(cap, coin)` grant. Reachable only through this
+/// module's functions on the owning Vault, and the single source of truth for
+/// the grant's state (the cap carries no budget). The coin type lives in the
+/// `BudgetKey`, not here, so a single cap has N independent `Allowance` values.
 public struct Allowance has drop, store {
+    /// `u64::MAX` is the UNLIMITED sentinel (never decremented); `0` is a
+    /// live-but-suspended entry; anything else is the raw drawable budget.
     remaining: u64,
+    /// `u64::MAX` is the NO-EXPIRY sentinel; any finite value must be strictly
+    /// in the future at `set_allowance` time.
     expires_at_ms: u64,
 }
 
@@ -431,24 +413,18 @@ public struct CapDeleted has copy, drop {
 /// tx fails unless it is consumed by `share` or `destroy` in the same tx.
 ///
 /// #### Parameters
-/// - `ctx`: Transaction context, used to allocate the Vault and OwnerCap UIDs
-///   and to record the creator.
+/// - `ctx`: Transaction context.
 ///
 /// #### Returns
 /// - The new `Vault` (consume it with `share` or `destroy`) and its sole
 ///   `OwnerCap`, both by value.
-///
-/// #### Aborts
-/// Never. Emits `VaultCreated { vault_id, owner_cap_id, creator }`.
 public fun new(ctx: &mut TxContext): (Vault, OwnerCap) {
-    let vault_uid = object::new(ctx);
-    let vault_id = vault_uid.to_inner();
-
     let vault = Vault {
-        id: vault_uid,
+        id: object::new(ctx),
         allowances: linked_table::new<BudgetKey, Allowance>(ctx),
         granted_coin_types: vec_set::empty<TypeName>(),
     };
+    let vault_id = object::id(&vault);
 
     let owner_cap = OwnerCap {
         id: object::new(ctx),
@@ -464,16 +440,12 @@ public fun new(ctx: &mut TxContext): (Vault, OwnerCap) {
     (vault, owner_cap)
 }
 
-/// Share the Vault. Module-only entry point: `Vault` omits `store`, so external
-/// modules cannot share it another way.
+/// Share the Vault.
 ///
 /// Must run in the same tx as `new`; there is no deferred-share path. After
 /// `share`, the Vault is addressable as a shared input only in subsequent
 /// transactions, so all same-PTB fund / grant / embed steps must precede it. No
 /// event: sharing is platform-visible.
-///
-/// #### Aborts
-/// Never.
 public fun share(v: Vault) {
     transfer::share_object(v);
 }
@@ -518,12 +490,12 @@ public fun share(v: Vault) {
 /// under this vault_id.
 ///
 /// #### Parameters
-/// - `v`: The vault to tear down (consumed by value).
-/// - `cap`: The OwnerCap bound to `v` (consumed by value).
-/// - `ctx`: Transaction context, used to attribute the `VaultDestroyed` event.
+/// - `v`: The vault to tear down.
+/// - `cap`: The OwnerCap bound to `v`.
+/// - `ctx`: Transaction context.
 ///
-/// #### Aborts (in order)
-/// 1. `EWrongOwnerCap`: cap bound to a different Vault. Only abort.
+/// #### Aborts
+/// - `EWrongOwnerCap` if cap is bound to a different Vault.
 public fun destroy(v: Vault, cap: OwnerCap, ctx: &mut TxContext) {
     assert!(cap.vault_id == object::id(&v), EWrongOwnerCap);
 
@@ -551,7 +523,7 @@ public fun destroy(v: Vault, cap: OwnerCap, ctx: &mut TxContext) {
 
 // NOTE (direct address-balance funding is a valid alternative). Because the pool
 // IS the vault's object-owned address balance, anyone can fund it WITHOUT this module by
-// calling `sui::balance::send_funds(bal, object::id(v).to_address())` directly (a
+// calling `sui::balance::send_funds(bal, object::id_address(v))` directly (a
 // `Coin<T>` via `c.into_balance()` first). Such funds are spendable by `spend` and
 // withdrawable by the owner identically to a `deposit` (the accumulator is the
 // single source of truth). The ONLY difference: a raw `send_funds` emits no
@@ -560,15 +532,10 @@ public fun destroy(v: Vault, cap: OwnerCap, ctx: &mut TxContext) {
 // `deposit_balance` when the typed event matters; a raw `send_funds` is a lighter
 // permissionless top-up.
 
-/// Add a `Coin<T>` to the vault's per-coin pool. PERMISSIONLESS: anyone may
-/// deposit, and depositing confers NO rights (no entry, no claim, no refund
-/// path); the funds become the owner's pool. Only fund a vault whose owner you
-/// trust.
-///
-/// Takes `&Vault`, not `&mut`: a deposit writes no on-chain type
-/// set, so it mutates nothing. `send_funds` needs only the vault's address,
-/// derived from `object::id(v)`; the funds land directly in the address
-/// balance at that address.
+/// Add a `Coin<T>` to the vault's per-coin pool: a thin `Coin<T>` wrapper over
+/// `deposit_balance`. PERMISSIONLESS: anyone may deposit, and depositing confers
+/// NO rights (no entry, no claim, no refund path); the funds become the owner's
+/// pool. Only fund a vault whose owner you trust.
 ///
 /// CAVEAT: because deposits are permissionless and allowances are ceilings on
 /// the pool, a deposit by anyone (including a spender) re-arms live allowances
@@ -577,23 +544,13 @@ public fun destroy(v: Vault, cap: OwnerCap, ctx: &mut TxContext) {
 ///
 /// #### Parameters
 /// - `v`: The vault whose pool receives the funds.
-/// - `c`: The `Coin<T>` to deposit (consumed by value).
-/// - `ctx`: Transaction context, used to attribute the `Deposited` event.
+/// - `c`: The `Coin<T>` to deposit.
+/// - `ctx`: Transaction context.
 ///
-/// #### Aborts (in order)
-/// 1. `EZeroAmount`: `c.value() == 0`.
+/// #### Aborts
+/// - `EZeroAmount` if `c.value() == 0`.
 public fun deposit<T>(v: &Vault, c: Coin<T>, ctx: &mut TxContext) {
-    let amount = c.value();
-    assert!(amount > 0, EZeroAmount);
-
-    c.into_balance().send_funds(object::id(v).to_address());
-
-    event::emit(Deposited {
-        vault_id: object::id(v),
-        coin_type: type_name::with_defining_ids<T>(),
-        amount,
-        depositor: ctx.sender(),
-    });
+    v.deposit_balance(c.into_balance(), ctx);
 }
 
 /// `Balance<T>`-native deposit: the symmetric ingress to the `Balance<T>`
@@ -604,16 +561,16 @@ public fun deposit<T>(v: &Vault, c: Coin<T>, ctx: &mut TxContext) {
 ///
 /// #### Parameters
 /// - `v`: The vault whose pool receives the funds.
-/// - `b`: The `Balance<T>` to deposit (consumed by value).
-/// - `ctx`: Transaction context, used to attribute the `Deposited` event.
+/// - `b`: The `Balance<T>` to deposit.
+/// - `ctx`: Transaction context.
 ///
-/// #### Aborts (in order)
-/// 1. `EZeroAmount`: `b.value() == 0`.
+/// #### Aborts
+/// - `EZeroAmount` if `b.value() == 0`.
 public fun deposit_balance<T>(v: &Vault, b: Balance<T>, ctx: &mut TxContext) {
     let amount = b.value();
     assert!(amount > 0, EZeroAmount);
 
-    b.send_funds(object::id(v).to_address());
+    b.send_funds(object::id_address(v));
 
     event::emit(Deposited {
         vault_id: object::id(v),
@@ -637,14 +594,13 @@ public fun deposit_balance<T>(v: &Vault, b: Balance<T>, ctx: &mut TxContext) {
 /// #### Parameters
 /// - `v`: The vault the minted cap is bound to.
 /// - `cap`: The OwnerCap bound to `v`.
-/// - `ctx`: Transaction context, used to allocate the cap's UID and attribute
-///   the `SpenderCapMinted` event.
+/// - `ctx`: Transaction context.
 ///
 /// #### Returns
 /// - A new, budgetless `SpenderCap` bound to `v`, by value.
 ///
-/// #### Aborts (in order)
-/// 1. `EWrongOwnerCap`: cap bound to a different Vault. Only abort.
+/// #### Aborts
+/// - `EWrongOwnerCap` if cap is bound to a different Vault.
 public fun mint_cap(v: &Vault, cap: &OwnerCap, ctx: &mut TxContext): SpenderCap {
     assert!(cap.vault_id == object::id(v), EWrongOwnerCap);
 
@@ -663,7 +619,7 @@ public fun mint_cap(v: &Vault, cap: &OwnerCap, ctx: &mut TxContext): SpenderCap 
     spender_cap
 }
 
-/// Owner-only. UPSERT the `(cap_id, T)` budget: create it if absent, else
+/// UPSERT the `(cap_id, T)` budget: create it if absent, else
 /// overwrite `remaining` and `expires_at_ms` IN PLACE. The primary
 /// create-or-change path; one cap accrues N independent per-coin budgets via N
 /// `set_allowance<T>` calls.
@@ -714,14 +670,14 @@ public fun mint_cap(v: &Vault, cap: &OwnerCap, ctx: &mut TxContext): SpenderCap 
 ///   any finite value must be strictly in the future.
 /// - `expected`: Optional CAS guard; `Some(e)` proceeds only if the entry exists
 ///   and its current `remaining == e`, `None` is unconditional.
-/// - `clock`: Reference to the Sui `Clock`, used to validate `new_expires_at_ms`.
-/// - `ctx`: Transaction context, used to attribute the `AllowanceSet` event.
+/// - `clock`: The Sui `Clock`.
+/// - `ctx`: Transaction context.
 ///
-/// #### Aborts (in order)
-/// 1. `EWrongOwnerCap`: cap bound to a different Vault.
-/// 2. `EExpiryInPast`: finite `new_expires_at_ms <= now`.
-/// 3. `EUnexpectedAllowance`: CAS provided and the entry is absent or its
-///    current `remaining` differs.
+/// #### Aborts
+/// - `EWrongOwnerCap` if cap is bound to a different Vault.
+/// - `EExpiryInPast` if `new_expires_at_ms` is finite and `<= now`.
+/// - `EUnexpectedAllowance` if CAS is provided and the entry is absent or its
+///   current `remaining` differs.
 public fun set_allowance<T>(
     v: &mut Vault,
     cap: &OwnerCap,
@@ -833,25 +789,27 @@ public fun set_allowance<T>(
 /// - `v`: The vault to spend against.
 /// - `cap`: The SpenderCap bound to `v` whose `(cap, T)` budget is charged.
 /// - `amount`: Units of coin `T` to draw; must be positive.
-/// - `clock`: Reference to the Sui `Clock`, used to evaluate expiry.
-/// - `ctx`: Transaction context, used to attribute the `Spent` event.
+/// - `clock`: The Sui `Clock`.
+/// - `ctx`: Transaction context.
 ///
 /// #### Returns
 /// - A `Balance<T>` of exactly `amount`; the caller must consume it.
 ///
-/// #### Aborts (in order; deterministic integrator ABI)
-/// 1. `EWrongVault`: cap bound to a different Vault.
-/// 2. `ENoAllowance`: no `(cap, T)` entry (never granted, revoked, or a
-///    different coin).
-/// 3. `EAllowanceExpired`: finite expiry and `now >= expires_at_ms`.
-/// 4. `EZeroAmount`: `amount == 0`.
-/// 5. `EAllowanceExceeded`: finite `remaining` and `amount > remaining`;
-///    includes suspended-at-zero.
-/// 6. *(execution status)* `InsufficientFundsForWithdraw`: the object's settled
-///    balance is below `amount`. A funds-accumulator execution status raised at
-///    `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
-///    code you can match with `expected_failure(abort_code = ...)`, and not one
-///    of this module's codes.
+/// The library checks abort in the listed order (a deterministic integrator ABI).
+///
+/// #### Aborts
+/// - `EWrongVault` if cap is bound to a different Vault.
+/// - `ENoAllowance` if there is no `(cap, T)` entry (never granted, revoked, or
+///   a different coin).
+/// - `EAllowanceExpired` if expiry is finite and `now >= expires_at_ms`.
+/// - `EZeroAmount` if `amount == 0`.
+/// - `EAllowanceExceeded` if `remaining` is finite and `amount > remaining`;
+///   includes suspended-at-zero.
+/// - `InsufficientFundsForWithdraw` (execution status) if the object's settled
+///   balance is below `amount`. A funds-accumulator execution status raised at
+///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
+///   code you can match with `expected_failure(abort_code = ...)`, and not one
+///   of this module's codes.
 public fun spend<T>(
     v: &mut Vault,
     cap: &SpenderCap,
@@ -956,13 +914,13 @@ public fun spend<T>(
 /// - `v`: The vault whose ledger entry is removed.
 /// - `cap`: The OwnerCap bound to `v`.
 /// - `cap_id`: The SpenderCap object id whose `(cap_id, T)` entry is targeted.
-/// - `ctx`: Transaction context, used to attribute the `Revoked` event.
+/// - `ctx`: Transaction context.
 ///
 /// #### Returns
 /// - `true` if an entry was present and removed; `false` if there was none.
 ///
-/// #### Aborts (in order)
-/// 1. `EWrongOwnerCap`: only abort.
+/// #### Aborts
+/// - `EWrongOwnerCap` if cap is bound to a different Vault.
 public fun revoke<T>(v: &mut Vault, cap: &OwnerCap, cap_id: ID, ctx: &mut TxContext): bool {
     // Owner gate: the ONLY check, so no state can race this into failure.
     assert!(cap.vault_id == object::id(v), EWrongOwnerCap);
@@ -1019,10 +977,10 @@ public fun revoke<T>(v: &mut Vault, cap: &OwnerCap, cap_id: ID, ctx: &mut TxCont
 /// - `v`: The vault whose ledger entries are removed.
 /// - `cap`: The OwnerCap bound to `v`.
 /// - `cap_id`: The SpenderCap object id whose entries are all removed.
-/// - `ctx`: Transaction context, used to attribute each `Revoked` event.
+/// - `ctx`: Transaction context.
 ///
-/// #### Aborts (in order)
-/// 1. `EWrongOwnerCap`: only abort.
+/// #### Aborts
+/// - `EWrongOwnerCap` if cap is bound to a different Vault.
 public fun revoke_all(v: &mut Vault, cap: &OwnerCap, cap_id: ID, ctx: &mut TxContext) {
     assert!(cap.vault_id == object::id(v), EWrongOwnerCap);
 
@@ -1063,12 +1021,11 @@ public fun revoke_all(v: &mut Vault, cap: &OwnerCap, cap_id: ID, ctx: &mut TxCon
 ///
 /// #### Parameters
 /// - `v`: The live vault whose entries for this cap are removed.
-/// - `cap`: The SpenderCap to renounce, bound to `v` (consumed by value).
-/// - `ctx`: Transaction context, used to attribute the `Renounced` event.
+/// - `cap`: The SpenderCap to renounce, bound to `v`.
+/// - `ctx`: Transaction context.
 ///
-/// #### Aborts (in order)
-/// 1. `EWrongVault`: cap bound to a different Vault. Only abort: an
-///    already-revoked entry is fine.
+/// #### Aborts
+/// - `EWrongVault` if cap is bound to a different Vault.
 public fun renounce(v: &mut Vault, cap: SpenderCap, ctx: &mut TxContext) {
     let vault_id = object::id(v);
     assert!(cap.vault_id == vault_id, EWrongVault);
@@ -1113,10 +1070,7 @@ public fun renounce(v: &mut Vault, cap: SpenderCap, ctx: &mut TxContext) {
 /// drains the whole ledger regardless.
 ///
 /// #### Parameters
-/// - `cap`: The orphaned SpenderCap to delete (consumed by value).
-///
-/// #### Aborts
-/// Never.
+/// - `cap`: The orphaned SpenderCap to delete.
 public fun delete_orphaned_cap(cap: SpenderCap) {
     let SpenderCap { id, vault_id } = cap;
     let cap_id = id.to_inner();
@@ -1144,12 +1098,11 @@ public fun delete_orphaned_cap(cap: SpenderCap) {
 /// #### Parameters
 /// - `v`: The vault whose pool receives the recovered stray.
 /// - `c`: The `Receiving<Coin<T>>` ticket for the stray coin sent to `v`.
-/// - `ctx`: Transaction context, used to attribute the `Squashed` event.
+/// - `ctx`: Transaction context.
 ///
 /// #### Aborts
-/// Never on pool/ledger state. (The framework `public_receive` can abort on an
-/// invalid or stale `Receiving` ticket: a framework guarantee, not a library
-/// abort.)
+/// - The framework `public_receive` can abort on an invalid or stale
+///   `Receiving` ticket; this module itself never aborts on pool/ledger state.
 public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) {
     let vault_id = object::id(v);
 
@@ -1182,19 +1135,19 @@ public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) 
 /// - `v`: The vault whose pool is drawn down.
 /// - `cap`: The OwnerCap bound to `v`.
 /// - `amount`: Units of coin `T` to withdraw; must be positive.
-/// - `ctx`: Transaction context, used to attribute the `Withdrawn` event.
+/// - `ctx`: Transaction context.
 ///
 /// #### Returns
 /// - A `Balance<T>` of exactly `amount`; the caller must consume it.
 ///
-/// #### Aborts (in order)
-/// 1. `EWrongOwnerCap`: cap bound to a different Vault.
-/// 2. `EZeroAmount`: `amount == 0`.
-/// 3. *(execution status)* `InsufficientFundsForWithdraw`: the object's settled
-///    balance is below `amount`. A funds-accumulator execution status raised at
-///    `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
-///    code you can match with `expected_failure(abort_code = ...)`, and not one
-///    of this module's codes.
+/// #### Aborts
+/// - `EWrongOwnerCap` if cap is bound to a different Vault.
+/// - `EZeroAmount` if `amount == 0`.
+/// - `InsufficientFundsForWithdraw` (execution status) if the object's settled
+///   balance is below `amount`. A funds-accumulator execution status raised at
+///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
+///   code you can match with `expected_failure(abort_code = ...)`, and not one
+///   of this module's codes.
 public fun withdraw<T>(
     v: &mut Vault,
     cap: &OwnerCap,
@@ -1255,23 +1208,21 @@ public fun withdraw<T>(
 /// #### Parameters
 /// - `v`: The vault whose settled `T` pool is drained.
 /// - `cap`: The OwnerCap bound to `v`.
-/// - `root`: The `AccumulatorRoot`, read for the settled (start-of-checkpoint)
-///   pool value.
-/// - `ctx`: Transaction context, used to attribute the `Withdrawn` event.
+/// - `root`: The `AccumulatorRoot`.
+/// - `ctx`: Transaction context.
 ///
 /// #### Returns
 /// - A possibly-zero `Balance<T>` holding the drained settled pool; the caller
 ///   must consume it.
 ///
-/// #### Aborts (in order)
-/// 1. `EWrongOwnerCap`: cap bound to a different Vault.
-/// 2. *(execution status)* `InsufficientFundsForWithdraw`: the live pool fell
-///    below the settled snapshot earlier in this checkpoint (the settled-vs-live
-///    skew; retry-safe), so the object's settled balance is below the amount. A
-///    funds-accumulator execution status raised at `redeem_funds` (surfaced in
-///    effects / dry run / SDK), NOT a Move `#[error]` code you can match with
-///    `expected_failure(abort_code = ...)`, and not one of this module's codes.
-///    Never aborts on spender/ledger state.
+/// #### Aborts
+/// - `EWrongOwnerCap` if cap is bound to a different Vault.
+/// - `InsufficientFundsForWithdraw` (execution status) if the live pool fell
+///   below the settled snapshot earlier in this checkpoint (the settled-vs-live
+///   skew; retry-safe). A funds-accumulator execution status raised at
+///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
+///   code you can match with `expected_failure(abort_code = ...)`, and not one
+///   of this module's codes. Never aborts on spender/ledger state.
 public fun withdraw_all<T>(
     v: &mut Vault,
     cap: &OwnerCap,
@@ -1346,8 +1297,8 @@ public fun allowance<T>(v: &Vault, cap_id: ID): u64 {
 /// #### Parameters
 /// - `v`: The vault to inspect.
 /// - `cap_id`: The SpenderCap object id whose `(cap_id, T)` entry is quoted.
-/// - `root`: The `AccumulatorRoot`, read for the settled `T` pool value.
-/// - `clock`: Reference to the Sui `Clock`, used to evaluate expiry.
+/// - `root`: The `AccumulatorRoot`.
+/// - `clock`: The Sui `Clock`.
 ///
 /// #### Returns
 /// - The advisory upper bound on a current `spend<T>`; `0` when absent, expired,
@@ -1367,7 +1318,7 @@ public fun spendable_now<T>(v: &Vault, cap_id: ID, root: &AccumulatorRoot, clock
     };
     // The u64::MAX sentinel is min's neutral element: unlimited reduces to the
     // settled pool with no special case.
-    entry.remaining.min(balance::settled_funds_value<T>(root, object::id(v).to_address()))
+    entry.remaining.min(balance::settled_funds_value<T>(root, object::id_address(v)))
 }
 
 /// Raw `expires_at_ms` for `(cap, T)`; `0` if absent. A present entry's value is
@@ -1395,7 +1346,7 @@ public fun contains<T>(v: &Vault, cap_id: ID): bool {
 /// this read can still fail with the `InsufficientFundsForWithdraw` execution
 /// status if the live pool dropped since the read (the settled-vs-live skew).
 public fun balance_value<T>(v: &Vault, root: &AccumulatorRoot): u64 {
-    balance::settled_funds_value<T>(root, object::id(v).to_address())
+    balance::settled_funds_value<T>(root, object::id_address(v))
 }
 
 /// The coin types the OWNER has granted: exactly what `revoke_all`/`renounce`
