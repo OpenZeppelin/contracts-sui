@@ -56,7 +56,7 @@ fun compose_create_fund_and_release_across_modules() {
     clock.set_for_testing(START_MS + DURATION_MS / 2);
     assert_eq!(quadratic::releasable(&wallet, &clock), TOTAL / 4);
     let vested = quadratic::vested_amount(&wallet, &clock);
-    vesting_wallet::release(&mut wallet, &vested, scenario.ctx());
+    wallet.release(&vested, scenario.ctx());
     assert_eq!(wallet.released(), TOTAL / 4);
 
     // After end: everything remaining is releasable, draining the wallet.
@@ -167,7 +167,7 @@ fun compose_destroy_after_drain() {
     // Permissionless half reclaims the storage rebate; the witness-gated half consumes
     // the receipt and enforces the ended and beneficiary gates (the sender is the
     // beneficiary here).
-    let receipt = vesting_wallet::destroy_empty(wallet);
+    let receipt = wallet.destroy_empty();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
     scenario.next_tx(BENEFICIARY);
@@ -196,7 +196,7 @@ fun destroy_aborts_before_end() {
     );
     clock.set_for_testing(START_MS + DURATION_MS - 1);
 
-    let receipt = vesting_wallet::destroy_empty(wallet);
+    let receipt = wallet.destroy_empty();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
     abort
@@ -219,7 +219,7 @@ fun destroy_rejects_non_beneficiary() {
     );
     clock.set_for_testing(START_MS + DURATION_MS);
 
-    let receipt = vesting_wallet::destroy_empty(wallet);
+    let receipt = wallet.destroy_empty();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
     abort
@@ -245,5 +245,5 @@ fun quadratic_release(
     ctx: &mut TxContext,
 ) {
     let vested = quadratic::vested_amount(wallet, clock);
-    vesting_wallet::release(wallet, &vested, ctx);
+    wallet.release(&vested, ctx);
 }

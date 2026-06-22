@@ -36,7 +36,7 @@
 /// not be deployed as-is.
 module openzeppelin_finance::example_vesting_quadratic;
 
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount, DestroyReceipt};
+use openzeppelin_finance::vesting_wallet::{VestingWallet, VestedAmount, DestroyReceipt};
 use openzeppelin_math::rounding;
 use openzeppelin_math::u64::mul_div;
 use sui::clock::Clock;
@@ -128,7 +128,7 @@ public fun releasable<C>(wallet: &VestingWallet<Quadratic, Params, C>, clock: &C
 /// - `ENotEnded` if called before the schedule's end (`start_ms + duration_ms`).
 /// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
 public fun destroy(receipt: DestroyReceipt<Quadratic, Params>, clock: &Clock, ctx: &TxContext) {
-    let (beneficiary, params) = vesting_wallet::consume_receipt(receipt, Quadratic {});
+    let (beneficiary, params) = receipt.consume_receipt(Quadratic {});
     assert!(clock.timestamp_ms() >= params.calculate_end(), ENotEnded);
     assert!(ctx.sender() == beneficiary, ENotBeneficiary);
 }

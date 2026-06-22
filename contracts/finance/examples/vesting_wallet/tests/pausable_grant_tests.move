@@ -142,14 +142,14 @@ fun unwrap_then_curve_teardown() {
     // beneficiary so the beneficiary-gated curve teardown can run.
     scenario.next_tx(EMPLOYER);
     let cap = scenario.take_from_sender<GrantAdminCap>();
-    let wallet = example_pausable_grant::unwrap(grant, cap);
+    let wallet = grant.unwrap(cap);
     transfer::public_transfer(wallet, BENEFICIARY);
 
     // Beneficiary finalizes: permissionless `destroy_empty` for the receipt, then the
     // curve's witness-gated `destroy`.
     scenario.next_tx(BENEFICIARY);
     let wallet = scenario.take_from_sender<VestingWallet<Linear, Params, USDC>>();
-    let receipt = vesting_wallet::destroy_empty(wallet);
+    let receipt = wallet.destroy_empty();
     linear::destroy(receipt, &clock, scenario.ctx());
 
     sui::clock::destroy_for_testing(clock);
@@ -173,7 +173,7 @@ fun foreign_cap_cannot_unwrap() {
     // The sender holds two caps; the most recent one belongs to grant B.
     let cap_b = scenario.take_from_sender<GrantAdminCap>();
 
-    let wallet = example_pausable_grant::unwrap(grant_a, cap_b);
+    let wallet = grant_a.unwrap(cap_b);
     transfer::public_transfer(wallet, BENEFICIARY);
 
     abort
