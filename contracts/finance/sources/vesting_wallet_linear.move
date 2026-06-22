@@ -262,6 +262,31 @@ public fun create_and_share<C>(
     transfer::public_share_object(wallet);
 }
 
+/// Sugar for the common case: build a continuous wallet and immediately share it.
+/// The wallet is made shared via `transfer::public_share_object`.
+///
+/// #### Parameters
+/// - `beneficiary`: Address that every release pays out to.
+/// - `start_ms`: Timestamp (ms) at which vesting begins.
+/// - `cliff_ms`: Cliff length (ms from `start_ms`); `0` for no cliff.
+/// - `duration_ms`: Length of the vesting period (ms).
+/// - `ctx`: Transaction context.
+///
+/// #### Aborts
+/// - `EZeroSteps` if `duration_ms == 0`.
+/// - `EInvalidCliff` if `cliff_ms > duration_ms`.
+/// - `EScheduleOverflow` if `start_ms + duration_ms` would overflow `u64`.
+public fun create_and_share_continuous<C>(
+    beneficiary: address,
+    start_ms: u64,
+    cliff_ms: u64,
+    duration_ms: u64,
+    ctx: &mut TxContext,
+) {
+    let wallet = new_continuous<C>(beneficiary, start_ms, cliff_ms, duration_ms, ctx);
+    transfer::public_share_object(wallet);
+}
+
 // === Curve evaluation & release ===
 
 /// Evaluate the stepped curve at `clock.timestamp_ms()` and mint the resulting

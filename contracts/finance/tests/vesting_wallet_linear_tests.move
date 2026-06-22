@@ -214,6 +214,24 @@ fun create_and_share_shares_wallet() {
     test.end();
 }
 
+// `create_and_share_continuous` puts a continuous wallet into the shared topology.
+#[test]
+fun create_and_share_continuous_shares_wallet() {
+    let (mut test, clk) = setup(0);
+
+    vesting_wallet_linear::create_and_share_continuous<USDC>(BENEFICIARY, 0, 0, 4000, test.ctx());
+
+    test.next_tx(@0x1);
+    let wallet = test.take_shared<VestingWallet<Linear, Params, USDC>>();
+    assert_eq!(wallet.beneficiary(), BENEFICIARY);
+    assert_eq!(vesting_wallet_linear::duration_ms(&wallet), 4000);
+    assert_eq!(vesting_wallet_linear::period_ms(&wallet), 1);
+    test_scenario::return_shared(wallet);
+
+    destroy(clk);
+    test.end();
+}
+
 // === Curve shape ===
 
 // Before `start_ms`, the curve is zero and does not underflow.
