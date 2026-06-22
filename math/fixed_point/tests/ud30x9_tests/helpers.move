@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_fp_math::ud30x9_test_helpers;
 
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};

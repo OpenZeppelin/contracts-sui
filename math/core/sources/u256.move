@@ -85,7 +85,7 @@ public fun checked_shr(value: u256, shift: u8): Option<u256> {
 /// - `option::none()` when the rounded quotient cannot be represented as `u256`.
 ///
 /// #### Aborts
-/// - Aborts if `denominator` is zero.
+/// - `EDivideByZero` if `denominator` is zero.
 public fun mul_div(a: u256, b: u256, denominator: u256, rounding_mode: RoundingMode): Option<u256> {
     let (overflow, result) = macros::mul_div!(a, b, denominator, rounding_mode);
     if (overflow) {
@@ -115,7 +115,7 @@ public fun mul_shr(a: u256, b: u256, shift: u8, rounding_mode: RoundingMode): Op
     }
 }
 
-/// Count the number of leading zero bits in the value.
+/// Count the number of leading zero bits in `value`.
 ///
 /// #### Parameters
 /// - `value`: Input value.
@@ -203,7 +203,7 @@ public fun sqrt(value: u256, rounding_mode: RoundingMode): u256 {
 /// - `option::none()` when `value` and `modulus` are not co-prime, or when `modulus` is 1.
 ///
 /// #### Aborts
-/// - Aborts if `modulus` is zero.
+/// - `EZeroModulus` if `modulus` is zero.
 public fun inv_mod(value: u256, modulus: u256): Option<u256> {
     macros::inv_mod!(value, modulus)
 }
@@ -219,7 +219,7 @@ public fun inv_mod(value: u256, modulus: u256): Option<u256> {
 /// - `(a * b) mod modulus`.
 ///
 /// #### Aborts
-/// - Aborts if `modulus` is zero.
+/// - `EZeroModulus` if `modulus` is zero.
 public fun mul_mod(a: u256, b: u256, modulus: u256): u256 {
     macros::mul_mod!(a, b, modulus)
 }

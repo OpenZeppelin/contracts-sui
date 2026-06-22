@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_fp_math::sd29x9_wrap_tests;
 
 use openzeppelin_fp_math::sd29x9::{Self, from_bits, two_complement};

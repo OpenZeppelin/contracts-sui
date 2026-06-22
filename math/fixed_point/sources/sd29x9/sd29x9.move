@@ -128,7 +128,7 @@ public fun max(): SD29x9 {
 /// - The wrapped `SD29x9` value.
 ///
 /// #### Aborts
-/// - Aborts if `x` exceeds the representable positive magnitude (`2^127 - 1`).
+/// - `EOverflow` if `x` exceeds the representable positive magnitude (`2^127 - 1`).
 ///
 /// NOTE: This function can't be used to obtain the minimum value, use `min()` instead.
 public fun wrap(x: u128, is_negative: bool): SD29x9 {

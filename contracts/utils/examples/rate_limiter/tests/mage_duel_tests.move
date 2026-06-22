@@ -1,4 +1,3 @@
-#[test_only]
 module openzeppelin_utils::mage_duel_tests;
 
 use openzeppelin_utils::mage_duel::{Self, challenge, Duel, ChallengerCap, OpponentCap};
