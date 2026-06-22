@@ -222,13 +222,11 @@ public struct BudgetKey has copy, drop, store {
     coin_type: TypeName,
 }
 
-/// Owner authority for exactly one Vault. Transferable +
-/// custody-composable (`store` enables multisig/DAO embedding and
-/// two-step-transfer wrapping). Exactly ONE OwnerCap exists per Vault for its
-/// whole life: `new` mints it and `destroy` consumes it. `vault_id` is set at
-/// `new` and never rewritten; transfer of the cap IS owner rotation. It gates a
-/// wide blast radius: `withdraw<T>`/`withdraw_all<T>` over
-/// every coin and `revoke_all` over every `(cap, coin)` entry.
+/// Owner authority for exactly one Vault. Exactly ONE OwnerCap exists per Vault
+/// for its whole life: `new` mints it and `destroy` consumes it. `vault_id` is
+/// set at `new` and never rewritten; transfer of the cap IS owner rotation. It
+/// gates a wide blast radius: `withdraw<T>`/`withdraw_all<T>` over every coin and
+/// `revoke_all` over every `(cap, coin)` entry.
 public struct OwnerCap has key, store {
     id: UID,
     vault_id: ID,
@@ -243,8 +241,7 @@ public struct OwnerCap has key, store {
 /// the `T` argument at the `spend<T>` call site and resolved against the ledger
 /// key. `vault_id` is set at `mint_cap` and never rewritten; the binding
 /// survives every transfer, wrap, or table embedding. On-chain custodians
-/// should validate it via `spender_cap_vault_id` before accepting a cap. No
-/// `copy`: spend authority cannot be duplicated.
+/// should validate it via `spender_cap_vault_id` before accepting a cap.
 public struct SpenderCap has key, store {
     id: UID,
     vault_id: ID,
@@ -582,7 +579,7 @@ public fun deposit_balance<T>(v: &Vault, b: Balance<T>, ctx: &mut TxContext) {
 
 // === Cap + budgets (two owner verbs: mint_cap, set_allowance) ===
 
-/// Owner-only. Mint a BARE, untyped `SpenderCap` and return it BY VALUE: no
+/// Mint a BARE, untyped `SpenderCap` and return it BY VALUE: no
 /// budget, no ledger entry, no coin type yet. The caller decides the
 /// cap's destination in the same PTB: `public_transfer` it to a delegate, or
 /// embed it by value in a wrapper object / protocol record. Per-coin budgets
@@ -1120,7 +1117,7 @@ public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) 
 
 // === Owner exit (consults only the cap binding + pool, never the ledger) ===
 
-/// Owner-only. Withdraw exactly `amount` of coin `T` from the pool as
+/// Withdraw exactly `amount` of coin `T` from the pool as
 /// `Balance<T>`. May leave live allowances unbacked: intended (allowances are
 /// ceilings; the next over-pool spend fails with the `InsufficientFundsForWithdraw`
 /// execution status with a live budget).
@@ -1171,7 +1168,7 @@ public fun withdraw<T>(
     bal
 }
 
-/// Owner-only. Drain the SETTLED `T` pool as a possibly-zero `Balance<T>`. It
+/// Drain the SETTLED `T` pool as a possibly-zero `Balance<T>`. It
 /// reads `settled_funds_value<T>(root, vault_address)` (the START-OF-CHECKPOINT
 /// snapshot) and withdraws exactly that. There is deliberately no
 /// caller-supplied amount: a fixed amount would be a stale-amount DoS (a racing

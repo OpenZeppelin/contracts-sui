@@ -290,7 +290,7 @@ fun was_created_confirms_intended_cap() {
     // Teardown: no funds were deposited, so the pool is empty and `destroy` needs
     // no prior drain. Dispose the cap and clock, then tear the vault down.
     destroy(cap);
-    clk.destroy_for_testing();
+    destroy(clk);
     vault.destroy(owner_cap, scenario.ctx());
 
     scenario.end();
