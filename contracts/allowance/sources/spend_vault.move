@@ -30,7 +30,6 @@
 ///
 /// #### When to use which
 ///
-/// 
 /// You want to...                                Call
 /// ------------------------------------------   -----------------------------
 /// issue a cap now, set the budget later         mint_cap (bare; transfer/embed it)
@@ -43,7 +42,6 @@
 /// recover a stray Coin sent to the vault        squash<T> (permissionless)
 /// emergency stop                                revoke_all (tx1), then withdraw_all<T> (tx2, retry-safe)
 /// tear down the vault                           withdraw_all<T> every coin, THEN destroy
-/// 
 ///
 /// #### Core semantics
 ///
