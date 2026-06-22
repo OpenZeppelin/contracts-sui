@@ -23,7 +23,7 @@ Sui smart contracts are written in Move leveraging the Sui Move framework.
 
 Follow the installation guide in the [Sui documentation](https://docs.sui.io/guides/developer/getting-started/sui-install).
 
-**Required version**: Sui CLI [1.72.5](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.72.5).
+**Required version**: Sui CLI [1.73.2](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.73.2).
 
 ## Docs
 
