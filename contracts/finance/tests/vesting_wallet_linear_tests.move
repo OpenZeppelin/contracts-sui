@@ -542,7 +542,8 @@ fun destroy_after_end_on_empty_wallet() {
     assert_eq!(wallet.balance(), 0);
 
     test.next_tx(BENEFICIARY);
-    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
 
     let destroyed = event::events_by_type<Destroyed<Linear, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -562,7 +563,8 @@ fun destroy_rejects_before_end() {
 
     let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     clk.set_for_testing(3999);
-    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
     abort
 }
 
@@ -577,7 +579,8 @@ fun destroy_rejects_nonempty_balance() {
     wallet.fund(1, test.ctx());
     clk.set_for_testing(5000); // after end, so the ended gate cannot fire
     test.next_tx(BENEFICIARY);
-    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
     abort
 }
 
@@ -590,7 +593,8 @@ fun destroy_rejects_non_beneficiary() {
     let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     clk.set_for_testing(5000); // after end, so the ended gate cannot fire
     test.next_tx(@0xCAFE); // not the beneficiary
-    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
     abort
 }
 

@@ -9,6 +9,7 @@ use openzeppelin_finance::vesting_wallet::{
     Released,
     Destroyed
 };
+use openzeppelin_finance::vesting_wallet_linear;
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
 use sui::event;
@@ -535,8 +536,9 @@ fun destroy_empty_returns_params_and_emits() {
     let wallet = new_wallet(BENEFICIARY, scenario.ctx());
     let wallet_id = object::id(&wallet);
 
-    let params = wallet.destroy_empty(TestCurve {});
-    assert_eq!(params, TestParams { tag: PARAMS_TAG });
+    let receipt = wallet.destroy_empty();
+    assert_eq!(vesting_wallet::test_receipt_beneficiary(&receipt), BENEFICIARY);
+    assert_eq!(vesting_wallet::test_receipt_params(&receipt), TestParams { tag: PARAMS_TAG });
 
     let destroyed = event::events_by_type<Destroyed<TestCurve, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -545,6 +547,7 @@ fun destroy_empty_returns_params_and_emits() {
         vesting_wallet::test_new_destroyed<TestCurve, USDC>(wallet_id, BENEFICIARY, 0),
     );
 
+    destroy(receipt);
     scenario.end();
 }
 
@@ -556,7 +559,7 @@ fun destroy_empty_rejects_nonempty_balance() {
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
     wallet.deposit(mint(1, &mut ctx));
 
-    wallet.destroy_empty(TestCurve {});
+    let _receipt = wallet.destroy_empty();
     abort
 }
 
