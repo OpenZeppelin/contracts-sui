@@ -55,9 +55,11 @@ is not required up front.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
    not-yet-released portion to the beneficiary. Permissionless and idempotent: if
    nothing new has vested it is a no-op.
-4. **Inspect** - `releasable` returns what `release` would pay right now; `start`,
-   `period`, `steps`, `duration`, `end`, and `cliff` read the schedule.
-5. **Tear down** - once drained and ended, `destroy` reclaims the storage rebate.
+4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`, `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
+5. **Tear down** - once drained, `vesting_wallet::destroy_empty` reclaims the storage
+   rebate and returns a `DestroyReceipt`; hand that to `vesting_wallet_linear::destroy`,
+   which requires the schedule to have ended and the caller to be the beneficiary
+   before accepting the teardown.
 
 ### Usage
 
@@ -228,17 +230,15 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    build the wallet itself without routing through `new`.
 3. A `vested_amount(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
    that evaluates the curve and ends in `wallet.mint_vested_amount(MyCurve {}, amount)`.
-4. A teardown that calls `wallet.destroy_empty(MyCurve {})` and destructures the
-   returned parameters.
+4. A teardown that calls `wallet.destroy_empty()` for a `DestroyReceipt<MyCurve,
+   MyParams>`, then `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover
+   the beneficiary and parameters and destructure them. `destroy_empty` is permissionless;
+   the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
 
 The curve **must be monotonically non-decreasing in time and bounded above by
 `balance + released`.** A curve that violates either makes `release` abort before any
 state changes - funds stay safe, but the release path is bricked until the curve is
 fixed.
-
-A reconfigurable curve can additionally wrap `set_schedule_params` (witness-gated); a
-curve that omits it - like `vesting_wallet_linear` - leaves its wallets' parameters
-permanently immutable on chain.
 
 ### The `VestedAmount` attestation
 
@@ -261,13 +261,15 @@ one per integration boundary described above:
 
 - [`vesting_quadratic`](examples/vesting_wallet/vesting_quadratic.move) - the **custom
   schedule** pattern: a backloaded `vested = total * (elapsed / duration)^2` curve that
-  ships *only* the two operations requiring the schedule's private types (`params` and
-  `vested_amount`) and lets the integrator drive `new`, `deposit`, and `release` against
+  ships *only* the operations requiring the schedule's private types (`params`,
+  `vested_amount`, and the witness-gated `destroy` that consumes the teardown receipt)
+  and lets the integrator drive `new`, `deposit`, `release`, and `destroy_empty` against
   `vesting_wallet` directly. The minimal shape of a new curve.
 - [`pausable_grant`](examples/vesting_wallet/pausable_grant.move) - the **curve-agnostic
   wrapper** pattern: a shared grant that nests a wallet, stays generic over `S`/`P`,
   hands out `&inner` while keeping `&mut` private, and re-exposes `release` behind a
-  cap-gated pause check. Works with any present or future curve.
+  cap-gated pause check. `unwrap` dissolves the wrapper back to the bare wallet so the
+  curve module can finalize teardown. Works with any present or future curve.
 - [`splitter`](examples/vesting_wallet/splitter.move) - the **beneficiary-as-object**
   pattern: point a wallet's `beneficiary` at a shared `Beneficiary` object so each
   release lands as a `Receiving<Coin<C>>` that anyone can `disperse` to many receivers

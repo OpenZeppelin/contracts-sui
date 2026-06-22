@@ -7,13 +7,12 @@ use openzeppelin_finance::vesting_wallet::{
     Created,
     Deposited,
     Released,
-    Destroyed,
-    ScheduleParamsUpdated
+    Destroyed
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
 use sui::event;
-use sui::test_scenario::{Self, Scenario};
+use sui::test_scenario;
 
 // A throwaway curve used to exercise the curve-agnostic primitive directly: it
 // lets the tests mint a `VestedAmount` with an arbitrary `amount`, so the
@@ -39,7 +38,7 @@ public struct Wrapper has key, store {
 const BENEFICIARY: address = @0xB0B;
 const PARAMS_TAG: u64 = 7;
 
-// === Test helpers ===
+// === Test-Only Helpers ===
 
 fun new_wallet(
     beneficiary: address,
@@ -527,8 +526,8 @@ fun release_allows_draining_exact_balance() {
 
 // === Teardown ===
 
-// `destroy_empty` is witness-gated, consumes the wallet by value and returns `P`,
-// accepts an empty balance, emits `Destroyed`, and loses no value.
+// `destroy_empty` is permissionless, consumes the wallet by value and returns a
+// `DestroyReceipt`, accepts an empty balance, emits `Destroyed`, and loses no value.
 #[test]
 fun destroy_empty_returns_params_and_emits() {
     let mut scenario = test_scenario::begin(@0x1);
@@ -536,8 +535,9 @@ fun destroy_empty_returns_params_and_emits() {
     let wallet = new_wallet(BENEFICIARY, scenario.ctx());
     let wallet_id = object::id(&wallet);
 
-    let params = wallet.destroy_empty(TestCurve {});
-    assert_eq!(params, TestParams { tag: PARAMS_TAG });
+    let receipt = wallet.destroy_empty();
+    assert_eq!(vesting_wallet::test_receipt_beneficiary(&receipt), BENEFICIARY);
+    assert_eq!(vesting_wallet::test_receipt_params(&receipt), TestParams { tag: PARAMS_TAG });
 
     let destroyed = event::events_by_type<Destroyed<TestCurve, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -546,6 +546,7 @@ fun destroy_empty_returns_params_and_emits() {
         vesting_wallet::test_new_destroyed<TestCurve, USDC>(wallet_id, BENEFICIARY, 0),
     );
 
+    destroy(receipt);
     scenario.end();
 }
 
@@ -557,37 +558,8 @@ fun destroy_empty_rejects_nonempty_balance() {
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
     wallet.deposit(mint(1, &mut ctx));
 
-    wallet.destroy_empty(TestCurve {});
+    let _receipt = wallet.destroy_empty();
     abort
-}
-
-// === Schedule params update ===
-
-// `set_schedule_params` is witness-gated, replaces the stored params, returns the
-// previous ones, and emits `ScheduleParamsUpdated` with the new params.
-#[test]
-fun set_schedule_params_replaces_and_emits() {
-    let mut ctx = tx_context::dummy();
-
-    let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    let wallet_id = object::id(&wallet);
-
-    let previous = wallet.set_schedule_params(TestCurve {}, TestParams { tag: 42 });
-
-    assert_eq!(previous, TestParams { tag: PARAMS_TAG });
-    assert_eq!(wallet.schedule_params(), TestParams { tag: 42 });
-
-    let updated = event::events_by_type<ScheduleParamsUpdated<TestCurve, TestParams, USDC>>();
-    assert_eq!(updated.length(), 1);
-    assert_eq!(
-        updated[0],
-        vesting_wallet::test_new_schedule_params_updated<TestCurve, TestParams, USDC>(
-            wallet_id,
-            TestParams { tag: 42 },
-        ),
-    );
-
-    destroy(wallet);
 }
 
 // === State immutability ===

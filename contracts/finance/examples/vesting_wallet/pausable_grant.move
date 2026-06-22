@@ -22,9 +22,16 @@
 /// The primitive only ever pays the wallet's fixed `beneficiary`; it exposes no path
 /// to withdraw balance to a third party. So a wrapper that does not own the witness
 /// `S` *cannot* claw unvested funds back to the employer - pausing freezes the stream
-/// but does not refund it. True clawback needs `destroy_empty` (witness-gated) and so
-/// belongs to a curve-specific teardown, not a curve-agnostic wrapper. This example
-/// stays honest about that boundary: it pauses, it does not refund.
+/// but does not refund it. This example stays honest about that boundary: it pauses, it
+/// does not refund.
+///
+/// Teardown follows the same split. `vesting_wallet::destroy_empty` is permissionless,
+/// but it requires a drained wallet and only hands back a `DestroyReceipt` that the
+/// curve module must consume with its witness `S`. A curve-agnostic wrapper has no `S`,
+/// so it cannot finalize teardown itself. What it *can* do is dissolve the wrapper:
+/// `unwrap` consumes the grant and its admin cap and returns the bare nested wallet, so
+/// the holder can then run the curve module's teardown (`destroy_empty` + the curve's
+/// witness-gated `destroy`) against it. See the tests for the end-to-end flow.
 ///
 /// The wallet must be funded *before* it is wrapped, since `new` consumes it and the
 /// wrapper never re-exposes `&mut inner`. Re-enabling top-ups would mean adding a
@@ -130,6 +137,32 @@ public fun resume<S: drop, P: copy + drop + store, C>(
 ) {
     assert!(cap.grant_id == object::id(self), EWrongGrant);
     self.paused = false;
+}
+
+/// Dissolve the grant: consume the grant and its admin cap and return the nested
+/// wallet to the caller. This is the curve-agnostic half of teardown - the wrapper
+/// holds no witness `S`, so it cannot consume a `DestroyReceipt` itself; it stops at
+/// handing back the bare wallet. The caller finishes teardown through the curve
+/// module: `vesting_wallet::destroy_empty(wallet)` for the receipt, then the curve's
+/// witness-gated `destroy` to consume it (which can impose its own gates, e.g. that
+/// the schedule has ended).
+///
+/// Cap-gated like `pause`/`resume`: only the employer can dissolve the grant. The
+/// returned wallet still only ever pays its fixed `beneficiary`, so unwrapping confers
+/// no power to redirect funds - it just lifts the pause wrapper off.
+///
+/// #### Aborts
+/// - `EWrongGrant` if `cap` controls a different grant.
+public fun unwrap<S: drop, P: copy + drop + store, C>(
+    self: PausableGrant<S, P, C>,
+    cap: GrantAdminCap,
+): VestingWallet<S, P, C> {
+    assert!(cap.grant_id == object::id(&self), EWrongGrant);
+    let PausableGrant { id, inner, .. } = self;
+    let GrantAdminCap { id: cap_id, .. } = cap;
+    id.delete();
+    cap_id.delete();
+    inner
 }
 
 // === View helpers ===

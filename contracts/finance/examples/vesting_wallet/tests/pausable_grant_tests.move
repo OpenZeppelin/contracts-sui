@@ -1,7 +1,7 @@
 module openzeppelin_finance::example_pausable_grant_tests;
 
 use openzeppelin_finance::example_pausable_grant::{Self, PausableGrant, GrantAdminCap};
-use openzeppelin_finance::vesting_wallet;
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
 use openzeppelin_finance::vesting_wallet_linear::{Self as linear, Linear, Params};
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
@@ -119,6 +119,64 @@ fun resume_restores_releases() {
     ts::return_shared(grant);
     sui::clock::destroy_for_testing(clock);
     scenario.end();
+}
+
+// Teardown through the wrapper: the admin dissolves the grant with `unwrap`, recovering
+// the bare wallet, then the curve module finalizes teardown. `linear::destroy` is
+// beneficiary-gated, so the admin first forwards the drained wallet to the beneficiary -
+// the custodial-holder hand-off linear's teardown docs describe.
+#[test]
+fun unwrap_then_curve_teardown() {
+    let mut scenario = ts::begin(EMPLOYER);
+    let mut clock = sui::clock::create_for_testing(scenario.ctx());
+
+    create_grant(&mut scenario);
+    scenario.next_tx(BENEFICIARY);
+
+    // Drain the grant at the end of the schedule.
+    let mut grant = scenario.take_shared<PausableGrant<Linear, Params, USDC>>();
+    clock.set_for_testing(START_MS + DURATION_MS);
+    release(&mut grant, &clock, scenario.ctx());
+
+    // Admin dissolves the wrapper, recovering the bare wallet, and forwards it to the
+    // beneficiary so the beneficiary-gated curve teardown can run.
+    scenario.next_tx(EMPLOYER);
+    let cap = scenario.take_from_sender<GrantAdminCap>();
+    let wallet = example_pausable_grant::unwrap(grant, cap);
+    transfer::public_transfer(wallet, BENEFICIARY);
+
+    // Beneficiary finalizes: permissionless `destroy_empty` for the receipt, then the
+    // curve's witness-gated `destroy`.
+    scenario.next_tx(BENEFICIARY);
+    let wallet = scenario.take_from_sender<VestingWallet<Linear, Params, USDC>>();
+    let receipt = vesting_wallet::destroy_empty(wallet);
+    linear::destroy(receipt, &clock, scenario.ctx());
+
+    sui::clock::destroy_for_testing(clock);
+    scenario.end();
+}
+
+// An admin cap from one grant cannot unwrap a different grant.
+#[test, expected_failure(abort_code = example_pausable_grant::EWrongGrant)]
+fun foreign_cap_cannot_unwrap() {
+    let mut scenario = ts::begin(EMPLOYER);
+
+    // Two independent grants; the cap from the second is taken below.
+    create_grant(&mut scenario);
+    scenario.next_tx(EMPLOYER);
+    let id_a = ts::most_recent_id_shared<PausableGrant<Linear, Params, USDC>>().destroy_some();
+
+    create_grant(&mut scenario);
+    scenario.next_tx(EMPLOYER);
+
+    let grant_a = ts::take_shared_by_id<PausableGrant<Linear, Params, USDC>>(&scenario, id_a);
+    // The sender holds two caps; the most recent one belongs to grant B.
+    let cap_b = scenario.take_from_sender<GrantAdminCap>();
+
+    let wallet = example_pausable_grant::unwrap(grant_a, cap_b);
+    transfer::public_transfer(wallet, BENEFICIARY);
+
+    abort
 }
 
 // An admin cap from one grant cannot pause a different grant.
