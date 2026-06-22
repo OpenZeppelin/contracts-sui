@@ -106,6 +106,10 @@ public fun inner<S: drop, P: copy + drop + store, C>(
 ///
 /// #### Aborts
 /// - `EPaused` if the grant is currently paused.
+/// - `EWalletMismatch` if `vested` was not minted for this wallet.
+/// - `EVestedBelowReleased` if `vested.amount` is below the amount already released.
+/// - `EInsufficientBalance` if the balance cannot cover the releasable amount, i.e.
+///   the curve attested more than `balance + released`.
 public fun release<S: drop, P: copy + drop + store, C>(
     self: &mut PausableGrant<S, P, C>,
     vested: &VestedAmount<S>,

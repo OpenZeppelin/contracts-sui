@@ -61,6 +61,8 @@ public fun new(receivers: vector<address>, weights: vector<u64>, ctx: &mut TxCon
     let mut total_weight = 0;
     weights.do_ref!(|w| {
         assert!(*w > 0, EZeroWeight);
+        // SAFETY: unchecked sum, but a u64 overflow aborts here (fail-safe) - a config
+        // with weights summing past u64::MAX simply cannot be created.
         total_weight = total_weight + *w;
     });
 

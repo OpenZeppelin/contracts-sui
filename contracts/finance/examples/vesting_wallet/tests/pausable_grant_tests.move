@@ -200,3 +200,25 @@ fun foreign_cap_cannot_pause() {
 
     abort
 }
+
+// An admin cap from one grant cannot resume a different grant.
+#[test, expected_failure(abort_code = example_pausable_grant::EWrongGrant)]
+fun foreign_cap_cannot_resume() {
+    let mut scenario = ts::begin(EMPLOYER);
+
+    // Two independent grants; the cap from the second is taken below.
+    create_grant(&mut scenario);
+    scenario.next_tx(EMPLOYER);
+    let id_a = ts::most_recent_id_shared<PausableGrant<Linear, Params, USDC>>().destroy_some();
+
+    create_grant(&mut scenario);
+    scenario.next_tx(EMPLOYER);
+
+    let mut grant_a = ts::take_shared_by_id<PausableGrant<Linear, Params, USDC>>(&scenario, id_a);
+    // The sender holds two caps; the most recent one belongs to grant B.
+    let cap_b = scenario.take_from_sender<GrantAdminCap>();
+
+    grant_a.resume(&cap_b);
+
+    abort
+}

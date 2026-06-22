@@ -106,11 +106,61 @@ fun rounding_dust_goes_to_last_receiver() {
     scenario.end();
 }
 
+// A single receiver takes the whole payout: the loop runs zero iterations and the lone
+// receiver absorbs the full coin as the "last" one.
+#[test]
+fun single_receiver_takes_everything() {
+    let mut scenario = ts::begin(EMPLOYER);
+
+    let splitter_addr = example_splitter::new(vector[ALICE], vector[7], scenario.ctx());
+
+    scenario.next_tx(EMPLOYER);
+    let mut splitter = scenario.take_shared<Beneficiary>();
+    transfer::public_transfer(coin::mint_for_testing<USDC>(100, scenario.ctx()), splitter_addr);
+
+    scenario.next_tx(EMPLOYER);
+    let payout = ts::most_recent_receiving_ticket<Coin<USDC>>(&object::id(&splitter));
+    splitter.disperse<USDC>(payout, scenario.ctx());
+    ts::return_shared(splitter);
+
+    scenario.next_tx(EMPLOYER);
+    let to_alice = scenario.take_from_address<Coin<USDC>>(ALICE);
+    assert_eq!(to_alice.value(), 100);
+
+    destroy(to_alice);
+    scenario.end();
+}
+
+// The view helpers echo the config fixed at creation.
+#[test]
+fun view_helpers_expose_config() {
+    let mut scenario = ts::begin(EMPLOYER);
+
+    example_splitter::new(vector[ALICE, BOB, CAROL], vector[50, 30, 20], scenario.ctx());
+
+    scenario.next_tx(EMPLOYER);
+    let splitter = scenario.take_shared<Beneficiary>();
+    assert_eq!(splitter.receivers(), vector[ALICE, BOB, CAROL]);
+    assert_eq!(splitter.weights(), vector[50, 30, 20]);
+    assert_eq!(splitter.total_weight(), 100);
+
+    ts::return_shared(splitter);
+    scenario.end();
+}
+
 // `new` rejects mismatched receivers/weights lengths.
 #[test, expected_failure(abort_code = example_splitter::EBadConfig)]
 fun new_rejects_length_mismatch() {
     let mut scenario = ts::begin(EMPLOYER);
     example_splitter::new(vector[ALICE, BOB], vector[50], scenario.ctx());
+    abort
+}
+
+// `new` rejects empty config vectors.
+#[test, expected_failure(abort_code = example_splitter::EBadConfig)]
+fun new_rejects_empty_config() {
+    let mut scenario = ts::begin(EMPLOYER);
+    example_splitter::new(vector[], vector[], scenario.ctx());
     abort
 }
 
