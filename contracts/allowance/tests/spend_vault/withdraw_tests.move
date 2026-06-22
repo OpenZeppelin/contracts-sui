@@ -11,7 +11,7 @@
 // withdraw_all (full drain) and the native pool-short aborts are not covered
 // here: pool-balance effects need a live AccumulatorRoot, which the unit-test
 // VM cannot construct, so over-withdraw and withdraw-from-empty succeed; those
-// are covered by integration tests.
+// require a live network and are not exercised by this package's tests.
 module openzeppelin_allowance::spend_vault_withdraw_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, OwnerCap};

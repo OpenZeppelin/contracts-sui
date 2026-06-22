@@ -12,8 +12,8 @@
 //
 // Pool-balance effects of destroy (destroy does NOT drain the address-balance
 // pool; the owner must withdraw_all<T> every coin first) need a live
-// AccumulatorRoot, which the unit-test VM cannot construct; those are covered by
-// integration tests. Only the ledger leg lives here.
+// AccumulatorRoot, which the unit-test VM cannot construct; they are not exercised
+// by this package's tests (they require a live network). Only the ledger leg lives here.
 module openzeppelin_allowance::spend_vault_lifecycle_tests;
 
 use openzeppelin_allowance::spend_vault;

@@ -8,7 +8,7 @@
 //
 // Pool-balance effects (the native pool-short abort at `redeem_funds` and the
 // atomic revert of the pre-decrement) need a live AccumulatorRoot, which the
-// unit-test VM cannot construct; those are covered by integration tests.
+// unit-test VM cannot construct; they are not exercised by this package's tests (they require a live network).
 module openzeppelin_allowance::spend_vault_spend_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, SpenderCap};

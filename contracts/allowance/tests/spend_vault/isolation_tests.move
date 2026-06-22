@@ -5,7 +5,7 @@
 //
 // Pool-balance effects need a live AccumulatorRoot, which the unit-test VM cannot
 // construct; those (the native pool-short abort and every &AccumulatorRoot-taking
-// read) are covered by integration tests.
+// read) require a live network and are not exercised by this package's tests.
 module openzeppelin_allowance::spend_vault_isolation_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, SpenderCap};

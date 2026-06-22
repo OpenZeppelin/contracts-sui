@@ -7,7 +7,7 @@
 // per-(cap, coin) independence, cap_id stability, and event emission.
 //
 // Pool-balance effects need a live AccumulatorRoot, which the unit-test VM
-// cannot construct; those are covered by integration tests.
+// cannot construct; they are not exercised by this package's tests (they require a live network).
 module openzeppelin_allowance::spend_vault_cap_budget_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, SpenderCap};

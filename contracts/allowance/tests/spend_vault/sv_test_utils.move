@@ -18,8 +18,8 @@
 // line-coverage tooling will mark the `spend` / `withdraw` fund-movement lines as
 // covered even though the pool-short and rollback behavior is NOT asserted by any
 // unit test. Those paths (the pool-short native abort, the rollback, and every
-// `&AccumulatorRoot`-taking read) require integration tests against a live
-// network, not here.
+// `&AccumulatorRoot`-taking read) can only be exercised on a live network, not
+// in this unit suite.
 #[test_only]
 module openzeppelin_allowance::sv_test_utils;
 
