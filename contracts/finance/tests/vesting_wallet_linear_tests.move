@@ -16,7 +16,7 @@ public struct USDC has drop {}
 
 const BENEFICIARY: address = @0xB0B;
 
-// === Test helpers ===
+// === Test-Only Helpers ===
 
 fun setup(t0: u64): (Scenario, Clock) {
     let mut test = test_scenario::begin(@0x1);

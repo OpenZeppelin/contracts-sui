@@ -55,8 +55,6 @@ use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
 use std::u64::mul_div;
 use sui::clock::Clock;
 
-// === Imports ===
-
 // === Errors ===
 
 /// `period_ms` was zero; each tranche must span a positive period.

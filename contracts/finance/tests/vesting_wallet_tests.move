@@ -13,7 +13,7 @@ use openzeppelin_finance::vesting_wallet::{
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
 use sui::event;
-use sui::test_scenario::{Self, Scenario};
+use sui::test_scenario;
 
 // A throwaway curve used to exercise the curve-agnostic primitive directly: it
 // lets the tests mint a `VestedAmount` with an arbitrary `amount`, so the
@@ -39,7 +39,7 @@ public struct Wrapper has key, store {
 const BENEFICIARY: address = @0xB0B;
 const PARAMS_TAG: u64 = 7;
 
-// === Test helpers ===
+// === Test-Only Helpers ===
 
 fun new_wallet(
     beneficiary: address,
