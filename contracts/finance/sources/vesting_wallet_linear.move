@@ -16,10 +16,9 @@
 /// # Why a separate module
 ///
 /// Struct fields are module-private in Move, so only this module can construct a
-/// `Linear` or a `Params` value, and therefore only this module can build a
-/// `VestingWallet<Linear, Params, C>` (via `vesting_wallet::new`, which takes the
-/// `Params` by value) or mint a `VestedAmount<Linear>` (via
-/// `vesting_wallet::mint_vested_amount`, which takes the `Linear` witness). See
+/// `Linear` witness, and therefore only this module can mint a
+/// `VestedAmount<Linear>` (via `vesting_wallet::mint_vested_amount`, which takes
+/// the `Linear` witness) - the operation that confers curve authority. See
 /// `vesting_wallet`'s docs for the full rationale.
 ///
 /// The public `params` constructor is the seam this gives an external protocol: it
@@ -333,6 +332,12 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// permissionless - an arbitrary actor could otherwise strand such a deposit and
 /// pocket the storage rebate. Restricting this final step to the beneficiary keeps both
 /// the strand risk and the rebate with the only party harmed by it.
+///
+/// In owned mode this couples teardown to the beneficiary in both halves:
+/// `destroy_empty` needs the wallet object by value (owner-only) and this call needs
+/// `ctx.sender() == beneficiary`. A custodial holder that is not the beneficiary must
+/// transfer the wallet to the beneficiary before the rebate can be reclaimed. Shared
+/// topology is unaffected.
 ///
 /// #### Parameters
 /// - `receipt`: The `DestroyReceipt<Linear, Params>` returned by
