@@ -7,8 +7,7 @@ use openzeppelin_finance::vesting_wallet::{
     Created,
     Deposited,
     Released,
-    Destroyed,
-    ScheduleParamsUpdated
+    Destroyed
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
@@ -559,35 +558,6 @@ fun destroy_empty_rejects_nonempty_balance() {
 
     wallet.destroy_empty(TestCurve {});
     abort
-}
-
-// === Schedule params update ===
-
-// `set_schedule_params` is witness-gated, replaces the stored params, returns the
-// previous ones, and emits `ScheduleParamsUpdated` with the new params.
-#[test]
-fun set_schedule_params_replaces_and_emits() {
-    let mut ctx = tx_context::dummy();
-
-    let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    let wallet_id = object::id(&wallet);
-
-    let previous = wallet.set_schedule_params(TestCurve {}, TestParams { tag: 42 });
-
-    assert_eq!(previous, TestParams { tag: PARAMS_TAG });
-    assert_eq!(wallet.schedule_params(), TestParams { tag: 42 });
-
-    let updated = event::events_by_type<ScheduleParamsUpdated<TestCurve, TestParams, USDC>>();
-    assert_eq!(updated.length(), 1);
-    assert_eq!(
-        updated[0],
-        vesting_wallet::test_new_schedule_params_updated<TestCurve, TestParams, USDC>(
-            wallet_id,
-            TestParams { tag: 42 },
-        ),
-    );
-
-    destroy(wallet);
 }
 
 // === State immutability ===

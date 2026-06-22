@@ -223,14 +223,6 @@ public struct Released<phantom S, phantom C> has copy, drop {
     amount: u64,
 }
 
-/// Emitted by `set_schedule_params` when a curve module replaces a wallet's
-/// stored parameters.
-public struct ScheduleParamsUpdated<phantom S, P, phantom C> has copy, drop {
-    wallet_id: ID,
-    /// The new parameters now stored in the wallet.
-    schedule_params: P,
-}
-
 /// Emitted by `destroy_empty` when a drained wallet is torn down.
 public struct Destroyed<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
@@ -412,50 +404,6 @@ public fun release<S: drop, P: copy + drop + store, C>(
     });
 }
 
-// TODO: THIS ISN'T CURVE-AGNOSTIC WHEN A WRAPPER AROUND WALLET IS CREATED, AS IT WOULD
-// REQUIRE THE WRAPPER TO EXPOSE `&mut inner` TO WORK. FIND A REDESIGN.
-/// Replace the wallet's stored schedule parameters, returning the previous ones.
-/// Witness-gated by `_w: S`: only the module that declares `S` can construct one,
-/// so only the curve module that owns this wallet's schedule can reconfigure it.
-///
-/// This is the *only* path to mutate `schedule_params` after construction, and it
-/// is opt-in by the curve module: the primitive exposes no ungated mutator, so a
-/// curve module that never wraps this leaves its wallets' parameters permanently
-/// immutable on chain. The reference `vesting_wallet_linear` deliberately does not
-/// wrap it - its schedule is fixed at construction. It exists for custom curves that
-/// need to reconfigure after creation (e.g. extend a duration or adjust a cliff).
-///
-/// The curve module is responsible for keeping its invariants intact across the
-/// change. The wallet never re-derives the curve and applies no validation here -
-/// just as `mint_vested_amount` trusts the attested amount. Funds stay safe
-/// regardless: `release` pays out `vested - released` and aborts
-/// (`EVestedBelowReleased`) if a new parameter set makes the vested total dip below
-/// what has already been released - so a careless update can brick the release path
-/// until corrected, but cannot over-release or claw back paid-out funds.
-///
-/// #### Parameters
-/// - `wallet`: The wallet whose parameters are being replaced.
-/// - `_w`: The curve witness `S`; proves the caller is the declaring curve module.
-/// - `schedule_params`: The new parameters to store.
-///
-/// #### Returns
-/// - The parameters previously stored in the wallet.
-public fun set_schedule_params<S: drop, P: copy + drop + store, C>(
-    wallet: &mut VestingWallet<S, P, C>,
-    _w: S,
-    schedule_params: P,
-): P {
-    let previous = wallet.schedule_params;
-    wallet.schedule_params = schedule_params;
-
-    event::emit(ScheduleParamsUpdated<S, P, C> {
-        wallet_id: object::id(wallet),
-        schedule_params,
-    });
-
-    previous
-}
-
 /// Consume a drained wallet to reclaim its storage rebate and return its schedule
 /// parameters to the caller (the curve module destructures them). Witness-gated by
 /// `_w: S`, so only the declaring curve module can tear a wallet down. Coins
@@ -613,16 +561,6 @@ public fun test_new_released<S, C>(
     amount: u64,
 ): Released<S, C> {
     Released { wallet_id, beneficiary, amount }
-}
-
-/// Build a `ScheduleParamsUpdated` event value for asserting against
-/// `event::events_by_type`.
-#[test_only]
-public fun test_new_schedule_params_updated<S, P, C>(
-    wallet_id: ID,
-    schedule_params: P,
-): ScheduleParamsUpdated<S, P, C> {
-    ScheduleParamsUpdated { wallet_id, schedule_params }
 }
 
 /// Build a `Destroyed` event value for asserting against `event::events_by_type`.
