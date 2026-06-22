@@ -127,7 +127,7 @@ public fun releasable<C>(wallet: &VestingWallet<Quadratic, Params, C>, clock: &C
 /// #### Aborts
 /// - `ENotEnded` if called before the schedule's end (`start_ms + duration_ms`).
 /// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
-public fun destroy(receipt: DestroyReceipt<Quadratic, Params>, clock: &Clock, ctx: &TxContext) {
+public fun destroy(receipt: DestroyReceipt<Quadratic, Params>, clock: &Clock, ctx: &mut TxContext) {
     let (beneficiary, params) = receipt.consume_receipt(Quadratic {});
     assert!(clock.timestamp_ms() >= params.calculate_end(), ENotEnded);
     assert!(ctx.sender() == beneficiary, ENotBeneficiary);
