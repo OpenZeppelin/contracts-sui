@@ -33,7 +33,8 @@
 module openzeppelin_finance::example_vesting_quadratic;
 
 use openzeppelin_finance::vesting_wallet::{VestingWallet, VestedAmount};
-use std::u64::mul_div;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u64::mul_div;
 use sui::clock::Clock;
 
 // === Errors ===
@@ -130,9 +131,14 @@ fun vested_amount_raw<C>(wallet: &VestingWallet<Quadratic, Params, C>, clock: &C
         // Post-end: clamp to the wallet's total.
         total
     } else {
-        // total * (elapsed / duration)^2, via two `mul_div`s so the squared ratio
+        // SAFETY: total * (elapsed / duration)^2, via two `mul_div`s so the squared ratio
         // never leaves u64. `elapsed < duration`, so the result stays below `total`.
         let elapsed = now - start_ms;
-        mul_div(mul_div(total, elapsed, duration_ms), elapsed, duration_ms)
+        mul_div(
+            mul_div(total, elapsed, duration_ms, rounding::down()).destroy_some(),
+            elapsed,
+            duration_ms,
+            rounding::down(),
+        ).destroy_some()
     }
 }

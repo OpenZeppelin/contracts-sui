@@ -19,5 +19,11 @@ deps = { MoveStdlib = "MoveStdlib" }
 [pinned.testnet.openzeppelin_finance]
 source = { root = true }
 use_environment = "testnet"
+manifest_digest = "5BB43A1EACC9E614ED3855761171204B7516310D59C245C1FEDF624802A34BCF"
+deps = { openzeppelin_math = "openzeppelin_math", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.openzeppelin_math]
+source = { local = "../../math/core" }
+use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }

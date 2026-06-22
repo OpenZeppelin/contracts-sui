@@ -19,7 +19,8 @@
 /// not be deployed as-is.
 module openzeppelin_finance::example_splitter;
 
-use std::u64::mul_div;
+use openzeppelin_math::rounding;
+use openzeppelin_math::u64::mul_div;
 use sui::coin::Coin;
 use sui::transfer::Receiving;
 
@@ -80,7 +81,12 @@ public fun disperse<C>(self: &mut Beneficiary, payout: Receiving<Coin<C>>, ctx: 
 
     let mut i = 0;
     while (i < n - 1) {
-        let share = mul_div(value, self.weights[i], self.total_weight);
+        let share = mul_div(
+            value,
+            self.weights[i],
+            self.total_weight,
+            rounding::down(),
+        ).destroy_some();
         transfer::public_transfer(coin.split(share, ctx), self.receivers[i]);
         i = i + 1;
     };
