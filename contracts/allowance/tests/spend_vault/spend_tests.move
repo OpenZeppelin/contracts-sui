@@ -44,7 +44,14 @@ fun spend_partial_delivers_exact_and_decrements() {
         assert_eq!(evs.length(), 1);
         assert_eq!(
             evs[0],
-            spend_vault::test_new_spent(vid, cid, type_name::with_defining_ids<USDC>(), 300, 200, SPENDER),
+            spend_vault::test_new_spent(
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                300,
+                200,
+                SPENDER,
+            ),
         );
 
         destroy(bal);
@@ -149,8 +156,17 @@ fun spend_unlimited_never_decrements() {
         // remaining stays the sentinel; Spent.remaining reports u64::MAX.
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), MAXU64);
         let evs = event::events_by_type<spend_vault::Spent>();
-        assert_eq!(evs[evs.length() - 1],
-            spend_vault::test_new_spent(vid, cid, type_name::with_defining_ids<USDC>(), 5_000, MAXU64, SPENDER));
+        assert_eq!(
+            evs[evs.length() - 1],
+            spend_vault::test_new_spent(
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                5_000,
+                MAXU64,
+                SPENDER,
+            ),
+        );
 
         destroy(b1);
         destroy(b2);

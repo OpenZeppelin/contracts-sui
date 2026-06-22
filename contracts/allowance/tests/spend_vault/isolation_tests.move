@@ -35,7 +35,16 @@ fun spend_with_foreign_vault_cap_aborts_wrong_vault() {
     let (mut vb, ocb) = spend_vault::new(s.ctx());
     let capb = spend_vault::mint_cap(&vb, &ocb, s.ctx());
     let cidb = object::id(&capb);
-    spend_vault::set_allowance<USDC>(&mut vb, &ocb, cidb, 500, MAXU64, option::none(), &clk, s.ctx());
+    spend_vault::set_allowance<USDC>(
+        &mut vb,
+        &ocb,
+        cidb,
+        500,
+        MAXU64,
+        option::none(),
+        &clk,
+        s.ctx(),
+    );
     // B's cap on A -> EWrongVault (code 1), before any ledger access.
     let b = spend_vault::spend<USDC>(&mut va, &capb, 100, &clk, s.ctx());
     destroy(b);
@@ -156,7 +165,16 @@ fun set_allowance_on_cap_x_leaves_cap_y_identical() {
         let mut v = u::take_vault(&s);
         let clk = u::take_clock(&s);
         let oc = u::take_owner_cap(&s, OWNER);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cidx, 999, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cidx,
+            999,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cidx), 999); // X changed
         assert_eq!(spend_vault::allowance<USDC>(&v, cidy), 500); // Y bit-identical
         assert_eq!(spend_vault::expiry<USDC>(&v, cidy), MAXU64);
@@ -269,9 +287,36 @@ fun batch_three_deposits_mixed_coins_one_tx() {
         // Three distinct-coin Deposited events emitted in this tx.
         let evs = event::events_by_type<spend_vault::Deposited>();
         assert_eq!(evs.length(), 3);
-        assert!(evs.contains(&spend_vault::test_new_deposited(vid, type_name::with_defining_ids<USDC>(), 100, OWNER)));
-        assert!(evs.contains(&spend_vault::test_new_deposited(vid, type_name::with_defining_ids<SUIT>(), 200, OWNER)));
-        assert!(evs.contains(&spend_vault::test_new_deposited(vid, type_name::with_defining_ids<DEEP>(), 300, OWNER)));
+        assert!(
+            evs.contains(
+                &spend_vault::test_new_deposited(
+                    vid,
+                    type_name::with_defining_ids<USDC>(),
+                    100,
+                    OWNER,
+                ),
+            ),
+        );
+        assert!(
+            evs.contains(
+                &spend_vault::test_new_deposited(
+                    vid,
+                    type_name::with_defining_ids<SUIT>(),
+                    200,
+                    OWNER,
+                ),
+            ),
+        );
+        assert!(
+            evs.contains(
+                &spend_vault::test_new_deposited(
+                    vid,
+                    type_name::with_defining_ids<DEEP>(),
+                    300,
+                    OWNER,
+                ),
+            ),
+        );
         spend_vault::share(v);
         transfer::public_transfer(oc, OWNER);
     };
@@ -316,9 +361,36 @@ fun batch_three_set_allowance_across_coins_one_tx() {
         let clk = u::clock_at(u::start_ms(), s.ctx());
         let cap = spend_vault::mint_cap(&v, &oc, s.ctx());
         let cid = object::id(&cap);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 100, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 200, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<DEEP>(&mut v, &oc, cid, 300, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            100,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            200,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<DEEP>(
+            &mut v,
+            &oc,
+            cid,
+            300,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         // All three independent budgets land on the one cap.
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 100);
         assert_eq!(spend_vault::allowance<SUIT>(&v, cid), 200);
@@ -362,9 +434,9 @@ fun batch_three_revokes_one_tx() {
 }
 
 #[test]
-fun batch_mixed_sequence_deposit_spend_revoke_one_tx() {
-    // A mixed interleaving in ONE tx (deposit, then spend, then revoke a
-    // different coin) all compose: no one-call-per-tx assumption anywhere.
+fun batch_mixed_sequence_deposit_spend_one_tx() {
+    // A mixed interleaving in ONE tx (deposit, then spend) composes: no
+    // one-call-per-tx assumption.
     let mut s = ts::begin(OWNER);
     let (_vid, cid) = build_usdc_suit_cap(&mut s); // USDC=500, SUIT=300, both funded
     s.next_tx(SPENDER);

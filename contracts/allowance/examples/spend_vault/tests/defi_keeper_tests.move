@@ -96,7 +96,13 @@ fun keeper_executes_topup_and_cap_survives_owner_update() {
         let mut service = scenario.take_shared<Service>();
         let clk = scenario.take_shared<Clock>();
 
-        let funds = service.execute_topup<EXAMPLE_COIN>(&mut vault, USER, 100, &clk, scenario.ctx());
+        let funds = service.execute_topup<EXAMPLE_COIN>(
+            &mut vault,
+            USER,
+            100,
+            &clk,
+            scenario.ctx(),
+        );
         assert_eq!(funds.value(), 100);
         transfer::public_transfer(funds.into_coin(scenario.ctx()), USER);
         assert_eq!(vault.allowance<EXAMPLE_COIN>(cap_id), 200);
@@ -155,7 +161,13 @@ fun keeper_executes_topup_and_cap_survives_owner_update() {
         let mut service = scenario.take_shared<Service>();
         let clk = scenario.take_shared<Clock>();
 
-        let funds = service.execute_topup<EXAMPLE_COIN>(&mut vault, USER, 400, &clk, scenario.ctx());
+        let funds = service.execute_topup<EXAMPLE_COIN>(
+            &mut vault,
+            USER,
+            400,
+            &clk,
+            scenario.ctx(),
+        );
         transfer::public_transfer(funds.into_coin(scenario.ctx()), USER);
         assert_eq!(vault.allowance<EXAMPLE_COIN>(cap_id), 100);
 
@@ -181,7 +193,13 @@ fun topup_by_non_operator_is_rejected() {
         let mut service = scenario.take_shared<Service>();
         let clk = scenario.take_shared<Clock>();
 
-        let funds = service.execute_topup<EXAMPLE_COIN>(&mut vault, USER, 100, &clk, scenario.ctx());
+        let funds = service.execute_topup<EXAMPLE_COIN>(
+            &mut vault,
+            USER,
+            100,
+            &clk,
+            scenario.ctx(),
+        );
         destroy(funds); // unreachable, the gate aborts first
 
         ts::return_shared(vault);
@@ -233,7 +251,13 @@ fun topup_for_unregistered_user_is_rejected() {
         let clk = scenario.take_shared<Clock>();
 
         // Aborts at the custody lookup before any cap is borrowed.
-        let funds = service.execute_topup<EXAMPLE_COIN>(&mut vault, MALLORY, 100, &clk, scenario.ctx());
+        let funds = service.execute_topup<EXAMPLE_COIN>(
+            &mut vault,
+            MALLORY,
+            100,
+            &clk,
+            scenario.ctx(),
+        );
         destroy(funds); // unreachable
 
         ts::return_shared(vault);

@@ -41,7 +41,13 @@ fun revoke_live_entry_returns_true_and_removes() {
         assert_eq!(evs.length(), 1);
         assert_eq!(
             evs[0],
-            spend_vault::test_new_revoked(vid, cid, type_name::with_defining_ids<USDC>(), true, OWNER),
+            spend_vault::test_new_revoked(
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                true,
+                OWNER,
+            ),
         );
 
         ts::return_to_sender(&s, oc);
@@ -76,7 +82,13 @@ fun revoke_again_is_idempotent_no_op() {
         assert_eq!(evs.length(), 1);
         assert_eq!(
             evs[0],
-            spend_vault::test_new_revoked(vid, cid, type_name::with_defining_ids<USDC>(), false, OWNER),
+            spend_vault::test_new_revoked(
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                false,
+                OWNER,
+            ),
         );
         ts::return_to_sender(&s, oc);
         u::return_vault(v);
@@ -99,7 +111,13 @@ fun revoke_never_granted_coin_returns_false() {
         assert_eq!(evs.length(), 1);
         assert_eq!(
             evs[0],
-            spend_vault::test_new_revoked(vid, cid, type_name::with_defining_ids<FOO>(), false, OWNER),
+            spend_vault::test_new_revoked(
+                vid,
+                cid,
+                type_name::with_defining_ids<FOO>(),
+                false,
+                OWNER,
+            ),
         );
         ts::return_to_sender(&s, oc);
         u::return_vault(v);
@@ -717,8 +735,26 @@ fun revoke_all_skips_coin_target_cap_never_held() {
         cidx = object::id(&capx);
         let capy = spend_vault::mint_cap(&v, &oc, s.ctx());
         cidy = object::id(&capy);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cidx, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cidy, 300, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cidx,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cidy,
+            300,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         transfer::public_transfer(capx, SPENDER);
         transfer::public_transfer(capy, SPENDER);
         spend_vault::share(v);

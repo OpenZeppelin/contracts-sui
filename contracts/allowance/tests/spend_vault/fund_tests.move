@@ -83,7 +83,12 @@ fun deposit_by_non_owner_succeeds_confers_no_rights() {
         assert_eq!(evs.length(), 1);
         assert_eq!(
             evs[0],
-            spend_vault::test_new_deposited(vid, type_name::with_defining_ids<USDC>(), 500, STRANGER),
+            spend_vault::test_new_deposited(
+                vid,
+                type_name::with_defining_ids<USDC>(),
+                500,
+                STRANGER,
+            ),
         );
         // Confers NO rights: no granted type, no (cap, USDC) entry.
         assert_eq!(spend_vault::granted_coin_types(&v).length(), 0);
@@ -183,7 +188,12 @@ fun deposit_balance_by_non_owner_writes_no_granted_types() {
         assert_eq!(evs.length(), 1);
         assert_eq!(
             evs[0],
-            spend_vault::test_new_deposited(vid, type_name::with_defining_ids<FOO>(), 900, STRANGER),
+            spend_vault::test_new_deposited(
+                vid,
+                type_name::with_defining_ids<FOO>(),
+                900,
+                STRANGER,
+            ),
         );
         assert_eq!(spend_vault::granted_coin_types(&v).length(), 0);
         assert!(!spend_vault::contains<FOO>(&v, probe));

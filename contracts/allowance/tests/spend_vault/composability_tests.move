@@ -33,8 +33,26 @@ fun atomic_lifecycle_multi_coin_one_ptb() {
         spend_vault::deposit(&v, coin::mint_for_testing<SUIT>(2_000, s.ctx()), s.ctx());
         let cap = spend_vault::mint_cap(&v, &oc, s.ctx());
         let cid = object::id(&cap);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 700, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            700,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         spend_vault::share(v);
         transfer::public_transfer(oc, OWNER);
         transfer::public_transfer(cap, SPENDER);
@@ -159,9 +177,36 @@ fun one_cap_three_coins_three_independent_entries() {
         let (mut v, oc) = spend_vault::new(s.ctx());
         let cap = spend_vault::mint_cap(&v, &oc, s.ctx());
         let cid = object::id(&cap);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 100, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 200, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<DEEP>(&mut v, &oc, cid, 300, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            100,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            200,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<DEEP>(
+            &mut v,
+            &oc,
+            cid,
+            300,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         spend_vault::share(v);
         transfer::public_transfer(oc, OWNER);
         transfer::public_transfer(cap, SPENDER);
@@ -178,7 +223,16 @@ fun one_cap_three_coins_three_independent_entries() {
         assert_eq!(spend_vault::allowance<SUIT>(&v, cid), 200);
         assert_eq!(spend_vault::allowance<DEEP>(&v, cid), 300);
         // mutate only SUIT
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 999, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            999,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 100); // untouched
         assert_eq!(spend_vault::allowance<SUIT>(&v, cid), 999); // changed
         assert_eq!(spend_vault::allowance<DEEP>(&v, cid), 300); // untouched
@@ -203,8 +257,26 @@ fun two_caps_same_coin_independent_summing_budgets() {
         let cid1 = object::id(&cap1);
         let cid2 = object::id(&cap2);
         // two independent USDC budgets on one vault; they SUM from the pool's view
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid1, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid2, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid1,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid2,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         transfer::public_transfer(cap1, SPENDER);
         transfer::public_transfer(cap2, @0xC);
         spend_vault::share(v);
@@ -267,9 +339,36 @@ fun batched_deposits_and_grants_one_tx() {
         spend_vault::deposit(&v, coin::mint_for_testing<DEEP>(100, s.ctx()), s.ctx());
         let cap = spend_vault::mint_cap(&v, &oc, s.ctx());
         let cid = object::id(&cap);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 10, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 20, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<DEEP>(&mut v, &oc, cid, 30, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            10,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            20,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<DEEP>(
+            &mut v,
+            &oc,
+            cid,
+            30,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         spend_vault::share(v);
         transfer::public_transfer(oc, OWNER);
         transfer::public_transfer(cap, SPENDER);

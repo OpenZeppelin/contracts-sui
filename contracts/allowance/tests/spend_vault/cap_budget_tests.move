@@ -112,7 +112,16 @@ fun set_allowance_create_on_absent() {
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 500);
         assert_eq!(spend_vault::expiry<USDC>(&v, cid), MAXU64);
@@ -128,7 +137,14 @@ fun set_allowance_create_on_absent() {
         assert_eq!(
             evs[0],
             spend_vault::test_new_allowance_set(
-                vid, cid, type_name::with_defining_ids<USDC>(), 500, MAXU64, false, true, OWNER,
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                500,
+                MAXU64,
+                false,
+                true,
+                OWNER,
             ),
         );
 
@@ -152,8 +168,26 @@ fun set_allowance_overwrite_not_additive() {
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 800, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            800,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         // OVERWRITE, not 500+800.
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 800);
@@ -166,7 +200,14 @@ fun set_allowance_overwrite_not_additive() {
         assert_eq!(
             evs[1],
             spend_vault::test_new_allowance_set(
-                vid, cid, type_name::with_defining_ids<USDC>(), 800, MAXU64, false, false, OWNER,
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                800,
+                MAXU64,
+                false,
+                false,
+                OWNER,
             ),
         );
 
@@ -192,9 +233,27 @@ fun set_allowance_zero_suspends_no_abort() {
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         // amount 0 = suspend, NOT EZeroAmount.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 0, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            0,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         assert!(spend_vault::contains<USDC>(&v, cid));
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 0);
@@ -218,8 +277,26 @@ fun set_allowance_revives_suspended() {
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 0, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            0,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 500);
         assert!(spend_vault::contains<USDC>(&v, cid));
@@ -251,7 +328,16 @@ fun set_allowance_future_expiry_revives_expired() {
 
         // restate a fresh future expiry -> revives in place.
         let exp2 = exp + 5_000;
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, exp2, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            exp2,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::expiry<USDC>(&v, cid), exp2);
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 500);
 
@@ -276,7 +362,16 @@ fun set_allowance_expiry_equals_now_aborts() {
     let oc = u::take_owner_cap(&s, OWNER);
     let clk = u::take_clock(&s);
     // now == start_ms; expiry == now aborts EExpiryInPast
-    spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, u::start_ms(), option::none(), &clk, s.ctx());
+    spend_vault::set_allowance<USDC>(
+        &mut v,
+        &oc,
+        cid,
+        500,
+        u::start_ms(),
+        option::none(),
+        &clk,
+        s.ctx(),
+    );
     abort
 }
 
@@ -314,7 +409,16 @@ fun set_allowance_expiry_sentinel_ok() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::expiry<USDC>(&v, cid), MAXU64);
         ts::return_to_sender(&s, oc);
         u::return_vault(v);
@@ -336,7 +440,16 @@ fun set_allowance_unlimited_budget_and_no_expiry() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, MAXU64, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            MAXU64,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), MAXU64);
         assert_eq!(spend_vault::expiry<USDC>(&v, cid), MAXU64);
         ts::return_to_sender(&s, oc);
@@ -361,9 +474,27 @@ fun set_allowance_cas_match_overwrites() {
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 400, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            400,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         // CAS: expect 400 (current), set to 250.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 250, MAXU64, option::some(400), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            250,
+            MAXU64,
+            option::some(400),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 250);
 
         let evs = event::events_by_type<spend_vault::AllowanceSet>();
@@ -371,7 +502,14 @@ fun set_allowance_cas_match_overwrites() {
         assert_eq!(
             evs[1],
             spend_vault::test_new_allowance_set(
-                vid, cid, type_name::with_defining_ids<USDC>(), 250, MAXU64, true, false, OWNER,
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                250,
+                MAXU64,
+                true,
+                false,
+                OWNER,
             ),
         );
 
@@ -395,7 +533,16 @@ fun set_allowance_cas_mismatch_aborts() {
     let clk = u::take_clock(&s);
     spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 400, MAXU64, option::none(), &clk, s.ctx());
     // current remaining is 400; expecting 399 aborts EUnexpectedAllowance
-    spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 250, MAXU64, option::some(399), &clk, s.ctx());
+    spend_vault::set_allowance<USDC>(
+        &mut v,
+        &oc,
+        cid,
+        250,
+        MAXU64,
+        option::some(399),
+        &clk,
+        s.ctx(),
+    );
     abort
 }
 
@@ -427,7 +574,16 @@ fun set_allowance_none_unconditional_create() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 700, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            700,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 700);
         let evs = event::events_by_type<spend_vault::AllowanceSet>();
         assert_eq!(evs.length(), 1);
@@ -435,7 +591,14 @@ fun set_allowance_none_unconditional_create() {
         assert_eq!(
             evs[0],
             spend_vault::test_new_allowance_set(
-                vid, cid, type_name::with_defining_ids<USDC>(), 700, MAXU64, false, true, OWNER,
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                700,
+                MAXU64,
+                false,
+                true,
+                OWNER,
             ),
         );
         ts::return_to_sender(&s, oc);
@@ -457,9 +620,27 @@ fun set_allowance_cas_matches_unlimited_sentinel() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, MAXU64, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            MAXU64,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         // expect the unlimited sentinel; reduce to a finite budget.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 600, MAXU64, option::some(MAXU64), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            600,
+            MAXU64,
+            option::some(MAXU64),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 600);
         ts::return_to_sender(&s, oc);
         u::return_vault(v);
@@ -480,9 +661,27 @@ fun set_allowance_cas_matches_suspended_zero() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 0, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            0,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         // current remaining is 0 (suspended); Some(0) matches.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::some(0), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::some(0),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 500);
         ts::return_to_sender(&s, oc);
         u::return_vault(v);
@@ -520,7 +719,16 @@ fun precedence_wrong_owner_beats_expiry_in_past() {
     let clk = u::take_clock(&s);
     let (_vb, ocb) = spend_vault::new(s.ctx());
     // foreign cap AND expiry == now (past): the gate fires before the expiry check
-    spend_vault::set_allowance<USDC>(&mut v, &ocb, cid, 500, u::start_ms(), option::none(), &clk, s.ctx());
+    spend_vault::set_allowance<USDC>(
+        &mut v,
+        &ocb,
+        cid,
+        500,
+        u::start_ms(),
+        option::none(),
+        &clk,
+        s.ctx(),
+    );
     abort
 }
 
@@ -538,7 +746,16 @@ fun precedence_expiry_in_past_beats_cas_mismatch() {
     // create so a CAS could otherwise be evaluated, then trigger past-expiry + CAS mismatch
     spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 400, MAXU64, option::none(), &clk, s.ctx());
     // expiry == now (past) AND CAS expects 999 (mismatch): the expiry check fires first
-    spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 250, u::start_ms(), option::some(999), &clk, s.ctx());
+    spend_vault::set_allowance<USDC>(
+        &mut v,
+        &oc,
+        cid,
+        250,
+        u::start_ms(),
+        option::some(999),
+        &clk,
+        s.ctx(),
+    );
     abort
 }
 
@@ -558,7 +775,16 @@ fun set_allowance_on_absent_never_no_allowance() {
         let clk = u::take_clock(&s);
         // FOO never granted; this creates rather than aborting ENoAllowance.
         assert!(!spend_vault::contains<FOO>(&v, cid));
-        spend_vault::set_allowance<FOO>(&mut v, &oc, cid, 123, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<FOO>(
+            &mut v,
+            &oc,
+            cid,
+            123,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert!(spend_vault::contains<FOO>(&v, cid));
         assert_eq!(spend_vault::allowance<FOO>(&v, cid), 123);
         ts::return_to_sender(&s, oc);
@@ -602,11 +828,47 @@ fun cap_id_stable_across_all_updates_then_spends() {
         let clk = u::take_clock(&s);
         let exp = u::start_ms() + 1_000_000;
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());  // create
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 900, MAXU64, option::none(), &clk, s.ctx());  // raise
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 200, MAXU64, option::none(), &clk, s.ctx());  // lower
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 0, MAXU64, option::none(), &clk, s.ctx());    // suspend
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 350, exp, option::none(), &clk, s.ctx());     // revive + renew expiry
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        ); // create
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            900,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        ); // raise
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            200,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        ); // lower
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            0,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        ); // suspend
+        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 350, exp, option::none(), &clk, s.ctx()); // revive + renew expiry
 
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 350);
         assert_eq!(spend_vault::expiry<USDC>(&v, cid), exp);
@@ -654,8 +916,26 @@ fun granted_coin_types_sole_writer_and_ungriefable() {
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 300, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            300,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         let gct = spend_vault::granted_coin_types(&v);
         assert_eq!(gct.length(), 2);
@@ -663,7 +943,16 @@ fun granted_coin_types_sole_writer_and_ungriefable() {
         assert!(gct.contains(&type_name::with_defining_ids<SUIT>()));
 
         // re-set USDC (update, not create) does not duplicate the type.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 999, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            999,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::granted_coin_types(&v).length(), 2);
 
         // a permissionless deposit<FOO> writes NO on-chain type set.
@@ -695,7 +984,16 @@ fun phantom_cap_id_creates_entry_and_grows_granted_types_permanently() {
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, phantom, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            phantom,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         // The phantom cap_id created a fresh entry: was_created == true.
         let evs = event::events_by_type<spend_vault::AllowanceSet>();
@@ -703,7 +1001,14 @@ fun phantom_cap_id_creates_entry_and_grows_granted_types_permanently() {
         assert_eq!(
             evs[0],
             spend_vault::test_new_allowance_set(
-                vid, phantom, type_name::with_defining_ids<USDC>(), 500, MAXU64, false, true, OWNER,
+                vid,
+                phantom,
+                type_name::with_defining_ids<USDC>(),
+                500,
+                MAXU64,
+                false,
+                true,
+                OWNER,
             ),
         );
         // USDC is now in granted_coin_types.
@@ -743,12 +1048,48 @@ fun set_allowance_per_coin_no_reset() {
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 300, suit_exp, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<DEEP>(&mut v, &oc, cid, 700, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            300,
+            suit_exp,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<DEEP>(
+            &mut v,
+            &oc,
+            cid,
+            700,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         // update only USDC.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 50, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            50,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 50);
         // SUIT bit-identical (remaining + expiry).
@@ -786,11 +1127,38 @@ fun set_allowance_cross_cap_independent() {
         cid_y = object::id(&cap_y);
         let _ = vid;
 
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid_x, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid_y, 300, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid_x,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid_y,
+            300,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         // update cap-X only.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid_x, 50, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid_x,
+            50,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid_x), 50);
         // cap-Y untouched.
         assert_eq!(spend_vault::allowance<USDC>(&v, cid_y), 300);
@@ -847,14 +1215,39 @@ fun set_allowance_suspend_event_flags() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 0, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            0,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         let evs = event::events_by_type<spend_vault::AllowanceSet>();
         assert_eq!(evs.length(), 2);
         assert_eq!(
             evs[1],
             spend_vault::test_new_allowance_set(
-                vid, cid, type_name::with_defining_ids<USDC>(), 0, MAXU64, false, false, OWNER,
+                vid,
+                cid,
+                type_name::with_defining_ids<USDC>(),
+                0,
+                MAXU64,
+                false,
+                false,
+                OWNER,
             ),
         );
         ts::return_to_sender(&s, oc);
@@ -877,8 +1270,26 @@ fun set_allowance_cas_match_with_new_expiry() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 200, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 150, exp, option::some(200), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            200,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            150,
+            exp,
+            option::some(200),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 150);
         assert_eq!(spend_vault::expiry<USDC>(&v, cid), exp);
         ts::return_to_sender(&s, oc);
@@ -901,12 +1312,48 @@ fun granted_coin_types_grows_only_no_dup_across_lifecycle() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::granted_coin_types(&v).length(), 1);
         // suspend (update), revive (update), raise (update): no new type entry.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 0, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 900, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            0,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            900,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::granted_coin_types(&v).length(), 1);
         ts::return_to_sender(&s, oc);
         u::return_vault(v);
@@ -937,7 +1384,16 @@ fun set_allowance_targets_only_named_cap() {
         let _ = vid;
 
         // grant only cap A.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid_a, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid_a,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         assert!(spend_vault::contains<USDC>(&v, cid_a));
         // cap B has NO entry (mint created none, no set targeted it).
         assert!(!spend_vault::contains<USDC>(&v, cid_b));
@@ -964,8 +1420,26 @@ fun revoke_one_coin_leaves_other_grant_intact() {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
         let clk = u::take_clock(&s);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 300, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            300,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
 
         let was_present = spend_vault::revoke<USDC>(&mut v, &oc, cid, s.ctx());
         assert!(was_present);
@@ -1012,7 +1486,16 @@ fun set_allowance_cas_stale_after_spend_aborts() {
     let mut v = u::take_vault(&s);
     let clk = u::take_clock(&s);
     let oc = u::take_owner_cap(&s, OWNER);
-    spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 200, MAXU64, option::some(400), &clk, s.ctx());
+    spend_vault::set_allowance<USDC>(
+        &mut v,
+        &oc,
+        cid,
+        200,
+        MAXU64,
+        option::some(400),
+        &clk,
+        s.ctx(),
+    );
     abort
 }
 
@@ -1030,7 +1513,16 @@ fun set_allowance_read_then_cas_atomic_succeeds() {
         let oc = u::take_owner_cap(&s, OWNER);
         let current = spend_vault::allowance<USDC>(&v, cid); // read
         // CAS on the value just read, same tx: proceeds iff nothing raced in between.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 250, MAXU64, option::some(current), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            250,
+            MAXU64,
+            option::some(current),
+            &clk,
+            s.ctx(),
+        );
         assert_eq!(spend_vault::allowance<USDC>(&v, cid), 250);
         ts::return_to_sender(&s, oc);
         u::return_vault(v);
@@ -1055,8 +1547,26 @@ fun set_allowance_target_entry_stable_under_interleaving() {
         cida = object::id(&capa);
         let capb = spend_vault::mint_cap(&v, &oc, s.ctx());
         cidb = object::id(&capb);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cida, 400, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cidb, 700, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cida,
+            400,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cidb,
+            700,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         transfer::public_transfer(capa, SPENDER);
         transfer::public_transfer(capb, SPENDER);
         spend_vault::share(v);

@@ -43,7 +43,8 @@ use sui::table::{Self, Table};
 #[error(code = 0)]
 const ENotOperator: vector<u8> = "Caller is not the service operator";
 #[error(code = 1)]
-const EWrongVaultForService: vector<u8> = "Cap is bound to a different vault than this service serves";
+const EWrongVaultForService: vector<u8> =
+    "Cap is bound to a different vault than this service serves";
 #[error(code = 2)]
 const ENotRegistered: vector<u8> = "No cap registered under this user address";
 

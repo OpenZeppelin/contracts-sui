@@ -58,7 +58,10 @@ fun direct_delegation_full_lifecycle() {
 
         // Recover the cap id from the share / transfer the wrapper performed.
         scenario.next_tx(OWNER);
-        (ts::most_recent_id_for_address<spend_vault::SpenderCap>(DELEGATE).destroy_some(), owner_cap)
+        (
+            ts::most_recent_id_for_address<spend_vault::SpenderCap>(DELEGATE).destroy_some(),
+            owner_cap,
+        )
     };
 
     // Tx 3 (DELEGATE): spend 150 to the delegate's wallet through the cap.
@@ -100,7 +103,13 @@ fun direct_delegation_full_lifecycle() {
         );
         assert_eq!(vault.allowance<EXAMPLE_COIN>(cap_id), 500);
 
-        direct_delegation::suspend<EXAMPLE_COIN>(&mut vault, &owner_cap, cap_id, &clk, scenario.ctx());
+        direct_delegation::suspend<EXAMPLE_COIN>(
+            &mut vault,
+            &owner_cap,
+            cap_id,
+            &clk,
+            scenario.ctx(),
+        );
         assert_eq!(vault.allowance<EXAMPLE_COIN>(cap_id), 0);
         assert!(vault.contains<EXAMPLE_COIN>(cap_id)); // suspended, entry still present
 

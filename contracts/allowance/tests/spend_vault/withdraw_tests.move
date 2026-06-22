@@ -121,7 +121,7 @@ fun withdraw_multiple_in_one_tx_succeed() {
 #[test]
 fun withdraw_succeeds_with_maximal_adversarial_ledger() {
     // Build a vault carrying a live grant, a suspended grant, and an unlimited
-    // grant across two caps; withdraw still succeeds (no ledger consult). No
+    // grant across three caps; withdraw still succeeds (no ledger consult). No
     // spender state can block the owner exit. Non-root path only.
     let mut s = ts::begin(OWNER);
     let clk = u::clock_at(u::start_ms(), s.ctx());
@@ -131,13 +131,36 @@ fun withdraw_succeeds_with_maximal_adversarial_ledger() {
     // cap A: a live finite grant.
     let cap_a = spend_vault::mint_cap(&v, &oc, s.ctx());
     let cid_a = object::id(&cap_a);
-    spend_vault::set_allowance<USDC>(&mut v, &oc, cid_a, 500, MAXU64, option::none(), &clk, s.ctx());
-    // cap B: a suspended grant (remaining == 0) + an unlimited grant (sentinel).
+    spend_vault::set_allowance<USDC>(
+        &mut v,
+        &oc,
+        cid_a,
+        500,
+        MAXU64,
+        option::none(),
+        &clk,
+        s.ctx(),
+    );
+    // cap B: a suspended grant (remaining == 0).
     let cap_b = spend_vault::mint_cap(&v, &oc, s.ctx());
     let cid_b = object::id(&cap_b);
     spend_vault::set_allowance<USDC>(&mut v, &oc, cid_b, 0, MAXU64, option::none(), &clk, s.ctx());
+    // cap C: an unlimited grant (remaining == u64::MAX sentinel).
+    let cap_c = spend_vault::mint_cap(&v, &oc, s.ctx());
+    let cid_c = object::id(&cap_c);
+    spend_vault::set_allowance<USDC>(
+        &mut v,
+        &oc,
+        cid_c,
+        MAXU64,
+        MAXU64,
+        option::none(),
+        &clk,
+        s.ctx(),
+    );
     transfer::public_transfer(cap_a, SPENDER);
     transfer::public_transfer(cap_b, SPENDER);
+    transfer::public_transfer(cap_c, SPENDER);
     spend_vault::share(v);
     transfer::public_transfer(oc, OWNER);
     clk.share_for_testing();
@@ -146,7 +169,7 @@ fun withdraw_succeeds_with_maximal_adversarial_ledger() {
     {
         let mut v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER);
-        // Despite the live + suspended ledger entries across two caps, the owner
+        // Despite the live + suspended ledger entries across three caps, the owner
         // exits cleanly: withdraw never reads the ledger.
         let bal = spend_vault::withdraw<USDC>(&mut v, &oc, 800, s.ctx());
         assert_eq!(bal.value(), 800);

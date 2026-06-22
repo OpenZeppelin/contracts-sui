@@ -214,7 +214,16 @@ fun granted_coin_types_excludes_deposited_only_types() {
         spend_vault::deposit(&v, sui::coin::mint_for_testing<DEEP>(1_000, s.ctx()), s.ctx());
         let cap = spend_vault::mint_cap(&v, &oc, s.ctx());
         let cid = object::id(&cap);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         transfer::public_transfer(cap, SPENDER);
         spend_vault::share(v);
         transfer::public_transfer(oc, OWNER);

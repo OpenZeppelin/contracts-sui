@@ -7,12 +7,12 @@
 /// > One untyped cap now spans N coin budgets, so a leaked cap
 /// > exposes the SUM across all coins the owner granted it. The library never
 /// > inspects holder identity, provenance, or intent; transfer of the cap is
-/// > transfer of authority, and mis-delivery is mis-authorization. There is no
-/// > recipient binding in this module. Owner-side mitigations: small per-coin
-/// > budgets, finite expiry per `(cap, coin)`, suspension
-/// > (`set_allowance(..., 0, ...)`), and `revoke_all` (bounds a leaked cap's
-/// > exposure to zero in one call). Integrators custodying a cap MUST
-/// > sender-gate any function that borrows it: an ungated public borrow is
+/// > transfer of authority, and sending it to the wrong party hands that party
+/// > the authority. There is no recipient binding in this module. Owner-side
+/// > mitigations: small per-coin budgets, finite expiry per `(cap, coin)`,
+/// > suspension (`set_allowance(..., 0, ...)`), and `revoke_all` (bounds a
+/// > leaked cap's exposure to zero in one call). Integrators custodying a cap
+/// > MUST sender-gate any function that borrows it: an ungated public borrow is
 /// > world-drainable authority.
 ///
 /// A `Vault` is a single UNTYPED shared escrow that holds N coin types at once.
@@ -676,7 +676,7 @@ public fun mint_cap(v: &Vault, cap: &OwnerCap, ctx: &mut TxContext): SpenderCap 
 /// **`cap_id` is the SPENDER cap's object id** (`object::id(&spender_cap)`, the
 /// id `mint_cap` minted), NOT the OwnerCap's id. It is UNVALIDATED by design
 /// (kept a bare ID) and the owner gate only checks the OwnerCap, so a
-/// mistyped or mis-sourced `cap_id` silently targets a different budget. The
+/// mistyped or wrongly-copied `cap_id` silently targets a different budget. The
 /// CREATE branch gives NO error signal: a wrong `cap_id` provisions a
 /// fresh budget with `was_created == true`, shaped exactly like success (and adds
 /// its `T` to the never-pruned `granted_coin_types`). Confirm before
@@ -766,10 +766,12 @@ public fun set_allowance<T>(
         entry.expires_at_ms = new_expires_at_ms;
         false
     } else {
-        v.allowances.push_back(
-            key,
-            Allowance { remaining: new_amount, expires_at_ms: new_expires_at_ms },
-        );
+        v
+            .allowances
+            .push_back(
+                key,
+                Allowance { remaining: new_amount, expires_at_ms: new_expires_at_ms },
+            );
         // `granted_coin_types` is written ONLY here (set_allowance-create,
         // owner-gated), so permissionless funding can never inflate the set the
         // revoke paths iterate. Guard the insert: `vec_set::insert` aborts on a
@@ -889,10 +891,7 @@ public fun spend<T>(
 
     // 5. Compare-before-decrement (no underflow path exists). The unlimited
     //    sentinel short-circuits by equality, no arithmetic.
-    assert!(
-        remaining == std::u64::max_value!() || amount <= remaining,
-        EAllowanceExceeded,
-    );
+    assert!(remaining == std::u64::max_value!() || amount <= remaining, EAllowanceExceeded);
 
     // === Commit (all five library checks passed; no library abort below) ===
     //
@@ -1353,20 +1352,17 @@ public fun allowance<T>(v: &Vault, cap_id: ID): u64 {
 /// #### Returns
 /// - The advisory upper bound on a current `spend<T>`; `0` when absent, expired,
 ///   or suspended (`remaining == 0`).
-public fun spendable_now<T>(
-    v: &Vault,
-    cap_id: ID,
-    root: &AccumulatorRoot,
-    clock: &Clock,
-): u64 {
+public fun spendable_now<T>(v: &Vault, cap_id: ID, root: &AccumulatorRoot, clock: &Clock): u64 {
     let key = budget_key<T>(cap_id);
     if (!v.allowances.contains(key)) {
         return 0
     };
     let entry = v.allowances.borrow(key);
     // Same closed boundary as `spend` check 3.
-    if (entry.expires_at_ms != std::u64::max_value!()
-        && clock.timestamp_ms() >= entry.expires_at_ms) {
+    if (
+        entry.expires_at_ms != std::u64::max_value!()
+        && clock.timestamp_ms() >= entry.expires_at_ms
+    ) {
         return 0
     };
     // The u64::MAX sentinel is min's neutral element: unlimited reduces to the
@@ -1442,11 +1438,7 @@ fun budget_key<T>(cap_id: ID): BudgetKey {
 // untyped + runtime `coin_type` schema.
 
 #[test_only]
-public fun test_new_vault_created(
-    vault_id: ID,
-    owner_cap_id: ID,
-    creator: address,
-): VaultCreated {
+public fun test_new_vault_created(vault_id: ID, owner_cap_id: ID, creator: address): VaultCreated {
     VaultCreated { vault_id, owner_cap_id, creator }
 }
 

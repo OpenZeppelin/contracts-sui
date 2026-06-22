@@ -28,13 +28,6 @@ use sui::clock::{Self, Clock};
 use sui::coin;
 use sui::test_scenario::{Self as ts, Scenario};
 
-// === Test coin types (distinct defining types so BudgetKeys differ) ===
-
-public struct USDC has drop {}
-public struct SUIT has drop {} // a stand-in "SUI"-like coin (avoids the real sui::sui::SUI)
-public struct DEEP has drop {}
-public struct FOO has drop {} // junk type for un-griefability / wrong-coin tests
-
 // === Common constants (consts are module-private in Move; expose via fns) ===
 
 const NO_EXPIRY: u64 = 18_446_744_073_709_551_615; // u64::MAX sentinel
@@ -46,6 +39,13 @@ public fun no_expiry(): u64 { NO_EXPIRY }
 public fun max_u64(): u64 { MAX_U64 }
 
 public fun start_ms(): u64 { START_MS }
+
+// === Test coin types (distinct defining types so BudgetKeys differ) ===
+
+public struct USDC has drop {}
+public struct SUIT has drop {} // a stand-in "SUI"-like coin (avoids the real sui::sui::SUI)
+public struct DEEP has drop {}
+public struct FOO has drop {} // junk type for un-griefability / wrong-coin tests
 
 // === Clock helpers ===
 
@@ -95,7 +95,16 @@ public fun setup_granted<T>(
     };
     let cap = spend_vault::mint_cap(&v, &oc, s.ctx());
     let cap_id = object::id(&cap);
-    spend_vault::set_allowance<T>(&mut v, &oc, cap_id, budget, expiry, option::none(), &clk, s.ctx());
+    spend_vault::set_allowance<T>(
+        &mut v,
+        &oc,
+        cap_id,
+        budget,
+        expiry,
+        option::none(),
+        &clk,
+        s.ctx(),
+    );
     transfer::public_transfer(cap, spender);
     spend_vault::share(v);
     transfer::public_transfer(oc, owner);

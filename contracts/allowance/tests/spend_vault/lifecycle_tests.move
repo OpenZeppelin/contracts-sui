@@ -153,7 +153,14 @@ fun explicit_one_ptb_setup_succeeds() {
         let cap = spend_vault::mint_cap(&v, &oc, s.ctx());
         cid = object::id(&cap);
         spend_vault::set_allowance<USDC>(
-            &mut v, &oc, cid, 500, MAXU64, option::none(), &clk, s.ctx(),
+            &mut v,
+            &oc,
+            cid,
+            500,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
         );
         spend_vault::share(v);
         transfer::public_transfer(cap, SPENDER);
@@ -253,9 +260,36 @@ fun destroy_drains_three_ledger_entries() {
         let cid1 = object::id(&cap1);
         let cid2 = object::id(&cap2);
         // cap1 granted two coins, cap2 granted one: 3 ledger entries total.
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid1, 100, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid1, 200, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid2, 300, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid1,
+            100,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid1,
+            200,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid2,
+            300,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         spend_vault::share(v);
         transfer::public_transfer(cap1, SPENDER);
         transfer::public_transfer(cap2, SPENDER);
@@ -289,8 +323,26 @@ fun destroy_after_revoke_all_emptied_ledger() {
         vid = object::id(&v);
         let cap = spend_vault::mint_cap(&v, &oc, s.ctx());
         cid = object::id(&cap);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, cid, 100, MAXU64, option::none(), &clk, s.ctx());
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, cid, 200, MAXU64, option::none(), &clk, s.ctx());
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            cid,
+            100,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            cid,
+            200,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        );
         spend_vault::share(v);
         transfer::public_transfer(cap, SPENDER);
         transfer::public_transfer(oc, OWNER);
@@ -403,7 +455,7 @@ fun destroy_consumes_owner_cap_by_value() {
     {
         let v = u::take_vault(&s);
         let oc = u::take_owner_cap(&s, OWNER); // the ONE owner cap
-        spend_vault::destroy(v, oc, s.ctx());  // <- consumes it by value
+        spend_vault::destroy(v, oc, s.ctx()); // <- consumes it by value
 
         let evs = event::events_by_type<spend_vault::VaultDestroyed>();
         assert_eq!(evs.length(), 1);
@@ -457,9 +509,27 @@ fun destroy_unconditional_over_adversarial_ledger() {
         let c1 = object::id(&cap1);
         let cap2 = spend_vault::mint_cap(&v, &oc, s.ctx());
         let c2 = object::id(&cap2);
-        spend_vault::set_allowance<USDC>(&mut v, &oc, c1, 0, MAXU64, option::none(), &clk, s.ctx());      // suspended
-        spend_vault::set_allowance<SUIT>(&mut v, &oc, c1, 100, future, option::none(), &clk, s.ctx());    // will expire
-        spend_vault::set_allowance<USDC>(&mut v, &oc, c2, MAXU64, MAXU64, option::none(), &clk, s.ctx());  // unlimited
+        spend_vault::set_allowance<USDC>(&mut v, &oc, c1, 0, MAXU64, option::none(), &clk, s.ctx()); // suspended
+        spend_vault::set_allowance<SUIT>(
+            &mut v,
+            &oc,
+            c1,
+            100,
+            future,
+            option::none(),
+            &clk,
+            s.ctx(),
+        ); // will expire
+        spend_vault::set_allowance<USDC>(
+            &mut v,
+            &oc,
+            c2,
+            MAXU64,
+            MAXU64,
+            option::none(),
+            &clk,
+            s.ctx(),
+        ); // unlimited
         transfer::public_transfer(cap1, SPENDER);
         transfer::public_transfer(cap2, SPENDER);
         spend_vault::share(v);
