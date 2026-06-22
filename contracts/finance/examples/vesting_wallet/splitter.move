@@ -67,7 +67,7 @@ public fun new(receivers: vector<address>, weights: vector<u64>, ctx: &mut TxCon
     });
 
     let splitter = Beneficiary { id: object::new(ctx), receivers, weights, total_weight };
-    let addr = object::id(&splitter).id_to_address();
+    let addr = object::id_address(&splitter);
     transfer::share_object(splitter);
     addr
 }
