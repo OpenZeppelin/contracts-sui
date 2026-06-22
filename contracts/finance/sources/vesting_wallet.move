@@ -50,12 +50,20 @@
 ///
 /// 1. Declare a witness `public struct MyCurve has drop {}` and a parameters
 ///    struct `public struct MyParams has copy, drop, store { /* params */ }`.
-/// 2. A constructor that validates the parameters and calls
-///    `vesting_wallet::new<MyCurve, MyParams, C>(MyParams { .. }, beneficiary, ctx)`.
+/// 2. A public `params` constructor that validates and returns a `MyParams`, with
+///    `new` as sugar over
+///    `vesting_wallet::new<MyCurve, MyParams, C>(params(..), beneficiary, ctx)`.
+///    Exposing `params` separately lets a curve-agnostic protocol build the wallet
+///    itself (calling `vesting_wallet::new` directly) without routing through `new`.
 /// 3. A `vested(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
 ///    that ends in `vesting_wallet::mint_vested_amount(wallet, MyCurve {}, amount)`.
 /// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet, MyCurve {})`,
 ///    which returns the parameters for the curve module to destructure.
+///
+/// A curve that needs to be reconfigurable after creation may additionally wrap
+/// `vesting_wallet::set_schedule_params(wallet, MyCurve {}, new_params)`. This is the
+/// only path to mutate `schedule_params`, and it is witness-gated, so a curve that
+/// omits the wrapper makes its wallets' parameters permanently immutable on chain.
 ///
 /// The curve must be monotonically non-decreasing in time and bounded above by
 /// `balance + released`; violating either makes `release` abort before any state
@@ -190,7 +198,8 @@ public struct Created<phantom S, P, phantom C> has copy, drop {
     schedule_params: P,
 }
 
-/// Emitted by `deposit` (and `receive_and_deposit`) when funds are added.
+/// Emitted by `deposit` (and `receive_and_deposit`) when a non-zero amount is
+/// added. A deposit of a zero-value coin emits no event.
 public struct Deposited<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
     /// Amount added to the balance by this deposit.
@@ -207,6 +216,14 @@ public struct Released<phantom S, phantom C> has copy, drop {
     amount: u64,
 }
 
+/// Emitted by `set_schedule_params` when a curve module replaces a wallet's
+/// stored parameters.
+public struct ScheduleParamsUpdated<phantom S, P, phantom C> has copy, drop {
+    wallet_id: ID,
+    /// The new parameters now stored in the wallet.
+    schedule_params: P,
+}
+
 /// Emitted by `destroy_empty` when a drained wallet is torn down.
 public struct Destroyed<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
@@ -219,9 +236,14 @@ public struct Destroyed<phantom S, phantom C> has copy, drop {
 
 /// Build a new wallet around a schedule and return it by value. Returning by value
 /// (rather than sharing internally) lets the caller chain creation, funding, and
-/// topology selection in a single PTB. The parameters `P` are taken by value: since
-/// only the declaring curve module can construct a `P`, supplying one is the
-/// authority proof that the caller is that curve module.
+/// topology selection in a single PTB.
+///
+/// The type parameters are:
+/// - `S` - the curve's `drop`-only schedule witness
+/// - `P` - the curve's `copy + drop + store` parameters struct
+/// - `C` - the coin type being vested
+///
+/// See the module overview for the full rationale.
 ///
 /// #### Parameters
 /// - `schedule_params`: The curve's stored configuration, opaque to the wallet.
@@ -293,14 +315,11 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     VestedAmount { wallet_id: object::id(wallet), amount }
 }
 
-/// Read the cumulative vested total recorded in a `VestedAmount<S>` without
-/// consuming it.
-public fun amount<S>(vested: &VestedAmount<S>): u64 {
-    vested.amount
-}
-
 /// Add a coin to the wallet's balance. Permissionless - the beneficiary's
 /// identity is data, not a capability, and anyone may fund.
+///
+/// A deposit of a zero-value coin is a no-op: the (empty) balance is consumed but
+/// nothing changes and no `Deposited` event is emitted.
 ///
 /// #### Aborts
 /// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
@@ -318,6 +337,7 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
     );
 
     wallet.balance.join(coin.into_balance());
+    if (amount == 0) return;
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
 }
 
@@ -385,6 +405,48 @@ public fun release<S: drop, P: copy + drop + store, C>(
     });
 }
 
+/// Replace the wallet's stored schedule parameters, returning the previous ones.
+/// Witness-gated by `_w: S`: only the module that declares `S` can construct one,
+/// so only the curve module that owns this wallet's schedule can reconfigure it.
+///
+/// This is the *only* path to mutate `schedule_params` after construction, and it
+/// is opt-in by the curve module: the primitive exposes no ungated mutator, so a
+/// curve module that never wraps this leaves its wallets' parameters permanently
+/// immutable on chain. The reference `vesting_wallet_linear` deliberately does not
+/// wrap it - its schedule is fixed at construction. It exists for custom curves that
+/// need to reconfigure after creation (e.g. extend a duration or adjust a cliff).
+///
+/// The curve module is responsible for keeping its invariants intact across the
+/// change. The wallet never re-derives the curve and applies no validation here -
+/// just as `mint_vested_amount` trusts the attested amount. Funds stay safe
+/// regardless: `release` pays out `vested - released` and aborts
+/// (`EVestedBelowReleased`) if a new parameter set makes the vested total dip below
+/// what has already been released - so a careless update can brick the release path
+/// until corrected, but cannot over-release or claw back paid-out funds.
+///
+/// #### Parameters
+/// - `wallet`: The wallet whose parameters are being replaced.
+/// - `_w`: The curve witness `S`; proves the caller is the declaring curve module.
+/// - `schedule_params`: The new parameters to store.
+///
+/// #### Returns
+/// - The parameters previously stored in the wallet.
+public fun set_schedule_params<S: drop, P: copy + drop + store, C>(
+    wallet: &mut VestingWallet<S, P, C>,
+    _w: S,
+    schedule_params: P,
+): P {
+    let previous = wallet.schedule_params;
+    wallet.schedule_params = schedule_params;
+
+    event::emit(ScheduleParamsUpdated<S, P, C> {
+        wallet_id: object::id(wallet),
+        schedule_params,
+    });
+
+    previous
+}
+
 /// Consume a drained wallet to reclaim its storage rebate and return its schedule
 /// parameters to the caller (the curve module destructures them). Witness-gated by
 /// `_w: S`, so only the declaring curve module can tear a wallet down. Coins
@@ -411,13 +473,7 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
     let beneficiary = wallet.beneficiary;
     let total_released = wallet.released;
 
-    let VestingWallet {
-        id,
-        beneficiary: _,
-        released: _,
-        balance,
-        schedule_params,
-    } = wallet;
+    let VestingWallet { id, balance, schedule_params, .. } = wallet;
     balance.destroy_zero();
     id.delete();
 
@@ -431,6 +487,10 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
 /// What `release` would pay out for the supplied `VestedAmount<S>` right now:
 /// `vested.amount - wallet.released`. Borrows `vested`, so the same attestation can
 /// still be passed to a subsequent `release`.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+/// - `vested`: A `VestedAmount<S>` minted for this wallet by its curve module.
 ///
 /// #### Returns
 /// - The releasable amount: the attested cumulative total minus what has already
@@ -449,13 +509,37 @@ public fun releasable<S: drop, P: copy + drop + store, C>(
     *vested_amount - wallet.released
 }
 
+/// Read the cumulative vested total recorded in a `VestedAmount<S>` without
+/// consuming it.
+///
+/// #### Parameters
+/// - `vested`: The `VestedAmount<S>` to read.
+///
+/// #### Returns
+/// - The cumulative vested total recorded in `vested`.
+public fun amount<S>(vested: &VestedAmount<S>): u64 {
+    vested.amount
+}
+
 /// Read the wallet's schedule parameters. Ungated - curve parameters are public
 /// information.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The wallet's stored schedule parameters.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params
 }
 
 /// Address that receives every `release`.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The address that receives every `release`.
 public fun beneficiary<S: drop, P: copy + drop + store, C>(
     wallet: &VestingWallet<S, P, C>,
 ): address {
@@ -463,11 +547,23 @@ public fun beneficiary<S: drop, P: copy + drop + store, C>(
 }
 
 /// Cumulative amount released so far.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The cumulative amount released so far.
 public fun released<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.released
 }
 
 /// Funds currently held by the wallet and not yet released.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to query.
+///
+/// #### Returns
+/// - The funds currently held by the wallet and not yet released.
 public fun balance<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.balance.value()
 }
@@ -498,6 +594,16 @@ public fun test_new_released<S, C>(
     amount: u64,
 ): Released<S, C> {
     Released { wallet_id, beneficiary, amount }
+}
+
+/// Build a `ScheduleParamsUpdated` event value for asserting against
+/// `event::events_by_type`.
+#[test_only]
+public fun test_new_schedule_params_updated<S, P, C>(
+    wallet_id: ID,
+    schedule_params: P,
+): ScheduleParamsUpdated<S, P, C> {
+    ScheduleParamsUpdated { wallet_id, schedule_params }
 }
 
 /// Build a `Destroyed` event value for asserting against `event::events_by_type`.

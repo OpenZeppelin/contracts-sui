@@ -16,18 +16,13 @@ public struct USDC has drop {}
 
 const BENEFICIARY: address = @0xB0B;
 
-// === Test helpers ===
+// === Test-Only Helpers ===
 
 fun setup(t0: u64): (Scenario, Clock) {
     let mut test = test_scenario::begin(@0x1);
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(t0);
     (test, clk)
-}
-
-fun teardown(test: Scenario, clk: Clock) {
-    destroy(clk);
-    test.end();
 }
 
 fun new_stepped(
@@ -130,7 +125,8 @@ fun new_accepts_cliff_equal_to_duration() {
     assert_eq!(wallet.vested(&clk), 1000); // cliff boundary == end: full total
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Construction state & topology ===
@@ -157,12 +153,48 @@ fun new_sets_params_and_emits_created() {
         vesting_wallet::test_new_created<Linear, Params, USDC>(
             object::id(&wallet),
             BENEFICIARY,
-            vesting_wallet_linear::test_params(100, 250, 1000, 4),
+            vesting_wallet_linear::params(100, 250, 1000, 4),
         ),
     );
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
+}
+
+// `params` is the seam for a curve-agnostic protocol: it hands out a validated
+// `Params` that drives the bare `vesting_wallet` primitive directly, producing a
+// wallet equivalent to one built by `new` - the accessors and curve read the same.
+#[test]
+fun params_drives_bare_primitive() {
+    let (mut test, mut clk) = setup(0);
+
+    let p = vesting_wallet_linear::params(100, 250, 1000, 4);
+    let mut wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
+    wallet.fund(1000, test.ctx());
+
+    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::period(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::steps(&wallet), 4);
+    assert_eq!(vesting_wallet_linear::end(&wallet), 4100);
+
+    // The curve evaluates identically to a `new`-built wallet: one step elapsed at
+    // t = 1100 (100 start + 1000 period), so 1000 * 1 / 4 = 250.
+    clk.set_for_testing(1100);
+    assert_eq!(wallet.vested(&clk), 250);
+
+    destroy(wallet);
+    destroy(clk);
+    test.end();
+}
+
+// The construction guards in `params` are exercised through `new` above; `new`
+// delegates validation to `params`, so a guard reached via `params` directly aborts
+// with the same code.
+#[test, expected_failure(abort_code = vesting_wallet_linear::EZeroPeriod)]
+fun params_rejects_zero_period() {
+    vesting_wallet_linear::params(0, 0, 0, 4);
 }
 
 // `create_and_share` puts the wallet into the shared topology.
@@ -178,7 +210,8 @@ fun create_and_share_shares_wallet() {
     assert_eq!(vesting_wallet_linear::duration(&wallet), 4000);
     test_scenario::return_shared(wallet);
 
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Curve shape ===
@@ -195,7 +228,8 @@ fun vested_amount_pre_start_is_zero() {
     assert_eq!(wallet.vested(&clk), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The staircase: the value is flat within a period and steps up at each boundary.
@@ -228,7 +262,8 @@ fun vested_amount_is_a_staircase() {
     assert_eq!(wallet.vested(&clk), 750);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // With a cliff shorter than one period, the staircase is gated to zero until the
@@ -252,7 +287,8 @@ fun vested_amount_pre_cliff_is_zero() {
     assert_eq!(wallet.vested(&clk), 250);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The key cliff behavior: a cliff spanning several periods releases those tranches
@@ -275,7 +311,8 @@ fun vested_amount_at_cliff_jumps_to_catch_up() {
     assert_eq!(wallet.vested(&clk), 4000);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // At and after the end the curve clamps to the wallet total.
@@ -295,7 +332,8 @@ fun vested_amount_post_end_clamps_to_total() {
     assert_eq!(wallet.vested(&clk), 1000);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The curve is non-decreasing as the clock advances.
@@ -306,19 +344,17 @@ fun vested_amount_is_nondecreasing_in_time() {
     let mut wallet = new_stepped(0, 1000, 1000, 4, test.ctx());
     wallet.fund(1000, test.ctx());
 
-    let samples = vector[0u64, 500, 1000, 1500, 2000, 3000, 4000, 5000];
     let mut prev = 0;
-    let mut i = 0;
-    while (i < samples.length()) {
-        clk.set_for_testing(samples[i]);
+    vector[0u64, 500, 1000, 1500, 2000, 3000, 4000, 5000].do!(|sample| {
+        clk.set_for_testing(sample);
         let current = wallet.vested(&clk);
         assert!(current >= prev);
         prev = current;
-        i = i + 1;
-    };
+    });
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The curve math uses a u128 intermediate, so the worst case
@@ -338,7 +374,8 @@ fun vested_amount_uses_u128_intermediate_at_max() {
     assert_eq!(wallet.vested(&clk), max / 2);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // A deposit made after start immediately participates at the current step
@@ -357,7 +394,8 @@ fun deposit_vests_as_if_from_start() {
     assert_eq!(wallet.vested(&clk), 500);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Release ===
@@ -421,7 +459,8 @@ fun release_then_release_within_same_period_is_noop() {
     assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The `releasable` view matches what `release` actually pays, and reads zero
@@ -440,7 +479,32 @@ fun releasable_view_matches_release() {
     assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
+}
+
+// The `releasable` view reads zero before the schedule opens (pre-start) and while
+// the cliff still gates it (pre-cliff), asserted directly on the view rather than
+// transitively through `release`. The wallet is funded and the cliff spans several
+// periods, so a non-gated curve would report a non-zero amount - the zero is the gate
+// doing its job, not an empty balance.
+#[test]
+fun releasable_is_zero_pre_start_and_pre_cliff() {
+    let (mut test, mut clk) = setup(0);
+
+    // Opens at 1000; cliff at start + 3000 spans 3 full periods.
+    let mut wallet = new_stepped(1000, 3000, 1000, 8, test.ctx());
+    wallet.fund(8000, test.ctx());
+
+    clk.set_for_testing(999); // pre-start
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
+
+    clk.set_for_testing(3000); // past start, 2 periods elapsed, still before the cliff (4000)
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
+
+    destroy(wallet);
+    destroy(clk);
+    test.end();
 }
 
 // After the end the whole total is releasable, and once drained nothing more is.
@@ -458,7 +522,8 @@ fun full_release_after_end_then_releasable_zero() {
     assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Teardown ===
@@ -476,8 +541,8 @@ fun destroy_after_end_on_empty_wallet() {
     vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
     assert_eq!(wallet.balance(), 0);
 
-    test.next_tx(@0x1);
-    vesting_wallet_linear::destroy(wallet, &clk);
+    test.next_tx(BENEFICIARY);
+    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
 
     let destroyed = event::events_by_type<Destroyed<Linear, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -486,7 +551,8 @@ fun destroy_after_end_on_empty_wallet() {
         vesting_wallet::test_new_destroyed<Linear, USDC>(wallet_id, BENEFICIARY, 1000),
     );
 
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // Tearing down before the schedule end aborts, even on an empty wallet.
@@ -496,20 +562,35 @@ fun destroy_rejects_before_end() {
 
     let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     clk.set_for_testing(3999);
-    vesting_wallet_linear::destroy(wallet, &clk);
+    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
     abort
 }
 
-// Tearing down a wallet that still holds a balance aborts (the empty-balance
-// gate from the primitive fires before the ended gate).
+// Tearing down a wallet that still holds a balance aborts. Clock is after end and
+// the caller is the beneficiary, so neither the ended nor the beneficiary gate can
+// fire - only the empty-balance gate from the primitive.
 #[test, expected_failure(abort_code = vesting_wallet::ENotEmpty)]
 fun destroy_rejects_nonempty_balance() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     wallet.fund(1, test.ctx());
-    clk.set_for_testing(5000); // after end, so only the balance gate can fire
-    vesting_wallet_linear::destroy(wallet, &clk);
+    clk.set_for_testing(5000); // after end, so the ended gate cannot fire
+    test.next_tx(BENEFICIARY);
+    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
+    abort
+}
+
+// Only the beneficiary may tear down the wallet; any other caller aborts even on a
+// drained, ended wallet.
+#[test, expected_failure(abort_code = vesting_wallet_linear::ENotBeneficiary)]
+fun destroy_rejects_non_beneficiary() {
+    let (mut test, mut clk) = setup(0);
+
+    let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
+    clk.set_for_testing(5000); // after end, so the ended gate cannot fire
+    test.next_tx(@0xCAFE); // not the beneficiary
+    vesting_wallet_linear::destroy(wallet, &clk, test.ctx());
     abort
 }
 
@@ -529,7 +610,8 @@ fun create_deposit_release_in_one_flow() {
     assert_eq!(wallet.balance(), 500);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Early-release resistance ===
@@ -558,7 +640,8 @@ fun release_before_first_step_moves_no_funds() {
     assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // ====================================================================
@@ -602,6 +685,26 @@ fun new_continuous_accepts_end_at_u64_max_boundary() {
     destroy(wallet);
 }
 
+// Accept boundary (continuous): cliff == duration is allowed; nothing vests until
+// the end, then the curve jumps straight to the full total. Mirrors the stepped
+// `new_accepts_cliff_equal_to_duration`.
+#[test]
+fun new_continuous_accepts_cliff_equal_to_duration() {
+    let (mut test, mut clk) = setup(0);
+
+    let mut wallet = new_continuous(0, 1000, 1000, test.ctx());
+    wallet.fund(1000, test.ctx());
+
+    clk.set_for_testing(999);
+    assert_eq!(wallet.vested(&clk), 0); // still gated by the cliff
+    clk.set_for_testing(1000);
+    assert_eq!(wallet.vested(&clk), 1000); // cliff boundary == end: full total
+
+    destroy(wallet);
+    destroy(clk);
+    test.end();
+}
+
 // `new_continuous` is the `period = 1`, `steps = duration` limit of the stepped curve.
 #[test]
 fun new_continuous_sets_period_one_and_steps_duration() {
@@ -617,7 +720,35 @@ fun new_continuous_sets_period_one_and_steps_duration() {
     assert_eq!(vesting_wallet_linear::end(&wallet), 1100);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
+}
+
+// `params_continuous` is the curve-agnostic seam for a continuous schedule: it yields
+// the `period = 1`, `steps = duration` `Params` that drives the bare primitive
+// directly, equivalent to a `new_continuous`-built wallet.
+#[test]
+fun params_continuous_drives_bare_primitive() {
+    let (mut test, clk) = setup(0);
+
+    let p = vesting_wallet_linear::params_continuous(100, 250, 1000);
+    let wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
+
+    assert_eq!(vesting_wallet_linear::start(&wallet), 100);
+    assert_eq!(vesting_wallet_linear::cliff(&wallet), 250);
+    assert_eq!(vesting_wallet_linear::period(&wallet), 1);
+    assert_eq!(vesting_wallet_linear::steps(&wallet), 1000);
+    assert_eq!(vesting_wallet_linear::end(&wallet), 1100);
+
+    destroy(wallet);
+    destroy(clk);
+    test.end();
+}
+
+// A zero duration is rejected, mirroring `new_continuous`.
+#[test, expected_failure(abort_code = vesting_wallet_linear::EZeroSteps)]
+fun params_continuous_rejects_zero_duration() {
+    vesting_wallet_linear::params_continuous(0, 0, 0);
 }
 
 // === Curve shape ===
@@ -635,7 +766,8 @@ fun vested_amount_continuous_at_exact_start_is_zero() {
     assert_eq!(wallet.vested(&clk), 0);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The key cliff behavior: at the cliff boundary the curve jumps from 0 to the
@@ -654,7 +786,8 @@ fun vested_amount_continuous_at_cliff_jumps_to_proportional() {
     assert_eq!(wallet.vested(&clk), 250);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // Between cliff and end the curve is linear from start.
@@ -671,7 +804,8 @@ fun vested_amount_continuous_is_linear_mid_schedule() {
     assert_eq!(wallet.vested(&clk), 750); // 1000 * 3000 / 4000
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The curve math uses a u128 intermediate, so the worst case
@@ -689,7 +823,8 @@ fun vested_amount_continuous_uses_u128_intermediate_at_max() {
     assert_eq!(wallet.vested(&clk), max - 1);
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // === Composability ===
@@ -760,7 +895,8 @@ fun retroactive_deposit_never_over_releases() {
     assert_eq!(wallet.balance() + wallet.released(), 200); // conserved: nothing minted from nowhere
 
     destroy(wallet);
-    teardown(test, clk);
+    destroy(clk);
+    test.end();
 }
 
 // The only arithmetic that could lift the curve above the schedule is the

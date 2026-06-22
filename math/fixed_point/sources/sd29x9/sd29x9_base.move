@@ -33,8 +33,11 @@ const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictl
 
 // === Structs ===
 
+/// Sign-magnitude decomposition of a signed fixed-point value.
 public struct Components has copy, drop {
+    /// Whether the value is negative (`true`) or non-negative (`false`).
     neg: bool,
+    /// Absolute value (magnitude) in raw fixed-point units.
     mag: u256,
 }
 
@@ -51,7 +54,7 @@ public struct Components has copy, drop {
 /// - The `UD30x9` representation of `x`.
 ///
 /// #### Aborts
-/// - Aborts if `x` is negative.
+/// - `ECannotBeConvertedToUD30x9` if `x` is negative.
 public fun into_UD30x9(x: SD29x9): UD30x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     assert!(!neg, ECannotBeConvertedToUD30x9);
@@ -83,7 +86,7 @@ public fun try_into_UD30x9(x: SD29x9): Option<UD30x9> {
 /// - The non-negative value of `x`.
 ///
 /// #### Aborts
-/// - Aborts if `x` is the minimum representable value (`-2^127`), because `+2^127` is not representable.
+/// - `EOverflow` if `x` is the minimum representable value (`-2^127`), because `+2^127` is not representable.
 public fun abs(x: SD29x9): SD29x9 {
     let mut components = decompose(x.unwrap());
     components.neg = false;
@@ -100,7 +103,7 @@ public fun abs(x: SD29x9): SD29x9 {
 /// - The sum `x + y`.
 ///
 /// #### Aborts
-/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun add(x: SD29x9, y: SD29x9): SD29x9 {
     let result = decompose(x.unwrap()).add_components(decompose(y.unwrap()));
     result.wrap_components()
@@ -115,7 +118,7 @@ public fun add(x: SD29x9, y: SD29x9): SD29x9 {
 /// - `x` rounded up (ceiling) at integer precision.
 ///
 /// #### Aborts
-/// - Aborts if the rounded positive result exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the rounded positive result exceeds the representable `SD29x9` range.
 public fun ceil(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     let scale = common::scale_u256!();
@@ -153,7 +156,7 @@ public fun eq(x: SD29x9, y: SD29x9): bool {
 /// - `x` rounded down (floor) at integer precision.
 ///
 /// #### Aborts
-/// - Aborts if the rounded negative result magnitude exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the rounded negative result magnitude exceeds the representable `SD29x9` range.
 public fun floor(x: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(x.unwrap());
     let scale = common::scale_u256!();
@@ -330,7 +333,7 @@ public fun lte(x: SD29x9, y: SD29x9): bool {
 /// - Returns `0` when `x` is an exact multiple of `y`.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 public fun rem(x: SD29x9, y: SD29x9): SD29x9 {
     let y_bits = y.unwrap();
     assert!(y_bits != 0, EDivideByZero);
@@ -354,7 +357,7 @@ public fun rem(x: SD29x9, y: SD29x9): SD29x9 {
 /// - Returns `0` when `x` is an exact multiple of `y`.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
+/// - `EDivideByZero` if `y` is zero.
 public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
     let y_bits = y.unwrap();
     assert!(y_bits != 0, EDivideByZero);
@@ -382,7 +385,7 @@ public fun mod(x: SD29x9, y: SD29x9): SD29x9 {
 /// - The product `x * y`, rounded toward zero.
 ///
 /// #### Aborts
-/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
     x.mul_trunc(y)
 }
@@ -399,7 +402,7 @@ public fun mul(x: SD29x9, y: SD29x9): SD29x9 {
 /// - The product `x * y`, rounded toward zero.
 ///
 /// #### Aborts
-/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun mul_trunc(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
@@ -426,7 +429,7 @@ public fun mul_trunc(x: SD29x9, y: SD29x9): SD29x9 {
 /// - The product `x * y`, rounded away from zero when inexact.
 ///
 /// #### Aborts
-/// - Aborts if the rounded magnitude exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the rounded magnitude exceeds the representable `SD29x9` range.
 public fun mul_away(x: SD29x9, y: SD29x9): SD29x9 {
     let x = decompose(x.unwrap());
     let y = decompose(y.unwrap());
@@ -449,7 +452,7 @@ public fun mul_away(x: SD29x9, y: SD29x9): SD29x9 {
 ///
 /// #### Aborts
 /// - `EDivideByZero` if `y` is zero.
-/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div(x: SD29x9, y: SD29x9): SD29x9 {
     x.div_trunc(y)
 }
@@ -466,8 +469,8 @@ public fun div(x: SD29x9, y: SD29x9): SD29x9 {
 /// - The quotient `x / y`, rounded toward zero.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
-/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+/// - `EDivideByZero` if `y` is zero.
+/// - `EOverflow` if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun div_trunc(x: SD29x9, y: SD29x9): SD29x9 {
     let y_bits = y.unwrap();
     assert!(y_bits != 0, EDivideByZero);
@@ -496,8 +499,8 @@ public fun div_trunc(x: SD29x9, y: SD29x9): SD29x9 {
 /// - The quotient `x / y`, rounded away from zero when inexact.
 ///
 /// #### Aborts
-/// - Aborts if `y` is zero.
-/// - Aborts if the rounded magnitude exceeds the representable `SD29x9` range.
+/// - `EDivideByZero` if `y` is zero.
+/// - `EOverflow` if the rounded magnitude exceeds the representable `SD29x9` range.
 public fun div_away(x: SD29x9, y: SD29x9): SD29x9 {
     let y_bits = y.unwrap();
     assert!(y_bits != 0, EDivideByZero);
@@ -532,7 +535,7 @@ public fun div_away(x: SD29x9, y: SD29x9): SD29x9 {
 /// - An approximation of `x^exp` computed using binary exponentiation and fixed-point truncation.
 ///
 /// #### Aborts
-/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun pow(x: SD29x9, exp: u8): SD29x9 {
     if (exp == 0) {
         return one()
@@ -596,7 +599,7 @@ public fun sqrt(x: SD29x9): SD29x9 {
 /// - `-x`.
 ///
 /// #### Aborts
-/// - Aborts if `x` is the minimum representable value (`-2^127`), because `+2^127` is not representable.
+/// - `EOverflow` if `x` is the minimum representable value (`-2^127`), because `+2^127` is not representable.
 public fun negate(x: SD29x9): SD29x9 {
     let value = decompose(x.unwrap());
     value.negate_components().wrap_components()
@@ -624,7 +627,7 @@ public fun neq(x: SD29x9, y: SD29x9): bool {
 /// - The difference `x - y`.
 ///
 /// #### Aborts
-/// - Aborts if the resulting magnitude exceeds the representable `SD29x9` range.
+/// - `EOverflow` if the resulting magnitude exceeds the representable `SD29x9` range.
 public fun sub(x: SD29x9, y: SD29x9): SD29x9 {
     let negated_y = decompose(y.unwrap()).negate_components();
     let result = decompose(x.unwrap()).add_components(negated_y);

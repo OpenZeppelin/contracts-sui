@@ -3,15 +3,17 @@ module openzeppelin_finance::vesting_wallet_tests;
 use openzeppelin_finance::vesting_wallet::{
     Self,
     VestingWallet,
+    VestedAmount,
     Created,
     Deposited,
     Released,
-    Destroyed
+    Destroyed,
+    ScheduleParamsUpdated
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
 use sui::event;
-use sui::test_scenario::{Self, Scenario};
+use sui::test_scenario;
 
 // A throwaway curve used to exercise the curve-agnostic primitive directly: it
 // lets the tests mint a `VestedAmount` with an arbitrary `amount`, so the
@@ -24,10 +26,20 @@ public struct TestParams has copy, drop, store { tag: u64 }
 /// Phantom coin marker for the vested asset.
 public struct USDC has drop {}
 
+/// A minimal curve-agnostic third-party wrapper, as documented in `VestedAmount`'s
+/// "Why minting and spending are separated" note: it nests the wallet, exposes only
+/// an immutable `&inner` (so any curve module can mint a `VestedAmount` against it),
+/// keeps `&mut inner` private, and re-exposes `release` as its own function that
+/// delegates to the nested wallet. It never hands out `&mut inner`.
+public struct Wrapper has key, store {
+    id: UID,
+    inner: VestingWallet<TestCurve, TestParams, USDC>,
+}
+
 const BENEFICIARY: address = @0xB0B;
 const PARAMS_TAG: u64 = 7;
 
-// === Test helpers ===
+// === Test-Only Helpers ===
 
 fun new_wallet(
     beneficiary: address,
@@ -42,6 +54,22 @@ fun new_wallet(
 
 fun mint(amount: u64, ctx: &mut TxContext): Coin<USDC> {
     coin::mint_for_testing<USDC>(amount, ctx)
+}
+
+fun wrap(inner: VestingWallet<TestCurve, TestParams, USDC>, ctx: &mut TxContext): Wrapper {
+    Wrapper { id: object::new(ctx), inner }
+}
+
+/// Immutable view onto the nested wallet - the only access the wrapper exposes for
+/// curve modules to mint a `VestedAmount`.
+fun inner(wrapper: &Wrapper): &VestingWallet<TestCurve, TestParams, USDC> {
+    &wrapper.inner
+}
+
+/// The wrapper's own `release`: takes a `&VestedAmount` (no witness) and delegates to
+/// the private `&mut inner`.
+fun release(wrapper: &mut Wrapper, vested: &VestedAmount<TestCurve>, ctx: &mut TxContext) {
+    wrapper.inner.release(vested, ctx);
 }
 
 // === Construction & topology ===
@@ -148,6 +176,58 @@ fun receive_and_deposit_claims_addressed_coin() {
     assert_eq!(deposited[0], vesting_wallet::test_new_deposited<TestCurve, USDC>(wallet_id, 1000));
 
     test_scenario::return_shared(wallet);
+    scenario.end();
+}
+
+// A deposit of a zero-value coin is a no-op: balance and ledger are untouched and
+// no `Deposited` event is emitted (mirroring a release that pays out nothing).
+#[test]
+fun deposit_zero_value_coin_is_noop() {
+    let mut scenario = test_scenario::begin(@0xCAFE);
+
+    let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    wallet.deposit(mint(0, scenario.ctx()));
+
+    assert_eq!(wallet.balance(), 0);
+    assert_eq!(wallet.released(), 0);
+    assert_eq!(event::events_by_type<Deposited<TestCurve, USDC>>().length(), 0);
+
+    destroy(wallet);
+    scenario.end();
+}
+
+// The documented owned-mode fast path: the wallet lives in a holder's inventory
+// (never shared), an upstream emitter sends a coin to its object address, and the
+// holder claims it with `receive_and_deposit` from their own transaction.
+#[test]
+fun receive_and_deposit_claims_addressed_coin_owned() {
+    let holder = @0xA11CE;
+    let mut scenario = test_scenario::begin(@0x1);
+
+    // Hand the wallet to a holder as an owned object (no share).
+    let wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    let wallet_id = object::id(&wallet);
+    let wallet_addr = object::id_address(&wallet);
+    transfer::public_transfer(wallet, holder);
+
+    // An upstream emitter sends a coin to the wallet's object address.
+    scenario.next_tx(@0x1);
+    let coin = mint(1000, scenario.ctx());
+    let coin_id = object::id(&coin);
+    transfer::public_transfer(coin, wallet_addr);
+
+    // The holder takes their owned wallet and claims the coin through the deposit path.
+    scenario.next_tx(holder);
+    let mut wallet = scenario.take_from_sender<VestingWallet<TestCurve, TestParams, USDC>>();
+    let receiving = test_scenario::receiving_ticket_by_id<Coin<USDC>>(coin_id);
+    wallet.receive_and_deposit(receiving);
+
+    assert_eq!(wallet.balance(), 1000);
+    let deposited = event::events_by_type<Deposited<TestCurve, USDC>>();
+    assert_eq!(deposited.length(), 1);
+    assert_eq!(deposited[0], vesting_wallet::test_new_deposited<TestCurve, USDC>(wallet_id, 1000));
+
+    destroy(wallet);
     scenario.end();
 }
 
@@ -481,6 +561,35 @@ fun destroy_empty_rejects_nonempty_balance() {
     abort
 }
 
+// === Schedule params update ===
+
+// `set_schedule_params` is witness-gated, replaces the stored params, returns the
+// previous ones, and emits `ScheduleParamsUpdated` with the new params.
+#[test]
+fun set_schedule_params_replaces_and_emits() {
+    let mut ctx = tx_context::dummy();
+
+    let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
+    let wallet_id = object::id(&wallet);
+
+    let previous = wallet.set_schedule_params(TestCurve {}, TestParams { tag: 42 });
+
+    assert_eq!(previous, TestParams { tag: PARAMS_TAG });
+    assert_eq!(wallet.schedule_params(), TestParams { tag: 42 });
+
+    let updated = event::events_by_type<ScheduleParamsUpdated<TestCurve, TestParams, USDC>>();
+    assert_eq!(updated.length(), 1);
+    assert_eq!(
+        updated[0],
+        vesting_wallet::test_new_schedule_params_updated<TestCurve, TestParams, USDC>(
+            wallet_id,
+            TestParams { tag: 42 },
+        ),
+    );
+
+    destroy(wallet);
+}
+
 // === State immutability ===
 
 // The beneficiary, schedule params, and id are all fixed across
@@ -556,6 +665,39 @@ fun beneficiary_can_be_object_address() {
     scenario.next_tx(@0x1);
     let coin = scenario.take_from_address<Coin<USDC>>(object_addr);
     assert_eq!(coin.value(), 1000);
+
+    destroy(coin);
+    scenario.end();
+}
+
+// === Third-party wrapper ===
+
+// The documented wrapper use case, driven directly: a curve-agnostic wrapper nests
+// the wallet, mints a `VestedAmount` against the immutable `&inner` (the only access
+// it exposes), and releases through its own `release` that delegates to the private
+// `&mut inner`. An unrelated sender drives it, the funds flow to the construction-time
+// beneficiary, and the wrapper never exposes `&mut inner`.
+#[test]
+fun release_through_third_party_wrapper() {
+    let mut scenario = test_scenario::begin(@0xCAFE); // unrelated sender drives the wrapper
+
+    let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    wallet.deposit(mint(1000, scenario.ctx()));
+    let mut wrapper = wrap(wallet, scenario.ctx());
+
+    // Curve-agnostic flow: mint against `&inner`, release through the wrapper.
+    let vested = wrapper.inner().mint_vested_amount(TestCurve {}, 400);
+    wrapper.release(&vested, scenario.ctx());
+
+    assert_eq!(wrapper.inner().released(), 400);
+    assert_eq!(wrapper.inner().balance(), 600);
+
+    destroy(wrapper);
+
+    // The construction-time beneficiary received the released coin.
+    scenario.next_tx(BENEFICIARY);
+    let coin = scenario.take_from_sender<Coin<USDC>>();
+    assert_eq!(coin.value(), 400);
 
     destroy(coin);
     scenario.end();
