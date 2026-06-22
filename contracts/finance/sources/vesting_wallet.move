@@ -89,7 +89,6 @@
 module openzeppelin_finance::vesting_wallet;
 
 use sui::balance::{Self, Balance};
-use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::event;
 use sui::transfer::Receiving;
@@ -413,6 +412,8 @@ public fun release<S: drop, P: copy + drop + store, C>(
     });
 }
 
+// TODO: THIS ISN'T CURVE-AGNOSTIC WHEN A WRAPPER AROUND WALLET IS CREATED, AS IT WOULD
+// REQUIRE THE WRAPPER TO EXPOSE `&mut inner` TO WORK. FIND A REDESIGN.
 /// Replace the wallet's stored schedule parameters, returning the previous ones.
 /// Witness-gated by `_w: S`: only the module that declares `S` can construct one,
 /// so only the curve module that owns this wallet's schedule can reconfigure it.
@@ -439,8 +440,6 @@ public fun release<S: drop, P: copy + drop + store, C>(
 ///
 /// #### Returns
 /// - The parameters previously stored in the wallet.
-// TODO: THIS ISN'T CURVE-AGNOSTIC WHEN A WRAPPER AROUND WALLET IS CREATED, AS IT WOULD
-// REQUIRE THE WRAPPER TO EXPOSE `&mut inner` TO WORK. FIND A REDESIGN.
 public fun set_schedule_params<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     _w: S,
