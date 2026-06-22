@@ -61,19 +61,24 @@ use sui::clock::Clock;
 /// `period_ms` was zero; each tranche must span a positive period.
 #[error(code = 0)]
 const EZeroPeriod: vector<u8> = "Period must be greater than zero";
+
 /// `steps` was zero; a schedule must have at least one tranche.
 #[error(code = 1)]
 const EZeroSteps: vector<u8> = "Steps must be greater than zero";
+
 /// `cliff_ms` exceeded the schedule duration (`period_ms * steps`); the cliff must
 /// fall within the schedule.
 #[error(code = 2)]
 const EInvalidCliff: vector<u8> = "Cliff must not exceed duration";
+
 /// `period_ms * steps`, or `start_ms` plus that duration, would overflow `u64`.
 #[error(code = 3)]
 const EScheduleOverflow: vector<u8> = "Schedule end (start + period * steps) would overflow u64";
+
 /// `destroy` was called before the schedule's end (`start_ms + period_ms * steps`).
 #[error(code = 4)]
 const ENotEnded: vector<u8> = "Schedule has not ended yet";
+
 /// `destroy` was called by an address other than the wallet's beneficiary.
 #[error(code = 5)]
 const ENotBeneficiary: vector<u8> = "Only the beneficiary may destroy the wallet";

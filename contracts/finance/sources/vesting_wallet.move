@@ -96,18 +96,22 @@ use sui::transfer::Receiving;
 /// `destroy_empty` was called on a wallet that still holds a balance.
 #[error(code = 0)]
 const ENotEmpty: vector<u8> = "Wallet still holds a balance";
+
 /// A `VestedAmount` was used against a different wallet than the one it was minted
 /// for.
 #[error(code = 1)]
 const EWalletMismatch: vector<u8> = "VestedAmount does not match this wallet";
+
 /// A `VestedAmount` attests a cumulative total below what the wallet has already
 /// released - a stale attestation or a curve that regressed.
 #[error(code = 2)]
 const EVestedBelowReleased: vector<u8> = "Vested amount is below the amount already released";
+
 /// A `deposit` would push the wallet's lifetime total (`balance + released`) past
 /// `u64::MAX`, which the wallet's `u64` accounting cannot represent.
 #[error(code = 3)]
 const EBalanceOverflow: vector<u8> = "Deposit would overflow the wallet's lifetime total";
+
 /// A `release` attests more than the wallet's funded total (`balance + released`),
 /// so the current balance cannot cover the releasable amount.
 #[error(code = 4)]
