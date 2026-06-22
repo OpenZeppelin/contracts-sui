@@ -96,7 +96,7 @@ fun new_rejects_end_overflow() {
     destroy(new_stepped(std::u64::max_value!() - 999, 0, 1000, 1, &mut ctx));
 }
 
-// Boundary: a schedule whose end is exactly u64::MAX is valid and `end()`
+// Boundary: a schedule whose end is exactly u64::MAX is valid and `end_ms()`
 // does not abort.
 #[test]
 fun new_accepts_end_at_u64_max_boundary() {
@@ -676,7 +676,7 @@ fun new_continuous_rejects_schedule_overflow() {
     destroy(new_continuous(std::u64::max_value!(), 0, 1, &mut ctx));
 }
 
-// Boundary: a schedule whose end is exactly u64::MAX is valid and `end()`
+// Boundary: a schedule whose end is exactly u64::MAX is valid and `end_ms()`
 // does not abort.
 #[test]
 fun new_continuous_accepts_end_at_u64_max_boundary() {

@@ -231,9 +231,9 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
 3. A `vested_amount(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
    that evaluates the curve and ends in `wallet.mint_vested_amount(MyCurve {}, amount)`.
 4. A teardown that calls `wallet.destroy_empty()` for a `DestroyReceipt<MyCurve,
-   MyParams>`, then `receipt.consume_receipt(MyCurve {})` to recover the beneficiary
-   and parameters and destructure them. `destroy_empty` is permissionless; the
-   witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
+   MyParams>`, then `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover
+   the beneficiary and parameters and destructure them. `destroy_empty` is permissionless;
+   the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
 
 The curve **must be monotonically non-decreasing in time and bounded above by
 `balance + released`.** A curve that violates either makes `release` abort before any

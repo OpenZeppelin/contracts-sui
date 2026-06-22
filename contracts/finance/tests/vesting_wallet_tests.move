@@ -9,7 +9,6 @@ use openzeppelin_finance::vesting_wallet::{
     Released,
     Destroyed
 };
-use openzeppelin_finance::vesting_wallet_linear;
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
 use sui::event;
@@ -527,8 +526,8 @@ fun release_allows_draining_exact_balance() {
 
 // === Teardown ===
 
-// `destroy_empty` is witness-gated, consumes the wallet by value and returns `P`,
-// accepts an empty balance, emits `Destroyed`, and loses no value.
+// `destroy_empty` is permissionless, consumes the wallet by value and returns a
+// `DestroyReceipt`, accepts an empty balance, emits `Destroyed`, and loses no value.
 #[test]
 fun destroy_empty_returns_params_and_emits() {
     let mut scenario = test_scenario::begin(@0x1);
