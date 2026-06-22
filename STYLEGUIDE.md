@@ -240,13 +240,23 @@ Examples of required rewrites:
 
 Doc-comments are the source of truth for the generated API reference
 (`sui move build --doc`) and for downstream AI-integrator tooling - treat them as
-part of the public API, not decoration. Keep them complete and accurate.
+part of the public API, not decoration. Keep them complete, accurate, and
+concise.
 
 - `///` for doc comments (renders in IDEs), `//` for inline technical notes
 - No JavaDoc-style `/** */`
 - Use regular dashes (`-`) instead of em dashes (`—`) in all prose, comments,
   and documentation
 - Document struct fields, complex params, and return values
+- Write for a human reader: prefer short, plain sentences over dense,
+  multi-clause prose. Completeness (every param, return, and abort) is required,
+  not verbosity
+- Do not restate in prose what the declaration already shows, such as a struct's
+  abilities (e.g. "transferable via `store`", "cannot be discarded (no `drop`)")
+- Describe what a parameter *is*, not why it is needed (e.g. `ctx`: "Transaction
+  context.", not "used to attribute the event")
+- Put field-specific notes in field-level `///` docs above the field, not in the
+  struct's top doc-comment
 - Use section headings `#### Parameters`, `#### Returns`, and `#### Aborts` when
   relevant; use `-` for list items (not `*`)
 - Document public functions: include `#### Parameters` and `#### Returns` where
