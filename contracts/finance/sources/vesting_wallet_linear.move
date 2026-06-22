@@ -8,10 +8,11 @@
 /// implements the curve on top of the curve-agnostic `vesting_wallet` primitive:
 /// `params` validates and builds a tranche schedule (`period_ms`, `steps`), `new` is
 /// sugar that hands that `Params` to `vesting_wallet::new`, and `params_continuous` /
-/// `new_continuous` are the continuous linear (`period_ms = 1`) analogs. An integrator who wants the wallet built for them touches only this module -
-/// they never construct a bare wallet or mint a `VestedAmount` by hand. A
-/// curve-agnostic protocol that drives the bare `vesting_wallet` primitive itself
-/// takes only `params` and mints the wallet on its own (see "Why a separate module").
+/// `new_continuous` are the continuous linear (`period_ms = 1`) analogs. An integrator
+/// who wants the wallet built for them touches only this module - they never construct
+/// a bare wallet or mint a `VestedAmount` by hand. A curve-agnostic protocol that
+/// drives the bare `vesting_wallet` primitive itself takes only `params` and mints the
+/// wallet on its own (see "Why a separate module").
 ///
 /// # Why a separate module
 ///
