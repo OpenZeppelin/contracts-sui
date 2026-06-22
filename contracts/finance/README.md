@@ -268,8 +268,9 @@ one per integration boundary described above:
 - [`pausable_grant`](examples/vesting_wallet/pausable_grant.move) - the **curve-agnostic
   wrapper** pattern: a shared grant that nests a wallet, stays generic over `S`/`P`,
   hands out `&inner` while keeping `&mut` private, and re-exposes `release` behind a
-  cap-gated pause check. `unwrap` dissolves the wrapper back to the bare wallet so the
-  curve module can finalize teardown. Works with any present or future curve.
+  pause check whose flag the employer toggles via cap-gated `pause`/`resume`.
+  `unwrap` dissolves the wrapper back to the bare wallet so the curve module can finalize
+  teardown. Works with any present or future curve.
 - [`splitter`](examples/vesting_wallet/splitter.move) - the **beneficiary-as-object**
   pattern: point a wallet's `beneficiary` at a shared `Beneficiary` object so each
   release lands as a `Receiving<Coin<C>>` that anyone can `disperse` to many receivers
