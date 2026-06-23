@@ -124,7 +124,7 @@ const EInsufficientBalance: vector<u8> = "Releasable amount exceeds the wallet's
 /// read `balance + released` as the wallet's "current total" when evaluating the
 /// schedule, so deposits made after the schedule starts can participate
 /// retroactively (the reference linear curve does this).
-public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> has key, store {
+public struct VestingWallet<phantom S, P: copy + drop + store, phantom C> has key, store {
     id: UID,
     /// Recipient of every `release`, read fresh from this field at call time.
     beneficiary: address,
@@ -256,7 +256,7 @@ public struct Destroyed<phantom S, phantom C> has copy, drop {
 /// #### Returns
 /// - A fresh `VestingWallet<S, P, C>` with a zero balance and nothing released,
 ///   owned by the caller (pick a topology before the PTB ends).
-public fun new<S: drop, P: copy + drop + store, C>(
+public fun new<S, P: copy + drop + store, C>(
     schedule_params: P,
     beneficiary: address,
     ctx: &mut TxContext,
