@@ -44,6 +44,26 @@ module openzeppelin_sale::sale;
 
 use sui::coin::Coin;
 
+// === Errors ===
+
+#[error(code = 0)]
+const ENotInit: vector<u8> = "Sale must be in Init phase";
+
+#[error(code = 1)]
+const ENotActive: vector<u8> = "Sale must be in Active phase";
+
+#[error(code = 2)]
+const ENotFinalized: vector<u8> = "Sale must be in Finalized phase";
+
+#[error(code = 3)]
+const ENotCancelled: vector<u8> = "Sale must be in Cancelled phase";
+
+#[error(code = 4)]
+const ENotTerminal: vector<u8> = "Sale must be in a terminal phase (Finalized or Cancelled)";
+
+#[error(code = 5)]
+const EAlreadyCancelled: vector<u8> = "Already in the Cancelled phase";
+
 // === Phase ===
 
 /// Lifecycle phases shared by every sale flavor.
@@ -136,6 +156,26 @@ public fun is_cancelled(p: &Phase): bool {
         Phase::Cancelled => true,
         _ => false,
     }
+}
+
+public fun assert_init(p: &Phase) {
+    assert!(p.is_init(), ENotInit);
+}
+
+public fun assert_active(p: &Phase) {
+    assert!(p.is_active(), ENotActive);
+}
+
+public fun assert_finalized(p: &Phase) {
+    assert!(p.is_finalized(), ENotFinalized);
+}
+
+public fun assert_cancelled(p: &Phase) {
+    assert!(p.is_cancelled(), ENotCancelled);
+}
+
+public fun assert_terminal(p: &Phase) {
+    assert!(p.is_finalized() || p.is_cancelled(), ENotTerminal);
 }
 
 // === Package-internal helpers ===
@@ -243,8 +283,17 @@ public(package) fun unpack_vested_allocation<S, P>(
 
 public(package) fun phase_init(): Phase { Phase::Init }
 
-public(package) fun phase_active(): Phase { Phase::Active }
+public(package) fun into_active(phase: &Phase): Phase {
+    assert!(phase.is_init(), ENotInit);
+    Phase::Active
+}
 
-public(package) fun phase_finalized(): Phase { Phase::Finalized }
+public(package) fun into_finalized(phase: &Phase): Phase {
+    assert!(phase.is_active(), ENotActive);
+    Phase::Finalized
+}
 
-public(package) fun phase_cancelled(): Phase { Phase::Cancelled }
+public(package) fun into_cancelled(phase: &Phase): Phase {
+    assert!(!phase.is_cancelled(), EAlreadyCancelled);
+    Phase::Cancelled
+}
