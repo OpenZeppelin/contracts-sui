@@ -343,7 +343,9 @@ public struct Spent has copy, drop {
 /// no-op), and by `revoke_all` once per removed coin. For single-coin `revoke`,
 /// `was_present == false` is the typo'd-cap_id signal: nothing was actually
 /// removed. For `revoke_all`, a whole-cap miss emits NOTHING (event absence is
-/// the signal), so it has no `was_present == false` record.
+/// the signal), so it has no `was_present == false` record. Indexers must gate
+/// state changes on `was_present == true`: this struct is one-event-per-call from
+/// `revoke` but one-event-per-removal from `revoke_all`.
 public struct Revoked has copy, drop {
     vault_id: ID,
     cap_id: ID,
@@ -363,7 +365,9 @@ public struct Renounced has copy, drop {
     by: address,
 }
 
-/// Emitted by both `withdraw` and `withdraw_all`. `amount` is the actual value
+/// Emitted by both `withdraw` and `withdraw_all` with no source discriminant, so
+/// an indexer cannot distinguish a partial `withdraw` from a full settled-pool
+/// `withdraw_all` drain from this event alone. `amount` is the actual value
 /// extracted, possibly 0 from `withdraw_all` on an empty pool.
 public struct Withdrawn has copy, drop {
     vault_id: ID,
@@ -800,6 +804,10 @@ public fun set_allowance<T>(
 /// - `EZeroAmount` if `amount == 0`.
 /// - `EAllowanceExceeded` if `remaining` is finite and `amount > remaining`;
 ///   includes suspended-at-zero.
+/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
+///   `enable_object_funds_withdraw` protocol feature is off. Propagated from
+///   `withdraw_funds_from_object`, total (not per-amount) and not a matchable
+///   Move `#[error]` code.
 /// - `InsufficientFundsForWithdraw` (execution status) if the object's settled
 ///   balance is below `amount`. A funds-accumulator execution status raised at
 ///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
@@ -866,8 +874,9 @@ public fun spend<T>(
 
     // Draw exactly `amount` from the per-coin address balance via `&mut v.id`:
     // no signer, only this module's cap-gated `&mut UID`.
-    // `withdraw_funds_from_object` only builds the Withdrawal; the fund movement
-    // and the pool-short check both happen at `redeem_funds`.
+    // `withdraw_funds_from_object` asserts the `enable_object_funds_withdraw`
+    // feature, then builds the Withdrawal; the fund movement and the pool-short
+    // check both happen at `redeem_funds`.
     let w = balance::withdraw_funds_from_object<T>(&mut v.id, amount);
     let bal = balance::redeem_funds(w);
 
@@ -1138,6 +1147,8 @@ public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) 
 /// #### Aborts
 /// - `EWrongOwnerCap` if cap is bound to a different Vault.
 /// - `EZeroAmount` if `amount == 0`.
+/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
+///   `enable_object_funds_withdraw` protocol feature is off.
 /// - `InsufficientFundsForWithdraw` (execution status) if the object's settled
 ///   balance is below `amount`. A funds-accumulator execution status raised at
 ///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
@@ -1212,6 +1223,10 @@ public fun withdraw<T>(
 ///
 /// #### Aborts
 /// - `EWrongOwnerCap` if cap is bound to a different Vault.
+/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
+///   `enable_object_funds_withdraw` protocol feature is off; only reachable on a
+///   non-empty settled pool (the empty-pool path returns `balance::zero` without
+///   touching the primitive).
 /// - `InsufficientFundsForWithdraw` (execution status) if the live pool fell
 ///   below the settled snapshot earlier in this checkpoint (the settled-vs-live
 ///   skew; retry-safe). A funds-accumulator execution status raised at
@@ -1288,17 +1303,20 @@ public fun allowance<T>(v: &Vault, cap_id: ID): u64 {
 /// settled-vs-live skew). Time and budget do hold (no intervening mutation); treat
 /// the pool as a ceiling and handle the abort, or avoid same-checkpoint contention.
 /// Guard `> 0` before feeding it to `spend`: a zero quote aborts `EZeroAmount`.
+/// Flag-independent: this read does not check `enable_object_funds_withdraw`, so on
+/// a network where that feature is off it still returns a non-zero quote that
+/// cannot actually be spent or withdrawn.
 ///
 /// #### Parameters
 /// - `v`: The vault to inspect.
-/// - `cap_id`: The SpenderCap object id whose `(cap_id, T)` entry is quoted.
 /// - `root`: The `AccumulatorRoot`.
+/// - `cap_id`: The SpenderCap object id whose `(cap_id, T)` entry is quoted.
 /// - `clock`: The Sui `Clock`.
 ///
 /// #### Returns
 /// - The advisory upper bound on a current `spend<T>`; `0` when absent, expired,
 ///   or suspended (`remaining == 0`).
-public fun spendable_now<T>(v: &Vault, cap_id: ID, root: &AccumulatorRoot, clock: &Clock): u64 {
+public fun spendable_now<T>(v: &Vault, root: &AccumulatorRoot, cap_id: ID, clock: &Clock): u64 {
     let key = budget_key<T>(cap_id);
     if (!v.allowances.contains(key)) {
         return 0
@@ -1339,7 +1357,9 @@ public fun contains<T>(v: &Vault, cap_id: ID): bool {
 /// advisory). Named for the balance it reports, though the funds live as an address
 /// balance rather than a struct field. NOTE: deriving a `withdraw(amount)` from
 /// this read can still fail with the `InsufficientFundsForWithdraw` execution
-/// status if the live pool dropped since the read (the settled-vs-live skew).
+/// status if the live pool dropped since the read (the settled-vs-live skew). It is
+/// also flag-independent: a non-zero result on a network with
+/// `enable_object_funds_withdraw` off still cannot be spent or withdrawn.
 public fun balance_value<T>(v: &Vault, root: &AccumulatorRoot): u64 {
     balance::settled_funds_value<T>(root, object::id_address(v))
 }
