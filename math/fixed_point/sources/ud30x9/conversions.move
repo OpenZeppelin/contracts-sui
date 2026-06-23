@@ -32,7 +32,7 @@ const EIntegerOverflow: vector<u8> = "Truncated whole part does not fit in u64";
 /// - `x`: Whole unsigned integer to scale into fixed-point form.
 ///
 /// #### Returns
-/// - The `UD30x9` representation of `x.0`.
+/// - The `UD30x9` representation of `x`.
 public fun from_u64(x: u64): UD30x9 {
     from_u128(x as u128)
 }
@@ -43,7 +43,7 @@ public fun from_u64(x: u64): UD30x9 {
 /// - `x`: Whole unsigned integer to scale into fixed-point form.
 ///
 /// #### Returns
-/// - The `UD30x9` representation of `x.0`.
+/// - The `UD30x9` representation of `x`.
 ///
 /// #### Aborts
 /// - `EOverflow` if `x * 10^9` would overflow the `UD30x9` raw representation.

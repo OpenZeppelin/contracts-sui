@@ -36,6 +36,8 @@ const HALF_RAW: u128 = 500_000_000;
 /// `Φ(+∞)` upper bound at the `UD30x9` raw scale (`10^9`).
 const ONE_RAW: u128 = 1_000_000_000;
 
+// === Package Functions ===
+
 // === Accessors ===
 
 /// `Φ(0)` at the raw scale - the lower bound of `cdf_nonneg_raw`'s return
@@ -71,6 +73,8 @@ public(package) fun cdf_nonneg_raw(z_raw: u128): u128 {
     )
 }
 
+// === Private Functions ===
+
 /// Evaluate `N(z) / D(z)` for a central-domain `z_raw` (`0 < z_raw < max_z`),
 /// given the coefficient tables. Split out from `cdf_nonneg_raw` so its
 /// integrity asserts can be exercised with injected coefficients in tests.
@@ -90,16 +94,16 @@ fun eval_rational(
 
     // Integrity guards on the AAA fit. A corrupted coefficient table would
     // surface here rather than silently producing a garbled output.
-    assert!(!horner::is_neg(&n), EInternalNumNegative);
-    assert!(!horner::is_neg(&d) && horner::mag(&d) > 0, EInternalDenNonPositive);
+    assert!(!n.is_neg(), EInternalNumNegative);
+    assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
 
     // Final ratio: N(z) / D(z) at WAD, cast to UD30x9 (10^9) with a single
     // nearest-rounding step. The result is bounded by ~10^29 on the central
     // domain - well under u256 capacity, so `destroy_some` cannot abort.
     let phi_raw_u256 = u256::mul_div(
-        horner::mag(&n),
+        n.mag(),
         common::scale_u256!(),
-        horner::mag(&d),
+        d.mag(),
         rounding::nearest(),
     ).destroy_some();
     // Last-ULP overshoot guard: rounding can produce ONE_RAW + 1 raw at z just
@@ -107,6 +111,8 @@ fun eval_rational(
     if (phi_raw_u256 > (ONE_RAW as u256)) ONE_RAW
     else (phi_raw_u256 as u128)
 }
+
+// === Test-Only Helpers ===
 
 /// Test-only window onto `eval_rational` so the `EInternalNumNegative` /
 /// `EInternalDenNonPositive` integrity asserts - unreachable through the public

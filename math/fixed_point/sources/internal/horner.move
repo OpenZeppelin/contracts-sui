@@ -41,6 +41,8 @@ public struct SignedScaled256 has copy, drop {
     neg: bool,
 }
 
+// === Package Functions ===
+
 // === Constructors ===
 
 /// The neutral additive element.
@@ -121,6 +123,11 @@ public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): Signe
 /// ~39 orders of magnitude below `u256::max ≈ 1.16 × 10^77`. A new consumer
 /// (e.g. `pdf`, `inverse_cdf`) with different coefficients or a wider input
 /// domain must re-establish this bound before reusing the evaluator.
+///
+/// #### Aborts
+/// - Arithmetic overflow if the full-width product `a.mag * b.mag` exceeds `u256`.
+///   The caller guarantees this cannot happen (see Precondition); it is not
+///   checked here.
 public(package) fun mul_wad(a: SignedScaled256, b: SignedScaled256): SignedScaled256 {
     let mag = (a.mag * b.mag) / WAD_U256;
     let neg = mag != 0 && a.neg != b.neg;
