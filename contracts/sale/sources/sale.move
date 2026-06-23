@@ -209,8 +209,8 @@ public(package) fun consume_receipt<S>(r: Receipt<S>): (ID, address, u64, u64, u
 /// a `Coin<S>` — keeping the carrier shape aligned avoids a needless
 /// `Balance ↔ Coin` round-trip in the same transaction.
 #[allow(lint(coin_field))]
-public struct VestedAllocation<phantom C, P> {
-    coin: Coin<C>,
+public struct VestedAllocation<phantom S, P> {
+    coin: Coin<S>,
     schedule_params: P,
     beneficiary: address,
     sale_id: ID,
@@ -218,13 +218,13 @@ public struct VestedAllocation<phantom C, P> {
 
 /// Build a `VestedAllocation`. Library-internal: only sibling library
 /// modules (e.g. `prefunded_sale::claim_into_vesting`) construct these.
-public(package) fun new_vested_allocation<C, P>(
-    coin: Coin<C>,
+public(package) fun new_vested_allocation<S, P>(
+    coin: Coin<S>,
     schedule_params: P,
     beneficiary: address,
     sale_id: ID,
-): VestedAllocation<C, P> {
-    VestedAllocation<C, P> { coin, schedule_params, beneficiary, sale_id }
+): VestedAllocation<S, P> {
+    VestedAllocation<S, P> { coin, schedule_params, beneficiary, sale_id }
 }
 
 /// Destructure a `VestedAllocation`. Library-internal: only sibling
@@ -232,9 +232,9 @@ public(package) fun new_vested_allocation<C, P>(
 /// downstream wallet shape.
 ///
 /// Returns `(coin, schedule_params, beneficiary, sale_id)`.
-public(package) fun unpack_vested_allocation<C, P>(
-    allocation: VestedAllocation<C, P>,
-): (Coin<C>, P, address, ID) {
+public(package) fun unpack_vested_allocation<S, P>(
+    allocation: VestedAllocation<S, P>,
+): (Coin<S>, P, address, ID) {
     let VestedAllocation { coin, schedule_params, beneficiary, sale_id } = allocation;
     (coin, schedule_params, beneficiary, sale_id)
 }
