@@ -2,7 +2,7 @@
 
 OpenZeppelin building blocks for Sui smart contracts development.
 
-**AI agents:** [`llms.txt`](../llms.txt) is the discovery entry point for integrating this library into a downstream project.
+**AI agents:** [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt) is the discovery entry point for integrating this library into a downstream project.
 
 ---
 
