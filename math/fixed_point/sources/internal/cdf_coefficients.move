@@ -14,6 +14,8 @@
 /// in `scripts/gaussian_codegen/cdf/`; do not hand-edit.
 module openzeppelin_fp_math::cdf_coefficients;
 
+// === Constants ===
+
 const NUM_MAGS: vector<u128> = vector[
     500_000_000_000_000_000, 190_807_717_061_735_534, 18_477_727_278_488_185, 15_046_897_503_881_893,
     10_871_372_336_577_149, 775_678_067_926_219, 10_553_581_641_750, 278_046_679_204_823,
@@ -39,6 +41,8 @@ const DEN_NEGS: vector<bool> = vector[
 /// consulting the rational. Single source of truth for the central-domain
 /// bound, consumed by `cdf::cdf_nonneg_raw`.
 const MAX_Z_RAW: u128 = 6_300_000_000;
+
+// === Package Functions ===
 
 /// Numerator magnitudes (ascending power order).
 public(package) fun cdf_num_mags(): vector<u128> { NUM_MAGS }

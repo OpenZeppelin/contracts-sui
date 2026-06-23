@@ -86,6 +86,8 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 /// in `scripts/gaussian_codegen/cdf/`; do not hand-edit.
 module openzeppelin_fp_math::cdf_coefficients;
 
+// === Constants ===
+
 {render_vector("NUM_MAGS", "u128", num_mag_items)}
 
 {render_vector("NUM_NEGS", "bool", num_neg_items)}
@@ -99,6 +101,8 @@ module openzeppelin_fp_math::cdf_coefficients;
 /// consulting the rational. Single source of truth for the central-domain
 /// bound, consumed by `cdf::cdf_nonneg_raw`.
 const MAX_Z_RAW: u128 = {fmt_u128(MAX_Z_RAW)};
+
+// === Package Functions ===
 
 /// Numerator magnitudes (ascending power order).
 public(package) fun cdf_num_mags(): vector<u128> {{ NUM_MAGS }}

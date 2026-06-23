@@ -15,8 +15,9 @@ Two output files are produced from the same source-of-truth case list:
 - `tests/sd29x9_tests/cdf_test_vectors.move` — all cases (positive + negative).
 - `tests/ud30x9_tests/cdf_test_vectors.move` — positive subset.
 
-Both files are `#[test_only]`; each has one `#[test]` driver that iterates the
-table and asserts `|actual − expected| ≤ TOLERANCE` (5 ULP).
+Each file lives under `tests/` (compiled in test mode only, so no module-level
+`#[test_only]` is needed) and has one `#[test]` driver that iterates the table
+and asserts `|actual − expected| ≤ TOLERANCE` (5 ULP).
 """
 from __future__ import annotations
 
@@ -138,7 +139,6 @@ def emit_sd29x9_module(cases: list[tuple[int, bool, int]]) -> str:
 /// Deterministic test vectors for `sd29x9_base::cdf`. Each row asserts the
 /// result of `sd29x9::wrap(z_raw, neg).cdf()` matches `expected` to within
 /// `TOLERANCE` raw SD29x9 ULPs (== 5 × 10^-9 absolute).
-#[test_only]
 module openzeppelin_fp_math::sd29x9_cdf_test_vectors;
 
 use openzeppelin_fp_math::sd29x9;
@@ -188,7 +188,6 @@ def emit_ud30x9_module(cases: list[tuple[int, bool, int]]) -> str:
 /// Deterministic test vectors for `ud30x9_base::cdf`. Each row asserts the
 /// result of `ud30x9::wrap(z_raw).cdf()` matches `expected` to within
 /// `TOLERANCE` raw UD30x9 ULPs (== 5 × 10^-9 absolute).
-#[test_only]
 module openzeppelin_fp_math::ud30x9_cdf_test_vectors;
 
 use openzeppelin_fp_math::ud30x9;

@@ -4,7 +4,6 @@
 /// Deterministic test vectors for `sd29x9_base::cdf`. Each row asserts the
 /// result of `sd29x9::wrap(z_raw, neg).cdf()` matches `expected` to within
 /// `TOLERANCE` raw SD29x9 ULPs (== 5 × 10^-9 absolute).
-#[test_only]
 module openzeppelin_fp_math::sd29x9_cdf_test_vectors;
 
 use openzeppelin_fp_math::sd29x9;
