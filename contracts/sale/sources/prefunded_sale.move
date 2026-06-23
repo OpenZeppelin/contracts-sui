@@ -138,6 +138,8 @@ use sui::coin::{Self, Coin};
 use sui::event;
 use sui::table::{Self, Table};
 
+use fun openzeppelin_sale::sale::consume_receipt as Receipt.consume;
+
 // === Errors ===
 
 // Phase guards
@@ -412,7 +414,7 @@ fun assert_admin<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
 }
 
 fun assert_sender_is_buyer<SaleCoin>(receipt: &Receipt<SaleCoin>, ctx: &TxContext) {
-    assert!(sale::receipt_buyer(receipt) == ctx.sender(), EBuyerOnly);
+    assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
 }
 
 // === Setup (Phase: Init) ===
@@ -481,13 +483,13 @@ public fun deposit_inventory<SaleCoin, PaymentCoin, ScheduleParams: copy + drop 
     sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     inventory: Coin<SaleCoin>,
 ) {
-    assert!(sale::is_init(&sale.phase), ENotInit);
-    let amount = coin::value(&inventory);
-    balance::join(&mut sale.inventory, coin::into_balance(inventory));
+    assert!(sale.phase.is_init(), ENotInit);
+    let amount = inventory.value();
+    sale.inventory.join(inventory.into_balance());
     event::emit(InventoryDeposited<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount,
-        inventory_after: balance::value(&sale.inventory),
+        inventory_after: sale.inventory.value(),
     });
 }
 
@@ -506,11 +508,11 @@ public fun set_per_buyer_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop 
     per_buyer_cap: u64,
     ctx: &mut TxContext,
 ) {
-    assert!(sale::is_init(&sale.phase), ENotInit);
-    assert!(option::is_none(&sale.per_buyer_cap), EPerBuyerCapAlreadySet);
+    assert!(sale.phase.is_init(), ENotInit);
+    assert!(sale.per_buyer_cap.is_none(), EPerBuyerCapAlreadySet);
     assert!(per_buyer_cap > 0, EPerBuyerCapZero);
-    option::fill(&mut sale.per_buyer_cap, per_buyer_cap);
-    option::fill(&mut sale.contributions, table::new<address, u64>(ctx));
+    sale.per_buyer_cap.fill(per_buyer_cap);
+    sale.contributions.fill(table::new<address, u64>(ctx));
     event::emit(PerBuyerCapSet<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         cap: per_buyer_cap,
@@ -532,9 +534,9 @@ public fun set_vesting_schedule_params<SaleCoin, PaymentCoin, ScheduleParams: co
     sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     params: ScheduleParams,
 ) {
-    assert!(sale::is_init(&sale.phase), ENotInit);
-    assert!(option::is_none(&sale.vesting_schedule_params), EVestingScheduleAlreadySet);
-    option::fill(&mut sale.vesting_schedule_params, params);
+    assert!(sale.phase.is_init(), ENotInit);
+    assert!(sale.vesting_schedule_params.is_none(), EVestingScheduleAlreadySet);
+    sale.vesting_schedule_params.fill(params);
     event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, ScheduleParams> {
         sale_id: object::id(sale),
         params,
@@ -560,15 +562,15 @@ public fun pair_refund_vault<SaleCoin, PaymentCoin, ScheduleParams: copy + drop 
     vault: &RefundVault<PaymentCoin>,
     vault_cap: RefundVaultCap<PaymentCoin>,
 ) {
-    assert!(sale::is_init(&sale.phase), ENotInit);
-    assert!(option::is_none(&sale.refund_vault_cap), EVaultAlreadyPaired);
-    assert!(refund_vault::cap_vault_id(&vault_cap) == object::id(vault), EWrongVault);
-    assert!(refund_vault::is_active(vault), EVaultNotActive);
-    assert!(refund_vault::value(vault) == 0, EVaultNotEmpty);
+    assert!(sale.phase.is_init(), ENotInit);
+    assert!(sale.refund_vault_cap.is_none(), EVaultAlreadyPaired);
+    assert!(vault_cap.cap_vault_id() == object::id(vault), EWrongVault);
+    assert!(vault.is_active(), EVaultNotActive);
+    assert!(vault.value() == 0, EVaultNotEmpty);
 
     let vault_id = object::id(vault);
-    option::fill(&mut sale.refund_vault_id, vault_id);
-    option::fill(&mut sale.refund_vault_cap, vault_cap);
+    sale.refund_vault_id.fill(vault_id);
+    sale.refund_vault_cap.fill(vault_cap);
     event::emit(RefundVaultPaired<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         vault_id,
@@ -586,7 +588,7 @@ public fun enable_allowlist<SaleCoin, PaymentCoin, ScheduleParams: copy + drop +
     sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     ctx: &mut TxContext,
 ): AllowlistAdmin<SaleCoin> {
-    assert!(sale::is_init(&sale.phase), ENotInit);
+    assert!(sale.phase.is_init(), ENotInit);
     assert!(!sale.requires_allowlist, EAllowlistAlreadyEnabled);
     sale.requires_allowlist = true;
     let sale_id = object::id(sale);
@@ -613,13 +615,13 @@ public fun share_and_activate<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
     mut sale: PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     clock: &Clock,
 ) {
-    assert!(sale::is_init(&sale.phase), ENotInit);
-    assert!(option::is_some(&sale.refund_vault_cap), EVaultRequiredForActivate);
+    assert!(sale.phase.is_init(), ENotInit);
+    assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
 
     let required_128 = (sale.hard_cap as u128) * (sale.rate as u128);
     assert!(required_128 <= U64_MAX, EInventoryOverflowAtActivate);
     let required = required_128 as u64;
-    assert!(balance::value(&sale.inventory) >= required, EInsufficientInventoryAtActivate);
+    assert!(sale.inventory.value() >= required, EInsufficientInventoryAtActivate);
 
     let activated_at_ms = clock::timestamp_ms(clock);
     assert!(activated_at_ms < sale.closes_at_ms, EActivationAfterClose);
@@ -650,24 +652,24 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     ctx: &mut TxContext,
 ) {
     // Phase + time
-    assert!(sale::is_active(&sale.phase), ENotActive);
+    assert!(sale.phase.is_active(), ENotActive);
     let now = clock::timestamp_ms(clock);
     assert!(now >= sale.opens_at_ms && now <= sale.closes_at_ms, ESaleWindowClosed);
 
     // Allowlist gate
     let buyer = ctx.sender();
     let entry_max = if (sale.requires_allowlist) {
-        assert!(option::is_some(&allow), EAllowlistRequired);
-        let entry = option::destroy_some(allow);
-        allowlist::consume<SaleCoin>(entry, object::id(sale), buyer)
+        assert!(allow.is_some(), EAllowlistRequired);
+        let entry = allow.destroy_some();
+        entry.consume(object::id(sale), buyer)
     } else {
-        assert!(option::is_none(&allow), EAllowlistNotRequired);
-        option::destroy_none(allow);
+        assert!(allow.is_none(), EAllowlistNotRequired);
+        allow.destroy_none();
         0
     };
 
     // Hard cap (u128-widened)
-    let paid = coin::value(&payment);
+    let paid = payment.value();
     assert!(paid > 0, EZeroPayment);
     let new_raised_128 = (sale.raised as u128) + (paid as u128);
     assert!(new_raised_128 <= U64_MAX, ERaisedOverflow);
@@ -679,21 +681,21 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     };
 
     // Per-buyer cap (u128-widened)
-    if (option::is_some(&sale.per_buyer_cap)) {
-        let per_cap = *option::borrow(&sale.per_buyer_cap);
-        let contribs = option::borrow_mut(&mut sale.contributions);
-        let current = if (table::contains(contribs, buyer)) {
-            *table::borrow(contribs, buyer)
+    if (sale.per_buyer_cap.is_some()) {
+        let per_cap = *sale.per_buyer_cap.borrow();
+        let contribs = sale.contributions.borrow_mut();
+        let current = if (contribs.contains(buyer)) {
+            *contribs.borrow(buyer)
         } else { 0 };
         let new_total_128 = (current as u128) + (paid as u128);
         assert!(new_total_128 <= U64_MAX, EContributionOverflow);
         assert!(new_total_128 <= (per_cap as u128), EPerBuyerCapExceeded);
         let new_total = new_total_128 as u64;
-        if (table::contains(contribs, buyer)) {
-            let slot = table::borrow_mut(contribs, buyer);
+        if (contribs.contains(buyer)) {
+            let slot = contribs.borrow_mut(buyer);
             *slot = new_total;
         } else {
-            table::add(contribs, buyer, new_total);
+            contribs.add(buyer, new_total);
         };
     };
 
@@ -701,13 +703,13 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     let allocation_128 = (paid as u128) * (sale.rate as u128);
     assert!(allocation_128 <= U64_MAX, EAllocationOverflow);
     let allocation = allocation_128 as u64;
-    let unallocated = balance::value(&sale.inventory) - sale.total_allocated;
+    let unallocated = sale.inventory.value() - sale.total_allocated;
     assert!(allocation <= unallocated, EInsufficientInventoryAtActivate);
 
     // State mutations
     sale.total_allocated = sale.total_allocated + allocation;
     sale.raised = new_raised_128 as u64;
-    balance::join(&mut sale.proceeds, coin::into_balance(payment));
+    sale.proceeds.join(payment.into_balance());
 
     // Mint and deliver receipt
     let sale_id = object::id(sale);
@@ -739,20 +741,20 @@ public fun finalize<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
-    assert!(sale::is_active(&sale.phase), ENotActive);
+    assert!(sale.phase.is_active(), ENotActive);
     let now = clock::timestamp_ms(clock);
     let window_closed = now > sale.closes_at_ms;
     let hard_cap_reached = sale.raised >= sale.hard_cap;
     assert!(window_closed || hard_cap_reached, ESaleWindowStillOpen);
     assert!(sale.raised >= sale.soft_cap, ESoftCapNotMet);
 
-    let paired_id = *option::borrow(&sale.refund_vault_id);
+    let paired_id = *sale.refund_vault_id.borrow();
     assert!(object::id(vault) == paired_id, EWrongVault);
 
     // Synchronize vault state with the sale's terminal phase.
     {
-        let cap_ref = option::borrow(&sale.refund_vault_cap);
-        refund_vault::flip_to_closed(vault, cap_ref);
+        let cap_ref = sale.refund_vault_cap.borrow();
+        vault.flip_to_closed(cap_ref);
     };
 
     sale.phase = sale::phase_finalized();
@@ -775,12 +777,12 @@ public fun cancel_after_close<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(sale::is_active(&sale.phase), ENotActive);
+    assert!(sale.phase.is_active(), ENotActive);
     let now = clock::timestamp_ms(clock);
     assert!(now > sale.closes_at_ms, ESaleWindowStillOpen);
     assert!(sale.soft_cap > 0 && sale.raised < sale.soft_cap, ESoftCapMet);
 
-    do_cancel(sale, vault, CancelReason::SoftCapMissed, now);
+    sale.do_cancel(vault, CancelReason::SoftCapMissed, now);
     let _ = ctx;
 }
 
@@ -807,13 +809,13 @@ public fun cancel_emergency<SaleCoin, PaymentCoin, ScheduleParams: copy + drop +
     ctx: &mut TxContext,
 ) {
     assert_admin(sale, cap);
-    assert!(sale::is_active(&sale.phase), ENotActive);
+    assert!(sale.phase.is_active(), ENotActive);
     let now = clock::timestamp_ms(clock);
     assert!(now <= sale.closes_at_ms, EEmergencyCancelAfterClose);
     assert!(sale.raised < sale.hard_cap, ESaleAlreadyComplete);
     assert!(sale.soft_cap == 0 || sale.raised < sale.soft_cap, ESoftCapMet);
 
-    do_cancel(sale, vault, CancelReason::AdminEmergency, now);
+    sale.do_cancel(vault, CancelReason::AdminEmergency, now);
     let _ = ctx;
 }
 
@@ -824,15 +826,15 @@ fun do_cancel<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     reason: CancelReason,
     now: u64,
 ) {
-    let paired_id = *option::borrow(&sale.refund_vault_id);
+    let paired_id = *sale.refund_vault_id.borrow();
     assert!(object::id(vault) == paired_id, EWrongVault);
 
-    let amount = balance::value(&sale.proceeds);
-    let proceeds_balance = balance::split(&mut sale.proceeds, amount);
+    let amount = sale.proceeds.value();
+    let proceeds_balance = sale.proceeds.split(amount);
     {
-        let cap_ref = option::borrow(&sale.refund_vault_cap);
-        refund_vault::deposit(vault, cap_ref, proceeds_balance);
-        refund_vault::flip_to_refunding(vault, cap_ref);
+        let cap_ref = sale.refund_vault_cap.borrow();
+        vault.deposit(cap_ref, proceeds_balance);
+        vault.flip_to_refunding(cap_ref);
     };
 
     sale.phase = sale::phase_cancelled();
@@ -860,16 +862,16 @@ public fun claim<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): Coin<SaleCoin> {
-    assert!(sale::is_finalized(&sale.phase), ENotFinalized);
-    assert!(option::is_none(&sale.vesting_schedule_params), EClaimRequiresVesting);
-    assert!(sale::receipt_sale_id(&receipt) == object::id(sale), EReceiptSaleMismatch);
+    assert!(sale.phase.is_finalized(), ENotFinalized);
+    assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
+    assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
     assert_sender_is_buyer(&receipt, ctx);
 
     let receipt_id = object::id(&receipt);
-    let (_sale_id, buyer, _paid, allocation, _ts) = sale::consume_receipt(receipt);
+    let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume();
 
     sale.total_allocated = sale.total_allocated - allocation;
-    let payout = balance::split(&mut sale.inventory, allocation);
+    let payout = sale.inventory.split(allocation);
 
     event::emit(Claimed<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
@@ -891,11 +893,11 @@ public fun claim_all<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>
     ctx: &mut TxContext,
 ): Coin<SaleCoin> {
     let mut total = coin::zero<SaleCoin>(ctx);
-    while (!vector::is_empty(&receipts)) {
-        let r = vector::pop_back(&mut receipts);
-        coin::join(&mut total, claim(sale, r, ctx));
+    while (!receipts.is_empty()) {
+        let r = receipts.pop_back();
+        total.join(sale.claim(r, ctx));
     };
-    vector::destroy_empty(receipts);
+    receipts.destroy_empty();
     total
 }
 
@@ -917,19 +919,19 @@ public fun claim_into_vesting<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): VestedAllocation<SaleCoin, ScheduleParams> {
-    assert!(sale::is_finalized(&sale.phase), ENotFinalized);
-    assert!(option::is_some(&sale.vesting_schedule_params), ENoVestingScheduleAttached);
-    assert!(sale::receipt_sale_id(&receipt) == object::id(sale), EReceiptSaleMismatch);
+    assert!(sale.phase.is_finalized(), ENotFinalized);
+    assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
+    assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
     assert_sender_is_buyer(&receipt, ctx);
 
     let receipt_id = object::id(&receipt);
-    let (_sale_id, buyer, _paid, allocation, _ts) = sale::consume_receipt(receipt);
+    let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume_receipt();
 
     sale.total_allocated = sale.total_allocated - allocation;
-    let payout = balance::split(&mut sale.inventory, allocation);
+    let payout = sale.inventory.split(allocation);
     let coin = coin::from_balance(payout, ctx);
 
-    let schedule = *option::borrow(&sale.vesting_schedule_params);
+    let schedule = *sale.vesting_schedule_params.borrow();
     let sale_id = object::id(sale);
 
     event::emit(Claimed<SaleCoin, PaymentCoin> {
@@ -949,9 +951,9 @@ public fun withdraw_proceeds<SaleCoin, PaymentCoin, ScheduleParams: copy + drop 
     ctx: &mut TxContext,
 ): Coin<PaymentCoin> {
     assert_admin(sale, cap);
-    assert!(sale::is_finalized(&sale.phase), ENotFinalized);
-    let amount = balance::value(&sale.proceeds);
-    let part = balance::split(&mut sale.proceeds, amount);
+    assert!(sale.phase.is_finalized(), ENotFinalized);
+    let amount = sale.proceeds.value();
+    let part = sale.proceeds.split(amount);
     event::emit(ProceedsWithdrawn<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount,
@@ -969,9 +971,9 @@ public fun withdraw_unsold_inventory<SaleCoin, PaymentCoin, ScheduleParams: copy
     ctx: &mut TxContext,
 ): Coin<SaleCoin> {
     assert_admin(sale, cap);
-    assert!(sale::is_finalized(&sale.phase) || sale::is_cancelled(&sale.phase), ENotTerminal);
-    let unallocated = balance::value(&sale.inventory) - sale.total_allocated;
-    let part = balance::split(&mut sale.inventory, unallocated);
+    assert!(sale.phase.is_finalized() || sale.phase.is_cancelled(), ENotTerminal);
+    let unallocated = sale.inventory.value() - sale.total_allocated;
+    let part = sale.inventory.split(unallocated);
     event::emit(InventoryWithdrawn<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount: unallocated,
@@ -990,20 +992,20 @@ public fun refund<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): Coin<PaymentCoin> {
-    assert!(sale::is_cancelled(&sale.phase), ENotCancelled);
-    assert!(sale::receipt_sale_id(&receipt) == object::id(sale), EReceiptSaleMismatch);
+    assert!(sale.phase.is_cancelled(), ENotCancelled);
+    assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
     assert_sender_is_buyer(&receipt, ctx);
-    let paired_vault_id = *option::borrow(&sale.refund_vault_id);
+    let paired_vault_id = *sale.refund_vault_id.borrow();
     assert!(object::id(vault) == paired_vault_id, EWrongVault);
 
     let receipt_id = object::id(&receipt);
-    let (_sale_id, buyer, paid, allocation, _ts) = sale::consume_receipt(receipt);
+    let (_sale_id, buyer, paid, allocation, _ts) = receipt.consume();
 
     sale.total_allocated = sale.total_allocated - allocation;
 
     let payment = {
-        let cap_ref = option::borrow(&sale.refund_vault_cap);
-        refund_vault::release_balance(vault, cap_ref, paid)
+        let cap_ref = sale.refund_vault_cap.borrow();
+        vault.release_balance(cap_ref, paid)
     };
 
     event::emit(Refunded<SaleCoin, PaymentCoin> {
@@ -1074,7 +1076,7 @@ public fun vesting_schedule_params<SaleCoin, PaymentCoin, ScheduleParams: copy +
 public fun inventory_total<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
-    balance::value(&sale.inventory)
+    sale.inventory.value()
 }
 
 public fun total_allocated<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
@@ -1086,20 +1088,20 @@ public fun total_allocated<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + 
 public fun inventory_remaining<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
-    balance::value(&sale.inventory) - sale.total_allocated
+    sale.inventory.value() - sale.total_allocated
 }
 
 public fun proceeds_amount<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
-    balance::value(&sale.proceeds)
+    sale.proceeds.value()
 }
 
 public fun is_open<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     clock: &Clock,
 ): bool {
-    if (!sale::is_active(&sale.phase)) { return false };
+    if (!sale.phase.is_active()) { return false };
     let now = clock::timestamp_ms(clock);
     now >= sale.opens_at_ms && now <= sale.closes_at_ms
 }

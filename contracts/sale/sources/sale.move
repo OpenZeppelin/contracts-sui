@@ -98,15 +98,15 @@ public struct Receipt<phantom S> has key {
 
 // === Receipt views ===
 
-public fun receipt_sale_id<S>(r: &Receipt<S>): ID { r.sale_id }
+public fun sale_id<S>(r: &Receipt<S>): ID { r.sale_id }
 
-public fun receipt_buyer<S>(r: &Receipt<S>): address { r.buyer }
+public fun buyer<S>(r: &Receipt<S>): address { r.buyer }
 
-public fun receipt_paid<S>(r: &Receipt<S>): u64 { r.paid }
+public fun paid<S>(r: &Receipt<S>): u64 { r.paid }
 
-public fun receipt_allocation<S>(r: &Receipt<S>): u64 { r.allocation }
+public fun allocation<S>(r: &Receipt<S>): u64 { r.allocation }
 
-public fun receipt_purchased_at_ms<S>(r: &Receipt<S>): u64 { r.purchased_at_ms }
+public fun purchased_at_ms<S>(r: &Receipt<S>): u64 { r.purchased_at_ms }
 
 // === Phase predicates ===
 
