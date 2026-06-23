@@ -80,7 +80,7 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 ///
 /// Accessors return the underlying `vector<u128>` / `vector<bool>` constants so
 /// callers can bind them to a local once per CDF evaluation and index locally
-/// inside the Horner loop — avoiding a fresh constant load on every iteration.
+/// inside the Horner loop - avoiding a fresh constant load on every iteration.
 ///
 /// See `cdf` for the consumer API. This module is regenerated from the AAA fit
 /// in `scripts/gaussian_codegen/cdf/`; do not hand-edit.

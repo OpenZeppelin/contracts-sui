@@ -46,7 +46,7 @@ def auto_generated_banner(source: str) -> str:
     function of its inputs, so regenerating an unchanged fit is a no-op and the
     `--check` drift guard can compare committed output byte-for-byte."""
     return (
-        f"// AUTO-GENERATED — do not hand-edit.\n"
+        f"// AUTO-GENERATED - do not hand-edit.\n"
         f"// Source: {source}\n"
     )
 

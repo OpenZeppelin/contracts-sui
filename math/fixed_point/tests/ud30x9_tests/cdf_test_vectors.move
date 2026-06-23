@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not hand-edit.
+// AUTO-GENERATED - do not hand-edit.
 // Source: scripts/gaussian_codegen/cdf/emit_test_vectors.py (oracle: mpmath ncdf at 100 dps)
 
 /// Deterministic test vectors for `ud30x9_base::cdf`. Each row asserts the
