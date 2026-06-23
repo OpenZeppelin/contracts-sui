@@ -1,0 +1,6 @@
+[package]
+name = "openzeppelin_allowance"
+edition = "2024"
+
+[addresses]
+openzeppelin_allowance = "0x0"
