@@ -10,9 +10,9 @@
 ///   systems, avoiding binary fixed-point surprises.
 /// - Fits efficiently in `u128`, keeping storage and arithmetic lightweight
 ///   compared to `u256`-based decimal types.
-/// - Useful wherever signed fixed-point arithmetic is needed for things like balance adjustments,
-///   deltas, or calculations involving both increases and decreases. Allows precise tracking of
-///   values that might dip below zero, unlike unsigned types.
+/// - Represents values that can dip below zero - balance deltas, signed
+///   adjustments, and any arithmetic mixing increases and decreases that the
+///   unsigned types cannot express.
 module openzeppelin_fp_math::sd29x9;
 
 use openzeppelin_fp_math::common;
