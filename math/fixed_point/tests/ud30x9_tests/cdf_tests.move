@@ -128,7 +128,7 @@ fun cdf_is_deterministic() {
 fun matches_sd29x9_cdf_on_positives() {
     // Verifies that `UD30x9::cdf(z)` and `SD29x9::cdf(z.into_SD29x9())` produce
     // the same raw probability for every positive `z`. Both paths route through
-    // the same `cdf::cdf_nonneg_raw` helper — this test asserts the type
+    // the same `cdf::cdf_nonneg_raw` helper - this test asserts the type
     // wrappers agree bit-for-bit.
     let probes: vector<u128> = vector[
         0,

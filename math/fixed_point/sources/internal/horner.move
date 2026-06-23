@@ -92,7 +92,7 @@ public(package) fun add(a: SignedScaled256, b: SignedScaled256): SignedScaled256
 /// Add a `(u128 magnitude, bool sign)` coefficient to `acc`, promoting the
 /// coefficient to `u256` and folding the cast + sign-magnitude add into a
 /// single step. Equivalent to `add(acc, from_coeff(mag, neg))`
-/// but avoids materializing the intermediate `SignedScaled256` — used on the
+/// but avoids materializing the intermediate `SignedScaled256` - used on the
 /// `horner_eval!` hot inner loop.
 public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): SignedScaled256 {
     let m = mag as u256;

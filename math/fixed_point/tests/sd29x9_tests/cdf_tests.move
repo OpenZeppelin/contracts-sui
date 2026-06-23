@@ -175,7 +175,7 @@ fun monotonic_on_grid() {
 #[test]
 fun symmetry_on_well_known_points() {
     // Probes span the zero special case, the rational central domain, and the
-    // saturated region — the reflection identity must hold on every branch.
+    // saturated region - the reflection identity must hold on every branch.
     let probes: vector<u128> = vector[
         0,
         100_000_000,

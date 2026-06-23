@@ -38,7 +38,7 @@ const ONE_RAW: u128 = 1_000_000_000;
 
 // === Accessors ===
 
-/// `Φ(0)` at the raw scale — the lower bound of `cdf_nonneg_raw`'s return
+/// `Φ(0)` at the raw scale - the lower bound of `cdf_nonneg_raw`'s return
 /// range. Exposed so callers can check the `phi ≥ 0.5` contract against the
 /// same constant the evaluator uses.
 public(package) fun half_raw(): u128 { HALF_RAW }
@@ -95,7 +95,7 @@ fun eval_rational(
 
     // Final ratio: N(z) / D(z) at WAD, cast to UD30x9 (10^9) with a single
     // nearest-rounding step. The result is bounded by ~10^29 on the central
-    // domain — well under u256 capacity, so `destroy_some` cannot abort.
+    // domain - well under u256 capacity, so `destroy_some` cannot abort.
     let phi_raw_u256 = u256::mul_div(
         horner::mag(&n),
         common::scale_u256!(),
@@ -109,8 +109,8 @@ fun eval_rational(
 }
 
 /// Test-only window onto `eval_rational` so the `EInternalNumNegative` /
-/// `EInternalDenNonPositive` integrity asserts — unreachable through the public
-/// API with the committed coefficients — can be driven with crafted tables.
+/// `EInternalDenNonPositive` integrity asserts - unreachable through the public
+/// API with the committed coefficients - can be driven with crafted tables.
 #[test_only]
 public(package) fun eval_rational_for_test(
     z_raw: u128,

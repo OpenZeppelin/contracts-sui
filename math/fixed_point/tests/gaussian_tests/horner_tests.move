@@ -98,7 +98,7 @@ fun add_opposite_signs_a_smaller() {
     // (3, -) + (5, +) = (2, +)
     let r = add(signed(3, true), pos(5));
     assert_eq!(r, pos(2));
-    // Mirror combo: (3, +) + (5, -) = (2, -) — result must take b's actual sign.
+    // Mirror combo: (3, +) + (5, -) = (2, -) - result must take b's actual sign.
     assert_eq!(add(pos(3), signed(5, true)), signed(2, true));
 }
 
@@ -107,7 +107,7 @@ fun add_opposite_signs_a_larger() {
     // (5, -) + (3, +) = (2, -)
     let r = add(signed(5, true), pos(3));
     assert_eq!(r, signed(2, true));
-    // Mirror combo: (5, +) + (3, -) = (2, +) — result must keep a's actual sign.
+    // Mirror combo: (5, +) + (3, -) = (2, +) - result must keep a's actual sign.
     assert_eq!(add(pos(5), signed(3, true)), pos(2));
 }
 
@@ -242,7 +242,7 @@ fun horner_eval_linear_negative_result() {
 
 #[test]
 fun horner_eval_constant_polynomial() {
-    // p(x) = 5, single coefficient — value is 5 regardless of x.
+    // p(x) = 5, single coefficient - value is 5 regardless of x.
     let mags = vector[5 * WAD];
     let negs = vector[false];
     let z = pos(TWO_WAD); // arbitrary z
