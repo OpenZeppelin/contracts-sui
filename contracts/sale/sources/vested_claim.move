@@ -42,16 +42,17 @@ use openzeppelin_sale::sale::{Self, VestedAllocation};
 /// `VestingWallet<S>` matching the sale's schedule. Anyone can call
 /// `release` on the resulting wallet; payouts always flow to the
 /// recorded beneficiary.
-public fun into_shared_wallet<S>(allocation: VestedAllocation<S>, ctx: &mut TxContext) {
-    let (coin, schedule, beneficiary, _sale_id) = sale::unpack_vested_allocation(allocation);
-    let mut wallet = vesting_wallet::new<S>(
+public fun into_shared_wallet<SW: drop, VSP: copy + drop + store, C>(
+    allocation: VestedAllocation<C, VSP>,
+    ctx: &mut TxContext,
+) {
+    let (coin, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
+    let mut wallet = vesting_wallet::new<SW, VSP, C>(
+        schedule_params,
         beneficiary,
-        sale::vesting_start_ms(&schedule),
-        sale::vesting_cliff_duration_ms(&schedule),
-        sale::vesting_duration_ms(&schedule),
         ctx,
     );
-    vesting_wallet::deposit(&mut wallet, coin);
+    wallet.deposit(coin);
     transfer::public_share_object(wallet);
 }
 
@@ -60,13 +61,14 @@ public fun into_shared_wallet<S>(allocation: VestedAllocation<S>, ctx: &mut TxCo
 /// wallet by `&mut`, so only the buyer's transactions can call
 /// `release`. Payouts still flow to the recorded beneficiary (the
 /// same address) and the beneficiary is fixed for the wallet's life.
-public fun into_owned_wallet<S>(allocation: VestedAllocation<S>, ctx: &mut TxContext) {
-    let (coin, schedule, beneficiary, _sale_id) = sale::unpack_vested_allocation(allocation);
-    let mut wallet = vesting_wallet::new<S>(
+public fun into_owned_wallet<SW: drop, VSP: copy + drop + store, C>(
+    allocation: VestedAllocation<C, VSP>,
+    ctx: &mut TxContext,
+) {
+    let (coin, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
+    let mut wallet = vesting_wallet::new<SW, VSP, C>(
+        schedule_params,
         beneficiary,
-        sale::vesting_start_ms(&schedule),
-        sale::vesting_cliff_duration_ms(&schedule),
-        sale::vesting_duration_ms(&schedule),
         ctx,
     );
     wallet.deposit(coin);

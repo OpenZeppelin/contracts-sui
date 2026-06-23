@@ -182,55 +182,6 @@ public(package) fun consume_receipt<S>(r: Receipt<S>): (ID, address, u64, u64, u
     (sale_id, buyer, paid, allocation, purchased_at_ms)
 }
 
-// === VestingSchedule ===
-//
-// Issuer-defined vesting policy. Constructed during sale Init via the
-// flavor's setter (e.g. `prefunded_sale::set_vesting_schedule`) and
-// read by adapters at claim time. Buyers cannot influence these
-// values; the schedule travels with the sale, not the receipt.
-
-/// All times in milliseconds. The schedule is interpreted exactly the
-/// way the vesting wallet interprets it: linear from `start_ms` to
-/// `start_ms + duration_ms`, with a cliff gate (not curve shift) at
-/// `start_ms + cliff_duration_ms`.
-public struct VestingSchedule has copy, drop, store {
-    start_ms: u64,
-    cliff_duration_ms: u64,
-    duration_ms: u64,
-}
-
-#[error(code = 100)]
-const EVestingDurationZero: vector<u8> = "Vesting duration_ms must be greater than zero";
-#[error(code = 101)]
-const EVestingInvalidCliff: vector<u8> = "Vesting cliff_duration_ms must be <= duration_ms";
-#[error(code = 102)]
-const EVestingScheduleOverflow: vector<u8> = "start_ms + duration_ms overflows u64";
-
-const U64_MAX: u128 = 18446744073709551615;
-
-/// Construct a vesting schedule. Asserts:
-/// - `duration_ms > 0`,
-/// - `cliff_duration_ms <= duration_ms`,
-/// - `start_ms + duration_ms` fits in `u64` (so downstream addition
-///   arithmetic in vesting wallets cannot overflow).
-public fun new_vesting_schedule(
-    start_ms: u64,
-    cliff_duration_ms: u64,
-    duration_ms: u64,
-): VestingSchedule {
-    assert!(duration_ms > 0, EVestingDurationZero);
-    assert!(cliff_duration_ms <= duration_ms, EVestingInvalidCliff);
-    let end_u128 = (start_ms as u128) + (duration_ms as u128);
-    assert!(end_u128 <= U64_MAX, EVestingScheduleOverflow);
-    VestingSchedule { start_ms, cliff_duration_ms, duration_ms }
-}
-
-public fun vesting_start_ms(s: &VestingSchedule): u64 { s.start_ms }
-
-public fun vesting_cliff_duration_ms(s: &VestingSchedule): u64 { s.cliff_duration_ms }
-
-public fun vesting_duration_ms(s: &VestingSchedule): u64 { s.duration_ms }
-
 // === VestedAllocation ===
 //
 // Hot-potato that wraps a single buyer's claim on a vesting-attached
@@ -258,34 +209,34 @@ public fun vesting_duration_ms(s: &VestingSchedule): u64 { s.duration_ms }
 /// a `Coin<S>` — keeping the carrier shape aligned avoids a needless
 /// `Balance ↔ Coin` round-trip in the same transaction.
 #[allow(lint(coin_field))]
-public struct VestedAllocation<phantom S> {
-    coin: Coin<S>,
-    schedule: VestingSchedule,
+public struct VestedAllocation<phantom C, P> {
+    coin: Coin<C>,
+    schedule_params: P,
     beneficiary: address,
     sale_id: ID,
 }
 
 /// Build a `VestedAllocation`. Library-internal: only sibling library
 /// modules (e.g. `prefunded_sale::claim_into_vesting`) construct these.
-public(package) fun new_vested_allocation<S>(
-    coin: Coin<S>,
-    schedule: VestingSchedule,
+public(package) fun new_vested_allocation<C, P>(
+    coin: Coin<C>,
+    schedule_params: P,
     beneficiary: address,
     sale_id: ID,
-): VestedAllocation<S> {
-    VestedAllocation<S> { coin, schedule, beneficiary, sale_id }
+): VestedAllocation<C, P> {
+    VestedAllocation<C, P> { coin, schedule_params, beneficiary, sale_id }
 }
 
 /// Destructure a `VestedAllocation`. Library-internal: only sibling
 /// library modules (e.g. `vested_claim`) unpack these into the
 /// downstream wallet shape.
 ///
-/// Returns `(coin, schedule, beneficiary, sale_id)`.
-public(package) fun unpack_vested_allocation<S>(
-    allocation: VestedAllocation<S>,
-): (Coin<S>, VestingSchedule, address, ID) {
-    let VestedAllocation { coin, schedule, beneficiary, sale_id } = allocation;
-    (coin, schedule, beneficiary, sale_id)
+/// Returns `(coin, schedule_params, beneficiary, sale_id)`.
+public(package) fun unpack_vested_allocation<C, P>(
+    allocation: VestedAllocation<C, P>,
+): (Coin<C>, P, address, ID) {
+    let VestedAllocation { coin, schedule_params, beneficiary, sale_id } = allocation;
+    (coin, schedule_params, beneficiary, sale_id)
 }
 
 // === Phase factories ===
