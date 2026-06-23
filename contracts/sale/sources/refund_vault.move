@@ -107,13 +107,13 @@ public struct VaultRelease<phantom P> has copy, drop {
 /// in that order, so the sale can take the vault by reference before
 /// the vault becomes shared.
 public fun new<P>(ctx: &mut TxContext): (RefundVault<P>, RefundVaultCap<P>) {
-    let vault = RefundVault<P> {
+    let vault = RefundVault {
         id: object::new(ctx),
         locked: balance::zero<P>(),
         state: VaultState::Active,
     };
     let vault_id = object::id(&vault);
-    let cap = RefundVaultCap<P> { id: object::new(ctx), vault_id };
+    let cap = RefundVaultCap { id: object::new(ctx), vault_id };
     event::emit(RefundVaultCreated<P> { vault_id });
     (vault, cap)
 }
@@ -130,20 +130,20 @@ public fun share<P>(vault: RefundVault<P>) {
 /// Deposit funds. Vault must be in `Active` state.
 public fun deposit<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>, funds: Balance<P>) {
     assert_cap(vault, cap);
-    assert!(is_active_state(&vault.state), ENotActiveState);
-    let amount = balance::value(&funds);
-    balance::join(&mut vault.locked, funds);
+    assert!(vault.state.is_active_state(), ENotActiveState);
+    let amount = funds.value();
+    vault.locked.join(funds);
     event::emit(VaultDeposit<P> {
         vault_id: object::id(vault),
         amount,
-        locked_after: balance::value(&vault.locked),
+        locked_after: vault.locked.value(),
     });
 }
 
 /// Transition `Active → Refunding`. Enables per-amount releases.
 public fun flip_to_refunding<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>) {
     assert_cap(vault, cap);
-    assert!(is_active_state(&vault.state), ENotActiveState);
+    assert!(vault.state.is_active_state(), ENotActiveState);
     let old = vault.state;
     vault.state = VaultState::Refunding;
     event::emit(VaultStateChanged<P> {
@@ -156,7 +156,7 @@ public fun flip_to_refunding<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap
 /// Transition `Active → Closed`. Enables `withdraw_all`.
 public fun flip_to_closed<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>) {
     assert_cap(vault, cap);
-    assert!(is_active_state(&vault.state), ENotActiveState);
+    assert!(vault.state.is_active_state(), ENotActiveState);
     let old = vault.state;
     vault.state = VaultState::Closed;
     event::emit(VaultStateChanged<P> {
@@ -174,13 +174,13 @@ public fun release_balance<P>(
     amount: u64,
 ): Balance<P> {
     assert_cap(vault, cap);
-    assert!(is_refunding_state(&vault.state), ENotRefundingState);
-    assert!(balance::value(&vault.locked) >= amount, EInsufficientLocked);
-    let part = balance::split(&mut vault.locked, amount);
+    assert!(vault.state.is_refunding_state(), ENotRefundingState);
+    assert!(vault.locked.value() >= amount, EInsufficientLocked);
+    let part = vault.locked.split(amount);
     event::emit(VaultRelease<P> {
         vault_id: object::id(vault),
         amount,
-        locked_after: balance::value(&vault.locked),
+        locked_after: vault.locked.value(),
     });
     part
 }
@@ -192,9 +192,9 @@ public fun withdraw_all<P>(
     ctx: &mut TxContext,
 ): Coin<P> {
     assert_cap(vault, cap);
-    assert!(is_closed_state(&vault.state), ENotClosedState);
-    let amount = balance::value(&vault.locked);
-    let part = balance::split(&mut vault.locked, amount);
+    assert!(vault.state.is_closed_state(), ENotClosedState);
+    let amount = vault.locked.value();
+    let part = vault.locked.split(amount);
     event::emit(VaultRelease<P> {
         vault_id: object::id(vault),
         amount,
@@ -208,15 +208,15 @@ public fun withdraw_all<P>(
 public fun state<P>(vault: &RefundVault<P>): VaultState { vault.state }
 
 /// Locked balance amount in `P`'s smallest units.
-public fun value<P>(vault: &RefundVault<P>): u64 { balance::value(&vault.locked) }
+public fun value<P>(vault: &RefundVault<P>): u64 { vault.locked.value() }
 
 public fun cap_vault_id<P>(cap: &RefundVaultCap<P>): ID { cap.vault_id }
 
-public fun is_active<P>(vault: &RefundVault<P>): bool { is_active_state(&vault.state) }
+public fun is_active<P>(vault: &RefundVault<P>): bool { vault.state.is_active_state() }
 
-public fun is_refunding<P>(vault: &RefundVault<P>): bool { is_refunding_state(&vault.state) }
+public fun is_refunding<P>(vault: &RefundVault<P>): bool { vault.state.is_refunding_state() }
 
-public fun is_closed<P>(vault: &RefundVault<P>): bool { is_closed_state(&vault.state) }
+public fun is_closed<P>(vault: &RefundVault<P>): bool { vault.state.is_closed_state() }
 
 // === Internal helpers ===
 
