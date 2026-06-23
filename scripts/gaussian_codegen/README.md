@@ -138,17 +138,18 @@ python -m gaussian_codegen.cdf.validate          # re-checks the committed coeff
 ```
 
 Or via the Makefile (`make -C scripts/gaussian_codegen <target>`): `regen` (the first
-three, then formats — see below), `validate`, `check` (drift guard), `test` (pytest),
-`ci` (what CI runs).
+three; the emitters format their own output), `validate`, `check` (drift guard),
+`test` (pytest), `ci` (what CI runs).
 
-`emit_coefficients` writes one vector element per line, but the committed
-`cdf_coefficients.move` is repacked by the repo's Move formatter
-(`@mysten/prettier-plugin-move`). After a manual `emit_coefficients`, run
-`prettier --write` on it; or just use `make regen`, which formats the generated
-files for you. (`emit_test_vectors` output is already formatter-compliant.)
+Both emitters format their output with the repo's Move formatter
+(`@mysten/prettier-plugin-move`) as their final step, so what they write is
+exactly what lands in the committed files - no separate `prettier --write` pass
+is needed. This requires `npm ci` at the repo root (for the prettier plugin);
+the emitters abort with a clear message if prettier is missing.
 
-`derive.py` writes a JSON intermediate (`scripts/gaussian_codegen/cdf/.derive_output.json`,
-gitignored) that the `emit_*.py` scripts consume.
+`derive.py` writes a JSON intermediate (`scripts/gaussian_codegen/cdf/.derive_output.json`)
+that the `emit_*.py` scripts consume. It is committed, so the coefficient drift
+guard can run in CI without re-deriving (see below).
 
 ### Drift guard
 
@@ -156,19 +157,20 @@ Both emitters accept `--check`: they render to memory and compare against the
 committed Move file byte-for-byte, exiting non-zero on any difference (without
 writing). The banner carries no timestamp, so the output is deterministic.
 
-`emit_test_vectors --check` is exact — its output is already formatter-compliant,
-which is why it is the drift guard CI runs. `emit_coefficients --check`, by
-contrast, compares its one-per-line output against the formatter-packed committed
-file, so it reports a *formatting-only* difference even when the numbers are
-correct; the committed coefficient **values** are guarded by `validate.py`, not
-by this check. It also needs a prior `derive` run for the JSON input.
+Both checks are exact: each emitter formats its output (via the prettier plugin)
+before the byte-comparison, so `--check` matches the committed, formatter-clean
+file with no spurious formatting drift. `emit_coefficients --check` reads the
+committed `.derive_output.json`; `emit_test_vectors --check` needs no JSON (it
+recomputes expected values from the mpmath oracle).
 
 ### What CI runs
 
-CI runs `validate.py`, `emit_test_vectors --check` (the test-vector drift
-guard), and the Python unit tests (`pytest`). Coefficient re-derivation stays
-local-only: it depends on the gitignored `.derive_output.json`, and the
-committed coefficients are instead guarded semantically by `validate.py`.
+CI runs `validate.py`, both `--check` drift guards (`emit_coefficients` and
+`emit_test_vectors`), and the Python unit tests (`pytest`); it runs `npm ci` so
+the emitters can format. Re-deriving the fit (`derive.py`) stays local-only: CI
+checks the committed coefficients against the committed `.derive_output.json`
+rather than re-running the AAA fit, whose result is sensitive to solver and
+library versions.
 
 ## `.derive_output.json` schema
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import difflib
+import subprocess
 import sys
 from pathlib import Path
 
@@ -59,6 +60,39 @@ def rel_or_abs(path: Path, root: Path) -> Path:
         return path.relative_to(root)
     except ValueError:
         return path
+
+
+def format_move(text: str, path: Path, repo_root: Path) -> str:
+    """Format Move source `text` with the repo's prettier + Move plugin, keyed
+    by `path`'s `.move` extension.
+
+    The emitters call this so their output is *already* formatter-compliant.
+    The committed generated files are checked against the repo-wide Move
+    formatter in CI, and formatting here makes the `--check` drift guard exact:
+    it compares formatted output against the committed file, instead of raw
+    output that a separate `prettier` pass would later reflow (the historical
+    source of the coefficients-file drift).
+
+    Raises if prettier is unavailable, so generation fails loudly rather than
+    emitting unformatted output that would later trip the formatter gate."""
+    prettier = repo_root / "node_modules" / ".bin" / "prettier"
+    if not prettier.exists():
+        raise RuntimeError(
+            f"prettier not found at {prettier}; run `npm ci` at the repo root "
+            "(installs @mysten/prettier-plugin-move, the Move formatter)"
+        )
+    result = subprocess.run(
+        [str(prettier), "--stdin-filepath", str(path)],
+        input=text,
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"prettier failed to format {path} (exit {result.returncode}):\n{result.stderr}"
+        )
+    return result.stdout
 
 
 def write_move(path: Path, content: str) -> None:

@@ -26,6 +26,7 @@ from gaussian_codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
+    format_move,
     rel_or_abs,
     write_move,
 )
@@ -142,6 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     num = [quantize(s) for s in raw["num_coeffs_str"]]
     den = [quantize(s) for s in raw["den_coeffs_str"]]
     text = emit_module(num, den)
+    text = format_move(text, args.output, REPO_ROOT)
 
     if args.check:
         if check_move(args.output, text):

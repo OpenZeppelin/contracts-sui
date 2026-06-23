@@ -33,6 +33,7 @@ from gaussian_codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
+    format_move,
     rel_or_abs,
     write_move,
 )
@@ -237,6 +238,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     sd_text = emit_sd29x9_module(cases)
     ud_text = emit_ud30x9_module(cases)
+    sd_text = format_move(sd_text, args.sd29x9_output, REPO_ROOT)
+    ud_text = format_move(ud_text, args.ud30x9_output, REPO_ROOT)
 
     if args.check:
         ok = check_move(args.sd29x9_output, sd_text)
