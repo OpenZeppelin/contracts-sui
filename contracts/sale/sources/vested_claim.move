@@ -32,7 +32,7 @@
 ///
 /// Different wallet shapes (milestone, hybrid, clawback-capable) would
 /// be siblings of this module — each one a library-side consumer with
-/// its own audit story. v1 ships the linear-with-cliff shape.
+/// its own audit story. v1 ships the vesting-schedule-agnostic shape.
 module openzeppelin_sale::vested_claim;
 
 use openzeppelin_finance::vesting_wallet;
