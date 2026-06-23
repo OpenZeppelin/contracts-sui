@@ -102,4 +102,5 @@ Complete integration examples live in [`examples/rate_limiter/`](examples/rate_l
 
 - [Utils package overview](https://docs.openzeppelin.com/contracts-sui/1.x/utils)
 - [Utils API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/utils)
+- [`llms.txt`](../../llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)
