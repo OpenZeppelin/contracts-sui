@@ -5,7 +5,7 @@
 // and the absent-vs-suspended disambiguation.
 //
 // NOTE: balance_value<T> and spendable_now<T> take &AccumulatorRoot, which the
-// unit-test VM cannot construct; those reads are not exercised by this package's tests (they require a live network).
+// unit-test VM cannot construct; those reads are not exercised by this package's tests.
 module openzeppelin_allowance::spend_vault_reads_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, SpenderCap};

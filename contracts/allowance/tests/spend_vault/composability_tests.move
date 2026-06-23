@@ -3,7 +3,7 @@
 // deposit-then-spend, BudgetKey composite-key independence, and the two-caps-sum
 // footgun at the cap level.
 //
-// Pool-balance effects need a live AccumulatorRoot, which the unit-test VM cannot
+// Pool-balance effects need an AccumulatorRoot, which the unit-test VM cannot
 // construct; pool conservation and the same-PTB under-drain edge require a live
 // network and are not exercised by this package's tests.
 module openzeppelin_allowance::spend_vault_composability_tests;
@@ -123,7 +123,7 @@ fun spend_output_redeposited_same_vault() {
 #[test]
 fun withdraw_output_routed_into_second_vault() {
     // OUT of vault A (withdraw -> Balance<T>) and straight IN to vault B
-    // (deposit_balance), zero glue. Both ledger-side; pool conservation requires a live network and is not exercised here.
+    // (deposit_balance), zero glue. Both ledger-side; pool conservation is not exercised here.
     let mut s = ts::begin(OWNER);
     let _a = u::new_funded_vault<USDC>(&mut s, OWNER, 1_000);
     s.next_tx(OWNER);

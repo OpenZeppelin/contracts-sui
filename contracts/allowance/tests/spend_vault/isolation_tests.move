@@ -3,9 +3,9 @@
 // Covers vault/cap/coin-type isolation, per-(cap,coin) independence, multi-call
 // PTB batching of each verb, and the two sequential spend/revoke orderings.
 //
-// Pool-balance effects need a live AccumulatorRoot, which the unit-test VM cannot
+// Pool-balance effects need an AccumulatorRoot, which the unit-test VM cannot
 // construct; those (the native pool-short abort and every &AccumulatorRoot-taking
-// read) require a live network and are not exercised by this package's tests.
+// read) are not exercised by this package's tests.
 module openzeppelin_allowance::spend_vault_isolation_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, SpenderCap};

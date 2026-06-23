@@ -5,10 +5,10 @@
 // written; squash recovers a stray coin emitting one Squashed (distinct from
 // Deposited) and is funds-in-only; batched deposits in one tx each succeed.
 //
-// Pool-balance effects need a live accumulator pool, which the unit-test VM cannot
+// Pool-balance effects need the accumulator pool, which the unit-test VM cannot
 // construct (balance_value needs an &AccumulatorRoot that is unavailable here), so
 // these tests assert EVENTS and LEDGER non-effects (granted_coin_types stays empty,
-// contains<T> stays false), NOT pool balances; pool balances require a live network and are not exercised by this package's tests.
+// contains<T> stays false), NOT pool balances; pool balances are not exercised by this package's tests.
 module openzeppelin_allowance::spend_vault_fund_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, Vault};

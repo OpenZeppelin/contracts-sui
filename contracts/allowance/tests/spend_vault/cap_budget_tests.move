@@ -6,8 +6,8 @@
 // compare-and-set, suspension via amount 0, granted-coin-type tracking,
 // per-(cap, coin) independence, cap_id stability, and event emission.
 //
-// Pool-balance effects need a live AccumulatorRoot, which the unit-test VM
-// cannot construct; they are not exercised by this package's tests (they require a live network).
+// Pool-balance effects need an AccumulatorRoot, which the unit-test VM
+// cannot construct; they are not exercised by this package's tests.
 module openzeppelin_allowance::spend_vault_cap_budget_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, SpenderCap};

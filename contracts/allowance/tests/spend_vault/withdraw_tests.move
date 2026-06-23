@@ -9,9 +9,9 @@
 // spender state can block it), and a single Withdrawn event emitted post-draw.
 //
 // withdraw_all (full drain) and the native pool-short aborts are not covered
-// here: pool-balance effects need a live AccumulatorRoot, which the unit-test
+// here: pool-balance effects need an AccumulatorRoot, which the unit-test
 // VM cannot construct, so over-withdraw and withdraw-from-empty succeed; those
-// require a live network and are not exercised by this package's tests.
+// are not exercised by this package's tests.
 module openzeppelin_allowance::spend_vault_withdraw_tests;
 
 use openzeppelin_allowance::spend_vault::{Self, OwnerCap};

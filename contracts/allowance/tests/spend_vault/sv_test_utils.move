@@ -6,7 +6,7 @@
 //
 // Testability note: the funds-accumulator pool (object-owned address balances)
 // is NOT modeled by the unit-test VM (over-withdraw and withdraw-from-empty both
-// succeed, and `AccumulatorRoot` cannot be constructed), so these helpers cover
+// succeed, and `AccumulatorRoot` has no test-only constructor yet), so these helpers cover
 // the ledger / cap / event / exact-value-delivery surface. Because the unit VM
 // does not move accumulator funds and cannot construct an `AccumulatorRoot`, the
 // following behaviors are NOT exercised by the unit suite:
@@ -18,7 +18,7 @@
 // line-coverage tooling will mark the `spend` / `withdraw` fund-movement lines as
 // covered even though the pool-short and rollback behavior is NOT asserted by any
 // unit test. Those paths (the pool-short native abort, the rollback, and every
-// `&AccumulatorRoot`-taking read) can only be exercised on a live network, not
+// `&AccumulatorRoot`-taking read) cannot be exercised
 // in this unit suite.
 #[test_only]
 module openzeppelin_allowance::sv_test_utils;
