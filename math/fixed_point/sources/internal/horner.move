@@ -12,13 +12,16 @@ module openzeppelin_fp_math::horner;
 
 // === Errors ===
 
-/// Polynomial must have at least one coefficient
+/// Polynomial must have at least one coefficient.
 #[error(code = 0)]
 const EEmptyPolynomial: vector<u8> = "Polynomial must have at least one coefficient";
 
 // === Constants ===
 
-const WAD_U256: u256 = 1_000_000_000_000_000_000;
+/// WAD is the `10^18` fixed-point scale that all arithmetic in this module runs
+/// at. Running finer than the user-facing `10^9` scale keeps intermediate rounding
+/// well below the final result's precision.
+const WAD_U256: u256 = 1_000_000_000_000_000_000; // 10^18
 
 // === Structs ===
 

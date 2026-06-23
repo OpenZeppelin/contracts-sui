@@ -18,12 +18,12 @@ use openzeppelin_math::u256;
 
 // === Errors ===
 
-/// Numerator polynomial returned a negative value on the central domain
+/// Numerator polynomial returned a negative value on the central domain.
 #[error(code = 0)]
 const EInternalNumNegative: vector<u8> =
     "CDF numerator polynomial returned a negative value on the central domain";
 
-/// Denominator polynomial returned a non-positive value on the central domain
+/// Denominator polynomial returned a non-positive value on the central domain.
 #[error(code = 1)]
 const EInternalDenNonPositive: vector<u8> =
     "CDF denominator polynomial returned a non-positive value on the central domain";
