@@ -1,10 +1,10 @@
-/// `PrefundedSale<S, P>` — fixed-price token sale, v1 flavor.
+/// `PrefundedSale<SaleCoin, PaymentCoin>` — fixed-price token sale, v1 flavor.
 ///
 /// The issuer pre-mints (or pre-acquires) the sale tokens and deposits
-/// them as `Balance<S>` inventory before activation. The sale draws
+/// them as `Balance<SaleCoin>` inventory before activation. The sale draws
 /// from that fixed inventory at `claim` time and never holds a
-/// `TreasuryCap<S>`. v2's `MintingSale<S, P>` will be a sibling type
-/// that holds a `TreasuryCap<S>` instead — same `Receipt<S>`, same
+/// `TreasuryCap<SaleCoin>`. v2's `MintingSale<SaleCoin, PaymentCoin>` will be a sibling type
+/// that holds a `TreasuryCap<SaleCoin>` instead — same `Receipt<SaleCoin>`, same
 /// `Phase`, separate audit boundary.
 ///
 /// ### Lifecycle
@@ -46,9 +46,9 @@
 ///   visibility to the sale can drive these flows once their
 ///   conditions hold. **Buyer claims and refunds do not depend on
 ///   admin liveness.**
-/// - **Admin-only (via `SaleAdminCap<S, P>`):** `cancel_emergency`
+/// - **Admin-only (via `SaleAdminCap<SaleCoin, PaymentCoin>`):** `cancel_emergency`
 ///   (in-window), `withdraw_proceeds`, `withdraw_unsold_inventory`.
-/// - **None (type-level):** `Receipt<S>` cannot be transferred or
+/// - **None (type-level):** `Receipt<SaleCoin>` cannot be transferred or
 ///   wrapped; the sale module itself can never mint or destroy
 ///   receipts outside the `purchase`/`claim`/`refund` paths.
 ///
@@ -70,7 +70,7 @@
 ///   running `contributions[buyer]` total. Configure with
 ///   `set_per_buyer_cap`.
 /// - **Allowlist (optional).** Switches the sale into compliance-gated
-///   mode: every `purchase` must consume an `AllowEntry<S>` minted by
+///   mode: every `purchase` must consume an `AllowEntry<SaleCoin>` minted by
 ///   the consumer's compliance module. Configure with
 ///   `enable_allowlist`.
 ///
@@ -92,7 +92,7 @@
 /// 1. **All setup must happen before `share_and_activate`.** Setup
 ///    functions assert `phase == Init`; after activation they abort.
 ///
-/// 2. **`SaleAdminCap<S, P>` controls only the admin-only paths.**
+/// 2. **`SaleAdminCap<SaleCoin, PaymentCoin>` controls only the admin-only paths.**
 ///    Wrap it in an RBAC / multisig / governance object. Losing the
 ///    cap leaves the sale fully usable for buyers — they can still
 ///    `purchase`, `claim`, `refund`, and trigger `finalize` /
@@ -100,12 +100,12 @@
 ///    emergency-cancel power and the ability to withdraw proceeds
 ///    and unsold inventory.
 ///
-/// 3. **`AllowlistAdmin<S>` controls compliance.** Issued by
+/// 3. **`AllowlistAdmin<SaleCoin>` controls compliance.** Issued by
 ///    `enable_allowlist`. Loses-the-key implications: no entries can
 ///    be minted, every `purchase` aborts. Hold in a recoverable
 ///    container.
 ///
-/// 4. **Every sale requires a paired `RefundVault<P>`.** Even sales
+/// 4. **Every sale requires a paired `RefundVault<PaymentCoin>`.** Even sales
 ///    with `soft_cap == 0` need a vault — `cancel_emergency` always
 ///    has a refund destination. Pair the vault before activation.
 ///
@@ -254,11 +254,11 @@ const ENoVestingScheduleAttached: vector<u8> =
 
 // === Types ===
 
-public struct PrefundedSale<phantom S, phantom P, ScheduleParams: copy> has key {
+public struct PrefundedSale<phantom SaleCoin, phantom PaymentCoin, ScheduleParams: copy> has key {
     id: UID,
     // Inventory & accounting
     /// Pre-funded sale tokens. Deposited during Init, drawn down on claim.
-    inventory: Balance<S>,
+    inventory: Balance<SaleCoin>,
     /// Allocations promised to outstanding receipts.
     /// Invariant: `inventory.value() >= total_allocated`. The
     /// `inventory.value() - total_allocated` remainder is the
@@ -266,7 +266,7 @@ public struct PrefundedSale<phantom S, phantom P, ScheduleParams: copy> has key 
     total_allocated: u64,
     /// Accumulated payments. Drained to admin on `withdraw_proceeds`
     /// (Finalized) or to the vault on cancel (Cancelled).
-    proceeds: Balance<P>,
+    proceeds: Balance<PaymentCoin>,
     // Pricing
     /// Sale tokens (smallest units) per 1 payment-coin smallest unit.
     rate: u64,
@@ -285,7 +285,7 @@ public struct PrefundedSale<phantom S, phantom P, ScheduleParams: copy> has key 
     refund_vault_id: Option<ID>,
     /// Wrapped vault controller. Sale's lifecycle drives vault state;
     /// the cap never returns out of the sale.
-    refund_vault_cap: Option<RefundVaultCap<P>>,
+    refund_vault_cap: Option<RefundVaultCap<PaymentCoin>>,
     // Optional per-buyer cap (lazy table)
     per_buyer_cap: Option<u64>,
     contributions: Option<Table<address, u64>>,
@@ -297,14 +297,14 @@ public struct PrefundedSale<phantom S, phantom P, ScheduleParams: copy> has key 
     vesting_schedule_params: Option<ScheduleParams>,
 }
 
-public struct SaleAdminCap<phantom S, phantom P> has key, store {
+public struct SaleAdminCap<phantom SaleCoin, phantom PaymentCoin> has key, store {
     id: UID,
     sale_id: ID,
 }
 
 // === Events ===
 
-public struct SaleCreated<phantom S, phantom P> has copy, drop {
+public struct SaleCreated<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     rate: u64,
     hard_cap: u64,
@@ -313,38 +313,42 @@ public struct SaleCreated<phantom S, phantom P> has copy, drop {
     closes_at_ms: u64,
 }
 
-public struct InventoryDeposited<phantom S, phantom P> has copy, drop {
+public struct InventoryDeposited<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     amount: u64,
     inventory_after: u64,
 }
 
-public struct PerBuyerCapSet<phantom S, phantom P> has copy, drop {
+public struct PerBuyerCapSet<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     cap: u64,
 }
 
-public struct VestingScheduleParamsSet<phantom S, phantom P, ScheduleParams: copy> has copy, drop {
+public struct VestingScheduleParamsSet<
+    phantom SaleCoin,
+    phantom PaymentCoin,
+    ScheduleParams: copy + drop,
+> has copy, drop {
     sale_id: ID,
     params: ScheduleParams,
 }
 
-public struct RefundVaultPaired<phantom S, phantom P> has copy, drop {
+public struct RefundVaultPaired<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     vault_id: ID,
 }
 
-public struct AllowlistEnabled<phantom S, phantom P> has copy, drop {
+public struct AllowlistEnabled<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     allowlist_admin_id: ID,
 }
 
-public struct SaleActivated<phantom S, phantom P> has copy, drop {
+public struct SaleActivated<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     activated_at_ms: u64,
 }
 
-public struct Purchased<phantom S, phantom P> has copy, drop {
+public struct Purchased<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     buyer: address,
     receipt_id: ID,
@@ -354,7 +358,7 @@ public struct Purchased<phantom S, phantom P> has copy, drop {
     purchased_at_ms: u64,
 }
 
-public struct SaleFinalized<phantom S, phantom P> has copy, drop {
+public struct SaleFinalized<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     raised: u64,
     closed_at_ms: u64,
@@ -365,33 +369,33 @@ public enum CancelReason has copy, drop, store {
     AdminEmergency,
 }
 
-public struct SaleCancelled<phantom S, phantom P> has copy, drop {
+public struct SaleCancelled<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     raised: u64,
     reason: CancelReason,
     closed_at_ms: u64,
 }
 
-public struct Claimed<phantom S, phantom P> has copy, drop {
+public struct Claimed<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     buyer: address,
     receipt_id: ID,
     amount: u64,
 }
 
-public struct Refunded<phantom S, phantom P> has copy, drop {
+public struct Refunded<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     buyer: address,
     receipt_id: ID,
     amount: u64,
 }
 
-public struct ProceedsWithdrawn<phantom S, phantom P> has copy, drop {
+public struct ProceedsWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     amount: u64,
 }
 
-public struct InventoryWithdrawn<phantom S, phantom P> has copy, drop {
+public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     amount: u64,
 }
@@ -400,14 +404,14 @@ public struct InventoryWithdrawn<phantom S, phantom P> has copy, drop {
 
 const U64_MAX: u128 = 18446744073709551615;
 
-fun assert_admin<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
-    cap: &SaleAdminCap<S, P>,
+fun assert_admin<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
 ) {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
 }
 
-fun assert_sender_is_buyer<S>(receipt: &Receipt<S>, ctx: &TxContext) {
+fun assert_sender_is_buyer<SaleCoin>(receipt: &Receipt<SaleCoin>, ctx: &TxContext) {
     assert!(sale::receipt_buyer(receipt) == ctx.sender(), EBuyerOnly);
 }
 
@@ -423,14 +427,14 @@ fun assert_sender_is_buyer<S>(receipt: &Receipt<S>, ctx: &TxContext) {
 /// - `hard_cap > 0` (every sale must have a bounded raise)
 /// - `soft_cap <= hard_cap`
 /// - `opens_at_ms < closes_at_ms`
-public fun create_sale<S, P, ScheduleParams: copy + drop + store>(
+public fun create_sale<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     rate: u64,
     hard_cap: u64,
     soft_cap: u64,
     opens_at_ms: u64,
     closes_at_ms: u64,
     ctx: &mut TxContext,
-): (PrefundedSale<S, P, ScheduleParams>, SaleAdminCap<S, P>) {
+): (PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>, SaleAdminCap<SaleCoin, PaymentCoin>) {
     assert!(rate > 0, ERateZero);
     assert!(hard_cap > 0, EHardCapZero);
     assert!(soft_cap <= hard_cap, EInvalidCapsOrdering);
@@ -438,9 +442,9 @@ public fun create_sale<S, P, ScheduleParams: copy + drop + store>(
 
     let sale = PrefundedSale {
         id: object::new(ctx),
-        inventory: balance::zero<S>(),
+        inventory: balance::zero<SaleCoin>(),
         total_allocated: 0,
-        proceeds: balance::zero<P>(),
+        proceeds: balance::zero<PaymentCoin>(),
         rate,
         hard_cap,
         soft_cap,
@@ -456,9 +460,9 @@ public fun create_sale<S, P, ScheduleParams: copy + drop + store>(
         vesting_schedule_params: option::none(),
     };
     let sale_id = object::id(&sale);
-    let cap = SaleAdminCap<S, P> { id: object::new(ctx), sale_id };
+    let cap = SaleAdminCap<SaleCoin, PaymentCoin> { id: object::new(ctx), sale_id };
 
-    event::emit(SaleCreated<S, P> {
+    event::emit(SaleCreated<SaleCoin, PaymentCoin> {
         sale_id,
         rate,
         hard_cap,
@@ -473,14 +477,14 @@ public fun create_sale<S, P, ScheduleParams: copy + drop + store>(
 /// Deposit sale tokens into inventory. May be called multiple times
 /// during Init. Authority is implicit: the sale is owned, so only the
 /// caller that created it can pass it as `&mut`.
-public fun deposit_inventory<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    inventory: Coin<S>,
+public fun deposit_inventory<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    inventory: Coin<SaleCoin>,
 ) {
     assert!(sale::is_init(&sale.phase), ENotInit);
     let amount = coin::value(&inventory);
     balance::join(&mut sale.inventory, coin::into_balance(inventory));
-    event::emit(InventoryDeposited<S, P> {
+    event::emit(InventoryDeposited<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount,
         inventory_after: balance::value(&sale.inventory),
@@ -497,8 +501,8 @@ public fun deposit_inventory<S, P, ScheduleParams: copy + drop + store>(
 /// Asserts:
 /// - `per_buyer_cap > 0` (a zero cap would block every purchase).
 /// - Not already configured (`set_per_buyer_cap` is one-shot).
-public fun set_per_buyer_cap<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
+public fun set_per_buyer_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     per_buyer_cap: u64,
     ctx: &mut TxContext,
 ) {
@@ -507,7 +511,7 @@ public fun set_per_buyer_cap<S, P, ScheduleParams: copy + drop + store>(
     assert!(per_buyer_cap > 0, EPerBuyerCapZero);
     option::fill(&mut sale.per_buyer_cap, per_buyer_cap);
     option::fill(&mut sale.contributions, table::new<address, u64>(ctx));
-    event::emit(PerBuyerCapSet<S, P> {
+    event::emit(PerBuyerCapSet<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         cap: per_buyer_cap,
     });
@@ -524,14 +528,14 @@ public fun set_per_buyer_cap<S, P, ScheduleParams: copy + drop + store>(
 /// buyer cannot trivially bypass the schedule. The schedule is
 /// **issuer-defined**: the buyer is the caller of the redemption
 /// path and cannot supply or override these values.
-public fun set_vesting_schedule_params<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
+public fun set_vesting_schedule_params<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     params: ScheduleParams,
 ) {
     assert!(sale::is_init(&sale.phase), ENotInit);
     assert!(option::is_none(&sale.vesting_schedule_params), EVestingScheduleAlreadySet);
     option::fill(&mut sale.vesting_schedule_params, params);
-    event::emit(VestingScheduleParamsSet<S, P, ScheduleParams> {
+    event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, ScheduleParams> {
         sale_id: object::id(sale),
         params,
     });
@@ -551,10 +555,10 @@ public fun set_vesting_schedule_params<S, P, ScheduleParams: copy + drop + store
 ///   `withdraw_all` requires `Closed` (reachable only via the sale's
 ///   `finalize`, which does not return the cap).
 /// - No prior vault has been paired.
-public fun pair_refund_vault<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    vault: &RefundVault<P>,
-    vault_cap: RefundVaultCap<P>,
+public fun pair_refund_vault<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    vault: &RefundVault<PaymentCoin>,
+    vault_cap: RefundVaultCap<PaymentCoin>,
 ) {
     assert!(sale::is_init(&sale.phase), ENotInit);
     assert!(option::is_none(&sale.refund_vault_cap), EVaultAlreadyPaired);
@@ -565,29 +569,29 @@ public fun pair_refund_vault<S, P, ScheduleParams: copy + drop + store>(
     let vault_id = object::id(vault);
     option::fill(&mut sale.refund_vault_id, vault_id);
     option::fill(&mut sale.refund_vault_cap, vault_cap);
-    event::emit(RefundVaultPaired<S, P> {
+    event::emit(RefundVaultPaired<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         vault_id,
     });
 }
 
 /// Switch the sale into compliance-gated mode and issue the
-/// `AllowlistAdmin<S>`. The caller wraps the admin inside the
+/// `AllowlistAdmin<SaleCoin>`. The caller wraps the admin inside the
 /// compliance module of their choice.
 ///
 /// One-shot: aborts if called twice on the same sale. Duplicate
 /// admins would let two compliance modules mint entries
 /// independently for the same sale, defeating the gating.
-public fun enable_allowlist<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
+public fun enable_allowlist<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     ctx: &mut TxContext,
-): AllowlistAdmin<S> {
+): AllowlistAdmin<SaleCoin> {
     assert!(sale::is_init(&sale.phase), ENotInit);
     assert!(!sale.requires_allowlist, EAllowlistAlreadyEnabled);
     sale.requires_allowlist = true;
     let sale_id = object::id(sale);
-    let admin = allowlist::new_admin<S>(sale_id, ctx);
-    event::emit(AllowlistEnabled<S, P> {
+    let admin = allowlist::new_admin<SaleCoin>(sale_id, ctx);
+    event::emit(AllowlistEnabled<SaleCoin, PaymentCoin> {
         sale_id,
         allowlist_admin_id: object::id(&admin),
     });
@@ -605,8 +609,8 @@ public fun enable_allowlist<S, P, ScheduleParams: copy + drop + store>(
 ///   would share a stale sale that immediately becomes finalizable
 ///   or cancellable with no purchase opportunity. Activation before
 ///   `opens_at_ms` is allowed.
-public fun share_and_activate<S, P, ScheduleParams: copy + drop + store>(
-    mut sale: PrefundedSale<S, P, ScheduleParams>,
+public fun share_and_activate<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    mut sale: PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     clock: &Clock,
 ) {
     assert!(sale::is_init(&sale.phase), ENotInit);
@@ -623,12 +627,12 @@ public fun share_and_activate<S, P, ScheduleParams: copy + drop + store>(
     sale.phase = sale::phase_active();
     let sale_id = object::id(&sale);
     transfer::share_object(sale);
-    event::emit(SaleActivated<S, P> { sale_id, activated_at_ms });
+    event::emit(SaleActivated<SaleCoin, PaymentCoin> { sale_id, activated_at_ms });
 }
 
 // === Active phase ===
 
-/// Buy sale tokens. Delivers a fresh `Receipt<S>` to `ctx.sender()`
+/// Buy sale tokens. Delivers a fresh `Receipt<SaleCoin>` to `ctx.sender()`
 /// (the buyer). Payment is added to `sale.proceeds`.
 ///
 /// `allow` must be `Some` iff `requires_allowlist == true`. The
@@ -638,10 +642,10 @@ public fun share_and_activate<S, P, ScheduleParams: copy + drop + store>(
 /// `contribution + paid`, `paid * rate`) is widened to `u128` and
 /// bounds-checked before downcasting, so oversized payments abort
 /// with a typed error rather than the default arithmetic overflow.
-public fun purchase<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    payment: Coin<P>,
-    allow: Option<AllowEntry<S>>,
+public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    payment: Coin<PaymentCoin>,
+    allow: Option<AllowEntry<SaleCoin>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -655,7 +659,7 @@ public fun purchase<S, P, ScheduleParams: copy + drop + store>(
     let entry_max = if (sale.requires_allowlist) {
         assert!(option::is_some(&allow), EAllowlistRequired);
         let entry = option::destroy_some(allow);
-        allowlist::consume<S>(entry, object::id(sale), buyer)
+        allowlist::consume<SaleCoin>(entry, object::id(sale), buyer)
     } else {
         assert!(option::is_none(&allow), EAllowlistNotRequired);
         option::destroy_none(allow);
@@ -707,11 +711,11 @@ public fun purchase<S, P, ScheduleParams: copy + drop + store>(
 
     // Mint and deliver receipt
     let sale_id = object::id(sale);
-    let receipt = sale::new_receipt<S>(sale_id, buyer, paid, allocation, now, ctx);
+    let receipt = sale::new_receipt<SaleCoin>(sale_id, buyer, paid, allocation, now, ctx);
     let receipt_id = object::id(&receipt);
     sale::deliver_receipt(receipt, buyer);
 
-    event::emit(Purchased<S, P> {
+    event::emit(Purchased<SaleCoin, PaymentCoin> {
         sale_id,
         buyer,
         receipt_id,
@@ -730,9 +734,9 @@ public fun purchase<S, P, ScheduleParams: copy + drop + store>(
 /// Allowed when phase is `Active` and either:
 /// - `now > closes_at_ms` and `raised >= soft_cap`, or
 /// - `raised >= hard_cap` (sold-out — closes early).
-public fun finalize<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    vault: &mut RefundVault<P>,
+public fun finalize<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
     assert!(sale::is_active(&sale.phase), ENotActive);
@@ -752,7 +756,7 @@ public fun finalize<S, P, ScheduleParams: copy + drop + store>(
     };
 
     sale.phase = sale::phase_finalized();
-    event::emit(SaleFinalized<S, P> {
+    event::emit(SaleFinalized<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         raised: sale.raised,
         closed_at_ms: now,
@@ -765,9 +769,9 @@ public fun finalize<S, P, ScheduleParams: copy + drop + store>(
 /// `soft_cap > 0`, and `raised < soft_cap`. Drains `sale.proceeds`
 /// into the paired vault and flips vault to `Refunding`. Buyers then
 /// call `refund` individually.
-public fun cancel_after_close<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    vault: &mut RefundVault<P>,
+public fun cancel_after_close<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -795,10 +799,10 @@ public fun cancel_after_close<S, P, ScheduleParams: copy + drop + store>(
 ///
 /// Drains `sale.proceeds` into the vault and flips vault to
 /// `Refunding`.
-public fun cancel_emergency<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    cap: &SaleAdminCap<S, P>,
-    vault: &mut RefundVault<P>,
+public fun cancel_emergency<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
+    vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -814,9 +818,9 @@ public fun cancel_emergency<S, P, ScheduleParams: copy + drop + store>(
 }
 
 /// Shared body of `cancel_after_close` and `cancel_emergency`.
-fun do_cancel<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    vault: &mut RefundVault<P>,
+fun do_cancel<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    vault: &mut RefundVault<PaymentCoin>,
     reason: CancelReason,
     now: u64,
 ) {
@@ -833,7 +837,7 @@ fun do_cancel<S, P, ScheduleParams: copy + drop + store>(
 
     sale.phase = sale::phase_cancelled();
 
-    event::emit(SaleCancelled<S, P> {
+    event::emit(SaleCancelled<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         raised: sale.raised,
         reason,
@@ -843,7 +847,7 @@ fun do_cancel<S, P, ScheduleParams: copy + drop + store>(
 
 // === Success path (Finalized) ===
 
-/// Redeem a receipt for `Coin<S>`. Asserts
+/// Redeem a receipt for `Coin<SaleCoin>`. Asserts
 /// `ctx.sender() == receipt.buyer`. Destroys the receipt.
 ///
 /// Aborts with `EClaimRequiresVesting` if the sale has a vesting
@@ -851,11 +855,11 @@ fun do_cancel<S, P, ScheduleParams: copy + drop + store>(
 /// `claim_into_vesting`. This is the library's enforcement that the
 /// schedule cannot be bypassed by calling the immediate-distribution
 /// path.
-public fun claim<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    receipt: Receipt<S>,
+public fun claim<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): Coin<S> {
+): Coin<SaleCoin> {
     assert!(sale::is_finalized(&sale.phase), ENotFinalized);
     assert!(option::is_none(&sale.vesting_schedule_params), EClaimRequiresVesting);
     assert!(sale::receipt_sale_id(&receipt) == object::id(sale), EReceiptSaleMismatch);
@@ -867,7 +871,7 @@ public fun claim<S, P, ScheduleParams: copy + drop + store>(
     sale.total_allocated = sale.total_allocated - allocation;
     let payout = balance::split(&mut sale.inventory, allocation);
 
-    event::emit(Claimed<S, P> {
+    event::emit(Claimed<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         buyer,
         receipt_id,
@@ -881,12 +885,12 @@ public fun claim<S, P, ScheduleParams: copy + drop + store>(
 /// `ctx.sender() == receipt.buyer` on each. Aborts the whole call
 /// if any receipt is invalid. Inherits the no-vesting guard from
 /// `claim`.
-public fun claim_all<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    mut receipts: vector<Receipt<S>>,
+public fun claim_all<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    mut receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
-): Coin<S> {
-    let mut total = coin::zero<S>(ctx);
+): Coin<SaleCoin> {
+    let mut total = coin::zero<SaleCoin>(ctx);
     while (!vector::is_empty(&receipts)) {
         let r = vector::pop_back(&mut receipts);
         coin::join(&mut total, claim(sale, r, ctx));
@@ -895,24 +899,24 @@ public fun claim_all<S, P, ScheduleParams: copy + drop + store>(
     total
 }
 
-/// Redeem a receipt into a `VestedAllocation<S, ScheduleParams>` hot-potato. The only
+/// Redeem a receipt into a `VestedAllocation<SaleCoin, ScheduleParams>` hot-potato. The only
 /// redemption path for a vesting-attached sale; aborts with
 /// `ENoVestingScheduleAttached` if no schedule is set (use `claim`
 /// instead).
 ///
-/// The returned `VestedAllocation<S, ScheduleParams>` has no `drop`, `key`, or `store`
+/// The returned `VestedAllocation<SaleCoin, ScheduleParams>` has no `drop`, `key`, or `store`
 /// ability and its fields are private to `sale.move`, so the caller
-/// cannot stash it, discard it, or extract the raw `Coin<S>`. The
+/// cannot stash it, discard it, or extract the raw `Coin<SaleCoin>`. The
 /// only consumer paths live in `vested_claim`, which route the coin
-/// into a `VestingWallet<S>` matching the sale's schedule.
+/// into a `VestingWallet<SaleCoin>` matching the sale's schedule.
 ///
 /// Asserts `ctx.sender() == receipt.buyer` (same buyer-binding rule
 /// as `claim`). Destroys the receipt.
-public fun claim_into_vesting<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    receipt: Receipt<S>,
+public fun claim_into_vesting<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): VestedAllocation<S, ScheduleParams> {
+): VestedAllocation<SaleCoin, ScheduleParams> {
     assert!(sale::is_finalized(&sale.phase), ENotFinalized);
     assert!(option::is_some(&sale.vesting_schedule_params), ENoVestingScheduleAttached);
     assert!(sale::receipt_sale_id(&receipt) == object::id(sale), EReceiptSaleMismatch);
@@ -928,7 +932,7 @@ public fun claim_into_vesting<S, P, ScheduleParams: copy + drop + store>(
     let schedule = *option::borrow(&sale.vesting_schedule_params);
     let sale_id = object::id(sale);
 
-    event::emit(Claimed<S, P> {
+    event::emit(Claimed<SaleCoin, PaymentCoin> {
         sale_id,
         buyer,
         receipt_id,
@@ -939,16 +943,16 @@ public fun claim_into_vesting<S, P, ScheduleParams: copy + drop + store>(
 }
 
 /// Withdraw collected proceeds. Phase must be `Finalized`.
-public fun withdraw_proceeds<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    cap: &SaleAdminCap<S, P>,
+public fun withdraw_proceeds<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     ctx: &mut TxContext,
-): Coin<P> {
+): Coin<PaymentCoin> {
     assert_admin(sale, cap);
     assert!(sale::is_finalized(&sale.phase), ENotFinalized);
     let amount = balance::value(&sale.proceeds);
     let part = balance::split(&mut sale.proceeds, amount);
-    event::emit(ProceedsWithdrawn<S, P> {
+    event::emit(ProceedsWithdrawn<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount,
     });
@@ -959,16 +963,16 @@ public fun withdraw_proceeds<S, P, ScheduleParams: copy + drop + store>(
 /// `Cancelled`. Strictly the unreserved portion
 /// (`inventory - total_allocated`); outstanding receipts remain
 /// backed.
-public fun withdraw_unsold_inventory<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    cap: &SaleAdminCap<S, P>,
+public fun withdraw_unsold_inventory<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     ctx: &mut TxContext,
-): Coin<S> {
+): Coin<SaleCoin> {
     assert_admin(sale, cap);
     assert!(sale::is_finalized(&sale.phase) || sale::is_cancelled(&sale.phase), ENotTerminal);
     let unallocated = balance::value(&sale.inventory) - sale.total_allocated;
     let part = balance::split(&mut sale.inventory, unallocated);
-    event::emit(InventoryWithdrawn<S, P> {
+    event::emit(InventoryWithdrawn<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount: unallocated,
     });
@@ -979,13 +983,13 @@ public fun withdraw_unsold_inventory<S, P, ScheduleParams: copy + drop + store>(
 
 /// Refund a buyer's payment. Asserts
 /// `ctx.sender() == receipt.buyer`. Destroys the receipt and pays
-/// `receipt.paid` worth of `Coin<P>` out of the paired vault.
-public fun refund<S, P, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<S, P, ScheduleParams>,
-    vault: &mut RefundVault<P>,
-    receipt: Receipt<S>,
+/// `receipt.paid` worth of `Coin<PaymentCoin>` out of the paired vault.
+public fun refund<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+    vault: &mut RefundVault<PaymentCoin>,
+    receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): Coin<P> {
+): Coin<PaymentCoin> {
     assert!(sale::is_cancelled(&sale.phase), ENotCancelled);
     assert!(sale::receipt_sale_id(&receipt) == object::id(sale), EReceiptSaleMismatch);
     assert_sender_is_buyer(&receipt, ctx);
@@ -1002,7 +1006,7 @@ public fun refund<S, P, ScheduleParams: copy + drop + store>(
         refund_vault::release_balance(vault, cap_ref, paid)
     };
 
-    event::emit(Refunded<S, P> {
+    event::emit(Refunded<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         buyer,
         receipt_id,
@@ -1014,85 +1018,85 @@ public fun refund<S, P, ScheduleParams: copy + drop + store>(
 
 // === Views ===
 
-public fun phase<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun phase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): Phase {
     sale.phase
 }
 
-public fun raised<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun raised<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     sale.raised
 }
 
-public fun rate<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun rate<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 { sale.rate }
 
-public fun hard_cap<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun hard_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     sale.hard_cap
 }
 
-public fun soft_cap<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun soft_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     sale.soft_cap
 }
 
-public fun opens_at_ms<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun opens_at_ms<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     sale.opens_at_ms
 }
 
-public fun closes_at_ms<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun closes_at_ms<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     sale.closes_at_ms
 }
 
-public fun requires_allowlist<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun requires_allowlist<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): bool { sale.requires_allowlist }
 
 /// Read the sale's vesting schedule. Returns `Some(schedule)` if the
 /// issuer called `set_vesting_schedule_params` during Init, otherwise `None`.
 /// Vesting adapters read this to determine the redemption shape.
-public fun vesting_schedule_params<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun vesting_schedule_params<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): Option<ScheduleParams> {
     sale.vesting_schedule_params
 }
 
-public fun inventory_total<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun inventory_total<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     balance::value(&sale.inventory)
 }
 
-public fun total_allocated<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun total_allocated<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     sale.total_allocated
 }
 
-public fun inventory_remaining<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun inventory_remaining<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     balance::value(&sale.inventory) - sale.total_allocated
 }
 
-public fun proceeds_amount<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun proceeds_amount<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): u64 {
     balance::value(&sale.proceeds)
 }
 
-public fun is_open<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun is_open<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     clock: &Clock,
 ): bool {
     if (!sale::is_active(&sale.phase)) { return false };
@@ -1100,16 +1104,18 @@ public fun is_open<S, P, ScheduleParams: copy + drop + store>(
     now >= sale.opens_at_ms && now <= sale.closes_at_ms
 }
 
-public fun has_reached_soft_cap<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun has_reached_soft_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): bool {
     sale.raised >= sale.soft_cap
 }
 
-public fun has_reached_hard_cap<S, P, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<S, P, ScheduleParams>,
+public fun has_reached_hard_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
 ): bool {
     sale.raised >= sale.hard_cap
 }
 
-public fun cap_sale_id<S, P>(c: &SaleAdminCap<S, P>): ID { c.sale_id }
+public fun cap_sale_id<SaleCoin, PaymentCoin>(c: &SaleAdminCap<SaleCoin, PaymentCoin>): ID {
+    c.sale_id
+}
