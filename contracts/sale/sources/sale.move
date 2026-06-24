@@ -283,17 +283,17 @@ public(package) fun unpack_vested_allocation<S, P>(
 
 public(package) fun phase_init(): Phase { Phase::Init }
 
-public(package) fun into_active(phase: &Phase): Phase {
+public(package) fun activate(phase: &mut Phase) {
     assert!(phase.is_init(), ENotInit);
-    Phase::Active
+    *phase = Phase::Active;
 }
 
-public(package) fun into_finalized(phase: &Phase): Phase {
+public(package) fun finalize(phase: &mut Phase) {
     assert!(phase.is_active(), ENotActive);
-    Phase::Finalized
+    *phase = Phase::Finalized;
 }
 
-public(package) fun into_cancelled(phase: &Phase): Phase {
+public(package) fun cancel(phase: &mut Phase) {
     assert!(!phase.is_cancelled(), EAlreadyCancelled);
-    Phase::Cancelled
+    *phase = Phase::Cancelled;
 }

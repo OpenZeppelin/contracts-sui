@@ -614,7 +614,7 @@ public fun share_and_activate<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
     let activated_at_ms = clock::timestamp_ms(clock);
     assert!(activated_at_ms < sale.closes_at_ms, EActivationAfterClose);
 
-    sale.phase = sale.phase.into_active();
+    sale.phase.activate();
     let sale_id = object::id(&sale);
     transfer::share_object(sale);
     event::emit(SaleActivated<SaleCoin, PaymentCoin> { sale_id, activated_at_ms });
@@ -745,7 +745,7 @@ public fun finalize<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
         vault.flip_to_closed(cap_ref);
     };
 
-    sale.phase = sale.phase.into_finalized();
+    sale.phase.finalize();
     event::emit(SaleFinalized<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         raised: sale.raised,
@@ -825,7 +825,7 @@ fun do_cancel<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
         vault.flip_to_refunding(cap_ref);
     };
 
-    sale.phase = sale.phase.into_cancelled();
+    sale.phase.cancel();
 
     event::emit(SaleCancelled<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
