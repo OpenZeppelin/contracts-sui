@@ -18,7 +18,7 @@
 ///
 /// Struct fields are module-private, so only this module can construct a
 /// `FixedRateCurve` witness, and therefore only this module can mint a
-/// `Quote<FixedRateCurve>` (via `sale::mint_quote`). A sale parameterized by
+/// `Quote<FixedRateCurve>` (via `prefunded_sale::mint_quote`). A sale parameterized by
 /// `FixedRateCurve` can be driven by no other pricing logic. The public
 /// `params` constructor is the seam an external protocol can use to build the
 /// config without surrendering the witness.
