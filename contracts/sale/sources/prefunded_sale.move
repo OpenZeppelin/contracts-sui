@@ -654,7 +654,7 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
         0
     };
 
-    // Hard cap (u128-widened)
+    // Hard cap
     let paid = payment.value();
     assert!(paid > 0, EZeroPayment);
     let u64_max = std::u64::max_value!();
@@ -665,7 +665,7 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     // Per-entry cap
     assert!(entry_max == 0 || paid <= entry_max, EPerEntryCapExceeded);
 
-    // Per-buyer cap (u128-widened)
+    // Per-buyer cap
     if (sale.per_buyer_cap.is_some()) {
         let per_cap = *sale.per_buyer_cap.borrow();
         let contribs = sale.contributions.borrow_mut();
