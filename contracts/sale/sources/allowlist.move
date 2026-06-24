@@ -4,10 +4,10 @@
 /// defines the two types that integrators wire their own compliance
 /// scheme against:
 ///
-/// - `AllowlistAdmin<S>` — owned capability. Held by the consumer's
+/// - `AllowlistAdmin<S>` - owned capability. Held by the consumer's
 ///   compliance module (KYC contract, tier-checker, merkle verifier,
 ///   etc.). The sale issues exactly one per `enable_allowlist` call.
-/// - `AllowEntry<S>` — single-use compliance ticket. Has **no
+/// - `AllowEntry<S>` - single-use compliance ticket. Has **no
 ///   abilities**, so it cannot be stored, copied, replayed, or
 ///   transferred. The compliance module mints an entry for a verified
 ///   buyer; the sale's `purchase` consumes it in the same PTB.
@@ -32,7 +32,7 @@
 ///
 /// - It cannot be saved across transactions (no `key`/`store`).
 /// - It cannot be cloned (no `copy`).
-/// - It cannot be discarded silently (no `drop`) — only a function that
+/// - It cannot be discarded silently (no `drop`) - only a function that
 ///   destructures it (`consume`) can dispose of it.
 ///
 /// The single legal path is: compliance module mints → sale consumes,
@@ -45,7 +45,7 @@
 /// non-existent address, transfers to `0x0`, etc.), the sale becomes
 /// uncompletable: no entries can be minted, and any sale that has
 /// `requires_allowlist == true` aborts every `purchase` call. There is
-/// no library override — that would be a centralization vector. Hold
+/// no library override - that would be a centralization vector. Hold
 /// the admin in an access-controlled wrapper that the operator can
 /// recover from.
 module openzeppelin_sale::allowlist;
@@ -59,7 +59,7 @@ const EWrongBuyer: vector<u8> = "AllowEntry buyer does not match transaction sen
 
 // === Types ===
 
-/// Single-use compliance ticket. No abilities — must be created and
+/// Single-use compliance ticket. No abilities - must be created and
 /// consumed in the same transaction.
 ///
 /// Fields are not exposed; the integrator's compliance module
@@ -97,7 +97,7 @@ public(package) fun new_admin<S>(sale_id: ID, ctx: &mut TxContext): AllowlistAdm
 /// Parameters:
 /// - `admin`: the `AllowlistAdmin<S>` previously issued for the sale.
 /// - `buyer`: the address that will perform the purchase. Must equal
-///   `ctx.sender()` at `purchase` time — the sale asserts this.
+///   `ctx.sender()` at `purchase` time - the sale asserts this.
 /// - `max_amount`: per-entry payment cap. `0` means "no per-entry cap"
 ///   (the sale's own per-buyer cap, if configured, still applies).
 ///

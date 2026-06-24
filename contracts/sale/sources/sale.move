@@ -3,7 +3,7 @@
 /// Includes the lifecycle enum, the per-buyer claim ticket, and the
 /// optional `VestingSchedule` policy that a sale flavor may attach
 /// to make distribution gradual. The schedule is issuer-defined and
-/// fixed at sale construction — buyers never supply or override it.
+/// fixed at sale construction - buyers never supply or override it.
 ///
 /// This module owns the lifecycle enum and the per-buyer claim ticket
 /// that every sale flavor reuses. Sale flavors (the v1 `prefunded_sale`,
@@ -12,7 +12,7 @@
 ///
 /// ### `Receipt<S>` is non-transferable
 ///
-/// `Receipt<S>` has the `key` ability only — no `store`. This has three
+/// `Receipt<S>` has the `key` ability only - no `store`. This has three
 /// concrete consequences:
 ///
 /// - `transfer::public_transfer` rejects a receipt (it requires `store`).
@@ -246,7 +246,7 @@ public(package) fun consume_receipt<S>(r: Receipt<S>): (ID, address, u64, u64, u
 /// The hot-potato carries `Coin<S>` rather than `Balance<S>` because
 /// the only consumer path (`vested_claim::into_*`) immediately feeds
 /// the inner value into `vesting_wallet::deposit`, which already takes
-/// a `Coin<S>` — keeping the carrier shape aligned avoids a needless
+/// a `Coin<S>` - keeping the carrier shape aligned avoids a needless
 /// `Balance ↔ Coin` round-trip in the same transaction.
 #[allow(lint(coin_field))]
 public struct VestedAllocation<phantom S, P> {

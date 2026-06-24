@@ -20,7 +20,7 @@
 ///
 /// `RefundVaultCap<P>` is phantom-typed on the payment coin so the cap
 /// for a `RefundVault<USDC>` cannot be paired with a sale that uses SUI
-/// as its payment coin — the type system rejects the mismatch at
+/// as its payment coin - the type system rejects the mismatch at
 /// compile time.
 ///
 /// In the paired-sale flow, `pair_refund_vault` consumes the cap into
@@ -119,7 +119,7 @@ public fun new<P>(ctx: &mut TxContext): (RefundVault<P>, RefundVaultCap<P>) {
 }
 
 /// Share an existing vault. Provided because `RefundVault<P>` is
-/// `key`-only — external modules cannot call
+/// `key`-only - external modules cannot call
 /// `transfer::public_share_object` on it directly.
 public fun share<P>(vault: RefundVault<P>) {
     transfer::share_object(vault);

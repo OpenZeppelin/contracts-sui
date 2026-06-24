@@ -1,10 +1,10 @@
-/// `PrefundedSale<SaleCoin, PaymentCoin>` — fixed-price token sale, v1 flavor.
+/// `PrefundedSale<SaleCoin, PaymentCoin>` - fixed-price token sale, v1 flavor.
 ///
 /// The issuer pre-mints (or pre-acquires) the sale tokens and deposits
 /// them as `Balance<SaleCoin>` inventory before activation. The sale draws
 /// from that fixed inventory at `claim` time and never holds a
 /// `TreasuryCap<SaleCoin>`. v2's `MintingSale<SaleCoin, PaymentCoin>` will be a sibling type
-/// that holds a `TreasuryCap<SaleCoin>` instead — same `Receipt<SaleCoin>`, same
+/// that holds a `TreasuryCap<SaleCoin>` instead - same `Receipt<SaleCoin>`, same
 /// `Phase`, separate audit boundary.
 ///
 /// ### Lifecycle
@@ -12,11 +12,11 @@
 /// ```text
 ///   create_sale ──┐
 ///   deposit_inventory ──┐
-///   set_per_buyer_cap   │  (Init phase — sale is owned by caller;
+///   set_per_buyer_cap   │  (Init phase - sale is owned by caller;
 ///   pair_refund_vault   ├   holding it by &mut is the authority)
 ///   enable_allowlist    │
 ///                       │
-///   share_and_activate ─┴──>  (Active phase — sale is shared)
+///   share_and_activate ─┴──>  (Active phase - sale is shared)
 ///                                  │
 ///                              purchase ×N
 ///                                  │
@@ -94,9 +94,9 @@
 ///
 /// 2. **`SaleAdminCap<SaleCoin, PaymentCoin>` controls only the admin-only paths.**
 ///    Wrap it in an RBAC / multisig / governance object. Losing the
-///    cap leaves the sale fully usable for buyers — they can still
+///    cap leaves the sale fully usable for buyers - they can still
 ///    `purchase`, `claim`, `refund`, and trigger `finalize` /
-///    `cancel_after_close` permissionlessly — but admin loses
+///    `cancel_after_close` permissionlessly - but admin loses
 ///    emergency-cancel power and the ability to withdraw proceeds
 ///    and unsold inventory.
 ///
@@ -106,7 +106,7 @@
 ///    container.
 ///
 /// 4. **Every sale requires a paired `RefundVault<PaymentCoin>`.** Even sales
-///    with `soft_cap == 0` need a vault — `cancel_emergency` always
+///    with `soft_cap == 0` need a vault - `cancel_emergency` always
 ///    has a refund destination. Pair the vault before activation.
 ///
 /// 5. **Receipts are non-transferable and buyer-bound.** A buyer with
@@ -283,7 +283,7 @@ public struct PrefundedSale<phantom SaleCoin, phantom PaymentCoin, ScheduleParam
     /// `claim` path aborts (`EClaimRequiresVesting`) and the only
     /// redemption route is `claim_into_vesting` → a library consumer
     /// (`vested_claim::into_*`). The buyer cannot influence the
-    /// schedule — it is fixed at sale construction.
+    /// schedule - it is fixed at sale construction.
     vesting_schedule_params: Option<ScheduleParams>,
 }
 
@@ -719,7 +719,7 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
 ///
 /// Allowed when phase is `Active` and either:
 /// - `now > closes_at_ms` and `raised >= soft_cap`, or
-/// - `raised >= hard_cap` (sold-out — closes early).
+/// - `raised >= hard_cap` (sold-out - closes early).
 public fun finalize<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     vault: &mut RefundVault<PaymentCoin>,
@@ -772,7 +772,7 @@ public fun cancel_after_close<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
 ///
 /// Allowed when phase is `Active` and the window has not yet closed
 /// (`now <= closes_at_ms`). Pre-open cancel (`now < opens_at_ms`) is
-/// permitted — useful when a bug or compliance issue is discovered
+/// permitted - useful when a bug or compliance issue is discovered
 /// before any purchase has happened.
 ///
 /// Guards (designed to prevent rugging a successful sale):
@@ -833,7 +833,7 @@ fun do_cancel<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
 /// `ctx.sender() == receipt.buyer`. Destroys the receipt.
 ///
 /// Aborts with `EClaimRequiresVesting` if the sale has a vesting
-/// schedule attached — vested sales must redeem via
+/// schedule attached - vested sales must redeem via
 /// `claim_into_vesting`. This is the library's enforcement that the
 /// schedule cannot be bypassed by calling the immediate-distribution
 /// path.
