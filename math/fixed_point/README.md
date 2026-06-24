@@ -50,7 +50,8 @@ underlying fixed-point representation and do not multiply or divide by `10^9`.
 - `SD29x9` only: `min`, `from_bits`
 
 ```move
-use openzeppelin_fp_math::{sd29x9, ud30x9};
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
 
 let one = ud30x9::wrap(1_000_000_000); // 1.0
 let raw = ud30x9::wrap(42); // Raw bits, not 42.0
@@ -146,7 +147,8 @@ Properties:
   no Sui objects; identical inputs always yield identical outputs.
 
 ```move
-use openzeppelin_fp_math::{sd29x9, ud30x9};
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
 
 let z = ud30x9::wrap(1_000_000_000); // 1.0
 let p = z.cdf(); // 0.841344746  (P(Z ≤ 1))
@@ -186,8 +188,8 @@ hand-edited (each carries an `AUTO-GENERATED` banner):
 - `sources/internal/cdf_coefficients.move`
 - `tests/{sd29x9_tests,ud30x9_tests}/cdf_test_vectors.move`
 
-To regenerate them — or to re-validate the committed coefficients against
-`scipy` — see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
+To regenerate them - or to re-validate the committed coefficients against
+`scipy` - see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
 
 ## Learn More
 

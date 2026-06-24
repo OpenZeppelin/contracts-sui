@@ -144,7 +144,7 @@ module openzeppelin_fp_math::sd29x9_cdf_test_vectors;
 
 use openzeppelin_fp_math::sd29x9;
 
-const TOLERANCE: u128 = 5; // ≤ 5 ULP at UD30x9 scale (10^-9)
+const TOLERANCE: u128 = 5; // ≤ 5 ULP at SD29x9 scale (10^-9)
 
 #[error(code = 0)]
 const ETestCaseFailed: vector<u8> =
