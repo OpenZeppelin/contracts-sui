@@ -81,13 +81,17 @@ def format_move(text: str, path: Path, repo_root: Path) -> str:
             f"prettier not found at {prettier}; run `npm ci` at the repo root "
             "(installs @mysten/prettier-plugin-move, the Move formatter)"
         )
-    result = subprocess.run(
-        [str(prettier), "--stdin-filepath", str(path)],
-        input=text,
-        capture_output=True,
-        text=True,
-        cwd=repo_root,
-    )
+    try:
+        result = subprocess.run(
+            [str(prettier), "--stdin-filepath", str(path)],
+            input=text,
+            capture_output=True,
+            text=True,
+            cwd=repo_root,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"prettier timed out while formatting {path}") from exc
     if result.returncode != 0:
         raise RuntimeError(
             f"prettier failed to format {path} (exit {result.returncode}):\n{result.stderr}"
