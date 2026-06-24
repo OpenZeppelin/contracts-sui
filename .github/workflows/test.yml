@@ -164,11 +164,20 @@ jobs:
       - name: Validate committed CDF coefficients
         run: python -m gaussian_codegen.cdf.validate
 
-      - name: Check coefficients are in sync with the generator
+      - name: Check CDF coefficients are in sync with the generator
         run: python -m gaussian_codegen.cdf.emit_coefficients --check
 
-      - name: Check test vectors are in sync with the generator
+      - name: Check CDF test vectors are in sync with the generator
         run: python -m gaussian_codegen.cdf.emit_test_vectors --check
+
+      - name: Validate committed PDF coefficients
+        run: python -m gaussian_codegen.pdf.validate
+
+      - name: Check PDF coefficients are in sync with the generator
+        run: python -m gaussian_codegen.pdf.emit_coefficients --check
+
+      - name: Check PDF test vectors are in sync with the generator
+        run: python -m gaussian_codegen.pdf.emit_test_vectors --check
 
       - name: Run codegen unit tests
         run: pytest scripts/gaussian_codegen/tests -q
