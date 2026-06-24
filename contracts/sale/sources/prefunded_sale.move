@@ -130,8 +130,9 @@
 module openzeppelin_sale::prefunded_sale;
 
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
+use openzeppelin_sale::phase::{Self, Phase};
 use openzeppelin_sale::refund_vault::{Self, RefundVault, RefundVaultCap};
-use openzeppelin_sale::sale::{Self, Phase, Receipt, VestedAllocation};
+use openzeppelin_sale::sale::{Self, Receipt, VestedAllocation};
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
@@ -449,7 +450,7 @@ public fun create_sale<
         raised: 0,
         opens_at_ms,
         closes_at_ms,
-        phase: sale::phase_init(),
+        phase: phase::phase_init(),
         requires_allowlist: false,
         refund_vault_id: option::none(),
         refund_vault_cap: option::none(),
@@ -1092,7 +1093,7 @@ public fun withdraw_unsold_inventory<
     ctx: &mut TxContext,
 ): Coin<SaleCoin> {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
-    sale.phase.assert_finalized();
+    sale.phase.assert_terminal();
     let unallocated = sale.inventory.value() - sale.total_allocated;
     let part = sale.inventory.split(unallocated);
     event::emit(InventoryWithdrawn<SaleCoin, PaymentCoin> {
