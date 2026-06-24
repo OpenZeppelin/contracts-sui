@@ -42,3 +42,19 @@ MAX_Z_RAW_WAD = int(_MAX_Z * WAD)
 """`MAX_Z` at WAD scale (`10^18`) — i.e. `6_300_000_000_000_000_000`. Kept for
 cross-scale consistency checks; the on-chain saturation bound is the raw-scale
 `MAX_Z_RAW` above."""
+
+# --- PDF domain bound -------------------------------------------------------
+
+PDF_MAX_Z = "6.5"
+"""Upper bound of the PDF central domain, as an exact decimal string. Inputs with
+`|z| >= PDF_MAX_Z` saturate to `0`: the density has decayed below the `10^-9`
+output resolution there (φ(6.5) ≈ 2.7e-10, which rounds to 0), so the cut-off is
+lossless. Slightly wider than the CDF bound because φ's tail reaches the
+round-to-zero point later than Φ reaches saturation."""
+
+_PDF_MAX_Z = Decimal(PDF_MAX_Z)
+
+PDF_MAX_Z_RAW = int(_PDF_MAX_Z * SCALE_DECIMAL)
+"""`PDF_MAX_Z` at the UD30x9 raw scale (`10^9`) — i.e. `6_500_000_000`. Emitted as
+the on-chain `pdf_coefficients::MAX_Z_RAW` (the saturation source of truth,
+consumed by `pdf::pdf_nonneg_raw`)."""

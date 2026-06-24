@@ -3,6 +3,7 @@ module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::cdf::cdf_nonneg_raw;
 use openzeppelin_fp_math::common;
+use openzeppelin_fp_math::pdf::pdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
 use openzeppelin_math::rounding;
@@ -171,6 +172,47 @@ public fun abs(x: UD30x9): UD30x9 {
 /// ```
 public fun cdf(z: UD30x9): UD30x9 {
     wrap(cdf_nonneg_raw(z.unwrap()))
+}
+
+/// Standard-normal probability density function `φ(z)` on non-negative `z`.
+///
+/// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` represented
+/// as `UD30x9`, where the peak is `φ(0) = 0.398942280`. The implementation
+/// evaluates an AAA-rational approximation `N(z) / D(z)` at WAD scale via
+/// Horner's method on a sign-magnitude `u256` accumulator; the final ratio is
+/// cast back to `UD30x9` (`10^9`) in a single nearest-rounding step.
+///
+/// #### Parameters
+/// - `z`: Non-negative input.
+///
+/// #### Returns
+/// - `φ(z) ∈ [0, 0.398942280]` at `UD30x9` scale.
+///
+/// #### Behavior
+/// - Monotone non-increasing in `z`; the peak `φ(0) = 0.398942280` is returned
+///   exactly.
+/// - Saturates exactly to `0` for `z ≥ 6.5`. At that bound `φ` is already
+///   `~2.7 × 10⁻¹⁰`, below the output's `10⁻⁹` resolution.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
+///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
+/// - Pure, deterministic, and object-free: identical inputs always produce
+///   identical outputs; touches no storage or Sui objects.
+///
+/// #### Aborts
+/// - Does not abort for any `UD30x9` input under the committed, validated
+///   coefficients. The evaluator carries internal integrity asserts
+///   (`pdf::EInternalNumNegative` / `pdf::EInternalDenNonPositive`) as
+///   defense-in-depth against a corrupted regenerated coefficient table; these
+///   cannot fire for the shipped coefficients.
+///
+/// #### Examples
+///
+/// ```move
+/// let z = ud30x9::wrap(1_000_000_000); // 1.0
+/// let d = z.pdf(); // 0.241970725
+/// ```
+public fun pdf(z: UD30x9): UD30x9 {
+    wrap(pdf_nonneg_raw(z.unwrap()))
 }
 
 /// Rounds toward positive infinity to the next integer (if fractional), otherwise unchanged.
