@@ -195,4 +195,5 @@ To regenerate them - or to re-validate the committed coefficients against
 
 - [Fixed-point math package overview](https://docs.openzeppelin.com/contracts-sui/1.x/fixed-point)
 - [Fixed-point math API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/fixed-point)
+- [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)

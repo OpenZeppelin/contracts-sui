@@ -2,6 +2,8 @@
 
 Math primitives for Sui DeFi, implemented as pure functions (no on-chain storage).
 
+**AI agents:** [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt) is the discovery entry point for integrating this library into a downstream project.
+
 ## Packages
 
 | Package | MVR | Move package | Docs | Highlights |
