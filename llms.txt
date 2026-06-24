@@ -9,8 +9,8 @@ follow the links to the sources of truth.
 
 ## Start here
 
-- [ARCHITECTURE.md](ARCHITECTURE.md): why the library is shaped this way and how to compose it
-- [contracts/](contracts/README.md) and [math/](math/README.md): the package catalogs -
+- [ARCHITECTURE.md](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/ARCHITECTURE.md): why the library is shaped this way and how to compose it
+- [contracts/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/contracts/README.md) and [math/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/math/README.md): the package catalogs -
   browse for the available packages, their MVR slugs, paths, and docs
 
 ## For each package
@@ -19,7 +19,7 @@ follow the links to the sources of truth.
 - **`examples/`** - compilable integration examples (composition recipes)
 - **API reference** - generated from doc-comments (`sui move build --doc`), published at
   `https://docs.openzeppelin.com/contracts-sui/1.x/api/<package>`
-- [audits/](audits/README.md) - audit reports and their scope
+- [audits/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/audits/README.md) - audit reports and their scope
 
 ## Dependencies
 
