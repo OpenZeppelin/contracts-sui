@@ -142,7 +142,7 @@ Properties:
   `z ≥ 6.3`.
 - **Φ(0)**: exactly `0.5`.
 - **Symmetry**: `cdf(z) + cdf(z.negate())` is exactly `1` for every `SD29x9`
-  input.
+  input except `min()`, whose negation is not representable.
 - **Execution**: pure, deterministic, and object-free integer math - no storage,
   no Sui objects; identical inputs always yield identical outputs.
 
