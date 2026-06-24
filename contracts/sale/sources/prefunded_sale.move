@@ -392,8 +392,6 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 
 // === Internal helpers ===
 
-const U64_MAX: u128 = 18446744073709551615;
-
 fun assert_admin<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
@@ -606,9 +604,9 @@ public fun share_and_activate<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
     sale.phase.assert_init();
     assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
 
-    let required_128 = (sale.hard_cap as u128) * (sale.rate as u128);
-    assert!(required_128 <= U64_MAX, EInventoryOverflowAtActivate);
-    let required = required_128 as u64;
+    let required = (sale.hard_cap as u128) * (sale.rate as u128);
+    assert!(required <= std::u64::max_value!() as u128, EInventoryOverflowAtActivate);
+    let required = required as u64;
     assert!(sale.inventory.value() >= required, EInsufficientInventoryAtActivate);
 
     let activated_at_ms = clock::timestamp_ms(clock);
@@ -659,14 +657,13 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     // Hard cap (u128-widened)
     let paid = payment.value();
     assert!(paid > 0, EZeroPayment);
-    let new_raised_128 = (sale.raised as u128) + (paid as u128);
-    assert!(new_raised_128 <= U64_MAX, ERaisedOverflow);
-    assert!(new_raised_128 <= (sale.hard_cap as u128), EHardCapExceeded);
+    let u64_max = std::u64::max_value!();
+    assert!(u64_max - paid >= sale.raised, ERaisedOverflow);
+    let new_raised = sale.raised + paid;
+    assert!(new_raised <= sale.hard_cap, EHardCapExceeded);
 
     // Per-entry cap
-    if (entry_max > 0) {
-        assert!(paid <= entry_max, EPerEntryCapExceeded);
-    };
+    assert!(entry_max == 0 || paid <= entry_max, EPerEntryCapExceeded);
 
     // Per-buyer cap (u128-widened)
     if (sale.per_buyer_cap.is_some()) {
@@ -675,10 +672,9 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
         let current = if (contribs.contains(buyer)) {
             *contribs.borrow(buyer)
         } else { 0 };
-        let new_total_128 = (current as u128) + (paid as u128);
-        assert!(new_total_128 <= U64_MAX, EContributionOverflow);
-        assert!(new_total_128 <= (per_cap as u128), EPerBuyerCapExceeded);
-        let new_total = new_total_128 as u64;
+        assert!(u64_max - paid >= current, EContributionOverflow);
+        let new_total = current + paid;
+        assert!(new_total <= per_cap, EPerBuyerCapExceeded);
         if (contribs.contains(buyer)) {
             let slot = contribs.borrow_mut(buyer);
             *slot = new_total;
@@ -688,15 +684,15 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     };
 
     // Allocation + inventory backing (u128-checked)
-    let allocation_128 = (paid as u128) * (sale.rate as u128);
-    assert!(allocation_128 <= U64_MAX, EAllocationOverflow);
-    let allocation = allocation_128 as u64;
+    let allocation = (paid as u128) * (sale.rate as u128);
+    assert!(allocation <= u64_max as u128, EAllocationOverflow);
+    let allocation = allocation as u64;
     let unallocated = sale.inventory.value() - sale.total_allocated;
     assert!(allocation <= unallocated, EInsufficientInventoryAtActivate);
 
     // State mutations
     sale.total_allocated = sale.total_allocated + allocation;
-    sale.raised = new_raised_128 as u64;
+    sale.raised = new_raised;
     sale.proceeds.join(payment.into_balance());
 
     // Mint and deliver receipt
