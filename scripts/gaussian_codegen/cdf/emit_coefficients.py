@@ -130,7 +130,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--check",
         action="store_true",
         help="Verify the committed file matches freshly generated output; exit 1 on "
-        "drift, do not write. Requires a prior `derive` run for the JSON input.",
+        "drift, do not write. Requires the input JSON to exist; the default "
+        "committed `.derive_output.json` is sufficient.",
     )
     args = parser.parse_args(argv)
 
