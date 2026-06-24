@@ -132,7 +132,8 @@ module openzeppelin_sale::prefunded_sale;
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
 use openzeppelin_sale::phase::{Self, Phase};
 use openzeppelin_sale::refund_vault::{Self, RefundVault, RefundVaultCap};
-use openzeppelin_sale::sale::{Self, Receipt, VestedAllocation};
+use openzeppelin_sale::sale::{Self, Receipt};
+use openzeppelin_sale::vested_allocation::{Self, VestedAllocation};
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
@@ -1051,7 +1052,7 @@ public fun claim_into_vesting<
         amount: allocation,
     });
 
-    sale::new_vested_allocation(coin, schedule, buyer, sale_id)
+    vested_allocation::new(coin, schedule, buyer, sale_id)
 }
 
 /// Withdraw collected proceeds. Phase must be `Finalized`.
