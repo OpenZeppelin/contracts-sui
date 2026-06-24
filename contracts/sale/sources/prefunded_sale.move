@@ -699,7 +699,7 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     let sale_id = object::id(sale);
     let receipt = sale::new_receipt<SaleCoin>(sale_id, buyer, paid, allocation, now, ctx);
     let receipt_id = object::id(&receipt);
-    sale::deliver_receipt(receipt, buyer);
+    receipt.deliver(buyer);
 
     event::emit(Purchased<SaleCoin, PaymentCoin> {
         sale_id,

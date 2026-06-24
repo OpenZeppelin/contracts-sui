@@ -21,7 +21,7 @@
 /// - A receipt cannot appear as a struct field elsewhere (fields require
 ///   `store`).
 ///
-/// The single transfer path is `deliver_receipt`, called by sale flavors
+/// The single transfer path is `deliver`, called by sale flavors
 /// at purchase time to send the receipt to the buyer. After that, the
 /// receipt stays with the buyer until consumed by `claim` or `refund`.
 /// `claim` and `refund` additionally assert `ctx.sender() == buyer`,
@@ -208,7 +208,7 @@ public(package) fun new_receipt<S>(
 /// Deliver a freshly-minted receipt to its buyer. The only transfer
 /// path for receipts. Sale flavors call this immediately after
 /// `new_receipt` and never expose the receipt back to the caller.
-public(package) fun deliver_receipt<S>(receipt: Receipt<S>, to: address) {
+public(package) fun deliver<S>(receipt: Receipt<S>, to: address) {
     transfer::transfer(receipt, to);
 }
 
