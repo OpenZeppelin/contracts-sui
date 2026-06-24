@@ -135,4 +135,5 @@ Complete integration examples live in [`examples/timelock/`](examples/timelock):
 
 - [Timelock package overview](https://docs.openzeppelin.com/contracts-sui/1.x/timelock)
 - [Timelock API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/timelock)
+- [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)
