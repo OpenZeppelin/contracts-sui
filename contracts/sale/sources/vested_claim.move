@@ -1,6 +1,6 @@
-/// Library-side consumer for `VestedAllocation<S, ScheduleParams>`.
+/// Library-side consumer for `VestedAllocation<S, VestingScheduleParams>`.
 ///
-/// `prefunded_sale::claim_into_vesting` returns a `VestedAllocation<S, ScheduleParams>`
+/// `prefunded_sale::claim_into_vesting` returns a `VestedAllocation<S, VestingScheduleParams>`
 /// hot-potato whose inner `Coin<S>` cannot be extracted outside the
 /// library (the carrier has no `drop`/`key`/`store` and its fields are
 /// private to `sale.move`). The functions in this module are the only
@@ -38,17 +38,17 @@ module openzeppelin_sale::vested_claim;
 use openzeppelin_finance::vesting_wallet;
 use openzeppelin_sale::sale::VestedAllocation;
 
-/// Consume a `VestedAllocation<S, ScheduleParams>` into a fresh shared
+/// Consume a `VestedAllocation<S, VestingScheduleParams>` into a fresh shared
 /// `VestingWallet<S>` matching the sale's schedule. Anyone can call
 /// `release` on the resulting wallet; payouts always flow to the
 /// recorded beneficiary.
 #[allow(lint(share_owned))]
-public fun into_shared_wallet<Witness: drop, ScheduleParams: copy + drop + store, S>(
-    allocation: VestedAllocation<S, ScheduleParams>,
+public fun into_shared_wallet<Witness: drop, VestingScheduleParams: copy + drop + store, S>(
+    allocation: VestedAllocation<S, VestingScheduleParams>,
     ctx: &mut TxContext,
 ) {
     let (coin, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
-    let mut wallet = vesting_wallet::new<Witness, ScheduleParams, S>(
+    let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, S>(
         schedule_params,
         beneficiary,
         ctx,
@@ -57,17 +57,17 @@ public fun into_shared_wallet<Witness: drop, ScheduleParams: copy + drop + store
     transfer::public_share_object(wallet);
 }
 
-/// Consume a `VestedAllocation<S, ScheduleParams>` into a fresh `VestingWallet<S>`
+/// Consume a `VestedAllocation<S, VestingScheduleParams>` into a fresh `VestingWallet<S>`
 /// transferred to the buyer. Only the buyer can pass the resulting
 /// wallet by `&mut`, so only the buyer's transactions can call
 /// `release`. Payouts still flow to the recorded beneficiary (the
 /// same address) and the beneficiary is fixed for the wallet's life.
-public fun into_owned_wallet<Witness: drop, ScheduleParams: copy + drop + store, S>(
-    allocation: VestedAllocation<S, ScheduleParams>,
+public fun into_owned_wallet<Witness: drop, VestingScheduleParams: copy + drop + store, S>(
+    allocation: VestedAllocation<S, VestingScheduleParams>,
     ctx: &mut TxContext,
 ) {
     let (coin, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
-    let mut wallet = vesting_wallet::new<Witness, ScheduleParams, S>(
+    let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, S>(
         schedule_params,
         beneficiary,
         ctx,

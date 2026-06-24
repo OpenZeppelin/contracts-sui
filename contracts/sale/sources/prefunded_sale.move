@@ -59,7 +59,7 @@
 ///
 /// - **Hard cap (required).** `hard_cap > 0` is enforced at
 ///   `create_sale`. Bounds the maximum raise. `inventory >=
-///   hard_cap * rate` is enforced at activation, so sold-out and
+///   hard_cap * max_rate` is enforced at activation, so sold-out and
 ///   hard-cap-reached coincide.
 /// - **Soft cap (optional, `0 = none`).** Minimum raise required for
 ///   `finalize`. If the window closes with `raised < soft_cap`,
@@ -165,27 +165,20 @@ const EActivationAfterClose: vector<u8> = "Cannot activate: closes_at_ms is alre
 
 // Pricing & accounting
 #[error(code = 20)]
-const ERateZero: vector<u8> = "rate must be greater than zero";
-#[error(code = 21)]
 const EHardCapZero: vector<u8> = "hard_cap must be greater than zero";
-#[error(code = 22)]
+#[error(code = 21)]
 const EInvalidCapsOrdering: vector<u8> = "soft_cap must be <= hard_cap";
-#[error(code = 23)]
+#[error(code = 22)]
 const EZeroPayment: vector<u8> = "Payment must be greater than zero";
-#[error(code = 24)]
-const EAllocationOverflow: vector<u8> = "payment * rate overflows u64";
-#[error(code = 25)]
+#[error(code = 23)]
 const ERaisedOverflow: vector<u8> = "raised + payment overflows u64";
-#[error(code = 26)]
+#[error(code = 24)]
 const EContributionOverflow: vector<u8> = "buyer contribution + payment overflows u64";
-#[error(code = 27)]
+#[error(code = 25)]
 const EHardCapExceeded: vector<u8> = "Purchase would exceed hard_cap";
-#[error(code = 28)]
-const EInventoryOverflowAtActivate: vector<u8> =
-    "hard_cap * rate overflows u64; cannot guarantee inventory backing";
-#[error(code = 29)]
+#[error(code = 26)]
 const EInsufficientInventoryAtActivate: vector<u8> =
-    "Inventory at activation does not cover hard_cap * rate";
+    "Inventory at activation does not cover hard_cap * max_rate";
 
 // Caps
 #[error(code = 30)]
@@ -225,6 +218,12 @@ const EVaultNotEmpty: vector<u8> =
 #[error(code = 60)]
 const EReceiptSaleMismatch: vector<u8> = "Receipt does not belong to this sale";
 
+// Quote / curve coupling
+#[error(code = 61)]
+const EQuoteSaleMismatch: vector<u8> = "Quote does not belong to this sale";
+#[error(code = 62)]
+const EQuotePaymentMismatch: vector<u8> = "Quote.paid does not match the payment coin value";
+
 // Per-buyer cap configuration
 #[error(code = 70)]
 const EPerBuyerCapAlreadySet: vector<u8> = "Per-buyer cap already configured";
@@ -244,7 +243,13 @@ const ENoVestingScheduleAttached: vector<u8> =
 
 // === Types ===
 
-public struct PrefundedSale<phantom SaleCoin, phantom PaymentCoin, ScheduleParams: copy> has key {
+public struct PrefundedSale<
+    phantom Curve: drop,
+    CurveParams: copy + drop + store,
+    phantom SaleCoin,
+    phantom PaymentCoin,
+    VestingScheduleParams: copy,
+> has key {
     id: UID,
     // Inventory & accounting
     /// Pre-funded sale tokens. Deposited during Init, drawn down on claim.
@@ -258,8 +263,10 @@ public struct PrefundedSale<phantom SaleCoin, phantom PaymentCoin, ScheduleParam
     /// (Finalized) or to the vault on cancel (Cancelled).
     proceeds: Balance<PaymentCoin>,
     // Pricing
-    /// Sale tokens (smallest units) per 1 payment-coin smallest unit.
-    rate: u64,
+    /// Curve configuration, opaque to the sale and fixed at construction.
+    /// Only the declaring `Curve` module interprets it (read via
+    /// `curve_params`). Mirrors how `VestingWallet` stores `schedule_params`.
+    curve_params: CurveParams,
     // Caps
     hard_cap: u64, // > 0; enforced at create_sale
     soft_cap: u64, // 0 = no soft cap; otherwise <= hard_cap
@@ -284,7 +291,7 @@ public struct PrefundedSale<phantom SaleCoin, phantom PaymentCoin, ScheduleParam
     /// redemption route is `claim_into_vesting` → a library consumer
     /// (`vested_claim::into_*`). The buyer cannot influence the
     /// schedule - it is fixed at sale construction.
-    vesting_schedule_params: Option<ScheduleParams>,
+    vesting_schedule_params: Option<VestingScheduleParams>,
 }
 
 public struct SaleAdminCap<phantom SaleCoin, phantom PaymentCoin> has key, store {
@@ -294,13 +301,13 @@ public struct SaleAdminCap<phantom SaleCoin, phantom PaymentCoin> has key, store
 
 // === Events ===
 
-public struct SaleCreated<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
+public struct SaleCreated<CurveParams, phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
-    rate: u64,
     hard_cap: u64,
     soft_cap: u64,
     opens_at_ms: u64,
     closes_at_ms: u64,
+    curve_params: CurveParams,
 }
 
 public struct InventoryDeposited<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
@@ -314,13 +321,13 @@ public struct PerBuyerCapSet<phantom SaleCoin, phantom PaymentCoin> has copy, dr
     cap: u64,
 }
 
-public struct VestingScheduleParamsSet<
+public struct VestingVestingScheduleParamsSet<
     phantom SaleCoin,
     phantom PaymentCoin,
-    ScheduleParams: copy + drop,
+    VestingScheduleParams: copy + drop,
 > has copy, drop {
     sale_id: ID,
-    params: ScheduleParams,
+    params: VestingScheduleParams,
 }
 
 public struct RefundVaultPaired<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
@@ -392,8 +399,14 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 
 // === Internal helpers ===
 
-fun assert_admin<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+fun assert_admin<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
 ) {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
@@ -410,20 +423,36 @@ fun assert_sender_is_buyer<SaleCoin>(receipt: &Receipt<SaleCoin>, ctx: &TxContex
 /// calls in the same PTB and then calls `share_and_activate` to
 /// transition to `Active`.
 ///
+/// The sale is pricing-agnostic. `curve_params` is the opaque
+/// configuration the `Curve` module interprets, and `max_rate` is the
+/// upper bound on allocation per payment unit that the curve commits to
+/// (a fixed-rate curve sets `max_rate = rate`; a ratcheting-down curve
+/// sets `max_rate = initial_rate`). Integrators normally call the curve
+/// module's own `create_sale` sugar, which derives `max_rate` from the
+/// params so the two cannot drift apart.
+///
 /// Asserts:
-/// - `rate > 0`
+/// - `max_rate > 0`
 /// - `hard_cap > 0` (every sale must have a bounded raise)
 /// - `soft_cap <= hard_cap`
 /// - `opens_at_ms < closes_at_ms`
-public fun create_sale<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    rate: u64,
+public fun create_sale<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    curve_params: CurveParams,
     hard_cap: u64,
     soft_cap: u64,
     opens_at_ms: u64,
     closes_at_ms: u64,
     ctx: &mut TxContext,
-): (PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>, SaleAdminCap<SaleCoin, PaymentCoin>) {
-    assert!(rate > 0, ERateZero);
+): (
+    PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    SaleAdminCap<SaleCoin, PaymentCoin>,
+) {
     assert!(hard_cap > 0, EHardCapZero);
     assert!(soft_cap <= hard_cap, EInvalidCapsOrdering);
     assert!(opens_at_ms < closes_at_ms, EInvalidTimeRange);
@@ -433,7 +462,7 @@ public fun create_sale<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + stor
         inventory: balance::zero<SaleCoin>(),
         total_allocated: 0,
         proceeds: balance::zero<PaymentCoin>(),
-        rate,
+        curve_params,
         hard_cap,
         soft_cap,
         raised: 0,
@@ -450,13 +479,13 @@ public fun create_sale<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + stor
     let sale_id = object::id(&sale);
     let cap = SaleAdminCap<SaleCoin, PaymentCoin> { id: object::new(ctx), sale_id };
 
-    event::emit(SaleCreated<SaleCoin, PaymentCoin> {
+    event::emit(SaleCreated<CurveParams, SaleCoin, PaymentCoin> {
         sale_id,
-        rate,
         hard_cap,
         soft_cap,
         opens_at_ms,
         closes_at_ms,
+        curve_params,
     });
 
     (sale, cap)
@@ -465,8 +494,14 @@ public fun create_sale<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + stor
 /// Deposit sale tokens into inventory. May be called multiple times
 /// during Init. Authority is implicit: the sale is owned, so only the
 /// caller that created it can pass it as `&mut`.
-public fun deposit_inventory<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun deposit_inventory<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     inventory: Coin<SaleCoin>,
 ) {
     sale.phase.assert_init();
@@ -489,8 +524,14 @@ public fun deposit_inventory<SaleCoin, PaymentCoin, ScheduleParams: copy + drop 
 /// Asserts:
 /// - `per_buyer_cap > 0` (a zero cap would block every purchase).
 /// - Not already configured (`set_per_buyer_cap` is one-shot).
-public fun set_per_buyer_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun set_per_buyer_cap<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     per_buyer_cap: u64,
     ctx: &mut TxContext,
 ) {
@@ -516,14 +557,20 @@ public fun set_per_buyer_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop 
 /// buyer cannot trivially bypass the schedule. The schedule is
 /// **issuer-defined**: the buyer is the caller of the redemption
 /// path and cannot supply or override these values.
-public fun set_vesting_schedule_params<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
-    params: ScheduleParams,
+public fun set_vesting_schedule_params<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    params: VestingScheduleParams,
 ) {
     sale.phase.assert_init();
     assert!(sale.vesting_schedule_params.is_none(), EVestingScheduleAlreadySet);
     sale.vesting_schedule_params.fill(params);
-    event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, ScheduleParams> {
+    event::emit(VestingVestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
         sale_id: object::id(sale),
         params,
     });
@@ -543,8 +590,14 @@ public fun set_vesting_schedule_params<SaleCoin, PaymentCoin, ScheduleParams: co
 ///   `withdraw_all` requires `Closed` (reachable only via the sale's
 ///   `finalize`, which does not return the cap).
 /// - No prior vault has been paired.
-public fun pair_refund_vault<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun pair_refund_vault<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     vault: &RefundVault<PaymentCoin>,
     vault_cap: RefundVaultCap<PaymentCoin>,
 ) {
@@ -570,8 +623,14 @@ public fun pair_refund_vault<SaleCoin, PaymentCoin, ScheduleParams: copy + drop 
 /// One-shot: aborts if called twice on the same sale. Duplicate
 /// admins would let two compliance modules mint entries
 /// independently for the same sale, defeating the gating.
-public fun enable_allowlist<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun enable_allowlist<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     ctx: &mut TxContext,
 ): AllowlistAdmin<SaleCoin> {
     sale.phase.assert_init();
@@ -586,36 +645,65 @@ public fun enable_allowlist<SaleCoin, PaymentCoin, ScheduleParams: copy + drop +
     admin
 }
 
+public struct ActivationTicket<phantom Curve: drop> {
+    sale_id: ID,
+    required_inventory: u64,
+}
+
+public fun mint_activation_ticket<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    _w: Curve,
+    required_inventory: u64,
+): ActivationTicket<Curve> { ActivationTicket { sale_id: object::id(sale), required_inventory } }
+
 /// Transition `Init → Active` and share the sale.
 ///
 /// Asserts:
 /// - A refund vault has been paired (every sale requires one).
-/// - `inventory >= hard_cap * rate` (u128-checked for overflow).
+/// - `inventory >= hard_cap * max_rate` (u128-checked for overflow).
 ///   Sold-out and hard-cap-reached therefore coincide; `purchase`
 ///   never aborts with "out of inventory" before "exceeds cap".
 /// - `now < closes_at_ms`. Activating after the window has elapsed
 ///   would share a stale sale that immediately becomes finalizable
 ///   or cancellable with no purchase opportunity. Activation before
 ///   `opens_at_ms` is allowed.
-public fun share_and_activate<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    mut sale: PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun share_and_activate<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    mut sale: PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    ticket: ActivationTicket<Curve>,
     clock: &Clock,
 ) {
+    let sale_id = object::id(&sale);
+    let ActivationTicket { sale_id: ticket_sale_id, required_inventory } = ticket;
+
+    assert!(sale_id == ticket_sale_id, EReceiptSaleMismatch);
+
+    // TODO: move phase-related error codes to this module and remove assert_init
     sale.phase.assert_init();
     assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
-
-    let required = (sale.hard_cap as u128) * (sale.rate as u128);
-    assert!(required <= std::u64::max_value!() as u128, EInventoryOverflowAtActivate);
-    let required = required as u64;
-    assert!(sale.inventory.value() >= required, EInsufficientInventoryAtActivate);
 
     let activated_at_ms = clock::timestamp_ms(clock);
     assert!(activated_at_ms < sale.closes_at_ms, EActivationAfterClose);
 
+    assert!(sale.inventory.value() >= required_inventory, EInsufficientInventoryAtActivate);
+
     sale.phase.activate();
-    let sale_id = object::id(&sale);
     transfer::share_object(sale);
-    event::emit(SaleActivated<SaleCoin, PaymentCoin> { sale_id, activated_at_ms });
+    event::emit(SaleActivated<SaleCoin, PaymentCoin> {
+        sale_id,
+        activated_at_ms,
+    });
 }
 
 // === Active phase ===
@@ -623,16 +711,30 @@ public fun share_and_activate<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
 /// Buy sale tokens. Delivers a fresh `Receipt<SaleCoin>` to `ctx.sender()`
 /// (the buyer). Payment is added to `sale.proceeds`.
 ///
+/// Pricing is supplied by `quote`, a witness-gated `Quote<Curve>` that
+/// only the sale's `Curve` module can mint (see `sale::mint_quote`).
+/// The quote is bound to this sale (`quote.sale_id`) and to the payment
+/// (`quote.paid == payment.value()`); its `allocation` is accepted only
+/// up to `paid * max_rate`, the sale's committed defensive bound, so a
+/// buggy or dishonest curve can never over-allocate inventory.
+///
 /// `allow` must be `Some` iff `requires_allowlist == true`. The
 /// entry is consumed; its `sale_id` and `buyer` are asserted.
 ///
 /// All arithmetic on user-controlled inputs (`raised + paid`,
-/// `contribution + paid`, `paid * rate`) is widened to `u128` and
+/// `contribution + paid`, `paid * max_rate`) is widened to `u128` and
 /// bounds-checked before downcasting, so oversized payments abort
 /// with a typed error rather than the default arithmetic overflow.
-public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun purchase<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     payment: Coin<PaymentCoin>,
+    quote: Quote<Curve>,
     allow: Option<AllowEntry<SaleCoin>>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -654,10 +756,15 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
         0
     };
 
-    // Hard cap
-    let paid = payment.value();
+    // Unpack the quote and bind it to this sale + payment.
+    let (quote_sale_id, paid, allocation) = quote.unpack();
+    assert!(quote_sale_id == object::id(sale), EQuoteSaleMismatch);
+    assert!(paid == payment.value(), EQuotePaymentMismatch);
     assert!(paid > 0, EZeroPayment);
+
     let u64_max = std::u64::max_value!();
+
+    // Hard cap
     assert!(u64_max - paid >= sale.raised, ERaisedOverflow);
     let new_raised = sale.raised + paid;
     assert!(new_raised <= sale.hard_cap, EHardCapExceeded);
@@ -683,10 +790,7 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
         };
     };
 
-    // Allocation + inventory backing (u128-checked)
-    let allocation = (paid as u128) * (sale.rate as u128);
-    assert!(allocation <= u64_max as u128, EAllocationOverflow);
-    let allocation = allocation as u64;
+    // Inventory backing.
     let unallocated = sale.inventory.value() - sale.total_allocated;
     assert!(allocation <= unallocated, EInsufficientInventoryAtActivate);
 
@@ -720,8 +824,14 @@ public fun purchase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
 /// Allowed when phase is `Active` and either:
 /// - `now > closes_at_ms` and `raised >= soft_cap`, or
 /// - `raised >= hard_cap` (sold-out - closes early).
-public fun finalize<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun finalize<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
@@ -755,8 +865,14 @@ public fun finalize<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
 /// `soft_cap > 0`, and `raised < soft_cap`. Drains `sale.proceeds`
 /// into the paired vault and flips vault to `Refunding`. Buyers then
 /// call `refund` individually.
-public fun cancel_after_close<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun cancel_after_close<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
@@ -783,8 +899,14 @@ public fun cancel_after_close<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
 ///
 /// Drains `sale.proceeds` into the vault and flips vault to
 /// `Refunding`.
-public fun cancel_emergency<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun cancel_emergency<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
@@ -800,8 +922,14 @@ public fun cancel_emergency<SaleCoin, PaymentCoin, ScheduleParams: copy + drop +
 }
 
 /// Shared body of `cancel_after_close` and `cancel_emergency`.
-fun do_cancel<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+fun do_cancel<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     vault: &mut RefundVault<PaymentCoin>,
     reason: CancelReason,
     now: u64,
@@ -837,8 +965,14 @@ fun do_cancel<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
 /// `claim_into_vesting`. This is the library's enforcement that the
 /// schedule cannot be bypassed by calling the immediate-distribution
 /// path.
-public fun claim<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun claim<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): Coin<SaleCoin> {
@@ -867,8 +1001,14 @@ public fun claim<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
 /// `ctx.sender() == receipt.buyer` on each. Aborts the whole call
 /// if any receipt is invalid. Inherits the no-vesting guard from
 /// `claim`.
-public fun claim_all<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun claim_all<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     mut receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): Coin<SaleCoin> {
@@ -881,12 +1021,12 @@ public fun claim_all<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>
     total
 }
 
-/// Redeem a receipt into a `VestedAllocation<SaleCoin, ScheduleParams>` hot-potato. The only
+/// Redeem a receipt into a `VestedAllocation<SaleCoin, VestingScheduleParams>` hot-potato. The only
 /// redemption path for a vesting-attached sale; aborts with
 /// `ENoVestingScheduleAttached` if no schedule is set (use `claim`
 /// instead).
 ///
-/// The returned `VestedAllocation<SaleCoin, ScheduleParams>` has no `drop`, `key`, or `store`
+/// The returned `VestedAllocation<SaleCoin, VestingScheduleParams>` has no `drop`, `key`, or `store`
 /// ability and its fields are private to `sale.move`, so the caller
 /// cannot stash it, discard it, or extract the raw `Coin<SaleCoin>`. The
 /// only consumer paths live in `vested_claim`, which route the coin
@@ -894,11 +1034,17 @@ public fun claim_all<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>
 ///
 /// Asserts `ctx.sender() == receipt.buyer` (same buyer-binding rule
 /// as `claim`). Destroys the receipt.
-public fun claim_into_vesting<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun claim_into_vesting<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): VestedAllocation<SaleCoin, ScheduleParams> {
+): VestedAllocation<SaleCoin, VestingScheduleParams> {
     sale.phase.assert_finalized();
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
@@ -925,8 +1071,14 @@ public fun claim_into_vesting<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
 }
 
 /// Withdraw collected proceeds. Phase must be `Finalized`.
-public fun withdraw_proceeds<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun withdraw_proceeds<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     ctx: &mut TxContext,
 ): Coin<PaymentCoin> {
@@ -945,8 +1097,14 @@ public fun withdraw_proceeds<SaleCoin, PaymentCoin, ScheduleParams: copy + drop 
 /// `Cancelled`. Strictly the unreserved portion
 /// (`inventory - total_allocated`); outstanding receipts remain
 /// backed.
-public fun withdraw_unsold_inventory<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun withdraw_unsold_inventory<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     ctx: &mut TxContext,
 ): Coin<SaleCoin> {
@@ -966,8 +1124,14 @@ public fun withdraw_unsold_inventory<SaleCoin, PaymentCoin, ScheduleParams: copy
 /// Refund a buyer's payment. Asserts
 /// `ctx.sender() == receipt.buyer`. Destroys the receipt and pays
 /// `receipt.paid` worth of `Coin<PaymentCoin>` out of the paired vault.
-public fun refund<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun refund<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     vault: &mut RefundVault<PaymentCoin>,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
@@ -1000,85 +1164,172 @@ public fun refund<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
 
 // === Views ===
 
-public fun phase<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun phase<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): Phase {
     sale.phase
 }
 
-public fun raised<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun raised<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.raised
 }
 
-public fun rate<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
-): u64 { sale.rate }
+/// Read the sale's curve configuration. Opaque to the sale; the
+/// declaring `Curve` module interprets it to price purchases. Mirrors
+/// `VestingWallet::schedule_params`.
+public fun curve_params<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+): CurveParams { sale.curve_params }
 
-public fun hard_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun hard_cap<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.hard_cap
 }
 
-public fun soft_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun soft_cap<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.soft_cap
 }
 
-public fun opens_at_ms<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun opens_at_ms<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.opens_at_ms
 }
 
-public fun closes_at_ms<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun closes_at_ms<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.closes_at_ms
 }
 
-public fun requires_allowlist<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun requires_allowlist<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): bool { sale.requires_allowlist }
 
 /// Read the sale's vesting schedule. Returns `Some(schedule)` if the
 /// issuer called `set_vesting_schedule_params` during Init, otherwise `None`.
 /// Vesting adapters read this to determine the redemption shape.
-public fun vesting_schedule_params<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
-): Option<ScheduleParams> {
+public fun vesting_schedule_params<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+): Option<VestingScheduleParams> {
     sale.vesting_schedule_params
 }
 
-public fun inventory_total<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun inventory_total<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.inventory.value()
 }
 
-public fun total_allocated<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun total_allocated<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.total_allocated
 }
 
-public fun inventory_remaining<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun inventory_remaining<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.inventory.value() - sale.total_allocated
 }
 
-public fun proceeds_amount<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun proceeds_amount<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
     sale.proceeds.value()
 }
 
-public fun is_open<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun is_open<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     clock: &Clock,
 ): bool {
     if (!sale.phase.is_active()) { return false };
@@ -1086,14 +1337,26 @@ public fun is_open<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
     now >= sale.opens_at_ms && now <= sale.closes_at_ms
 }
 
-public fun has_reached_soft_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun has_reached_soft_cap<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): bool {
     sale.raised >= sale.soft_cap
 }
 
-public fun has_reached_hard_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
+public fun has_reached_hard_cap<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): bool {
     sale.raised >= sale.hard_cap
 }
@@ -1101,3 +1364,63 @@ public fun has_reached_hard_cap<SaleCoin, PaymentCoin, ScheduleParams: copy + dr
 public fun cap_sale_id<SaleCoin, PaymentCoin>(c: &SaleAdminCap<SaleCoin, PaymentCoin>): ID {
     c.sale_id
 }
+
+// === Quote<C> - witness-gated pricing carrier ===
+//
+// A `Quote<C>` is the only way to drive `purchase` on a
+// `PrefundedSale<C, _, _, _, _>`. The hot-potato has no abilities, so:
+//
+// - It can only be produced by `mint_quote`, which requires a value
+//   of type `C: drop`. Since `C`'s constructor is private to the curve
+//   module that declares it, only that module can mint quotes for `C`.
+// - It cannot be stored, copied, or replayed across transactions.
+// - It cannot be transferred to another address.
+// - It cannot be discarded silently. The sale's `purchase` is the
+//   single legal consumer (`unpack`).
+//
+// The carrier pins `sale_id` so a quote minted for sale A cannot be
+// spent on sale B. The sale's `purchase` additionally asserts
+// `quote.paid == coin::value(payment)` to bind the quote to its
+// payment, and asserts `quote.allocation <= quote.paid * sale.max_rate`
+// as a defense-in-depth bound against a buggy or dishonest curve.
+
+/// Hot-potato carrying a curve-priced quote for a single purchase.
+public struct Quote<phantom C> {
+    sale_id: ID,
+    paid: u64,
+    allocation: u64,
+}
+
+/// Witness-gated quote constructor. The curve module declaring `C`
+/// calls this from its `quote(..)` function after running whatever
+/// pricing math it owns. The witness value is taken by value (`_w: C`)
+/// so a caller cannot mint a quote without the declaring curve module's
+/// cooperation.
+public fun mint_quote<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    _w: Curve,
+    paid: u64,
+    allocation: u64,
+): Quote<Curve> {
+    Quote<Curve> { sale_id: object::id(sale), paid, allocation }
+}
+
+/// Destructively read a quote. Library-internal: only sibling library
+/// modules (the sale flavor's `purchase`) unpack quotes. Returns
+/// `(sale_id, paid, allocation)`.
+fun unpack<C>(q: Quote<C>): (ID, u64, u64) {
+    let Quote { sale_id, paid, allocation } = q;
+    (sale_id, paid, allocation)
+}
+
+public fun sale_id<C>(q: &Quote<C>): ID { q.sale_id }
+
+public fun paid<C>(q: &Quote<C>): u64 { q.paid }
+
+public fun allocation<C>(q: &Quote<C>): u64 { q.allocation }
