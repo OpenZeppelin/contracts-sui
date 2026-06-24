@@ -36,7 +36,7 @@
 module openzeppelin_sale::vested_claim;
 
 use openzeppelin_finance::vesting_wallet;
-use openzeppelin_sale::sale::{Self, VestedAllocation};
+use openzeppelin_sale::sale::VestedAllocation;
 
 /// Consume a `VestedAllocation<S, ScheduleParams>` into a fresh shared
 /// `VestingWallet<S>` matching the sale's schedule. Anyone can call
