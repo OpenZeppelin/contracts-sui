@@ -19,48 +19,26 @@ import pathlib
 import sys
 from typing import Sequence
 
-from mpmath import mp, mpf
-
 from gaussian_codegen.shared import constants
 from gaussian_codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
     format_move,
+    quantize,
     rel_or_abs,
+    render_vector,
     write_move,
 )
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
-WAD = constants.WAD
 MAX_Z_RAW = constants.MAX_Z_RAW
 
 DERIVE_OUTPUT_PATH = pathlib.Path(__file__).parent / ".derive_output.json"
 COEFF_OUTPUT_PATH = (
     REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "cdf_coefficients.move"
 )
-
-
-def quantize(c_str: str) -> tuple[int, bool]:
-    """Quantize a high-precision coefficient string at unit scale to a
-    `(u128 magnitude, bool is_negative)` pair at WAD scale, half-up rounding.
-
-    The u128 range is enforced downstream by `fmt_u128` when the literal is
-    rendered, so it is not re-checked here."""
-    mp.dps = constants.DPS
-    c = mpf(c_str)
-    is_neg = c < 0
-    mag_real = (-c if is_neg else c) * mpf(WAD)
-    mag = int(mag_real + mpf("0.5"))
-    if mag == 0:
-        is_neg = False  # canonicalize zero
-    return mag, bool(is_neg)
-
-
-def render_vector(name: str, ty: str, items: Sequence[str], indent: str = "    ") -> str:
-    body = f",\n{indent}".join(items)
-    return f"const {name}: vector<{ty}> = vector[\n{indent}{body},\n];"
 
 
 def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str:
