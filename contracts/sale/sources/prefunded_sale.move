@@ -131,16 +131,14 @@ module openzeppelin_sale::prefunded_sale;
 
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
 use openzeppelin_sale::phase::{Self, Phase};
+use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{Self, RefundVault, RefundVaultCap};
-use openzeppelin_sale::sale::{Self, Receipt};
 use openzeppelin_sale::vested_allocation::{Self, VestedAllocation};
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::event;
 use sui::table::{Self, Table};
-
-use fun openzeppelin_sale::sale::consume_receipt as Receipt.consume;
 
 // === Errors ===
 
@@ -530,9 +528,6 @@ public fun set_per_buyer_cap<
 }
 
 /// Configure the sale's vesting policy. One-shot, Init-phase only.
-/// `start_ms`, `cliff_duration_ms`, and `duration_ms` are validated
-/// by `sale::new_vesting_schedule` (duration > 0, cliff <= duration,
-/// no `start_ms + duration_ms` overflow).
 ///
 /// Once a schedule is attached, the plain `claim` path aborts and
 /// buyers must redeem through `claim_into_vesting` → a
@@ -784,7 +779,7 @@ public fun purchase<
 
     // Mint and deliver receipt
     let sale_id = object::id(sale);
-    let receipt = sale::new_receipt<SaleCoin>(sale_id, buyer, paid, allocation, now, ctx);
+    let receipt = receipt::new_receipt<SaleCoin>(sale_id, buyer, paid, allocation, now, ctx);
     let receipt_id = object::id(&receipt);
     receipt.deliver(buyer);
 
@@ -1036,7 +1031,7 @@ public fun claim_into_vesting<
     (&receipt, ctx);
 
     let receipt_id = object::id(&receipt);
-    let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume_receipt();
+    let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume();
 
     sale.total_allocated = sale.total_allocated - allocation;
     let payout = sale.inventory.split(allocation);

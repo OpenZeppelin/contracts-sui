@@ -40,7 +40,7 @@
 /// trade the resulting `Coin<S>` after `claim` (or `Coin<P>` after
 /// `refund`), or build their own ticket type with abilities and
 /// compliance checks of their choosing.
-module openzeppelin_sale::sale;
+module openzeppelin_sale::receipt;
 
 // === Receipt ===
 
@@ -117,7 +117,7 @@ public(package) fun deliver<S>(receipt: Receipt<S>, to: address) {
 /// and `refund` paths in sale flavors. Deletes the receipt's UID.
 ///
 /// Returns `(sale_id, buyer, paid, allocation, purchased_at_ms)`.
-public(package) fun consume_receipt<S>(r: Receipt<S>): (ID, address, u64, u64, u64) {
+public(package) fun consume<S>(r: Receipt<S>): (ID, address, u64, u64, u64) {
     let Receipt { id, sale_id, buyer, paid, allocation, purchased_at_ms } = r;
     object::delete(id);
     (sale_id, buyer, paid, allocation, purchased_at_ms)
