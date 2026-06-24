@@ -71,11 +71,7 @@ public fun params(rate: u64): Params {
     Params { rate }
 }
 
-public fun mint_activation_ticket<
-    SaleCoin,
-    PaymentCoin,
-    VestingScheduleParams: copy + drop + store,
->(
+public fun activation_ticket<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): ActivationTicket<FixedRateCurve> {
     let rate = sale.curve_params().rate;
