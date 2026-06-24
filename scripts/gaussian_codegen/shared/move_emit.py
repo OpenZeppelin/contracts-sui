@@ -10,7 +10,7 @@ from pathlib import Path
 def fmt_u128(n: int) -> str:
     """Format a non-negative integer as a Move-friendly decimal literal with
     underscore separators every 3 digits (right-aligned). The `u128` suffix is
-    *not* appended — call sites add it where needed."""
+    *not* appended - call sites add it where needed."""
     if n < 0:
         raise ValueError(f"u128 literal must be non-negative, got {n}")
     if n >= 2**128:
@@ -54,7 +54,7 @@ def auto_generated_banner(source: str) -> str:
 
 def rel_or_abs(path: Path, root: Path) -> Path:
     """`path` relative to `root` when possible, else `path` unchanged. Used only
-    for human-readable logging — a custom `--output` outside the repo must not
+    for human-readable logging - a custom `--output` outside the repo must not
     crash the script after a successful write."""
     try:
         return path.relative_to(root)

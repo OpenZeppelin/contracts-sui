@@ -34,7 +34,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 WAD = constants.WAD
 SCALE = constants.SCALE_DECIMAL
-MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at 10^9 — default; the gate parses the committed value
+MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at 10^9 - default; the gate parses the committed value
 HALF_SCALE = SCALE // 2  # Φ(0) bit-exact
 U256_MAX = 2**256 - 1  # on-chain Move intermediates must fit u256
 
@@ -159,9 +159,9 @@ def cdf_simulate(
     n_acc = horner_eval(z_wad, num)
     d_acc = horner_eval(z_wad, den)
     if n_acc[1]:
-        raise RuntimeError(f"N negative at z_raw={z_raw} — INV-8 violation")
+        raise RuntimeError(f"N negative at z_raw={z_raw} - INV-8 violation")
     if d_acc[1] or d_acc[0] == 0:
-        raise RuntimeError(f"D non-positive at z_raw={z_raw} — INV-7 violation")
+        raise RuntimeError(f"D non-positive at z_raw={z_raw} - INV-7 violation")
 
     # Final ratio: phi_raw = round(N * 10^9 / D) with Nearest (half-up) rounding.
     phi_raw = mul_div_nearest(n_acc[0], SCALE, d_acc[0])
@@ -172,7 +172,7 @@ def cdf_simulate(
         # INV-14: cdf_nonneg ≥ 5e8 on [0, 6.3], so this never underflows
         if phi_raw < HALF_SCALE:
             raise RuntimeError(
-                f"cdf_nonneg returned {phi_raw} < {HALF_SCALE} at z_raw={z_raw} — INV-14 violation"
+                f"cdf_nonneg returned {phi_raw} < {HALF_SCALE} at z_raw={z_raw} - INV-14 violation"
             )
         phi_raw = SCALE - phi_raw
     return phi_raw

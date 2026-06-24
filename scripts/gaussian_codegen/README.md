@@ -4,7 +4,7 @@ This directory is an **offline Python toolkit**. It computes the numeric
 constants that the `cdf` (standard-normal CDF) function in `openzeppelin_fp_math`
 needs, and writes them into the Move source as generated tables.
 
-Nothing here runs on-chain, and nothing here is needed to *use* the library —
+Nothing here runs on-chain, and nothing here is needed to *use* the library -
 the Move package is fully self-contained at runtime. You only touch this
 directory to **(re)generate or re-validate** those constants.
 
@@ -23,23 +23,23 @@ Move source.
 
 The longer version is worth understanding.
 
-**What `cdf` computes.** Φ(z) — the *standard-normal CDF* — is the probability
+**What `cdf` computes.** Φ(z) - the *standard-normal CDF* - is the probability
 that a normally-distributed value lands at or below `z`: the area under the bell
 curve to the left of `z`. It's a building block for options pricing, risk
 models, and sampling. What matters for this toolkit is *how* we get the number,
 not what it's used for.
 
-**Why you can't just compute it on-chain.** Φ has no elementary formula — it's
+**Why you can't just compute it on-chain.** Φ has no elementary formula - it's
 defined by an integral with no closed form. The usual ways to evaluate it lean
 on `exp(−z²/2)` or the error function `erf`. But Move has **no floating point
-and no transcendental functions** — only integer arithmetic on our fixed-point
+and no transcendental functions** - only integer arithmetic on our fixed-point
 types. There is no `exp`, no `erf`, nothing to build Φ out of directly.
 
 **The trick: approximate the curve, don't compute it.** Instead of evaluating Φ,
-we approximate the *whole curve* with a **rational function** `N(z) / D(z)` —
+we approximate the *whole curve* with a **rational function** `N(z) / D(z)` -
 one polynomial divided by another. With the right coefficients, a degree-9
 rational matches Φ to about `10⁻⁹` across the domain using nothing but
-multiplies and a single divide — operations Move *does* have. (The approach is
+multiplies and a single divide - operations Move *does* have. (The approach is
 from [Evan Kim's "On-Chain Atomic Gaussian Math"](https://paragraph.com/@evandekim/on-chain-atomic-gaussian-math);
 we re-derived our own coefficients rather than copying his.)
 
@@ -50,16 +50,16 @@ numerical work; *evaluating* them is trivial. So we split it:
   curve-fitting algorithm, get near-optimal coefficients, validate them against
   a 100-digit reference, and write them into Move as integer constants.
 - **On-chain, every call (the Move code):** evaluate the two polynomials with
-  Horner's method and divide. A handful of integer multiplies — deterministic,
+  Horner's method and divide. A handful of integer multiplies - deterministic,
   constant gas. See `../../math/fixed_point/sources/internal/cdf.move` (and the shared primitives in
   `../../math/fixed_point/sources/internal/horner.move`).
 
 **Why AAA, and why Python.** The fitting algorithm is **AAA** (Adaptive
 Antoulas–Anderson). You hand it samples of a function and it automatically
-produces a near-optimal rational fit — no hand-tuning of degree or coefficient
+produces a near-optimal rational fit - no hand-tuning of degree or coefficient
 placement. It ships in `scipy.interpolate.AAA` (added in SciPy 1.15.0), and the
-high-precision reference math uses `mpmath`. Neither could run on-chain — they
-need floats and arbitrary precision and are far too expensive — which is exactly
+high-precision reference math uses `mpmath`. Neither could run on-chain - they
+need floats and arbitrary precision and are far too expensive - which is exactly
 why this half lives here, offline, and only the cheap half ships in Move.
 
 Even symmetry makes it cheaper still: we fit only the right half `[0, 6.3]` and
@@ -77,14 +77,14 @@ derive.py ──► .derive_output.json ──┬─► emit_coefficients.py ─
 validate.py ──► parses the committed cdf_coefficients.move, re-runs it, checks vs scipy
 ```
 
-- **`derive.py`** — runs the AAA fit, sweeps the polynomial degree, picks the
+- **`derive.py`** - runs the AAA fit, sweeps the polynomial degree, picks the
   smallest one that meets the `5×10⁻⁹` error target, and writes the chosen
   coefficients to a JSON intermediate.
-- **`emit_coefficients.py`** — reads that JSON, quantizes the coefficients to
+- **`emit_coefficients.py`** - reads that JSON, quantizes the coefficients to
   fixed-point integers, and writes `cdf_coefficients.move`.
-- **`emit_test_vectors.py`** — emits the Move test vectors (expected Φ at chosen
+- **`emit_test_vectors.py`** - emits the Move test vectors (expected Φ at chosen
   `z`, taken straight from the high-precision `mpmath` oracle).
-- **`validate.py`** — the independent check, and the CI gate. It does **not**
+- **`validate.py`** - the independent check, and the CI gate. It does **not**
   re-derive: it parses the committed `cdf_coefficients.move` and re-runs the
   exact on-chain integer arithmetic in Python, asserting the quantized error
   stays within budget (≤ 5 ULP at `10⁻⁹`) against `scipy`.
@@ -105,7 +105,7 @@ which is cheap enough to run in CI on every change.
 
 The floor pins above guarantee *correct* output, not *identical* output: a
 future `scipy.interpolate.AAA` could shift the fit. The committed coefficients
-were generated with these exact versions — pin to them to reproduce the tables
+were generated with these exact versions - pin to them to reproduce the tables
 byte-for-byte:
 
 | Package | Version |
@@ -208,11 +208,11 @@ gaussian_codegen/
 `pdf/`, `inverse_cdf/`, etc. follow the same shape. Roughly:
 
 1. Add any new shared bound/scale to `shared/constants.py` (don't hardcode it).
-2. Create `<family>/derive.py` — fit and write `<family>/.derive_output.json`
+2. Create `<family>/derive.py` - fit and write `<family>/.derive_output.json`
    (add the dotfile to `.gitignore`).
-3. Create `<family>/emit_*.py` — quantize/emit the Move file(s), reusing the
+3. Create `<family>/emit_*.py` - quantize/emit the Move file(s), reusing the
    `shared/move_emit.py` helpers and adding a `--check` mode.
-4. Create `<family>/validate.py` — re-run the on-chain integer arithmetic in
+4. Create `<family>/validate.py` - re-run the on-chain integer arithmetic in
    Python and assert the error bound against the committed Move file.
 5. Add unit tests under `tests/`, and wire `validate` + the new drift check
    into `.github/workflows/test.yml` and the `Makefile`.

@@ -1,4 +1,4 @@
-"""Unit tests for the sign-magnitude integer arithmetic in `validate.py` — the
+"""Unit tests for the sign-magnitude integer arithmetic in `validate.py` - the
 on-chain mirror of the `horner` (primitives) and `cdf` (evaluator) modules.
 These primitives are load-bearing: if they drift from the Move implementation,
 validation gives false confidence.

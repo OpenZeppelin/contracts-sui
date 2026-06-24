@@ -4,7 +4,7 @@ The mpmath oracle (100 dps) is used where we need values exact far beyond the
 target scales: emitting bit-exact test vectors and quantizing the derived
 coefficients. Coefficient *derivation* (`cdf/derive.py`) and *validation*
 (`cdf/validate.py`) instead measure error against `scipy.stats.norm.cdf`
-(float64, accurate to ~1e-16 — three orders of magnitude tighter than the 5e-9
+(float64, accurate to ~1e-16 - three orders of magnitude tighter than the 5e-9
 error budget), so scipy is the reference there. The two agree to float64
 precision; `sanity_check_against_scipy()` asserts it.
 """
@@ -60,4 +60,4 @@ if __name__ == "__main__":
     print(f"phi(0)   = {phi(0)}")
     print(f"phi(1)   = {phi(1)}")
     print(f"phi(6.3) = {phi('6.3')}")
-    print("OK — mpmath oracle matches scipy within 1e-15")
+    print("OK - mpmath oracle matches scipy within 1e-15")

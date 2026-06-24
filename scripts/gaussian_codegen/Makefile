@@ -1,6 +1,6 @@
 # Convenience targets for the offline coefficient toolkit.
 #
-# Run `make install` once (into a venv — see README), then use the targets
+# Run `make install` once (into a venv - see README), then use the targets
 # below. Override the interpreter with `make PYTHON=/path/to/python <target>`.
 # The emitters format their own output via the repo's prettier
 # (`node_modules/.bin/prettier`), so run `npm ci` at the repo root first.
