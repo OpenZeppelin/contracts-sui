@@ -397,25 +397,6 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
     amount: u64,
 }
 
-// === Internal helpers ===
-
-fun assert_admin<
-    Curve: drop,
-    CurveParams: copy + drop + store,
-    SaleCoin,
-    PaymentCoin,
-    VestingScheduleParams: copy + drop + store,
->(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
-    cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
-) {
-    assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
-}
-
-fun assert_sender_is_buyer<SaleCoin>(receipt: &Receipt<SaleCoin>, ctx: &TxContext) {
-    assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
-}
-
 // === Setup (Phase: Init) ===
 
 /// Create a sale in `Init` phase. Returns the sale as an owned value
@@ -911,7 +892,7 @@ public fun cancel_emergency<
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
-    assert_admin(sale, cap);
+    assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
     sale.phase.assert_active();
     let now = clock::timestamp_ms(clock);
     assert!(now <= sale.closes_at_ms, EEmergencyCancelAfterClose);
@@ -979,7 +960,8 @@ public fun claim<
     sale.phase.assert_finalized();
     assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
-    assert_sender_is_buyer(&receipt, ctx);
+    assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
+    (&receipt, ctx);
 
     let receipt_id = object::id(&receipt);
     let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume();
@@ -1048,7 +1030,8 @@ public fun claim_into_vesting<
     sale.phase.assert_finalized();
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
-    assert_sender_is_buyer(&receipt, ctx);
+    assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
+    (&receipt, ctx);
 
     let receipt_id = object::id(&receipt);
     let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume_receipt();
@@ -1082,7 +1065,7 @@ public fun withdraw_proceeds<
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     ctx: &mut TxContext,
 ): Coin<PaymentCoin> {
-    assert_admin(sale, cap);
+    assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
     sale.phase.assert_finalized();
     let amount = sale.proceeds.value();
     let part = sale.proceeds.split(amount);
@@ -1108,7 +1091,7 @@ public fun withdraw_unsold_inventory<
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     ctx: &mut TxContext,
 ): Coin<SaleCoin> {
-    assert_admin(sale, cap);
+    assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
     sale.phase.assert_finalized();
     let unallocated = sale.inventory.value() - sale.total_allocated;
     let part = sale.inventory.split(unallocated);
@@ -1138,7 +1121,8 @@ public fun refund<
 ): Coin<PaymentCoin> {
     sale.phase.assert_cancelled();
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
-    assert_sender_is_buyer(&receipt, ctx);
+    assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
+    (&receipt, ctx);
     let paired_vault_id = *sale.refund_vault_id.borrow();
     assert!(object::id(vault) == paired_vault_id, EWrongVault);
 
