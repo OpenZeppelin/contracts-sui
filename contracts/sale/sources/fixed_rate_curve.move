@@ -40,8 +40,6 @@ use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale, SaleAdminCap, Activ
 #[error(code = 0)]
 const ERateZero: vector<u8> = "rate must be greater than zero";
 #[error(code = 1)]
-const EAllocationOverflow: vector<u8> = "paid * rate overflows u64";
-#[error(code = 2)]
 const ERequiredInventoryOverflow: vector<u8> =
     "Required inventory would overflow u64; cannot guarantee inventory backing";
 
@@ -86,12 +84,10 @@ public fun activation_ticket<SaleCoin, PaymentCoin, VestingScheduleParams: copy 
 /// allocation is `paid * rate`, u128-widened to detect overflow.
 public fun quote<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
-    paid: u64,
+    balance: Balance<PaymentCoin>,
 ): Quote<FixedRateCurve> {
     let rate = sale.curve_params().rate;
-    let alloc = (paid as u128) * (rate as u128);
-    assert!(alloc <= (std::u64::max_value!() as u128), EAllocationOverflow);
-    sale.mint_quote(FixedRateCurve {}, paid, alloc as u64)
+    sale.mint_quote(FixedRateCurve {}, balance, rate)
 }
 
 // === Views ===

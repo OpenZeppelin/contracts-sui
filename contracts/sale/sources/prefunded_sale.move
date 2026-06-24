@@ -179,6 +179,8 @@ const EHardCapExceeded: vector<u8> = "Purchase would exceed hard_cap";
 #[error(code = 26)]
 const EInsufficientInventoryAtActivate: vector<u8> =
     "Inventory at activation does not cover hard_cap * max_rate";
+#[error(code = 27)]
+const EAllocationOverflow: vector<u8> = "Allocation would overflow u64";
 
 // Caps
 #[error(code = 30)]
@@ -1405,9 +1407,11 @@ public fun mint_quote<
 >(
     sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     _w: Curve,
-    paid: u64,
-    allocation: u64,
+    balance: Balance<PaymentCoin>,
+    rate: u64,
 ): Quote<Curve> {
+    let alloc = (balance.value() as u128) * (rate as u128);
+    assert!(alloc <= (std::u64::max_value!() as u128), EAllocationOverflow);
     Quote<Curve> { sale_id: object::id(sale), paid, allocation }
 }
 
