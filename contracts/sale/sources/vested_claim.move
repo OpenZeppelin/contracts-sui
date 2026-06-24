@@ -42,6 +42,7 @@ use openzeppelin_sale::sale::{Self, VestedAllocation};
 /// `VestingWallet<S>` matching the sale's schedule. Anyone can call
 /// `release` on the resulting wallet; payouts always flow to the
 /// recorded beneficiary.
+#[allow(lint(share_owned))]
 public fun into_shared_wallet<Witness: drop, ScheduleParams: copy + drop + store, S>(
     allocation: VestedAllocation<S, ScheduleParams>,
     ctx: &mut TxContext,
