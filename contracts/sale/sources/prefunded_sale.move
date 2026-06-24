@@ -143,102 +143,102 @@ use fun openzeppelin_sale::sale::consume_receipt as Receipt.consume;
 // === Errors ===
 
 // Auth
-#[error(code = 10)]
+#[error(code = 0)]
 const EWrongAdminCap: vector<u8> = "Admin cap does not match this sale";
-#[error(code = 11)]
+#[error(code = 1)]
 const EBuyerOnly: vector<u8> =
     "Receipt is bound to its buyer; transaction sender must equal receipt.buyer";
-#[error(code = 12)]
+#[error(code = 2)]
 const EEmergencyCancelAfterClose: vector<u8> =
     "cancel_emergency can only be called during the active window; use cancel_after_close instead";
 
 // Time
-#[error(code = 20)]
+#[error(code = 10)]
 const EInvalidTimeRange: vector<u8> = "opens_at_ms must be strictly less than closes_at_ms";
-#[error(code = 21)]
+#[error(code = 11)]
 const ESaleWindowClosed: vector<u8> = "Purchase outside [opens_at_ms, closes_at_ms]";
-#[error(code = 22)]
+#[error(code = 12)]
 const ESaleWindowStillOpen: vector<u8> =
     "Cannot close: window still open and hard cap not yet reached";
-#[error(code = 23)]
+#[error(code = 13)]
 const EActivationAfterClose: vector<u8> = "Cannot activate: closes_at_ms is already in the past";
 
 // Pricing & accounting
-#[error(code = 30)]
+#[error(code = 20)]
 const ERateZero: vector<u8> = "rate must be greater than zero";
-#[error(code = 31)]
+#[error(code = 21)]
 const EHardCapZero: vector<u8> = "hard_cap must be greater than zero";
-#[error(code = 32)]
+#[error(code = 22)]
 const EInvalidCapsOrdering: vector<u8> = "soft_cap must be <= hard_cap";
-#[error(code = 33)]
+#[error(code = 23)]
 const EZeroPayment: vector<u8> = "Payment must be greater than zero";
-#[error(code = 34)]
+#[error(code = 24)]
 const EAllocationOverflow: vector<u8> = "payment * rate overflows u64";
-#[error(code = 35)]
+#[error(code = 25)]
 const ERaisedOverflow: vector<u8> = "raised + payment overflows u64";
-#[error(code = 36)]
+#[error(code = 26)]
 const EContributionOverflow: vector<u8> = "buyer contribution + payment overflows u64";
-#[error(code = 37)]
+#[error(code = 27)]
 const EHardCapExceeded: vector<u8> = "Purchase would exceed hard_cap";
-#[error(code = 38)]
+#[error(code = 28)]
 const EInventoryOverflowAtActivate: vector<u8> =
     "hard_cap * rate overflows u64; cannot guarantee inventory backing";
-#[error(code = 39)]
+#[error(code = 29)]
 const EInsufficientInventoryAtActivate: vector<u8> =
     "Inventory at activation does not cover hard_cap * rate";
 
 // Caps
-#[error(code = 40)]
+#[error(code = 30)]
 const EPerBuyerCapExceeded: vector<u8> = "Purchase exceeds per-buyer cap";
-#[error(code = 41)]
+#[error(code = 31)]
 const EPerEntryCapExceeded: vector<u8> = "Purchase exceeds AllowEntry max_amount";
-#[error(code = 42)]
+#[error(code = 32)]
 const ESoftCapNotMet: vector<u8> = "Cannot finalize: raised < soft_cap";
-#[error(code = 43)]
+#[error(code = 33)]
 const ESoftCapMet: vector<u8> = "Cannot cancel: soft_cap already met or no soft_cap configured";
-#[error(code = 44)]
+#[error(code = 34)]
 const ESaleAlreadyComplete: vector<u8> =
     "Cannot cancel: hard_cap already reached, sale must finalize";
 
 // Allowlist coupling
-#[error(code = 50)]
+#[error(code = 40)]
 const EAllowlistRequired: vector<u8> = "Sale requires AllowEntry but none provided";
-#[error(code = 51)]
+#[error(code = 41)]
 const EAllowlistNotRequired: vector<u8> = "Sale does not require AllowEntry but one was provided";
-#[error(code = 52)]
+#[error(code = 42)]
 const EAllowlistAlreadyEnabled: vector<u8> = "Allowlist already enabled for this sale";
 
 // Vault coupling
-#[error(code = 60)]
+#[error(code = 50)]
 const EVaultAlreadyPaired: vector<u8> = "Refund vault already paired";
-#[error(code = 61)]
+#[error(code = 51)]
 const EVaultRequiredForActivate: vector<u8> = "Activation requires a paired refund vault";
-#[error(code = 62)]
+#[error(code = 52)]
 const EWrongVault: vector<u8> = "Provided vault does not match the one paired with this sale";
-#[error(code = 63)]
+#[error(code = 53)]
 const EVaultNotActive: vector<u8> = "Refund vault must be in Active state when paired";
-#[error(code = 64)]
+#[error(code = 54)]
 const EVaultNotEmpty: vector<u8> =
     "Refund vault must be empty (value == 0) when paired; pre-existing funds would be stranded after finalize/cancel";
 
 // Receipts
-#[error(code = 70)]
+#[error(code = 60)]
 const EReceiptSaleMismatch: vector<u8> = "Receipt does not belong to this sale";
 
 // Per-buyer cap configuration
-#[error(code = 80)]
+#[error(code = 70)]
 const EPerBuyerCapAlreadySet: vector<u8> = "Per-buyer cap already configured";
-#[error(code = 81)]
+#[error(code = 71)]
 const EPerBuyerCapZero: vector<u8> =
     "Per-buyer cap must be greater than zero (a zero cap blocks every buyer)";
 
 // Vesting schedule configuration
-#[error(code = 90)]
+#[error(code = 80)]
 const EVestingScheduleAlreadySet: vector<u8> = "Vesting schedule already configured";
-#[error(code = 91)]
+#[error(code = 81)]
 const EClaimRequiresVesting: vector<u8> =
     "Sale has a vesting schedule; redeem via claim_into_vesting + vested_claim, not plain claim";
-#[error(code = 92)]
+#[error(code = 82)]
 const ENoVestingScheduleAttached: vector<u8> =
     "Sale has no vesting schedule; use claim instead of claim_into_vesting";
 
