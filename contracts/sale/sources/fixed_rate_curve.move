@@ -34,6 +34,7 @@
 module openzeppelin_sale::fixed_rate_curve;
 
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale, SaleAdminCap, ActivationTicket, Quote};
+use sui::balance::Balance;
 
 // === Errors ===
 
@@ -80,12 +81,12 @@ public fun activation_ticket<SaleCoin, PaymentCoin, VestingScheduleParams: copy 
 
 // === Quote ===
 
-/// Mint a `Quote<FixedRateCurve>` for a buyer paying `paid` units. The
+/// Mint a `Quote<PaymentCoin>` for a buyer paying `paid` units. The
 /// allocation is `paid * rate`, u128-widened to detect overflow.
 public fun quote<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
     balance: Balance<PaymentCoin>,
-): Quote<FixedRateCurve> {
+): Quote<PaymentCoin> {
     let rate = sale.curve_params().rate;
     sale.mint_quote(FixedRateCurve {}, balance, rate)
 }

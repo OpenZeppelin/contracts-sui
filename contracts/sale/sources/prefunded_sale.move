@@ -223,8 +223,6 @@ const EReceiptSaleMismatch: vector<u8> = "Receipt does not belong to this sale";
 // Quote / curve coupling
 #[error(code = 61)]
 const EQuoteSaleMismatch: vector<u8> = "Quote does not belong to this sale";
-#[error(code = 62)]
-const EQuotePaymentMismatch: vector<u8> = "Quote.paid does not match the payment coin value";
 
 // Per-buyer cap configuration
 #[error(code = 70)]
@@ -735,14 +733,18 @@ public fun purchase<
     VestingScheduleParams: copy + drop + store,
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
-    payment: Coin<PaymentCoin>,
-    quote: Quote<Curve>,
+    quote: Quote<PaymentCoin>,
     allow: Option<AllowEntry<SaleCoin>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     // Phase + time
     sale.phase.assert_active();
+
+    // Unpack the quote and bind it to this sale.
+    let (quote_sale_id, payment, allocation) = quote.unpack();
+    assert!(quote_sale_id == object::id(sale), EQuoteSaleMismatch);
+
     let now = clock::timestamp_ms(clock);
     assert!(now >= sale.opens_at_ms && now <= sale.closes_at_ms, ESaleWindowClosed);
 
@@ -758,12 +760,8 @@ public fun purchase<
         0
     };
 
-    // Unpack the quote and bind it to this sale + payment.
-    let (quote_sale_id, paid, allocation) = quote.unpack();
-    assert!(quote_sale_id == object::id(sale), EQuoteSaleMismatch);
-    assert!(paid == payment.value(), EQuotePaymentMismatch);
-    assert!(paid > 0, EZeroPayment);
-
+    // already ensured that the value is > 0, see `mint_quote`
+    let paid = payment.value();
     let u64_max = std::u64::max_value!();
 
     // Hard cap
@@ -799,7 +797,7 @@ public fun purchase<
     // State mutations
     sale.total_allocated = sale.total_allocated + allocation;
     sale.raised = new_raised;
-    sale.proceeds.join(payment.into_balance());
+    sale.proceeds.join(payment);
 
     // Mint and deliver receipt
     let sale_id = object::id(sale);
@@ -1387,9 +1385,9 @@ public fun cap_sale_id<SaleCoin, PaymentCoin>(c: &SaleAdminCap<SaleCoin, Payment
 // as a defense-in-depth bound against a buggy or dishonest curve.
 
 /// Hot-potato carrying a curve-priced quote for a single purchase.
-public struct Quote<phantom C> {
+public struct Quote<phantom PaymentCoin> {
     sale_id: ID,
-    paid: u64,
+    payment: Balance<PaymentCoin>,
     allocation: u64,
 }
 
@@ -1407,24 +1405,25 @@ public fun mint_quote<
 >(
     sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     _w: Curve,
-    balance: Balance<PaymentCoin>,
+    payment: Balance<PaymentCoin>,
     rate: u64,
-): Quote<Curve> {
-    let alloc = (balance.value() as u128) * (rate as u128);
-    assert!(alloc <= (std::u64::max_value!() as u128), EAllocationOverflow);
-    Quote<Curve> { sale_id: object::id(sale), paid, allocation }
+): Quote<PaymentCoin> {
+    assert!(payment.value() > 0, EZeroPayment);
+    let allocation = (payment.value() as u128) * (rate as u128);
+    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
+    Quote { sale_id: object::id(sale), payment, allocation: allocation as u64 }
 }
 
 /// Destructively read a quote. Library-internal: only sibling library
 /// modules (the sale flavor's `purchase`) unpack quotes. Returns
 /// `(sale_id, paid, allocation)`.
-fun unpack<C>(q: Quote<C>): (ID, u64, u64) {
-    let Quote { sale_id, paid, allocation } = q;
-    (sale_id, paid, allocation)
+fun unpack<PaymentCoin>(q: Quote<PaymentCoin>): (ID, Balance<PaymentCoin>, u64) {
+    let Quote { sale_id, payment, allocation } = q;
+    (sale_id, payment, allocation)
 }
 
-public fun sale_id<C>(q: &Quote<C>): ID { q.sale_id }
+public fun sale_id<PaymentCoin>(q: &Quote<PaymentCoin>): ID { q.sale_id }
 
-public fun paid<C>(q: &Quote<C>): u64 { q.paid }
+public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> { &q.payment }
 
-public fun allocation<C>(q: &Quote<C>): u64 { q.allocation }
+public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
