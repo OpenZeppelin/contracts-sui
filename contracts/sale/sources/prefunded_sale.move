@@ -763,7 +763,6 @@ public fun cancel_after_close<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
     sale: &mut PrefundedSale<SaleCoin, PaymentCoin, ScheduleParams>,
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
-    ctx: &mut TxContext,
 ) {
     sale.phase.assert_active();
     let now = clock::timestamp_ms(clock);
@@ -771,7 +770,6 @@ public fun cancel_after_close<SaleCoin, PaymentCoin, ScheduleParams: copy + drop
     assert!(sale.soft_cap > 0 && sale.raised < sale.soft_cap, ESoftCapMet);
 
     sale.do_cancel(vault, CancelReason::SoftCapMissed, now);
-    let _ = ctx;
 }
 
 /// Emergency cancellation. **Admin-only.**
@@ -794,7 +792,6 @@ public fun cancel_emergency<SaleCoin, PaymentCoin, ScheduleParams: copy + drop +
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
-    ctx: &mut TxContext,
 ) {
     assert_admin(sale, cap);
     sale.phase.assert_active();
@@ -804,7 +801,6 @@ public fun cancel_emergency<SaleCoin, PaymentCoin, ScheduleParams: copy + drop +
     assert!(sale.soft_cap == 0 || sale.raised < sale.soft_cap, ESoftCapMet);
 
     sale.do_cancel(vault, CancelReason::AdminEmergency, now);
-    let _ = ctx;
 }
 
 /// Shared body of `cancel_after_close` and `cancel_emergency`.
