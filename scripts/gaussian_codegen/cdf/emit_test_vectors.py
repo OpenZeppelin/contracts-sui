@@ -2,7 +2,7 @@
 
 Picks a deterministic, hand-curated set of test inputs:
 - Well-known critical points (0, ±0.25, ±0.5, ±1, ±2, ±3, ±4, ±5, ±6, ±6.299,
-  ±6.3, ±6.301, ±7) — exercises symmetry, the saturation boundary on both
+  ±6.3, ±6.301, ±7) - exercises symmetry, the saturation boundary on both
   sides, and the Φ(0) bit-exact case.
 - 16 evenly spaced points across [0, max_z] for breadth.
 
@@ -12,8 +12,8 @@ z_raw ≥ MAX_Z_RAW) get exact endpoint values so the test exercises that branch
 in cdf.
 
 Two output files are produced from the same source-of-truth case list:
-- `tests/sd29x9_tests/cdf_test_vectors.move` — all cases (positive + negative).
-- `tests/ud30x9_tests/cdf_test_vectors.move` — positive subset.
+- `tests/sd29x9_tests/cdf_test_vectors.move` - all cases (positive + negative).
+- `tests/ud30x9_tests/cdf_test_vectors.move` - positive subset.
 
 Each file lives under `tests/` (compiled in test mode only, so no module-level
 `#[test_only]` is needed) and has one `#[test]` driver that iterates the table
@@ -59,7 +59,7 @@ UD30X9_OUTPUT_PATH = (
     / "cdf_test_vectors.move"
 )
 
-MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at UD30x9 scale — saturation threshold
+MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at UD30x9 scale - saturation threshold
 MAX_Z_FLOAT = float(constants.MAX_Z)
 
 CRITICAL_Z = [
@@ -144,7 +144,7 @@ module openzeppelin_fp_math::sd29x9_cdf_test_vectors;
 
 use openzeppelin_fp_math::sd29x9;
 
-const TOLERANCE: u128 = 5; // ≤ 5 ULP at UD30x9 scale (10^-9)
+const TOLERANCE: u128 = 5; // ≤ 5 ULP at SD29x9 scale (10^-9)
 
 #[error(code = 0)]
 const ETestCaseFailed: vector<u8> =

@@ -110,6 +110,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--coeffs", type=pathlib.Path, default=COEFF_PATH)
     args = parser.parse_args(argv)
 
+    if args.n < 2:
+        print("FAIL: --n must be at least 2", file=sys.stderr)
+        return 1
+
     if not args.coeffs.exists():
         print(f"FAIL: missing {args.coeffs}", file=sys.stderr)
         return 1

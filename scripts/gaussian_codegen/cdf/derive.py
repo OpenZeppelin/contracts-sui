@@ -7,7 +7,7 @@ fit's coefficients (mpmath at 100 dps, decimal-string serialized) to a JSON
 intermediate consumed by `emit_coefficients.py` and `emit_test_vectors.py`.
 
 Polynomial form is N(z)/D(z) with coefficients in **ascending power order**
-(constant term first). The fit is normalized so that D(0) = 1 — this keeps
+(constant term first). The fit is normalized so that D(0) = 1 - this keeps
 constant terms near `(0.5, 1)` and higher-order terms close to O(1), which
 makes them comfortably fit u128 after WAD scaling.
 """
@@ -59,7 +59,7 @@ def validate_grid() -> np.ndarray:
 
 
 def reference_values_float(grid: np.ndarray) -> np.ndarray:
-    """Φ values at the grid points (float64 — sufficient for AAA training; the
+    """Φ values at the grid points (float64 - sufficient for AAA training; the
     article's nominal error is 3.35e-9, three orders of magnitude above float64
     precision). mpmath at 100 dps is reserved for validation and quantization."""
     return norm.cdf(grid)
@@ -83,7 +83,7 @@ def measure_error(num: Sequence[mpf], den: Sequence[mpf], grid: np.ndarray) -> t
 
 
 def assert_signs_central(num: Sequence[mpf], den: Sequence[mpf], grid: np.ndarray) -> None:
-    """Verify that on the central domain D(z) > 0 and N(z) ≥ 0 — the runtime
+    """Verify that on the central domain D(z) > 0 and N(z) ≥ 0 - the runtime
     invariants INV-7 and INV-8. AAA fits to a non-negative monotone increasing
     function should satisfy these, but we check explicitly so a degenerate fit
     fails the codegen rather than silently producing a broken module."""

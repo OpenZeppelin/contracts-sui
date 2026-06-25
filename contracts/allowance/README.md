@@ -126,4 +126,5 @@ Complete integration examples live in [`examples/spend_vault/`](examples/spend_v
 
 - [Allowance package overview](https://docs.openzeppelin.com/contracts-sui/1.x/allowance)
 - [Allowance API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/allowance)
+- [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)

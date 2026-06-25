@@ -1,6 +1,5 @@
 module openzeppelin_fp_math::ud30x9_pdf_tests;
 
-use openzeppelin_fp_math::sd29x9_test_helpers::pos;
 use openzeppelin_fp_math::ud30x9;
 use openzeppelin_fp_math::ud30x9_base;
 use openzeppelin_fp_math::ud30x9_test_helpers::{assert_within, fixed};
@@ -114,7 +113,8 @@ fun pdf_is_deterministic() {
 #[test]
 fun matches_sd29x9_pdf_on_positives() {
     // `UD30x9::pdf(z)` and `SD29x9::pdf(z)` route through the same
-    // `pdf::pdf_nonneg_raw` helper; assert the type wrappers agree bit-for-bit.
+    // `pdf::pdf_nonneg_raw` helper, exercising the public `into_SD29x9`
+    // conversion, so the results must agree bit-for-bit.
     let probes: vector<u128> = vector[
         0,
         100_000_000,
@@ -130,7 +130,7 @@ fun matches_sd29x9_pdf_on_positives() {
     ];
     probes.destroy!(|raw| {
         let via_unsigned = fixed(raw).pdf().unwrap();
-        let via_signed = pos(raw).pdf().unwrap();
+        let via_signed = fixed(raw).into_SD29x9().pdf().unwrap();
         assert_eq!(via_unsigned, via_signed);
     });
 }

@@ -1,5 +1,5 @@
 """Unit tests for the sign-magnitude integer arithmetic in `shared/arithmetic.py`
-— the on-chain mirror of the `horner` Move primitives — and the end-to-end
+- the on-chain mirror of the `horner` Move primitives - and the end-to-end
 `cdf_simulate` evaluator in `cdf/validate.py`. These primitives are load-bearing:
 if they drift from the Move implementation, validation gives false confidence.
 """

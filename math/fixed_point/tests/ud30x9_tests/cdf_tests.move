@@ -1,6 +1,5 @@
 module openzeppelin_fp_math::ud30x9_cdf_tests;
 
-use openzeppelin_fp_math::sd29x9_test_helpers::pos;
 use openzeppelin_fp_math::ud30x9;
 use openzeppelin_fp_math::ud30x9_base;
 use openzeppelin_fp_math::ud30x9_test_helpers::{assert_within, fixed};
@@ -126,9 +125,9 @@ fun cdf_is_deterministic() {
 #[test]
 fun matches_sd29x9_cdf_on_positives() {
     // Verifies that `UD30x9::cdf(z)` and `SD29x9::cdf(z.into_SD29x9())` produce
-    // the same raw probability for every positive `z`. Both paths route through
-    // the same `cdf::cdf_nonneg_raw` helper - this test asserts the type
-    // wrappers agree bit-for-bit.
+    // the same raw probability for every positive `z`, exercising the public
+    // `into_SD29x9` conversion. Both paths route through the same
+    // `cdf::cdf_nonneg_raw` helper, so the results must agree bit-for-bit.
     let probes: vector<u128> = vector[
         0,
         100_000_000,
@@ -144,7 +143,7 @@ fun matches_sd29x9_cdf_on_positives() {
     ];
     probes.destroy!(|raw| {
         let via_unsigned = fixed(raw).cdf().unwrap();
-        let via_signed = pos(raw).cdf().unwrap();
+        let via_signed = fixed(raw).into_SD29x9().cdf().unwrap();
         assert_eq!(via_unsigned, via_signed);
     });
 }

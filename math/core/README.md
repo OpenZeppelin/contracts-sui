@@ -70,4 +70,5 @@ let med = vector::median!(&vector[5u64, 1, 9, 3, 7], rounding::down());
 
 - [Integer math package overview](https://docs.openzeppelin.com/contracts-sui/1.x/math)
 - [Integer math API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/math)
+- [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)

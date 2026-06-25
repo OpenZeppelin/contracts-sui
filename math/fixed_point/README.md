@@ -50,7 +50,8 @@ underlying fixed-point representation and do not multiply or divide by `10^9`.
 - `SD29x9` only: `min`, `from_bits`
 
 ```move
-use openzeppelin_fp_math::{sd29x9, ud30x9};
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
 
 let one = ud30x9::wrap(1_000_000_000); // 1.0
 let raw = ud30x9::wrap(42); // Raw bits, not 42.0
@@ -141,12 +142,13 @@ Properties:
   `z ≥ 6.3`.
 - **Φ(0)**: exactly `0.5`.
 - **Symmetry**: `cdf(z) + cdf(z.negate())` is exactly `1` for every `SD29x9`
-  input.
+  input except `min()`, whose negation is not representable.
 - **Execution**: pure, deterministic, and object-free integer math - no storage,
   no Sui objects; identical inputs always yield identical outputs.
 
 ```move
-use openzeppelin_fp_math::{sd29x9, ud30x9};
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
 
 let z = ud30x9::wrap(1_000_000_000); // 1.0
 let p = z.cdf(); // 0.841344746  (P(Z ≤ 1))
@@ -181,7 +183,8 @@ Properties:
   no Sui objects; identical inputs always yield identical outputs.
 
 ```move
-use openzeppelin_fp_math::{sd29x9, ud30x9};
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
 
 let z = ud30x9::wrap(1_000_000_000); // 1.0
 let d = z.pdf(); // 0.241970725  (height of the bell curve at z = 1)
@@ -222,11 +225,12 @@ approximations whose coefficients and test vectors are generated offline and mus
 - `tests/{sd29x9_tests,ud30x9_tests}/cdf_test_vectors.move`
 - `tests/{sd29x9_tests,ud30x9_tests}/pdf_test_vectors.move`
 
-To regenerate them — or to re-validate the committed coefficients against
-`scipy` — see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
+To regenerate them - or to re-validate the committed coefficients against
+`scipy` - see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
 
 ## Learn More
 
 - [Fixed-point math package overview](https://docs.openzeppelin.com/contracts-sui/1.x/fixed-point)
 - [Fixed-point math API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/fixed-point)
+- [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)

@@ -15,7 +15,7 @@ from gaussian_codegen.shared import constants
 def fmt_u128(n: int) -> str:
     """Format a non-negative integer as a Move-friendly decimal literal with
     underscore separators every 3 digits (right-aligned). The `u128` suffix is
-    *not* appended — call sites add it where needed."""
+    *not* appended - call sites add it where needed."""
     if n < 0:
         raise ValueError(f"u128 literal must be non-negative, got {n}")
     if n >= 2**128:
@@ -80,7 +80,7 @@ def auto_generated_banner(source: str) -> str:
 
 def rel_or_abs(path: Path, root: Path) -> Path:
     """`path` relative to `root` when possible, else `path` unchanged. Used only
-    for human-readable logging — a custom `--output` outside the repo must not
+    for human-readable logging - a custom `--output` outside the repo must not
     crash the script after a successful write."""
     try:
         return path.relative_to(root)
@@ -107,13 +107,17 @@ def format_move(text: str, path: Path, repo_root: Path) -> str:
             f"prettier not found at {prettier}; run `npm ci` at the repo root "
             "(installs @mysten/prettier-plugin-move, the Move formatter)"
         )
-    result = subprocess.run(
-        [str(prettier), "--stdin-filepath", str(path)],
-        input=text,
-        capture_output=True,
-        text=True,
-        cwd=repo_root,
-    )
+    try:
+        result = subprocess.run(
+            [str(prettier), "--stdin-filepath", str(path)],
+            input=text,
+            capture_output=True,
+            text=True,
+            cwd=repo_root,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"prettier timed out while formatting {path}") from exc
     if result.returncode != 0:
         raise RuntimeError(
             f"prettier failed to format {path} (exit {result.returncode}):\n{result.stderr}"
