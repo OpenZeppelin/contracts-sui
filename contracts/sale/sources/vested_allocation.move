@@ -22,12 +22,6 @@ use sui::balance::Balance;
 // consumer that honors the schedule. Buyers cannot reach the raw coin.
 
 /// Library-internal carrier for a vested claim. See module note above.
-///
-/// The hot-potato carries `Coin<S>` rather than `Balance<S>` because
-/// the only consumer path (`vested_claim::into_*`) immediately feeds
-/// the inner value into `vesting_wallet::deposit`, which already takes
-/// a `Coin<S>` - keeping the carrier shape aligned avoids a needless
-/// `Balance ↔ Coin` round-trip in the same transaction.
 public struct VestedAllocation<phantom S, P> {
     balance: Balance<S>,
     schedule_params: P,

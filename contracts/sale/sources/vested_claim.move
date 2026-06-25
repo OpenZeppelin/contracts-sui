@@ -35,19 +35,16 @@
 /// its own audit story. v1 ships the vesting-schedule-agnostic shape.
 module openzeppelin_sale::vested_claim;
 
-use openzeppelin_finance::vesting_wallet;
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
 use openzeppelin_sale::vested_allocation::VestedAllocation;
 use sui::coin;
 
-/// Consume a `VestedAllocation<S, VestingScheduleParams>` into a fresh shared
-/// `VestingWallet<S>` matching the sale's schedule. Anyone can call
-/// `release` on the resulting wallet; payouts always flow to the
-/// recorded beneficiary.
-#[allow(lint(share_owned))]
-public fun into_shared_wallet<Witness: drop, VestingScheduleParams: copy + drop + store, S>(
+/// Consume a `VestedAllocation<S, VestingScheduleParams>` into a fresh
+/// `VestingWallet<S>` matching the sale's schedule.
+public fun into_wallet<Witness: drop, VestingScheduleParams: copy + drop + store, S>(
     allocation: VestedAllocation<S, VestingScheduleParams>,
     ctx: &mut TxContext,
-) {
+): VestingWallet<Witness, VestingScheduleParams, S> {
     let (balance, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
     let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, S>(
         schedule_params,
@@ -55,24 +52,5 @@ public fun into_shared_wallet<Witness: drop, VestingScheduleParams: copy + drop 
         ctx,
     );
     wallet.deposit(coin::from_balance(balance, ctx));
-    transfer::public_share_object(wallet);
-}
-
-/// Consume a `VestedAllocation<S, VestingScheduleParams>` into a fresh `VestingWallet<S>`
-/// transferred to the buyer. Only the buyer can pass the resulting
-/// wallet by `&mut`, so only the buyer's transactions can call
-/// `release`. Payouts still flow to the recorded beneficiary (the
-/// same address) and the beneficiary is fixed for the wallet's life.
-public fun into_owned_wallet<Witness: drop, VestingScheduleParams: copy + drop + store, S>(
-    allocation: VestedAllocation<S, VestingScheduleParams>,
-    ctx: &mut TxContext,
-) {
-    let (balance, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
-    let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, S>(
-        schedule_params,
-        beneficiary,
-        ctx,
-    );
-    wallet.deposit(coin::from_balance(balance, ctx));
-    transfer::public_transfer(wallet, beneficiary);
+    wallet
 }
