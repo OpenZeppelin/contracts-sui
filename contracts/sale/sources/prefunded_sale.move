@@ -1444,6 +1444,7 @@ fun claim_all_internal<
     mut receipts: vector<Receipt<SaleCoin>>,
     ctx: &TxContext,
 ): Balance<SaleCoin> {
+    sale.phase.assert_finalized();
     let mut total = balance::zero<SaleCoin>();
     while (!receipts.is_empty()) {
         let r = receipts.pop_back();
