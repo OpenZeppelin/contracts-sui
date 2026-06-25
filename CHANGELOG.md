@@ -27,6 +27,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - New `timelock` module: a Sui-native `TimelockController` enforcing a minimum on-chain delay before a privileged operation executes. (#409)
 
+### `openzeppelin_fp_math`
+
+#### Added
+
+- `cdf`: the standard-normal cumulative distribution function `Φ(z)` for `UD30x9` and `SD29x9` fixed-point inputs. (#345)
+
 ## 1.3.0 (15-06-2026)
 
 ### `openzeppelin_math`

@@ -203,6 +203,10 @@ Examples of required rewrites:
   `#[test_only]` helpers (compiled only in test mode) and `#[test]` functions
   that exercise private items unreachable from `tests/`. Place all `#[test_only]`
   and `#[test]` items under the `// === Test-Only Helpers ===` section (item 13).
+- Do **not** put `#[test_only]` on the module declaration of a file under `tests/` -
+  those files are compiled only in test mode by location, so a module-level
+  `#[test_only]` is redundant. The attribute belongs only on test-only items inside a
+  *production* module.
 - Combine attributes: `#[test, expected_failure(abort_code = EMyError)]` -
   **always reference the error constant by name**, never by numeric literal.
   `abort_code = 5` is brittle: renumbering the error const breaks the test

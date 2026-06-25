@@ -18,10 +18,9 @@ Pub.local.toml
 *.log
 logs/
 
-# Node.js artifacts
+# Node.js artifacts (package.json + lockfile are committed so the codegen
+# CI job's `npm ci` can install the pinned Move formatter)
 node_modules
-package.json
-package-lock.json
 
 # Temporary folders
 tmp/
