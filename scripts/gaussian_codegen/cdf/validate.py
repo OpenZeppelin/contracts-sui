@@ -133,9 +133,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     text = args.coeffs.read_text(encoding="utf-8")
     num, den = parse_coefficients(text)
     max_z_raw = _parse_u128_const(text, "MAX_Z_RAW")
+    try:
+        coeffs_path = args.coeffs.relative_to(REPO_ROOT)
+    except ValueError:
+        coeffs_path = args.coeffs  # a --coeffs path outside the repo stays absolute
     print(
         f"Parsed {len(num)} numerator + {len(den)} denominator coefficients "
-        f"(MAX_Z_RAW = {max_z_raw}) from {args.coeffs.relative_to(REPO_ROOT)}"
+        f"(MAX_Z_RAW = {max_z_raw}) from {coeffs_path}"
     )
 
     grid = np.linspace(0.0, max_z_raw / SCALE, args.n)
