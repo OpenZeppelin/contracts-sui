@@ -136,6 +136,7 @@ use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{Self, RefundVault, RefundVaultCap};
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
+use sui::coin;
 use sui::event;
 use sui::table::{Self, Table};
 
@@ -969,7 +970,7 @@ public fun claim_all<
     VestingScheduleParams: copy + drop + store,
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
-    mut receipts: vector<Receipt<SaleCoin>>,
+    receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
     assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
@@ -1004,13 +1005,12 @@ public fun claim_into_vesting<
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_internal(receipt, ctx);
 
-    let vesting_schedule_params = *sale.vesting_schedule_params.borrow();
     let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
-        vesting_schedule_params,
-        buyer,
+        *sale.vesting_schedule_params.borrow(),
+        ctx.sender(), // only buyer can claim
         ctx,
     );
-    wallet.deposit(sui::coin::from_balance(payout, ctx));
+    wallet.deposit(coin::from_balance(payout, ctx));
 
     wallet
 }
@@ -1024,19 +1024,18 @@ public fun claim_all_into_vesting<
     Witness: drop,
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
-    mut receipts: vector<Receipt<SaleCoin>>,
+    receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): VestingWallet<Witness, VestingScheduleParams, SaleCoin> {
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_all_internal(receipts, ctx);
 
-    let vesting_schedule_params = *sale.vesting_schedule_params.borrow();
     let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
-        vesting_schedule_params,
-        buyer,
+        *sale.vesting_schedule_params.borrow(),
+        ctx.sender(), // only buyer can claim
         ctx,
     );
-    wallet.deposit(sui::coin::from_balance(payout, ctx));
+    wallet.deposit(coin::from_balance(payout, ctx));
 
     wallet
 }
@@ -1404,11 +1403,10 @@ fun claim_internal<
     SaleCoin,
     PaymentCoin,
     VestingScheduleParams: copy + drop + store,
-    Witness: drop,
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     receipt: Receipt<SaleCoin>,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ): Balance<SaleCoin> {
     sale.phase.assert_finalized();
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
@@ -1436,11 +1434,10 @@ fun claim_all_internal<
     SaleCoin,
     PaymentCoin,
     VestingScheduleParams: copy + drop + store,
-    Witness: drop,
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     mut receipts: vector<Receipt<SaleCoin>>,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ): Balance<SaleCoin> {
     let mut total = balance::zero<SaleCoin>();
     while (!receipts.is_empty()) {
