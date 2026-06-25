@@ -1,5 +1,6 @@
 module openzeppelin_fp_math::ud30x9_pdf_tests;
 
+use openzeppelin_fp_math::pdf_coefficients;
 use openzeppelin_fp_math::ud30x9;
 use openzeppelin_fp_math::ud30x9_base;
 use openzeppelin_fp_math::ud30x9_test_helpers::{assert_within, fixed};
@@ -44,6 +45,13 @@ fun pdf_three_well_known() {
 }
 
 // === Saturation ===
+
+#[test]
+fun max_z_raw_is_six_point_five() {
+    // Pin the saturation bound to the generated coefficient table so the
+    // saturation cases below fail if a regenerated bound drifts downward.
+    assert_eq!(pdf_coefficients::max_z_raw(), MAX_Z_RAW);
+}
 
 #[test]
 fun saturation_above_max_z() {
