@@ -18,6 +18,7 @@ openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
 
 - Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`, `sqrt`
 - Logarithms: `log2`, `ln`, `log10`
+- Distributions: `cdf` (standard-normal CDF `Φ`)
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`, `unchecked_lshift`, `unchecked_rshift`
 
@@ -49,7 +50,8 @@ underlying fixed-point representation and do not multiply or divide by `10^9`.
 - `SD29x9` only: `min`, `from_bits`
 
 ```move
-use openzeppelin_fp_math::{sd29x9, ud30x9};
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
 
 let one = ud30x9::wrap(1_000_000_000); // 1.0
 let raw = ud30x9::wrap(42); // Raw bits, not 42.0
@@ -120,6 +122,45 @@ let half = sd29x9::wrap(500_000_000, false); // 0.5
 let _ = half.log2();  // -1.0
 ```
 
+## Standard-normal CDF
+
+`Φ(z)` is the standard-normal cumulative distribution function: the probability
+that a standard-normal draw lands at or below `z` (the area under the bell curve
+to the left of `z`). It is a building block for options pricing, risk models,
+and sampling. Both fixed-point types expose it:
+
+- `UD30x9::cdf` takes non-negative `z` and returns `Φ(z) ∈ [0.5, 1]`.
+- `SD29x9::cdf` takes signed `z` and returns `Φ(z) ∈ [0, 1]`.
+
+Properties:
+
+- **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
+  empirical worst case `~7 × 10⁻¹⁰`.
+- **Domain**: effective input range `|z| ≤ 6.3`; beyond that the result
+  saturates.
+- **Saturation**: exactly `0` for `z ≤ -6.3` (SD29x9) and exactly `1` for
+  `z ≥ 6.3`.
+- **Φ(0)**: exactly `0.5`.
+- **Symmetry**: `cdf(z) + cdf(z.negate())` is exactly `1` for every `SD29x9`
+  input except `min()`, whose negation is not representable.
+- **Execution**: pure, deterministic, and object-free integer math - no storage,
+  no Sui objects; identical inputs always yield identical outputs.
+
+```move
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
+
+let z = ud30x9::wrap(1_000_000_000); // 1.0
+let p = z.cdf(); // 0.841344746  (P(Z ≤ 1))
+
+let neg = sd29x9::wrap(1_000_000_000, true); // -1.0
+let q = neg.cdf(); // 0.158655254  (P(Z ≤ -1))
+```
+
+Limitations: the approximation is defined on `|z| ≤ 6.3` and saturates outside
+that range; `10⁻⁹` is the finest distinction the output can represent. There is
+no floating point - results are exact fixed-point integer arithmetic.
+
 ## Usage Example
 
 ```move
@@ -138,8 +179,21 @@ let third_down = one.div_trunc(ud30x9::wrap(3000000000)); // 0.333333333
 let third_up = one.div_away(ud30x9::wrap(3000000000)); // 0.333333334
 ```
 
+## Generated code
+
+The standard-normal CDF (`cdf`) is backed by an AAA-rational approximation whose
+coefficients and test vectors are generated offline and must **not** be
+hand-edited (each carries an `AUTO-GENERATED` banner):
+
+- `sources/internal/cdf_coefficients.move`
+- `tests/{sd29x9_tests,ud30x9_tests}/cdf_test_vectors.move`
+
+To regenerate them - or to re-validate the committed coefficients against
+`scipy` - see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
+
 ## Learn More
 
 - [Fixed-point math package overview](https://docs.openzeppelin.com/contracts-sui/1.x/fixed-point)
 - [Fixed-point math API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/fixed-point)
+- [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)

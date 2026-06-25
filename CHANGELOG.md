@@ -21,6 +21,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `vesting_wallet` module: a curve-agnostic release-accounting core that conserves `Balance<C>` funds and lets you author custom vesting curves.
 - `vesting_wallet_linear` module: built-in linear/stepped vesting in `steps` equal tranches with an optional cliff, plus `new_continuous` for continuous linear vesting.
 
+### `openzeppelin_fp_math`
+
+#### Added
+
+- `cdf`: the standard-normal cumulative distribution function `Φ(z)` for `UD30x9` and `SD29x9` fixed-point inputs. (#345)
+
 ## 1.3.0 (15-06-2026)
 
 ### `openzeppelin_math`
