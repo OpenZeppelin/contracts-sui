@@ -173,15 +173,13 @@ const EZeroPayment: vector<u8> = "Payment must be greater than zero";
 #[error(code = 23)]
 const ERaisedOverflow: vector<u8> = "raised + payment overflows u64";
 #[error(code = 24)]
-const EContributionOverflow: vector<u8> = "buyer contribution + payment overflows u64";
-#[error(code = 25)]
 const EHardCapExceeded: vector<u8> = "Purchase would exceed hard_cap";
-#[error(code = 26)]
+#[error(code = 25)]
 const EInsufficientInventoryAtActivate: vector<u8> =
     "Inventory at activation does not cover hard_cap * max_rate";
-#[error(code = 27)]
+#[error(code = 26)]
 const EAllocationOverflow: vector<u8> = "Allocation would overflow u64";
-#[error(code = 28)]
+#[error(code = 27)]
 const EInsufficientInventory: vector<u8> = "Purchase allocation exceeds unallocated inventory";
 
 // Caps
@@ -225,10 +223,6 @@ const EReceiptSaleMismatch: vector<u8> = "Receipt does not belong to this sale";
 // Quote / curve coupling
 #[error(code = 61)]
 const EQuoteSaleMismatch: vector<u8> = "Quote does not belong to this sale";
-
-// Activation ticket
-#[error(code = 62)]
-const ETicketSaleMismatch: vector<u8> = "Activation ticket does not belong to this sale";
 
 // Per-buyer cap configuration
 #[error(code = 70)]
@@ -758,20 +752,14 @@ public fun purchase<
 
     // Per-buyer cap
     if (sale.per_buyer_cap.is_some()) {
-        let per_cap = *sale.per_buyer_cap.borrow();
-        let contribs = sale.contributions.borrow_mut();
-        let current = if (contribs.contains(buyer)) {
-            *contribs.borrow(buyer)
-        } else { 0 };
-        assert!(u64_max - paid >= current, EContributionOverflow);
-        let new_total = current + paid;
-        assert!(new_total <= per_cap, EPerBuyerCapExceeded);
-        if (contribs.contains(buyer)) {
-            let slot = contribs.borrow_mut(buyer);
-            *slot = new_total;
-        } else {
-            contribs.add(buyer, new_total);
+        let contributions = sale.contributions.borrow_mut();
+        if (!contributions.contains(buyer)) {
+            let per_cap = *sale.per_buyer_cap.borrow();
+            contributions.add(buyer, per_cap);
         };
+        let cap = contributions.borrow_mut(buyer);
+        assert!(paid <= *cap, EPerBuyerCapExceeded);
+        *cap = *cap - paid;
     };
 
     // Inventory backing.
