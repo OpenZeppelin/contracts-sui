@@ -224,6 +224,10 @@ const EReceiptSaleMismatch: vector<u8> = "Receipt does not belong to this sale";
 #[error(code = 61)]
 const EQuoteSaleMismatch: vector<u8> = "Quote does not belong to this sale";
 
+// Activation ticket
+#[error(code = 62)]
+const ETicketSaleMismatch: vector<u8> = "Activation ticket does not belong to this sale";
+
 // Per-buyer cap configuration
 #[error(code = 70)]
 const EPerBuyerCapAlreadySet: vector<u8> = "Per-buyer cap already configured";
@@ -665,7 +669,7 @@ public fun share_and_activate<
     let sale_id = object::id(&sale);
     let ActivationTicket { sale_id: ticket_sale_id, required_inventory } = ticket;
 
-    assert!(sale_id == ticket_sale_id, EReceiptSaleMismatch);
+    assert!(sale_id == ticket_sale_id, ETicketSaleMismatch);
 
     // TODO: move phase-related error codes to this module and remove assert_init
     sale.phase.assert_init();
