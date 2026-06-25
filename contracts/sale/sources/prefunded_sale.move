@@ -671,7 +671,6 @@ public fun share_and_activate<
 
     assert!(sale_id == ticket_sale_id, ETicketSaleMismatch);
 
-    // TODO: move phase-related error codes to this module and remove assert_init
     sale.phase.assert_init();
     assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
 
