@@ -37,7 +37,6 @@
 module openzeppelin_sale::refund_vault;
 
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
 use sui::event;
 
 // === Errors ===
@@ -186,11 +185,7 @@ public fun release_balance<P>(
 }
 
 /// Withdraw the entire locked balance. Vault must be in `Closed`.
-public fun withdraw_all<P>(
-    vault: &mut RefundVault<P>,
-    cap: &RefundVaultCap<P>,
-    ctx: &mut TxContext,
-): Coin<P> {
+public fun withdraw_all<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>): Balance<P> {
     assert_cap(vault, cap);
     assert!(vault.state.is_closed_state(), ENotClosedState);
     let amount = vault.locked.value();
@@ -200,7 +195,7 @@ public fun withdraw_all<P>(
         amount,
         locked_after: 0,
     });
-    coin::from_balance(part, ctx)
+    part
 }
 
 // === Views ===

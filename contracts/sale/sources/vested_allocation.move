@@ -1,6 +1,6 @@
 module openzeppelin_sale::vested_allocation;
 
-use sui::coin::Coin;
+use sui::balance::Balance;
 
 // === VestedAllocation ===
 //
@@ -28,9 +28,8 @@ use sui::coin::Coin;
 /// the inner value into `vesting_wallet::deposit`, which already takes
 /// a `Coin<S>` - keeping the carrier shape aligned avoids a needless
 /// `Balance ↔ Coin` round-trip in the same transaction.
-#[allow(lint(coin_field))]
 public struct VestedAllocation<phantom S, P> {
-    coin: Coin<S>,
+    balance: Balance<S>,
     schedule_params: P,
     beneficiary: address,
     sale_id: ID,
@@ -39,22 +38,22 @@ public struct VestedAllocation<phantom S, P> {
 /// Build a `VestedAllocation`. Library-internal: only sibling library
 /// modules (e.g. `prefunded_sale::claim_into_vesting`) construct these.
 public(package) fun new<S, P>(
-    coin: Coin<S>,
+    balance: Balance<S>,
     schedule_params: P,
     beneficiary: address,
     sale_id: ID,
 ): VestedAllocation<S, P> {
-    VestedAllocation<S, P> { coin, schedule_params, beneficiary, sale_id }
+    VestedAllocation<S, P> { balance, schedule_params, beneficiary, sale_id }
 }
 
 /// Destructure a `VestedAllocation`. Library-internal: only sibling
 /// library modules (e.g. `vested_claim`) unpack these into the
 /// downstream wallet shape.
 ///
-/// Returns `(coin, schedule_params, beneficiary, sale_id)`.
+/// Returns `(balance, schedule_params, beneficiary, sale_id)`.
 public(package) fun unpack_vested_allocation<S, P>(
     allocation: VestedAllocation<S, P>,
-): (Coin<S>, P, address, ID) {
-    let VestedAllocation { coin, schedule_params, beneficiary, sale_id } = allocation;
-    (coin, schedule_params, beneficiary, sale_id)
+): (Balance<S>, P, address, ID) {
+    let VestedAllocation { balance, schedule_params, beneficiary, sale_id } = allocation;
+    (balance, schedule_params, beneficiary, sale_id)
 }

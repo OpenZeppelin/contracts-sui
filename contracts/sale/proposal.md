@@ -64,7 +64,7 @@ Buyers hold no capability — they hold a `Receipt<S>` per purchase. Permissionl
     Init-phase setup (sale is owned, not yet shared):
     
     1. `create_sale<S, P>(rate, hard_cap, soft_cap, opens_at_ms, closes_at_ms, ctx) → (sale, cap)`
-    2. `deposit_inventory(&mut sale, coin)` — fund the sale's `Balance<S>`.
+    2. `deposit(&mut sale, coin)` — fund the sale's `Balance<S>`.
     3. `set_per_buyer_cap(&mut sale, cap, ctx)` *(optional)*
     4. `set_vesting_schedule(&mut sale, start_ms, cliff_ms, duration_ms)` *(optional; enables `claim_into_vesting`, disables plain `claim`)*
     5. `pair_refund_vault(&mut sale, &vault, vault_cap)` — required.

@@ -11,7 +11,7 @@
 ///
 /// ```text
 ///   create_sale ──┐
-///   deposit_inventory ──┐
+///   deposit ──┐
 ///   set_per_buyer_cap   │  (Init phase - sale is owned by caller;
 ///   pair_refund_vault   ├   holding it by &mut is the authority)
 ///   enable_allowlist    │
@@ -136,7 +136,6 @@ use openzeppelin_sale::refund_vault::{Self, RefundVault, RefundVaultCap};
 use openzeppelin_sale::vested_allocation::{Self, VestedAllocation};
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
-use sui::coin::{Self, Coin};
 use sui::event;
 use sui::table::{Self, Table};
 
@@ -313,7 +312,7 @@ public struct SaleCreated<CurveParams, phantom SaleCoin, phantom PaymentCoin> ha
 public struct InventoryDeposited<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     amount: u64,
-    inventory_after: u64,
+    new_inventory: u64,
 }
 
 public struct PerBuyerCapSet<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
@@ -475,7 +474,7 @@ public fun create_sale<
 /// Deposit sale tokens into inventory. May be called multiple times
 /// during Init. Authority is implicit: the sale is owned, so only the
 /// caller that created it can pass it as `&mut`.
-public fun deposit_inventory<
+public fun deposit<
     Curve: drop,
     CurveParams: copy + drop + store,
     SaleCoin,
@@ -483,15 +482,15 @@ public fun deposit_inventory<
     VestingScheduleParams: copy + drop + store,
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
-    inventory: Coin<SaleCoin>,
+    inventory: Balance<SaleCoin>,
 ) {
     sale.phase.assert_init();
     let amount = inventory.value();
-    sale.inventory.join(inventory.into_balance());
+    sale.inventory.join(inventory);
     event::emit(InventoryDeposited<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount,
-        inventory_after: sale.inventory.value(),
+        new_inventory: sale.inventory.value(),
     });
 }
 
@@ -953,7 +952,7 @@ public fun claim<
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): Coin<SaleCoin> {
+): Balance<SaleCoin> {
     sale.phase.assert_finalized();
     assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
@@ -973,7 +972,7 @@ public fun claim<
         amount: allocation,
     });
 
-    coin::from_balance(payout, ctx)
+    payout
 }
 
 /// Batch helper: claim several receipts in one call. Asserts
@@ -990,8 +989,8 @@ public fun claim_all<
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     mut receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
-): Coin<SaleCoin> {
-    let mut total = coin::zero<SaleCoin>(ctx);
+): Balance<SaleCoin> {
+    let mut total = balance::zero<SaleCoin>();
     while (!receipts.is_empty()) {
         let r = receipts.pop_back();
         total.join(sale.claim(r, ctx));
@@ -1035,7 +1034,6 @@ public fun claim_into_vesting<
 
     sale.total_allocated = sale.total_allocated - allocation;
     let payout = sale.inventory.split(allocation);
-    let coin = coin::from_balance(payout, ctx);
 
     let schedule = *sale.vesting_schedule_params.borrow();
     let sale_id = object::id(sale);
@@ -1047,7 +1045,7 @@ public fun claim_into_vesting<
         amount: allocation,
     });
 
-    vested_allocation::new(coin, schedule, buyer, sale_id)
+    vested_allocation::new(payout, schedule, buyer, sale_id)
 }
 
 /// Withdraw collected proceeds. Phase must be `Finalized`.
@@ -1060,8 +1058,7 @@ public fun withdraw_proceeds<
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
-    ctx: &mut TxContext,
-): Coin<PaymentCoin> {
+): Balance<PaymentCoin> {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
     sale.phase.assert_finalized();
     let amount = sale.proceeds.value();
@@ -1070,7 +1067,7 @@ public fun withdraw_proceeds<
         sale_id: object::id(sale),
         amount,
     });
-    coin::from_balance(part, ctx)
+    part
 }
 
 /// Withdraw unallocated inventory. Valid in `Finalized` or
@@ -1086,8 +1083,7 @@ public fun withdraw_unsold_inventory<
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
-    ctx: &mut TxContext,
-): Coin<SaleCoin> {
+): Balance<SaleCoin> {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
     sale.phase.assert_terminal();
     let unallocated = sale.inventory.value() - sale.total_allocated;
@@ -1096,7 +1092,7 @@ public fun withdraw_unsold_inventory<
         sale_id: object::id(sale),
         amount: unallocated,
     });
-    coin::from_balance(part, ctx)
+    part
 }
 
 // === Failure path (Cancelled) ===
@@ -1115,7 +1111,7 @@ public fun refund<
     vault: &mut RefundVault<PaymentCoin>,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): Coin<PaymentCoin> {
+): Balance<PaymentCoin> {
     sale.phase.assert_cancelled();
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
     assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
@@ -1140,7 +1136,7 @@ public fun refund<
         amount: paid,
     });
 
-    coin::from_balance(payment, ctx)
+    payment
 }
 
 // === Views ===

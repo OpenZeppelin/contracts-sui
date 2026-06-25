@@ -37,6 +37,7 @@ module openzeppelin_sale::vested_claim;
 
 use openzeppelin_finance::vesting_wallet;
 use openzeppelin_sale::vested_allocation::VestedAllocation;
+use sui::coin;
 
 /// Consume a `VestedAllocation<S, VestingScheduleParams>` into a fresh shared
 /// `VestingWallet<S>` matching the sale's schedule. Anyone can call
@@ -47,13 +48,13 @@ public fun into_shared_wallet<Witness: drop, VestingScheduleParams: copy + drop 
     allocation: VestedAllocation<S, VestingScheduleParams>,
     ctx: &mut TxContext,
 ) {
-    let (coin, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
+    let (balance, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
     let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, S>(
         schedule_params,
         beneficiary,
         ctx,
     );
-    wallet.deposit(coin);
+    wallet.deposit(coin::from_balance(balance, ctx));
     transfer::public_share_object(wallet);
 }
 
@@ -66,12 +67,12 @@ public fun into_owned_wallet<Witness: drop, VestingScheduleParams: copy + drop +
     allocation: VestedAllocation<S, VestingScheduleParams>,
     ctx: &mut TxContext,
 ) {
-    let (coin, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
+    let (balance, schedule_params, beneficiary, _sale_id) = allocation.unpack_vested_allocation();
     let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, S>(
         schedule_params,
         beneficiary,
         ctx,
     );
-    wallet.deposit(coin);
+    wallet.deposit(coin::from_balance(balance, ctx));
     transfer::public_transfer(wallet, beneficiary);
 }
