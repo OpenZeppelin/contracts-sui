@@ -37,7 +37,7 @@ from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_n
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 SCALE = constants.SCALE_DECIMAL
-MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.5 at 10^9 — default; the gate parses the committed value
+MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.5 at 10^9 - default; the gate parses the committed value
 
 COEFF_PATH = (
     REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "pdf_coefficients.move"
@@ -96,9 +96,9 @@ def pdf_simulate(
     n_acc = horner_eval(z_wad, num)
     d_acc = horner_eval(z_wad, den)
     if n_acc[1]:
-        raise RuntimeError(f"N negative at z_raw={z_raw} — pdf::EInternalNumNegative")
+        raise RuntimeError(f"N negative at z_raw={z_raw} - pdf::EInternalNumNegative")
     if d_acc[1] or d_acc[0] == 0:
-        raise RuntimeError(f"D non-positive at z_raw={z_raw} — pdf::EInternalDenNonPositive")
+        raise RuntimeError(f"D non-positive at z_raw={z_raw} - pdf::EInternalDenNonPositive")
 
     # Final ratio: phi_raw = round(N * 10^9 / D) with Nearest (half-up) rounding.
     return mul_div_nearest(n_acc[0], SCALE, d_acc[0])

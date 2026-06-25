@@ -2,7 +2,7 @@
 
 The single Python source of truth for re-running the on-chain gaussian integer
 arithmetic offline. Mirrors `math/fixed_point/sources/internal/horner.move`
-exactly — floor-division `mul_wad`, sign-magnitude `add`, canonical zero — plus
+exactly - floor-division `mul_wad`, sign-magnitude `add`, canonical zero - plus
 the `u256::mul_div(..., Nearest)` half-up rounding (from `math/core`) used for
 each family's final ratio. Every `<family>/validate.py` re-runs through these, so
 one tested copy stays in lock-step with the Move primitives.

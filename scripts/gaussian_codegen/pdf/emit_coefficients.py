@@ -113,7 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not args.input.exists():
-        print(f"FAIL: missing {args.input} — run `python -m gaussian_codegen.pdf.derive` first", file=sys.stderr)
+        print(f"FAIL: missing {args.input} - run `python -m gaussian_codegen.pdf.derive` first", file=sys.stderr)
         return 1
 
     raw = json.loads(args.input.read_text(encoding="utf-8"))

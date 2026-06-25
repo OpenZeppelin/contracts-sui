@@ -3,19 +3,19 @@
 Mirrors `cdf/emit_test_vectors.py`. Picks a deterministic, hand-curated set of
 test inputs:
 - Well-known critical points (0, ±0.25, ±0.5, ±1, ±2, ±3, ±4, ±5, ±6, ±6.499,
-  ±6.5, ±6.501, ±7) — exercises evenness, the saturation boundary on both
+  ±6.5, ±6.501, ±7) - exercises evenness, the saturation boundary on both
   sides, and the φ(0) peak.
 - 16 evenly spaced points across [0, PDF_MAX_Z] for breadth.
 
 For each (z, sign) the expected φ(z) value is computed at the UD30x9 raw scale
 (10^9) using the mpmath oracle. φ is *even*, so the sign never changes the
-expected value — including both signs for SD29x9 therefore checks the on-chain
+expected value - including both signs for SD29x9 therefore checks the on-chain
 evenness. Saturation cases (|z| ≥ 6.5, i.e. quantized z_raw ≥ MAX_Z_RAW) get the
 exact endpoint value 0 so the test exercises that branch in pdf.
 
 Two output files are produced from the same source-of-truth case list:
-- `tests/sd29x9_tests/pdf_test_vectors.move` — all cases (positive + negative).
-- `tests/ud30x9_tests/pdf_test_vectors.move` — positive subset.
+- `tests/sd29x9_tests/pdf_test_vectors.move` - all cases (positive + negative).
+- `tests/ud30x9_tests/pdf_test_vectors.move` - positive subset.
 
 Each file lives under `tests/` (compiled in test mode only, so no module-level
 `#[test_only]` is needed) and has one `#[test]` driver that iterates the table
@@ -61,7 +61,7 @@ UD30X9_OUTPUT_PATH = (
     / "pdf_test_vectors.move"
 )
 
-MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.5 at UD30x9 scale — saturation threshold
+MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.5 at UD30x9 scale - saturation threshold
 MAX_Z_FLOAT = float(constants.PDF_MAX_Z)
 
 CRITICAL_Z = [

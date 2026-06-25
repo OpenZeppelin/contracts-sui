@@ -60,7 +60,7 @@ def validate_grid() -> np.ndarray:
 
 
 def reference_values_float(grid: np.ndarray) -> np.ndarray:
-    """φ values at the grid points (float64 — sufficient for AAA training; mpmath
+    """φ values at the grid points (float64 - sufficient for AAA training; mpmath
     at 100 dps is reserved for validation and quantization)."""
     return norm.pdf(grid)
 
@@ -83,7 +83,7 @@ def measure_error(num: Sequence[mpf], den: Sequence[mpf], grid: np.ndarray) -> t
 
 
 def assert_signs_central(num: Sequence[mpf], den: Sequence[mpf], grid: np.ndarray) -> None:
-    """Verify that on the central domain D(z) > 0 and N(z) ≥ 0 — the runtime
+    """Verify that on the central domain D(z) > 0 and N(z) ≥ 0 - the runtime
     invariants asserted by `pdf::eval_rational`. φ is non-negative everywhere, so
     a healthy fit satisfies these; we check explicitly so a degenerate fit (e.g.
     a spurious in-domain pole) fails the codegen rather than silently shipping a

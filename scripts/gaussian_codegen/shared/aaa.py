@@ -52,7 +52,7 @@ def aaa_to_rational_polys(aaa_obj) -> tuple[list[mpf], list[mpf]]:
 
     d0 = den[0]
     if d0 == 0:
-        raise RuntimeError("AAA produced a denominator with zero constant term — cannot normalize")
+        raise RuntimeError("AAA produced a denominator with zero constant term - cannot normalize")
     num = [c / d0 for c in num]
     den = [c / d0 for c in den]
     return num, den
