@@ -157,8 +157,9 @@ exactly what lands in the committed files - no separate `prettier --write` pass
 is needed. This requires `npm ci` at the repo root (for the prettier plugin);
 the emitters abort with a clear message if prettier is missing.
 
-`derive.py` writes a JSON intermediate (`scripts/gaussian_codegen/cdf/.derive_output.json`)
-that the `emit_*.py` scripts consume. It is committed, so the coefficient drift
+Each family's `derive.py` writes a JSON intermediate
+(`scripts/gaussian_codegen/<family>/.derive_output.json`, e.g. `cdf/` and `pdf/`)
+that its `emit_*.py` scripts consume. It is committed, so the coefficient drift
 guard can run in CI without re-deriving (see below).
 
 ### Drift guard
