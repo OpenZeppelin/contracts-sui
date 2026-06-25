@@ -178,7 +178,8 @@ Properties:
 - **Domain**: effective input range `|z| ≤ 6.5`; beyond that the result
   saturates to `0`.
 - **Peak**: `φ(0) = 0.398942280` (`1/sqrt(2*pi)`), returned exactly.
-- **Symmetry**: even - `pdf(z)` equals `pdf(z.negate())` for every `SD29x9` input.
+- **Symmetry**: even - `pdf(z)` equals `pdf(z.negate())` for every `SD29x9`
+  input except `min()`, whose negation is not representable.
 - **Execution**: pure, deterministic, and object-free integer math - no storage,
   no Sui objects; identical inputs always yield identical outputs.
 

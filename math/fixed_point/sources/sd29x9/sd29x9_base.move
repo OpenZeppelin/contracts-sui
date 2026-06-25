@@ -222,7 +222,8 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// - The density `φ(z)` as a non-negative `SD29x9` in `[0, 0.398942280]`.
 ///
 /// #### Behavior
-/// - Even: `pdf(z) == pdf(z.negate())` for every input.
+/// - Even: `pdf(z) == pdf(z.negate())` for every input except `sd29x9::min()`,
+///   whose negation is not representable.
 /// - Monotone non-increasing in `|z|`; the peak `φ(0) = 0.398942280` is returned
 ///   exactly.
 /// - Saturates exactly to `0` for `|z| ≥ 6.5`. At that bound `φ` is already
