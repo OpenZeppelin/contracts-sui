@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@mysten/prettier-plugin-move": "^0.3.5"
+  }
+}

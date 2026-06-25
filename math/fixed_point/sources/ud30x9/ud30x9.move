@@ -74,6 +74,9 @@ public use fun openzeppelin_fp_math::ud30x9_convert::to_u128_trunc as UD30x9.to_
 public use fun openzeppelin_fp_math::ud30x9_convert::to_u64_trunc as UD30x9.to_u64_trunc;
 public use fun openzeppelin_fp_math::ud30x9_convert::try_to_u64_trunc as UD30x9.try_to_u64_trunc;
 
+// Gaussian functions
+public use fun openzeppelin_fp_math::ud30x9_base::cdf as UD30x9.cdf;
+
 // === Public Functions ===
 
 /// Constructs the zero value in `UD30x9` representation.
