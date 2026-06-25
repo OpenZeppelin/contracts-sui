@@ -32,9 +32,9 @@ and redeem.
 > inline summary. The sale is now generic over a pricing `Curve` / `CurveParams`, the
 > payment flows in via a witness-gated `Quote<PaymentCoin>` hot-potato, activation is
 > gated by an `ActivationTicket<Curve>` carrying a curve-computed `required_inventory`,
-> and the vesting schedule is a generic `VestingScheduleParams`. Several docstrings
-> still reference a stored `max_rate` and a `purchase`-time `allocation <= paid * max_rate`
-> check that **no longer exist in the code** — see INV-41 (the one real enforcement gap).
+> and the vesting schedule is a generic `VestingScheduleParams`. Treat the code as the sole
+> source of truth — many docstrings are outdated (e.g. they reference a `max_rate` bound that
+> does not exist in the code; see INV-41). Stale docs are noted but not acted on in this stage.
 
 ## Type-Level Invariants
 
@@ -112,11 +112,10 @@ or resold, decoupling KYC verification from the actual purchaser.
 **Statement:** `VestedAllocation<S, P>` has **no abilities** and **module-private fields**.
 It can only be constructed by `vested_allocation::new` (`public(package)`) — reached solely
 from `prefunded_sale::claim_into_vesting` — and unpacked by `unpack_vested_allocation`
-(`public(package)`) — reached solely from `vested_claim::into_*`. The buyer who holds it
+(`public(package)`) — reached solely from `vested_claim::into_wallet`. The buyer who holds it
 mid-PTB cannot stash it, drop it, transfer it, or extract the inner `Balance<S>`.
 
-**Applies to:** `VestedAllocation<S, P>`; `claim_into_vesting`, `vested_claim::into_shared_wallet`,
-`vested_claim::into_owned_wallet`.
+**Applies to:** `VestedAllocation<S, P>`; `claim_into_vesting`, `vested_claim::into_wallet`.
 
 **Enforcement mechanism:**
 - Type system: no abilities + private fields + `public(package)` ctor/unpacker.
@@ -554,16 +553,27 @@ allocation.
 
 **Severity:** Critical
 
-### INV-30: `raised` is monotonic, equals total payments, and is hard-capped
+### INV-30: `raised` and cumulative tokens sold are monotonic non-decreasing
 
 **Category:** State transition
 
-**Statement:** `raised` only ever increases (only `purchase` writes it), equals the sum of
-all accepted payments, and satisfies `raised <= hard_cap` at all times.
+**Statement:** `raised` only ever increases (only `purchase` writes it; no decrement path),
+equals the sum of all accepted payments, and satisfies `raised <= hard_cap` at all times.
+Equivalently, the **cumulative quantity of tokens sold only increases**: every `purchase`
+adds `allocation` to `total_allocated` and to the running total of allocations ever sold;
+nothing in the `Active` phase removes a sale. (Note: `total_allocated` is the *outstanding*
+count and does drop on `claim`/`refund` — INV-29 — but those happen only in terminal phases
+and reflect redemption of already-sold tokens, not an un-sale. The cumulative-sold quantity,
+`total_allocated + already-redeemed`, never decreases.)
 
-**Applies to:** `purchase`; read by `finalize`, `cancel_*`.
+**Applies to:** `purchase` (adds), `claim`/`claim_into_vesting`/`refund` (redeem already-sold,
+terminal phase only).
 
-**Enforcement:** INV-14 assert; no decrement path.
+**Enforcement:** INV-14 assert; `purchase` is the only writer that increases sold quantity;
+phase gating (INV-31) prevents new sales after a terminal close.
+
+**Violation scenario:** A path that decreased `raised` or "un-sold" an allocation during
+`Active` would let the sale double-allocate or under-report the raise.
 
 **Severity:** High
 
@@ -728,13 +738,14 @@ only proceeds/unsold-inventory withdrawal and emergency-cancel — never buyer f
 **Category:** Economic
 
 **Statement:** When `vesting_schedule_params.is_some()`, the only path that produces a
-`Coin/Balance<S>` for a buyer is `claim_into_vesting → vested_claim::into_*`, which always
-funds a `VestingWallet<S>` honoring the recorded schedule and paying the recorded
+`Coin/Balance<S>` for a buyer is `claim_into_vesting → vested_claim::into_wallet`, which
+always funds a `VestingWallet<S>` honoring the recorded schedule and paying the recorded
 beneficiary. The immediate `claim` aborts (`EClaimRequiresVesting`), and the intermediate
-`VestedAllocation` cannot be unpacked outside the library (INV-4).
+`VestedAllocation` cannot be unpacked outside the library (INV-4). `into_wallet` returns the
+funded wallet to the caller, who chooses the topology (share it for permissionless release,
+or transfer it to the beneficiary); the beneficiary is fixed inside the wallet regardless.
 
-**Applies to:** `claim`, `claim_into_vesting`, `vested_claim::into_shared_wallet`,
-`vested_claim::into_owned_wallet`.
+**Applies to:** `claim`, `claim_into_vesting`, `vested_claim::into_wallet`.
 
 **Enforcement:** INV-23 (runtime) + INV-4 (type level).
 
@@ -743,36 +754,36 @@ issuer configured to vest.
 
 **Severity:** Critical
 
-### INV-41: Allocation-vs-rate bound — ENFORCEMENT GAP (relies on curve correctness)
+### INV-41: Inventory backing is the sole bound on allocation; pricing is the curve's responsibility
 
 **Category:** Economic
 
-**Statement (intended):** A purchase's `allocation` should be bounded by the sale's
-committed pricing — historically `allocation <= paid * max_rate` — so a buggy or dishonest
-`Curve` cannot over-allocate inventory relative to what the rate implies.
-
-**Reality in code:** There is **no `max_rate` field** and **no `allocation <= paid * max_rate`
-check** in `purchase`. The only per-purchase bound is `allocation <= unallocated inventory`
-(INV-17). Several docstrings (`purchase`, the `Quote` section, `create_sale`,
-`share_and_activate`) still claim this defense-in-depth bound exists. It does not.
+**Statement:** A purchase's `allocation` is bounded **only** by remaining inventory —
+`allocation <= inventory.value() - total_allocated` (INV-17). The sale stores no `max_rate`
+and performs no `allocation <= paid * rate` cross-check; computing the correct allocation
+for a payment is delegated entirely to the `Curve` module that mints the `Quote`. This is by
+design: the witness gate (INV-5) means only the sale's own curve module can produce a quote,
+so pricing correctness sits inside that module's audit boundary, and the sale's defensive
+line is inventory backing alone.
 
 **Applies to:** `purchase`, `mint_quote`, every `Curve` module.
 
 **Enforcement mechanism:**
-- Type system: only the curve module can mint a quote (INV-5) — so "dishonest curve" reduces to "buggy/malicious curve module," which is inside the audit boundary for first-party curves.
-- Runtime check: **missing.** A faulty curve can set any `allocation` up to remaining inventory; the sale will accept it.
-- Test: a stub curve minting `allocation > paid * rate` is accepted by `purchase` today (would *not* abort) — demonstrates the gap.
+- Type system: only the declaring curve module can mint a `Quote` (INV-5).
+- Runtime check: `purchase` enforces inventory backing only (INV-17); no rate cross-check exists.
+- Test: a stub curve over-allocating relative to its rate is still bounded by inventory; total distributed can never exceed deposited inventory (INV-28 holds regardless of curve behavior).
 
-**Violation scenario:** A buggy curve front-loads allocation (early buyers get more than the
-rate implies), draining inventory so later in-cap buyers' purchases abort on inventory.
-Bounded by total inventory (cannot exceed it — INV-28 still holds), so this is
-misallocation among buyers, **not** creation of value beyond inventory.
+**Violation scenario:** A buggy curve could mis-split inventory among buyers (early buyers
+over-allocated, later in-cap buyers' purchases abort on inventory). This is misallocation
+*among buyers*, never creation of value beyond inventory — INV-28/INV-36 cap the total. A
+correct curve is the integrator/curve-author's responsibility.
 
-**Severity:** High — *no fund-loss beyond inventory, but a promised safety property is
-absent and the docs are misleading.* Recommend either (a) restore a `max_rate` on the sale
-and assert `allocation <= paid * max_rate` in `purchase`, or (b) remove the `max_rate`
-claims from the docstrings and state explicitly that inventory backing is the sole bound
-and curve correctness is trusted. **Dev decision required.**
+**Severity:** Medium — bounded by inventory; relies on curve correctness, which is the curve
+module's audited concern, not the sale's.
+
+> Stale docs (do not act on these here): `purchase`, the `Quote` section, `create_sale`, and
+> `share_and_activate` docstrings still reference a `max_rate` bound that does not exist in
+> the code. The code is correct; the docstrings are outdated.
 
 ### INV-42: Stale receipts pin funds but never lose backing (buyer-protective)
 
@@ -799,7 +810,7 @@ funds are never swept or lost; they remain claimable/refundable forever.
 **Statement:** The no-ability carriers force composition within one PTB:
 `curve::quote → purchase` (Quote), `compliance::mint_entry → purchase` (AllowEntry),
 `curve::activation_ticket → share_and_activate` (ActivationTicket), and
-`claim_into_vesting → vested_claim::into_*` (VestedAllocation). None can be persisted,
+`claim_into_vesting → vested_claim::into_wallet` (VestedAllocation). None can be persisted,
 split across transactions, or silently dropped.
 
 **Applies to:** `Quote`, `AllowEntry`, `ActivationTicket`, `VestedAllocation`.
@@ -845,9 +856,9 @@ document to diff against.
 
 - **Preserved:** all of INV-1…INV-45 reflect the current implementation and must hold.
 - **Modified:** none (first invariants artifact for this package).
-- **New:** none beyond what the code already embodies. The one item not matching the
-  implementation is INV-41 (the documented-but-absent `max_rate` bound), surfaced as a gap
-  rather than a silent assumption.
+- **New:** none beyond what the code already embodies. Where docstrings contradict the code
+  (e.g. the absent `max_rate` bound), the **code wins** — INV-41 documents the actual bound
+  (inventory backing only) rather than the stale doc claim.
 
 ## Invariant Coverage Matrix
 
@@ -871,8 +882,7 @@ document to diff against.
 | `withdraw_proceeds` | INV-25, INV-26, INV-34 | Runtime |
 | `withdraw_unsold_inventory` | INV-25, INV-26, INV-28, INV-42 | Runtime |
 | `refund` | INV-1, INV-22, INV-24, INV-26, INV-28, INV-29, INV-35, INV-36, INV-39, INV-42 | Type + Runtime |
-| `vested_claim::into_shared_wallet` | INV-4, INV-40, INV-43 | Type |
-| `vested_claim::into_owned_wallet` | INV-4, INV-40, INV-43 | Type |
+| `vested_claim::into_wallet` | INV-4, INV-40, INV-43 | Type |
 | `fixed_rate_curve::params` | INV-11 (rate>0) | Runtime |
 | `fixed_rate_curve::activation_ticket` | INV-5, INV-7, INV-12 | Type + Runtime |
 | `fixed_rate_curve::quote` | INV-2, INV-5, INV-18 | Type + Runtime |
@@ -897,8 +907,11 @@ document to diff against.
 - **`VestingScheduleParams` semantic validation.** The sale stores the params opaquely and
   does not validate them (e.g. cliff ≤ duration); that is the vesting wallet's `new`
   responsibility at consumption.
-- **`Witness` choice in `vested_claim::into_*`.** The wallet witness type is caller-chosen and
-  not pinned to the sale/curve; binding it is integrator territory (see Open Questions).
+- **Wallet topology and `Witness` choice in `vested_claim::into_wallet`.** `into_wallet`
+  returns the funded `VestingWallet` to the caller; whether to share it (permissionless
+  release) or transfer it to the beneficiary is the caller's choice, and the `Witness` type is
+  caller-chosen and not pinned to the sale/curve. Both are intentionally integrator territory.
+  The beneficiary is fixed inside the wallet, so topology does not change who gets paid.
 - **Curve pricing-math correctness.** Delegated to each `Curve` module. The sale trusts the
   quote's `allocation` up to inventory (see INV-41 for the missing defensive bound).
 - **Compliance/KYC logic.** The library ships only the `AllowlistAdmin`/`AllowEntry` slot;
@@ -932,16 +945,19 @@ document to diff against.
 
 ## Open Questions
 
-1. **INV-41 — restore the bound or fix the docs?** Add `max_rate` back to the sale and assert
-   `allocation <= paid * max_rate` in `purchase` (defense-in-depth against a buggy curve), or
-   delete the stale `max_rate` claims and document inventory backing as the sole bound with
-   curve correctness trusted? *(Blocks closing the docstring/code contradiction.)*
-2. **Should `vested_claim::into_*` pin the `Witness` to the sale's curve/schedule?** Today an
-   integrator picks the wallet witness freely. Is there a domain reason to bind it, or is
-   that intentionally integrator territory?
-3. **Any economic invariant the LLM missed?** Specifically around the curve abstraction —
-   e.g. should ratcheting/decreasing-rate curves carry an extra monotonicity invariant the
-   sale should defend, or is that wholly the curve's responsibility?
-4. **Per-entry vs per-buyer cap interaction** — is the current "per-entry caps a single
-   purchase, per-buyer caps cumulative, both can coexist" the intended product behavior, or
-   should one dominate?
+1. **Per-entry vs per-buyer cap interaction** — when a sale has *both* a per-buyer cap
+   (`set_per_buyer_cap`, cumulative across a buyer's purchases) *and* receives `AllowEntry`
+   tickets carrying `max_amount` (per-entry, caps a single purchase), `purchase` checks both
+   independently and a purchase must satisfy both. Is "both apply simultaneously" the intended
+   product behavior (INV-15), or should one take precedence? *(Pending dev answer.)*
+
+**Resolved during walk-through:**
+- *INV-41 (`max_rate`):* by design — inventory backing is the sole per-purchase bound; pricing
+  correctness is the curve module's responsibility. Stale `max_rate` docstrings are not acted
+  on in this stage.
+- *Curve rate-monotonicity:* clarified. The **sale** defends that the cumulative quantity of
+  tokens sold only increases (INV-30). Whether a curve's **rate** is monotonic (e.g. a
+  ratcheting-down curve) is the curve module's own concern, not the sale's — out of scope.
+- *`vested_claim` topology / witness:* `into_shared_wallet` + `into_owned_wallet` collapsed
+  into one `into_wallet` that returns the funded wallet; topology and `Witness` are
+  intentionally integrator-chosen (Out of Scope).

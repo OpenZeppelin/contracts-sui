@@ -129,11 +129,11 @@
 ///      both stay locked until they call `refund`.
 module openzeppelin_sale::prefunded_sale;
 
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
 use openzeppelin_sale::phase::{Self, Phase};
 use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{Self, RefundVault, RefundVaultCap};
-use openzeppelin_sale::vested_allocation::{Self, VestedAllocation};
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::event;
@@ -953,26 +953,8 @@ public fun claim<
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
-    sale.phase.assert_finalized();
     assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
-    assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
-    assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
-    (&receipt, ctx);
-
-    let receipt_id = object::id(&receipt);
-    let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume();
-
-    sale.total_allocated = sale.total_allocated - allocation;
-    let payout = sale.inventory.split(allocation);
-
-    event::emit(Claimed<SaleCoin, PaymentCoin> {
-        sale_id: object::id(sale),
-        buyer,
-        receipt_id,
-        amount: allocation,
-    });
-
-    payout
+    sale.claim_internal(receipt, ctx)
 }
 
 /// Batch helper: claim several receipts in one call. Asserts
@@ -990,13 +972,8 @@ public fun claim_all<
     mut receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
-    let mut total = balance::zero<SaleCoin>();
-    while (!receipts.is_empty()) {
-        let r = receipts.pop_back();
-        total.join(sale.claim(r, ctx));
-    };
-    receipts.destroy_empty();
-    total
+    assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
+    sale.claim_all_internal(receipts, ctx)
 }
 
 /// Redeem a receipt into a `VestedAllocation<SaleCoin, VestingScheduleParams>` hot-potato. The only
@@ -1018,34 +995,50 @@ public fun claim_into_vesting<
     SaleCoin,
     PaymentCoin,
     VestingScheduleParams: copy + drop + store,
+    Witness: drop,
 >(
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): VestedAllocation<SaleCoin, VestingScheduleParams> {
-    sale.phase.assert_finalized();
+): VestingWallet<Witness, VestingScheduleParams, SaleCoin> {
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
-    assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
-    assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
-    (&receipt, ctx);
+    let payout = sale.claim_internal(receipt, ctx);
 
-    let receipt_id = object::id(&receipt);
-    let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume();
-
-    sale.total_allocated = sale.total_allocated - allocation;
-    let payout = sale.inventory.split(allocation);
-
-    let schedule = *sale.vesting_schedule_params.borrow();
-    let sale_id = object::id(sale);
-
-    event::emit(Claimed<SaleCoin, PaymentCoin> {
-        sale_id,
+    let vesting_schedule_params = *sale.vesting_schedule_params.borrow();
+    let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
+        vesting_schedule_params,
         buyer,
-        receipt_id,
-        amount: allocation,
-    });
+        ctx,
+    );
+    wallet.deposit(sui::coin::from_balance(payout, ctx));
 
-    vested_allocation::new(payout, schedule, buyer, sale_id)
+    wallet
+}
+
+public fun claim_all_into_vesting<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+    Witness: drop,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    mut receipts: vector<Receipt<SaleCoin>>,
+    ctx: &mut TxContext,
+): VestingWallet<Witness, VestingScheduleParams, SaleCoin> {
+    assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
+    let payout = sale.claim_all_internal(receipts, ctx);
+
+    let vesting_schedule_params = *sale.vesting_schedule_params.borrow();
+    let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
+        vesting_schedule_params,
+        buyer,
+        ctx,
+    );
+    wallet.deposit(sui::coin::from_balance(payout, ctx));
+
+    wallet
 }
 
 /// Withdraw collected proceeds. Phase must be `Finalized`.
@@ -1404,3 +1397,56 @@ public fun sale_id<PaymentCoin>(q: &Quote<PaymentCoin>): ID { q.sale_id }
 public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> { &q.payment }
 
 public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
+
+fun claim_internal<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+    Witness: drop,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    receipt: Receipt<SaleCoin>,
+    ctx: &mut TxContext,
+): Balance<SaleCoin> {
+    sale.phase.assert_finalized();
+    assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
+    assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
+
+    let receipt_id = object::id(&receipt);
+    let (_sale_id, buyer, _paid, allocation, _ts) = receipt.consume();
+
+    sale.total_allocated = sale.total_allocated - allocation;
+    let payout = sale.inventory.split(allocation);
+
+    event::emit(Claimed<SaleCoin, PaymentCoin> {
+        sale_id: object::id(sale),
+        buyer,
+        receipt_id,
+        amount: allocation,
+    });
+
+    payout
+}
+
+fun claim_all_internal<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+    Witness: drop,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    mut receipts: vector<Receipt<SaleCoin>>,
+    ctx: &mut TxContext,
+): Balance<SaleCoin> {
+    let mut total = balance::zero<SaleCoin>();
+    while (!receipts.is_empty()) {
+        let r = receipts.pop_back();
+        total.join(sale.claim_internal(r, ctx));
+    };
+    receipts.destroy_empty();
+    total
+}
