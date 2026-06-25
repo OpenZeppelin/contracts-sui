@@ -181,6 +181,8 @@ const EInsufficientInventoryAtActivate: vector<u8> =
     "Inventory at activation does not cover hard_cap * max_rate";
 #[error(code = 27)]
 const EAllocationOverflow: vector<u8> = "Allocation would overflow u64";
+#[error(code = 28)]
+const EInsufficientInventory: vector<u8> = "Purchase allocation exceeds unallocated inventory";
 
 // Caps
 #[error(code = 30)]
@@ -223,6 +225,10 @@ const EReceiptSaleMismatch: vector<u8> = "Receipt does not belong to this sale";
 // Quote / curve coupling
 #[error(code = 61)]
 const EQuoteSaleMismatch: vector<u8> = "Quote does not belong to this sale";
+
+// Activation ticket
+#[error(code = 62)]
+const ETicketSaleMismatch: vector<u8> = "Activation ticket does not belong to this sale";
 
 // Per-buyer cap configuration
 #[error(code = 70)]
@@ -770,7 +776,7 @@ public fun purchase<
 
     // Inventory backing.
     let unallocated = sale.inventory.value() - sale.total_allocated;
-    assert!(allocation <= unallocated, EInsufficientInventoryAtActivate);
+    assert!(allocation <= unallocated, EInsufficientInventory);
 
     // State mutations
     sale.total_allocated = sale.total_allocated + allocation;
@@ -1107,7 +1113,6 @@ public fun refund<
     sale.phase.assert_cancelled();
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
     assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
-    (&receipt, ctx);
     let paired_vault_id = *sale.refund_vault_id.borrow();
     assert!(object::id(vault) == paired_vault_id, EWrongVault);
 
