@@ -327,7 +327,7 @@ public struct PerBuyerCapSet<phantom SaleCoin, phantom PaymentCoin> has copy, dr
     cap: u64,
 }
 
-public struct VestingVestingScheduleParamsSet<
+public struct VestingScheduleParamsSet<
     phantom SaleCoin,
     phantom PaymentCoin,
     VestingScheduleParams: copy + drop,
@@ -554,7 +554,7 @@ public fun set_vesting_schedule_params<
     sale.phase.assert_init();
     assert!(sale.vesting_schedule_params.is_none(), EVestingScheduleAlreadySet);
     sale.vesting_schedule_params.fill(params);
-    event::emit(VestingVestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
+    event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
         sale_id: object::id(sale),
         params,
     });
