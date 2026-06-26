@@ -529,7 +529,9 @@ fun destroy_empty_returns_params_and_emits() {
     let wallet = new_wallet(BENEFICIARY, scenario.ctx());
     let wallet_id = object::id(&wallet);
 
-    let receipt = wallet.destroy_empty();
+    // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
+    // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
+    let receipt = wallet.destroy_empty_for_testing();
     assert_eq!(vesting_wallet::test_receipt_beneficiary(&receipt), BENEFICIARY);
     assert_eq!(vesting_wallet::test_receipt_params(&receipt), TestParams { tag: PARAMS_TAG });
 
@@ -552,9 +554,39 @@ fun destroy_empty_rejects_nonempty_balance() {
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
     wallet.deposit(mint(1));
 
-    let _receipt = wallet.destroy_empty();
+    let _receipt = wallet.destroy_empty_for_testing();
     abort
 }
+
+// `destroy_empty` rejects a wallet whose object address still holds settled funds that
+// have not been swept into the on-book balance (the `sweep_settled` source).
+//
+// TODO: un-ignore (uncomment and add `#[test, expected_failure(...)]`) once
+// `accumulator::create_for_testing` ships in the published Sui mainnet framework. It also
+// needs the imports `use sui::accumulator::{Self, AccumulatorRoot};` and
+// `use sui::test_scenario::Scenario;`, plus the `seed_root` helper below. The unit VM may
+// also need to actually settle the funds parked at the address for the gate to fire.
+//
+// fun seed_root(scenario: &mut Scenario, resume: address) {
+//     scenario.next_tx(@0x0);
+//     accumulator::create_for_testing(scenario.ctx());
+//     scenario.next_tx(resume);
+// }
+//
+// #[test, expected_failure(abort_code = vesting_wallet::EUnsweptFunds)]
+// fun destroy_empty_rejects_unswept_settled_funds() {
+//     let mut scenario = test_scenario::begin(@0x1);
+//     seed_root(&mut scenario, @0x1);
+//
+//     let wallet = new_wallet(BENEFICIARY, scenario.ctx());
+//     // Park settled funds at the wallet's object address without sweeping them in.
+//     balance::send_funds(mint(1), object::id(&wallet).to_address());
+//     scenario.next_tx(@0x1);
+//
+//     let root = scenario.take_shared<AccumulatorRoot>();
+//     let _receipt = wallet.destroy_empty(&root);
+//     abort
+// }
 
 // === State immutability ===
 

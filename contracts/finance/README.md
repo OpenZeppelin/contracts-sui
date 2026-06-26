@@ -228,7 +228,7 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    build the wallet itself without routing through `new`.
 3. A `vested_amount(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
    that evaluates the curve and ends in `wallet.mint_vested_amount(MyCurve {}, amount)`.
-4. A teardown that calls `wallet.destroy_empty()` for a `DestroyReceipt<MyCurve,
+4. A teardown that calls `wallet.destroy_empty(root)` for a `DestroyReceipt<MyCurve,
    MyParams>`, then `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover
    the beneficiary and parameters and destructure them. `destroy_empty` is permissionless;
    the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.

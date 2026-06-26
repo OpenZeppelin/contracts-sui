@@ -146,7 +146,7 @@ public fun resume<S: drop, P: copy + drop + store, C>(
 /// wallet to the caller. This is the curve-agnostic half of teardown - the wrapper
 /// holds no witness `S`, so it cannot consume a `DestroyReceipt` itself; it stops at
 /// handing back the bare wallet. The caller finishes teardown through the curve
-/// module: `vesting_wallet::destroy_empty(wallet)` for the receipt, then the curve's
+/// module: `vesting_wallet::destroy_empty(wallet, root)` for the receipt, then the curve's
 /// witness-gated `destroy` to consume it (which can impose its own gates, e.g. that
 /// the schedule has ended).
 ///

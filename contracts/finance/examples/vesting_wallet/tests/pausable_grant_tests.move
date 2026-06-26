@@ -154,7 +154,9 @@ fun unwrap_then_curve_teardown() {
     // curve's witness-gated `destroy`.
     scenario.next_tx(BENEFICIARY);
     let wallet = scenario.take_from_sender<VestingWallet<Linear, Params, USDC>>();
-    let receipt = wallet.destroy_empty();
+    // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
+    // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
+    let receipt = wallet.destroy_empty_for_testing();
     linear::destroy(receipt, &clock, scenario.ctx());
 
     destroy(clock);

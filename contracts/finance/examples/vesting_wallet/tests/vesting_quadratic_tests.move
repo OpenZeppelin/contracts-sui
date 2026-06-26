@@ -187,7 +187,9 @@ fun compose_destroy_after_drain() {
     // Permissionless half reclaims the storage rebate; the witness-gated half consumes
     // the receipt and enforces the ended and beneficiary gates (the sender is the
     // beneficiary here).
-    let receipt = wallet.destroy_empty();
+    // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
+    // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
+    let receipt = wallet.destroy_empty_for_testing();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
     destroy(clock);
@@ -211,7 +213,7 @@ fun destroy_aborts_before_end() {
     );
     clock.set_for_testing(START_MS + DURATION_MS - 1);
 
-    let receipt = wallet.destroy_empty();
+    let receipt = wallet.destroy_empty_for_testing();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
     abort
@@ -234,7 +236,7 @@ fun destroy_rejects_non_beneficiary() {
     );
     clock.set_for_testing(START_MS + DURATION_MS);
 
-    let receipt = wallet.destroy_empty();
+    let receipt = wallet.destroy_empty_for_testing();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
     abort

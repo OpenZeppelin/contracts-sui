@@ -58,7 +58,7 @@
 ///    itself (calling `vesting_wallet::new` directly) without routing through `new`.
 /// 3. A `vested(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
 ///    that ends in `vesting_wallet::mint_vested_amount(wallet, MyCurve {}, amount)`.
-/// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet)` to get a
+/// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet, root)` to get a
 ///    `DestroyReceipt<MyCurve, MyParams>`, then
 ///    `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover the
 ///    beneficiary and parameters for the curve module to destructure.
@@ -117,6 +117,11 @@ const EBalanceOverflow: vector<u8> = "Deposit would overflow the wallet's lifeti
 /// so the current balance cannot cover the releasable amount.
 #[error(code = 4)]
 const EInsufficientBalance: vector<u8> = "Releasable amount exceeds the wallet's balance";
+
+/// `destroy_empty` was called on a wallet that still has unswept settled funds at
+/// its object address. Call `sweep_settled` first.
+#[error(code = 5)]
+const EUnsweptFunds: vector<u8> = "Wallet has unswept settled funds at its address";
 
 // === Structs ===
 
@@ -433,7 +438,10 @@ public fun release<S: drop, P: copy + drop + store, C>(
 /// wallet.
 ///
 /// #### Parameters
-/// - `wallet`: The wallet to destroy. Must hold a zero balance.
+/// - `wallet`: The wallet to destroy. Must hold a zero balance and have no pending
+///   settled funds at its object address (`sweep_settled` first if it does).
+/// - `root`: The shared `AccumulatorRoot`, read to confirm the wallet's object
+///   address holds no unswept settled funds.
 ///
 /// #### Returns
 /// - A `DestroyReceipt<S, P>` carrying the wallet's beneficiary and schedule
@@ -441,11 +449,24 @@ public fun release<S: drop, P: copy + drop + store, C>(
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the wallet still holds a balance.
+/// - `EUnsweptFunds` if the wallet has any pending settled funds.
 public fun destroy_empty<S: drop, P: copy + drop + store, C>(
     wallet: VestingWallet<S, P, C>,
+    root: &AccumulatorRoot,
 ): DestroyReceipt<S, P> {
     assert!(wallet.balance.value() == 0, ENotEmpty);
+    let settled = balance::settled_funds_value<C>(root, object::uid_to_address(&wallet.id));
+    assert!(settled == 0, EUnsweptFunds);
 
+    wallet.finish_destroy()
+}
+
+/// Shared teardown for `destroy_empty`: consume the drained wallet, emit `Destroyed`, and
+/// return the receipt. Assumes the empty-balance and settled-funds gates have already
+/// passed.
+fun finish_destroy<S: drop, P: copy + drop + store, C>(
+    wallet: VestingWallet<S, P, C>,
+): DestroyReceipt<S, P> {
     let wallet_id = object::id(&wallet);
     let beneficiary = wallet.beneficiary;
     let total_released = wallet.released;
@@ -567,6 +588,22 @@ public fun balance<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S,
 }
 
 // === Test-Only Helpers ===
+
+/// Tear down a drained wallet without the `AccumulatorRoot` settled-funds gate, so unit
+/// tests can exercise teardown without constructing an `AccumulatorRoot` - which has no
+/// test constructor in the pinned Sui release. The empty-balance gate is kept, so the
+/// `ENotEmpty` path stays covered through this entry too.
+///
+/// TODO: remove this and route the teardown tests through `destroy_empty` with a real
+/// `AccumulatorRoot` (via `accumulator::create_for_testing`) once that test helper ships
+/// in the published Sui mainnet framework.
+#[test_only]
+public fun destroy_empty_for_testing<S: drop, P: copy + drop + store, C>(
+    wallet: VestingWallet<S, P, C>,
+): DestroyReceipt<S, P> {
+    assert!(wallet.balance.value() == 0, ENotEmpty);
+    wallet.finish_destroy()
+}
 
 /// Build a `Created` event value for asserting against `event::events_by_type`.
 #[test_only]
