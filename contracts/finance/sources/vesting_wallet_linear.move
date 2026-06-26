@@ -51,7 +51,13 @@
 /// made at `t > start_ms` immediately participate at the current step proportion.
 module openzeppelin_finance::vesting_wallet_linear;
 
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount, DestroyReceipt};
+use openzeppelin_finance::vesting_wallet::{
+    Self,
+    VestingWallet,
+    VestedAmount,
+    DestroyReceipt,
+    DestroyCap
+};
 use openzeppelin_math::rounding;
 use openzeppelin_math::u64::mul_div;
 use sui::clock::Clock;
@@ -78,10 +84,6 @@ const EScheduleOverflow: vector<u8> = "Schedule end (start + period * steps) wou
 /// `destroy` was called before the schedule's end (`start_ms + period_ms * steps`).
 #[error(code = 4)]
 const ENotEnded: vector<u8> = "Schedule has not ended yet";
-
-/// `destroy` was called by an address other than the wallet's beneficiary.
-#[error(code = 5)]
-const ENotBeneficiary: vector<u8> = "Only the beneficiary may destroy the wallet";
 
 // === Structs ===
 
@@ -171,9 +173,10 @@ public fun params_continuous(start_ms: u64, cliff_ms: u64, duration_ms: u64): Pa
 }
 
 /// Build a `VestingWallet<Linear, Params, C>` on the stepped (tranche) schedule.
-/// Returns the wallet by value so the caller can chain deposit and topology
-/// selection in one PTB. Use `create_and_share` for the common "share immediately"
-/// case.
+/// Returns the wallet by value, plus the `DestroyCap` that authorizes its teardown, so
+/// the caller can chain deposit and topology selection in one PTB and route the cap to
+/// wherever teardown authority should live. Use `create_and_share` for the common "share
+/// immediately" case.
 ///
 /// #### Parameters
 /// - `beneficiary`: Address that every release pays out to.
@@ -185,6 +188,7 @@ public fun params_continuous(start_ms: u64, cliff_ms: u64, duration_ms: u64): Pa
 ///
 /// #### Returns
 /// - A fresh, unfunded `VestingWallet<Linear, Params, C>` owned by the caller.
+/// - The `DestroyCap` bound to that wallet, required later by `destroy`.
 ///
 /// #### Aborts
 /// - `EZeroPeriod` if `period_ms == 0`.
@@ -199,15 +203,15 @@ public fun new<C>(
     period_ms: u64,
     steps: u64,
     ctx: &mut TxContext,
-): VestingWallet<Linear, Params, C> {
+): (VestingWallet<Linear, Params, C>, DestroyCap) {
     vesting_wallet::new(params(start_ms, cliff_ms, period_ms, steps), beneficiary, ctx)
 }
 
 /// Sugar for a continuous linear-with-cliff schedule: the stepped curve in the
 /// `period_ms = 1` limit (`steps = duration_ms`), where every millisecond is its own
 /// tranche and the curve rises linearly. Use `new` directly for coarser tranches.
-/// Returns the wallet by value; use `create_and_share` for the common "share
-/// immediately" case.
+/// Returns the wallet by value plus its `DestroyCap`; use `create_and_share` for the
+/// common "share immediately" case.
 ///
 /// #### Parameters
 /// - `beneficiary`: Address that every release pays out to.
@@ -218,6 +222,7 @@ public fun new<C>(
 ///
 /// #### Returns
 /// - A fresh, unfunded `VestingWallet<Linear, Params, C>` owned by the caller.
+/// - The `DestroyCap` bound to that wallet, required later by `destroy`.
 ///
 /// #### Aborts
 /// - `EZeroSteps` if `duration_ms == 0`.
@@ -229,13 +234,14 @@ public fun new_continuous<C>(
     cliff_ms: u64,
     duration_ms: u64,
     ctx: &mut TxContext,
-): VestingWallet<Linear, Params, C> {
+): (VestingWallet<Linear, Params, C>, DestroyCap) {
     vesting_wallet::new(params_continuous(start_ms, cliff_ms, duration_ms), beneficiary, ctx)
 }
 
-/// Sugar for the common case: build a stepped wallet and immediately share it. The
-/// wallet is made shared via `transfer::public_share_object` instead of being
-/// returned.
+/// Sugar for the common case: build a stepped wallet and immediately share it via
+/// `transfer::public_share_object`, returning the wallet's `DestroyCap` for the caller
+/// to route wherever teardown authority should live (held, forwarded, or wrapped) -
+/// whoever ends up holding it can later tear the wallet down.
 ///
 /// #### Parameters
 /// - `beneficiary`: Address that every release pays out to.
@@ -244,6 +250,9 @@ public fun new_continuous<C>(
 /// - `period_ms`: Length of each tranche period (ms).
 /// - `steps`: Number of equal tranches.
 /// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - The shared wallet's `DestroyCap`, required later by `destroy`.
 ///
 /// #### Aborts
 /// - `EZeroPeriod` if `period_ms == 0`.
@@ -258,13 +267,15 @@ public fun create_and_share<C>(
     period_ms: u64,
     steps: u64,
     ctx: &mut TxContext,
-) {
-    let wallet = new<C>(beneficiary, start_ms, cliff_ms, period_ms, steps, ctx);
+): DestroyCap {
+    let (wallet, cap) = new<C>(beneficiary, start_ms, cliff_ms, period_ms, steps, ctx);
     transfer::public_share_object(wallet);
+    cap
 }
 
-/// Sugar for the common case: build a continuous wallet and immediately share it.
-/// The wallet is made shared via `transfer::public_share_object`.
+/// Sugar for the common case: build a continuous wallet and immediately share it via
+/// `transfer::public_share_object`, returning the wallet's `DestroyCap` for the caller
+/// to route wherever teardown authority should live.
 ///
 /// #### Parameters
 /// - `beneficiary`: Address that every release pays out to.
@@ -272,6 +283,9 @@ public fun create_and_share<C>(
 /// - `cliff_ms`: Cliff length (ms from `start_ms`); `0` for no cliff.
 /// - `duration_ms`: Length of the vesting period (ms).
 /// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - The shared wallet's `DestroyCap`, required later by `destroy`.
 ///
 /// #### Aborts
 /// - `EZeroSteps` if `duration_ms == 0`.
@@ -283,9 +297,10 @@ public fun create_and_share_continuous<C>(
     cliff_ms: u64,
     duration_ms: u64,
     ctx: &mut TxContext,
-) {
-    let wallet = new_continuous<C>(beneficiary, start_ms, cliff_ms, duration_ms, ctx);
+): DestroyCap {
+    let (wallet, cap) = new_continuous<C>(beneficiary, start_ms, cliff_ms, duration_ms, ctx);
     transfer::public_share_object(wallet);
+    cap
 }
 
 // === Curve evaluation & release ===
@@ -342,42 +357,39 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 }
 
 /// Finalize teardown of a drained, ended `Linear` wallet by consuming the
-/// `DestroyReceipt<Linear, Params>` that `vesting_wallet::destroy_empty` returns.
-/// `destroy_empty` is permissionless and is what actually reclaims the storage rebate;
-/// this call is the witness-gated other half - only this module holds `Linear`, so
-/// only it can unwrap the receipt - and it additionally requires the schedule to have
-/// ended and the caller to be the beneficiary. Because the receipt is a hot potato
-/// consumed in the same PTB that produced it, a failed gate here aborts and reverts
-/// the whole teardown, including the `destroy_empty` call.
+/// `DestroyReceipt<Linear, Params>` that `vesting_wallet::destroy_empty` returns, along
+/// with the wallet's `DestroyCap`. `destroy_empty` is permissionless and is what
+/// actually reclaims the storage rebate; this call is the gated other half - only this
+/// module holds `Linear`, so only it can unwrap the receipt - and it additionally
+/// requires the schedule to have ended. Because the receipt is a hot potato consumed in
+/// the same PTB that produced it, a failed gate here (or in the core cap check) aborts
+/// and reverts the whole teardown, including the `destroy_empty` call.
 ///
-/// Both extra gates guard against stranding an in-flight deposit. The ended gate stops
-/// a wallet being torn down ahead of a pending deposit, front-running funding intended
-/// to arrive later. The beneficiary gate addresses the residual case: a coin
+/// Authority comes from the `cap`, not the caller's address: whoever holds the wallet's
+/// `DestroyCap` may tear it down. This is what lets a wallet whose `beneficiary` is an
+/// object address be torn down at all - an object address is never a `ctx.sender()`, so
+/// the previous "only the beneficiary may destroy" gate could never be satisfied for it.
+/// The cap holder bears the strand risk the old beneficiary gate guarded: a coin
 /// `public_transfer`'d to the wallet's address but not yet `receive_and_deposit`'d is
-/// invisible to `destroy_empty`'s empty check, so - since `destroy_empty` is
-/// permissionless - an arbitrary actor could otherwise strand such a deposit and
-/// pocket the storage rebate. Restricting this final step to the beneficiary keeps both
-/// the strand risk and the rebate with the only party harmed by it.
+/// invisible to `destroy_empty`'s empty check, so finalizing teardown forfeits it. Route
+/// the cap to the party that should own that decision (commonly the beneficiary or its
+/// controller).
 ///
-/// In owned mode this couples teardown to the beneficiary in both halves:
-/// `destroy_empty` needs the wallet object by value (owner-only) and this call needs
-/// `ctx.sender() == beneficiary`. A custodial holder that is not the beneficiary must
-/// transfer the wallet to the beneficiary before the rebate can be reclaimed. Shared
-/// topology is unaffected.
+/// The ended gate is retained: it stops a wallet being torn down ahead of a pending
+/// deposit, front-running funding intended to arrive later.
 ///
 /// #### Parameters
 /// - `receipt`: The `DestroyReceipt<Linear, Params>` returned by
 ///   `vesting_wallet::destroy_empty`.
+/// - `cap`: The wallet's `DestroyCap`, minted by `new`. Consumed by the call.
 /// - `clock`: Sui `Clock`, used to check the schedule has ended.
-/// - `ctx`: Transaction context, used to check the caller is the beneficiary.
 ///
 /// #### Aborts
+/// - `EWrongCap` if `cap` was minted for a different wallet.
 /// - `ENotEnded` if called before the schedule's end (`start_ms + period_ms * steps`).
-/// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
-public fun destroy(receipt: DestroyReceipt<Linear, Params>, clock: &Clock, ctx: &mut TxContext) {
-    let (beneficiary, params) = vesting_wallet::consume_receipt(receipt, Linear {});
+public fun destroy(receipt: DestroyReceipt<Linear, Params>, cap: DestroyCap, clock: &Clock) {
+    let params = vesting_wallet::consume_receipt(receipt, cap, Linear {});
     assert!(clock.timestamp_ms() >= params.calculate_end(), ENotEnded);
-    assert!(ctx.sender() == beneficiary, ENotBeneficiary);
 }
 
 // === View helpers ===

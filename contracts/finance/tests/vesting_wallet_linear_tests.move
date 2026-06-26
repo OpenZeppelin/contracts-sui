@@ -25,6 +25,9 @@ fun setup(t0: u64): (Scenario, Clock) {
     (test, clk)
 }
 
+// Curve-shape and release tests do not tear down, so these helpers discard the
+// `DestroyCap` and return just the wallet. Teardown tests call the constructors directly
+// to keep the cap.
 fun new_stepped(
     start: u64,
     cliff: u64,
@@ -32,7 +35,9 @@ fun new_stepped(
     steps: u64,
     ctx: &mut TxContext,
 ): VestingWallet<Linear, Params, USDC> {
-    vesting_wallet_linear::new<USDC>(BENEFICIARY, start, cliff, period, steps, ctx)
+    let (wallet, cap) = vesting_wallet_linear::new<USDC>(BENEFICIARY, start, cliff, period, steps, ctx);
+    destroy(cap);
+    wallet
 }
 
 fun new_continuous(
@@ -41,7 +46,9 @@ fun new_continuous(
     duration: u64,
     ctx: &mut TxContext,
 ): VestingWallet<Linear, Params, USDC> {
-    vesting_wallet_linear::new_continuous<USDC>(BENEFICIARY, start, cliff, duration, ctx)
+    let (wallet, cap) = vesting_wallet_linear::new_continuous<USDC>(BENEFICIARY, start, cliff, duration, ctx);
+    destroy(cap);
+    wallet
 }
 
 fun fund(wallet: &mut VestingWallet<Linear, Params, USDC>, amount: u64, ctx: &mut TxContext) {
@@ -170,7 +177,8 @@ fun params_drives_bare_primitive() {
     let (mut test, mut clk) = setup(0);
 
     let p = vesting_wallet_linear::params(100, 250, 1000, 4);
-    let mut wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
+    let (mut wallet, cap) = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
+    destroy(cap);
     wallet.fund(1000, test.ctx());
 
     assert_eq!(vesting_wallet_linear::start_ms(&wallet), 100);
@@ -202,7 +210,8 @@ fun params_rejects_zero_period() {
 fun create_and_share_shares_wallet() {
     let (mut test, clk) = setup(0);
 
-    vesting_wallet_linear::create_and_share<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
+    let cap = vesting_wallet_linear::create_and_share<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
+    destroy(cap);
 
     test.next_tx(@0x1);
     let wallet = test.take_shared<VestingWallet<Linear, Params, USDC>>();
@@ -219,7 +228,14 @@ fun create_and_share_shares_wallet() {
 fun create_and_share_continuous_shares_wallet() {
     let (mut test, clk) = setup(0);
 
-    vesting_wallet_linear::create_and_share_continuous<USDC>(BENEFICIARY, 0, 0, 4000, test.ctx());
+    let cap = vesting_wallet_linear::create_and_share_continuous<USDC>(
+        BENEFICIARY,
+        0,
+        0,
+        4000,
+        test.ctx(),
+    );
+    destroy(cap);
 
     test.next_tx(@0x1);
     let wallet = test.take_shared<VestingWallet<Linear, Params, USDC>>();
@@ -546,12 +562,12 @@ fun full_release_after_end_then_releasable_zero() {
 
 // === Teardown ===
 
-// A drained, ended wallet can be torn down and emits `Destroyed`.
+// A drained, ended wallet can be torn down with its `DestroyCap` and emits `Destroyed`.
 #[test]
 fun destroy_after_end_on_empty_wallet() {
     let (mut test, mut clk) = setup(0);
 
-    let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
+    let (mut wallet, cap) = vesting_wallet_linear::new<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
     let wallet_id = object::id(&wallet);
     wallet.fund(1000, test.ctx());
 
@@ -561,7 +577,7 @@ fun destroy_after_end_on_empty_wallet() {
 
     test.next_tx(BENEFICIARY);
     let receipt = wallet.destroy_empty();
-    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
+    vesting_wallet_linear::destroy(receipt, cap, &clk);
 
     let destroyed = event::events_by_type<Destroyed<Linear, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -574,45 +590,90 @@ fun destroy_after_end_on_empty_wallet() {
     test.end();
 }
 
+// Regression for the object-beneficiary teardown bug: a wallet whose `beneficiary` is an
+// object address (never a transaction sender) can still be torn down, because teardown
+// authority is the `DestroyCap`, not `ctx.sender() == beneficiary`. An unrelated keypair
+// that merely holds the cap finalizes it.
+#[test]
+fun destroy_works_for_object_beneficiary() {
+    let (mut test, mut clk) = setup(0);
+
+    // Use another wallet's address as a stand-in object address for the beneficiary.
+    let (placeholder, placeholder_cap) = vesting_wallet_linear::new<USDC>(
+        BENEFICIARY,
+        0,
+        0,
+        1000,
+        4,
+        test.ctx(),
+    );
+    let object_addr = object::id_address(&placeholder);
+
+    let (mut wallet, cap) = vesting_wallet_linear::new<USDC>(object_addr, 0, 0, 1000, 4, test.ctx());
+    wallet.fund(1000, test.ctx());
+    clk.set_for_testing(4000);
+    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx()); // drains to the object beneficiary
+    assert_eq!(wallet.balance(), 0);
+
+    // A keypair that is NOT the object beneficiary tears the wallet down with the cap.
+    test.next_tx(@0xCAFE);
+    let receipt = wallet.destroy_empty();
+    vesting_wallet_linear::destroy(receipt, cap, &clk);
+
+    assert_eq!(event::events_by_type<Destroyed<Linear, USDC>>().length(), 1);
+
+    destroy(placeholder);
+    destroy(placeholder_cap);
+    destroy(clk);
+    test.end();
+}
+
 // Tearing down before the schedule end aborts, even on an empty wallet.
 #[test, expected_failure(abort_code = vesting_wallet_linear::ENotEnded)]
 fun destroy_rejects_before_end() {
     let (mut test, mut clk) = setup(0);
 
-    let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
+    let (wallet, cap) = vesting_wallet_linear::new<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
     clk.set_for_testing(3999);
     let receipt = wallet.destroy_empty();
-    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
+    vesting_wallet_linear::destroy(receipt, cap, &clk);
     abort
 }
 
-// Tearing down a wallet that still holds a balance aborts. Clock is after end and
-// the caller is the beneficiary, so neither the ended nor the beneficiary gate can
-// fire - only the empty-balance gate from the primitive.
+// Tearing down a wallet that still holds a balance aborts on the primitive's empty-balance
+// gate. Clock is after end so the ended gate cannot fire first.
 #[test, expected_failure(abort_code = vesting_wallet::ENotEmpty)]
 fun destroy_rejects_nonempty_balance() {
     let (mut test, mut clk) = setup(0);
 
-    let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
+    let (mut wallet, cap) = vesting_wallet_linear::new<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
     wallet.fund(1, test.ctx());
     clk.set_for_testing(5000); // after end, so the ended gate cannot fire
-    test.next_tx(BENEFICIARY);
     let receipt = wallet.destroy_empty();
-    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
+    vesting_wallet_linear::destroy(receipt, cap, &clk);
     abort
 }
 
-// Only the beneficiary may tear down the wallet; any other caller aborts even on a
-// drained, ended wallet.
-#[test, expected_failure(abort_code = vesting_wallet_linear::ENotBeneficiary)]
-fun destroy_rejects_non_beneficiary() {
+// Teardown is authorized by the matching `DestroyCap`, not the caller's address: a cap
+// minted for a different wallet is rejected even on a drained, ended wallet.
+#[test, expected_failure(abort_code = vesting_wallet::EWrongCap)]
+fun destroy_rejects_wrong_cap() {
     let (mut test, mut clk) = setup(0);
 
-    let wallet = new_stepped(0, 0, 1000, 4, test.ctx());
-    clk.set_for_testing(5000); // after end, so the ended gate cannot fire
-    test.next_tx(@0xCAFE); // not the beneficiary
+    let (wallet, _cap) = vesting_wallet_linear::new<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
+    // A second, independent wallet's cap is foreign to the first.
+    let (_other_wallet, other_cap) = vesting_wallet_linear::new<USDC>(
+        BENEFICIARY,
+        0,
+        0,
+        1000,
+        4,
+        test.ctx(),
+    );
+
+    clk.set_for_testing(5000); // after end, so the ended gate cannot fire first
     let receipt = wallet.destroy_empty();
-    vesting_wallet_linear::destroy(receipt, &clk, test.ctx());
+    vesting_wallet_linear::destroy(receipt, other_cap, &clk);
     abort
 }
 
@@ -754,7 +815,8 @@ fun params_continuous_drives_bare_primitive() {
     let (mut test, clk) = setup(0);
 
     let p = vesting_wallet_linear::params_continuous(100, 250, 1000);
-    let wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
+    let (wallet, cap) = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
+    destroy(cap);
 
     assert_eq!(vesting_wallet_linear::start_ms(&wallet), 100);
     assert_eq!(vesting_wallet_linear::cliff_ms(&wallet), 250);
