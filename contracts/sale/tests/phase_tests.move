@@ -1,4 +1,4 @@
-// Lifecycle enum tests for `phase` (INV-20).
+// Lifecycle enum tests for `phase`.
 //
 // The phase module enforces the *source-state* asserts on each transition.
 // Note the terminal-ness of `Finalized` is enforced at the sale layer (every

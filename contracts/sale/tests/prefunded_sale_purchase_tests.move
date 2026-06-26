@@ -1,11 +1,10 @@
-// Purchase-path tests for `prefunded_sale` (INV-13, INV-15, INV-21, INV-22,
-// INV-30, INV-31).
+// Purchase-path tests for `prefunded_sale`.
 //
 // Covers the happy purchase (state mutation + receipt delivery, which is the
-// quote+purchase single-PTB compose of INV-30), the window gate, the hard-cap
-// and per-buyer/per-entry caps, and the symmetric allowlist coupling (INV-15)
-// with its single-PTB entry consume (INV-31). The inventory-bound failure
-// (INV-21 / EInsufficientInventory) is only reachable via a dishonest curve and
+// quote+purchase single-PTB compose), the window gate, the hard-cap
+// and per-buyer/per-entry caps, and the symmetric allowlist coupling
+// with its single-PTB entry consume. The inventory-bound failure
+// (EInsufficientInventory) is only reachable via a dishonest curve and
 // lives in `prefunded_sale_curve_trust_tests`.
 module openzeppelin_sale::prefunded_sale_purchase_tests;
 
@@ -26,7 +25,13 @@ use sui::test_scenario::{Self as ts, Scenario};
 // cap, inventory 1_000). Leaves sale + vault shared, cap with ADMIN.
 fun setup_with_per_buyer_cap(test: &mut Scenario, clk: &Clock, per_buyer: u64) {
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -61,7 +66,7 @@ fun buy_with_entry(
     ts::return_to_address(tu::admin(), admin);
 }
 
-// === Happy path (INV-13, INV-21, INV-22, INV-30) ===
+// === Happy path ===
 
 #[test]
 fun purchase_delivers_receipt_and_updates_state() {
@@ -107,7 +112,7 @@ fun purchase_at_exact_hard_cap_ok() {
     test.end();
 }
 
-// === Window gate (INV-13) ===
+// === Window gate ===
 
 // A purchase before opens_at_ms is rejected.
 #[test, expected_failure(abort_code = prefunded_sale::ESaleWindowClosed)]
@@ -140,7 +145,7 @@ fun purchase_after_close_aborts() {
     test.end();
 }
 
-// === Hard cap (INV-13, INV-22) ===
+// === Hard cap ===
 
 #[test, expected_failure(abort_code = prefunded_sale::EHardCapExceeded)]
 fun purchase_exceeds_hard_cap_aborts() {
@@ -155,7 +160,7 @@ fun purchase_exceeds_hard_cap_aborts() {
     test.end();
 }
 
-// === Per-buyer cap (INV-13) ===
+// === Per-buyer cap ===
 
 // Cumulative payments within the cap across multiple purchases succeed.
 #[test]
@@ -189,13 +194,23 @@ fun per_buyer_cap_exceeded_aborts() {
     test.end();
 }
 
-// === Allowlist coupling (INV-15, INV-31) ===
+// === Allowlist coupling ===
 
 // Happy: an allowlist sale accepts a purchase carrying a valid entry.
 #[test]
 fun allowlist_purchase_with_entry_succeeds() {
     let (mut test, clk) = tu::setup();
-    tu::create_and_activate_full(&mut test, &clk, 1, 1_000, 0, tu::opens(), tu::closes(), 1_000, true);
+    tu::create_and_activate_full(
+        &mut test,
+        &clk,
+        1,
+        1_000,
+        0,
+        tu::opens(),
+        tu::closes(),
+        1_000,
+        true,
+    );
 
     test.next_tx(tu::buyer());
     let mut sale = tu::take_sale(&test);
@@ -211,7 +226,17 @@ fun allowlist_purchase_with_entry_succeeds() {
 #[test, expected_failure(abort_code = prefunded_sale::EAllowlistRequired)]
 fun allowlist_required_but_none_aborts() {
     let (mut test, clk) = tu::setup();
-    tu::create_and_activate_full(&mut test, &clk, 1, 1_000, 0, tu::opens(), tu::closes(), 1_000, true);
+    tu::create_and_activate_full(
+        &mut test,
+        &clk,
+        1,
+        1_000,
+        0,
+        tu::opens(),
+        tu::closes(),
+        1_000,
+        true,
+    );
 
     test.next_tx(tu::buyer());
     let mut sale = tu::take_sale(&test);
@@ -244,7 +269,17 @@ fun allowlist_not_required_but_provided_aborts() {
 #[test, expected_failure(abort_code = prefunded_sale::EPerEntryCapExceeded)]
 fun per_entry_cap_exceeded_aborts() {
     let (mut test, clk) = tu::setup();
-    tu::create_and_activate_full(&mut test, &clk, 1, 1_000, 0, tu::opens(), tu::closes(), 1_000, true);
+    tu::create_and_activate_full(
+        &mut test,
+        &clk,
+        1,
+        1_000,
+        0,
+        tu::opens(),
+        tu::closes(),
+        1_000,
+        true,
+    );
 
     test.next_tx(tu::buyer());
     let mut sale = tu::take_sale(&test);

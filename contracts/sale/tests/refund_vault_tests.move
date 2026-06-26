@@ -1,4 +1,4 @@
-// RefundVault state-machine + cap-gating tests (INV-5, INV-19, INV-26).
+// RefundVault state-machine + cap-gating tests.
 //
 // The vault is a standalone escrow primitive: Active accepts deposits; the
 // terminal states do not. Refunding supports per-amount releases; Closed
@@ -53,14 +53,14 @@ fun deposit_then_refunding_then_release_partial() {
 
     let part = vault.release_balance(&cap, 400);
     assert_eq!(part.value(), 400);
-    assert_eq!(vault.value(), 600); // INV-26: remaining covers outstanding
+    assert_eq!(vault.value(), 600); // remaining covers outstanding
 
     destroy(part);
     destroy(vault);
     destroy(cap);
 }
 
-// === Cap-gating (INV-5) ===
+// === Cap-gating ===
 
 #[test, expected_failure(abort_code = refund_vault::EWrongVaultCap)]
 fun deposit_with_wrong_cap_aborts() {
@@ -76,7 +76,7 @@ fun deposit_with_wrong_cap_aborts() {
     destroy(other_cap);
 }
 
-// === State guards (INV-19) ===
+// === State guards ===
 
 // deposit requires Active.
 #[test, expected_failure(abort_code = refund_vault::ENotActiveState)]

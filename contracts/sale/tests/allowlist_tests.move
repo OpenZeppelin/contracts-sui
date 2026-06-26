@@ -1,9 +1,9 @@
-// Allowlist compliance-slot tests (INV-4, INV-15, INV-31).
+// Allowlist compliance-slot tests.
 //
 // `AllowEntry<S>` is a single-use, no-ability ticket: minted by the compliance
 // module (gated by `AllowlistAdmin<S>`), consumed once by the sale's `purchase`
-// with its sale_id + buyer asserted. The single-PTB consume coupling (INV-31)
-// and the symmetric allowlist gate (INV-15) are exercised end-to-end in
+// with its sale_id + buyer asserted. The single-PTB consume coupling
+// and the symmetric allowlist gate are exercised end-to-end in
 // `prefunded_sale_purchase_tests`; here we pin the entry's own consume asserts.
 module openzeppelin_sale::allowlist_tests;
 

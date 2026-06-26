@@ -1,10 +1,10 @@
-// Curve-trust-boundary tests for `prefunded_sale` (INV-23, INV-21).
+// Curve-trust-boundary tests for `prefunded_sale`.
 //
-// INV-23 is an INTENTIONAL design decision: the sale accepts the curve's
-// `allocation` (from the quote) and `required_inventory` (from the activation
-// ticket) verbatim — there is no `max_rate` field and no independent rate
-// bound. The only protections are the inventory bound (INV-21) and the u128
-// overflow guards (INV-14). These tests use a test-only `BadCurve` witness — the
+// The curve-trust boundary is an INTENTIONAL design decision: the sale accepts
+// the curve's `allocation` (from the quote) and `required_inventory` (from the
+// activation ticket) verbatim — there is no `max_rate` field and no independent
+// rate bound. The only protections are the inventory bound and the u128
+// overflow guards. These tests use a test-only `BadCurve` witness — the
 // only way to exercise a dishonest curve and to reach EInsufficientInventory,
 // which an honest, tightly-provisioned `FixedRateCurve` sale can never trip.
 module openzeppelin_sale::prefunded_sale_curve_trust_tests;
@@ -31,7 +31,7 @@ fun setup(): (Scenario, Clock) {
 }
 
 // Create + activate a BadCurve sale, minting the activation ticket with an
-// arbitrary `required_inventory` (the sale trusts it — INV-23).
+// arbitrary `required_inventory` (the sale trusts it).
 fun activate_bad(
     test: &mut Scenario,
     clk: &Clock,
@@ -65,7 +65,7 @@ fun take_bad_sale(test: &Scenario): PrefundedSale<BadCurve, u64, SALE, USDC, u64
     ts::take_shared<PrefundedSale<BadCurve, u64, SALE, USDC, u64>>(test)
 }
 
-// === INV-23: the sale trusts the curve's required_inventory ===
+// === The sale trusts the curve's required_inventory ===
 
 // A dishonest curve can under-size `required_inventory`, activating a sale whose
 // real inventory (10) is far below `hard_cap` (1_000). The sale performs no
@@ -85,10 +85,11 @@ fun activation_trusts_undersized_required_inventory() {
     test.end();
 }
 
-// === INV-23 residual + INV-21: the inventory bound is the real protection ===
+// === Residual trust + the inventory bound is the real protection ===
 
 // A dishonest curve over-allocates beyond the unallocated inventory; the sale's
-// own INV-21 bound rejects it (the one independent check that survives INV-23).
+// own inventory bound rejects it (the one independent check that survives the
+// curve-trust boundary).
 #[test, expected_failure(abort_code = prefunded_sale::EInsufficientInventory)]
 fun overallocating_quote_beyond_inventory_aborts() {
     let (mut test, clk) = setup();
@@ -111,7 +112,7 @@ fun overallocating_quote_beyond_inventory_aborts() {
 
 // Within the inventory ceiling, an over-allocating curve IS accepted: inventory
 // drains far faster than `raised` approaches `hard_cap` (sold-out before
-// hard-cap). This pins the INV-23 residual — the sale does not re-derive price.
+// hard-cap). This pins the residual trust — the sale does not re-derive price.
 #[test]
 fun overallocating_quote_within_inventory_is_accepted() {
     let (mut test, clk) = setup();

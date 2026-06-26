@@ -1,8 +1,7 @@
-// Fixed-rate curve tests (INV-8 rate>0, INV-14 overflow guards, INV-2/INV-3
-// carrier minting).
+// Fixed-rate curve tests (rate>0, overflow guards, carrier minting).
 //
 // The curve is the only module that can mint a `Quote`/`ActivationTicket` for a
-// `PrefundedSale<FixedRateCurve, ...>` (witness-gated, INV-7). These tests pin
+// `PrefundedSale<FixedRateCurve, ...>` (witness-gated). These tests pin
 // its pricing math (`allocation = paid * rate`, `required_inventory =
 // hard_cap * rate`) and the u128 overflow guards on both.
 module openzeppelin_sale::fixed_rate_curve_tests;
@@ -19,7 +18,10 @@ fun new_sale(
     rate: u64,
     hard_cap: u64,
     ctx: &mut TxContext,
-): (PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>, prefunded_sale::SaleAdminCap<SALE, USDC>) {
+): (
+    PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>,
+    prefunded_sale::SaleAdminCap<SALE, USDC>,
+) {
     prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
         fixed_rate_curve::params(rate),
         hard_cap,
@@ -30,14 +32,14 @@ fun new_sale(
     )
 }
 
-// === params (INV-8) ===
+// === params ===
 
 #[test, expected_failure(abort_code = fixed_rate_curve::ERateZero)]
 fun params_rejects_zero_rate() {
     let _ = fixed_rate_curve::params(0); // aborts
 }
 
-// === quote pricing + guards (INV-2, INV-14) ===
+// === quote pricing + guards ===
 
 #[test]
 fun quote_allocation_is_paid_times_rate() {
@@ -76,7 +78,7 @@ fun quote_allocation_overflow_aborts() {
     destroy(cap);
 }
 
-// === activation ticket sizing + guard (INV-3, INV-14) ===
+// === activation ticket sizing + guard ===
 
 #[test]
 fun activation_ticket_requires_hard_cap_times_rate() {

@@ -1,5 +1,4 @@
-// Close-transition tests for `prefunded_sale` (INV-16, INV-20, INV-22, INV-25,
-// INV-28, INV-29).
+// Close-transition tests for `prefunded_sale`.
 //
 // finalize (success), cancel_after_close (permissionless soft-cap miss), and
 // cancel_emergency (admin, in-window) each enforce their economic
@@ -26,7 +25,7 @@ fun buy_once(test: &mut Scenario, clk: &Clock, paid: u64) {
     tu::return_sale(sale);
 }
 
-// === finalize (INV-16, INV-20, INV-29) ===
+// === finalize ===
 
 // Window closed with soft cap met -> Finalized, vault Closed.
 #[test]
@@ -104,7 +103,7 @@ fun finalize_soft_cap_not_met_aborts() {
     test.end();
 }
 
-// Finalized is terminal: a second finalize aborts on the phase guard (INV-20).
+// Finalized is terminal: a second finalize aborts on the phase guard.
 #[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotActive)]
 fun finalize_twice_aborts() {
     let (mut test, mut clk) = tu::setup();
@@ -123,7 +122,7 @@ fun finalize_twice_aborts() {
     test.end();
 }
 
-// === cancel_after_close (INV-16, INV-20, INV-22, INV-25) ===
+// === cancel_after_close ===
 
 // Window closed below the soft cap -> Cancelled, proceeds routed to the vault.
 #[test]
@@ -139,7 +138,7 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
     sale.cancel_after_close(&mut vault, &clk);
     assert_eq!(sale.phase().is_cancelled(), true);
     assert_eq!(vault.is_refunding(), true);
-    assert_eq!(vault.value(), 300); // INV-22/25/26: locked == raised
+    assert_eq!(vault.value(), 300); // locked == raised
     assert_eq!(sale.proceeds_amount(), 0); // proceeds drained
     tu::return_sale(sale);
     tu::return_vault(vault);
@@ -183,7 +182,7 @@ fun cancel_after_close_window_open_aborts() {
     test.end();
 }
 
-// === cancel_emergency (INV-16, INV-28) ===
+// === cancel_emergency ===
 
 // In-window emergency cancel by admin -> Cancelled, proceeds routed.
 #[test]
@@ -218,7 +217,13 @@ fun cancel_emergency_wrong_cap_aborts() {
     let mut sale = tu::take_sale(&test);
     let mut vault = tu::take_vault(&test);
     // A throwaway sale just to obtain a foreign (mismatching) admin cap.
-    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -255,7 +260,7 @@ fun cancel_emergency_after_close_aborts() {
     test.end();
 }
 
-// INV-28: a sold-out sale cannot be emergency-cancelled (must finalize).
+// A sold-out sale cannot be emergency-cancelled (must finalize).
 #[test, expected_failure(abort_code = prefunded_sale::ESaleAlreadyComplete)]
 fun cancel_emergency_hard_cap_reached_aborts() {
     let (mut test, clk) = tu::setup();
@@ -274,7 +279,7 @@ fun cancel_emergency_hard_cap_reached_aborts() {
     test.end();
 }
 
-// INV-28: a sale that has met its soft cap cannot be emergency-cancelled.
+// A sale that has met its soft cap cannot be emergency-cancelled.
 #[test, expected_failure(abort_code = prefunded_sale::ESoftCapMet)]
 fun cancel_emergency_soft_cap_met_aborts() {
     let (mut test, clk) = tu::setup();

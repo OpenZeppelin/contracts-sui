@@ -1,11 +1,10 @@
-// Redemption + admin-withdrawal tests for `prefunded_sale` (INV-9, INV-17,
-// INV-18, INV-21, INV-24, INV-26, INV-27, INV-32).
+// Redemption + admin-withdrawal tests for `prefunded_sale`.
 //
 // claim / claim_all / claim_into_vesting (success path), refund (failure path),
 // and the admin withdrawals. Buyer redemption is permissionless and does not
-// depend on the admin cap (INV-27): every claim/refund here runs in a buyer tx
-// without taking the cap. Conservation (INV-24) and inventory/refund solvency
-// (INV-21/26) are pinned by exact-value assertions.
+// depend on the admin cap: every claim/refund here runs in a buyer tx
+// without taking the cap. Conservation and inventory/refund solvency
+// are pinned by exact-value assertions.
 module openzeppelin_sale::prefunded_sale_claim_refund_tests;
 
 use openzeppelin_finance::vesting_wallet::VestingWallet;
@@ -54,7 +53,13 @@ fun cancel_now(test: &mut Scenario, clk: &mut Clock) {
 // steps), rate 1, no soft cap, inventory 1_000.
 fun setup_vesting_sale(test: &mut Scenario, clk: &Clock) {
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -72,7 +77,7 @@ fun setup_vesting_sale(test: &mut Scenario, clk: &Clock) {
     transfer::public_transfer(cap, tu::admin());
 }
 
-// === claim (INV-9, INV-21, INV-24) ===
+// === claim ===
 
 #[test]
 fun claim_returns_allocation_and_draws_inventory() {
@@ -178,7 +183,7 @@ fun claim_before_finalize_aborts() {
     test.end();
 }
 
-// === Vesting routing (INV-17, INV-32) ===
+// === Vesting routing ===
 
 // A vesting-attached sale rejects the plain claim path.
 #[test, expected_failure(abort_code = prefunded_sale::EClaimRequiresVesting)]
@@ -283,7 +288,7 @@ fun claim_into_vesting_without_schedule_aborts() {
     test.end();
 }
 
-// === refund (INV-9, INV-24, INV-26) ===
+// === refund ===
 
 #[test]
 fun refund_returns_paid_and_draws_vault() {
@@ -298,7 +303,7 @@ fun refund_returns_paid_and_draws_vault() {
     let r = test.take_from_address<Receipt<SALE>>(tu::buyer());
     let payment = sale.refund(&mut vault, r, test.ctx());
     assert_eq!(payment.value(), 300);
-    assert_eq!(vault.value(), 0); // INV-26: drained exactly
+    assert_eq!(vault.value(), 0); // drained exactly
     assert_eq!(sale.total_allocated(), 0);
     destroy(payment);
     tu::return_sale(sale);
@@ -346,7 +351,7 @@ fun refund_before_cancel_aborts() {
     test.end();
 }
 
-// === withdraw_proceeds (INV-18, INV-24, INV-29) ===
+// === withdraw_proceeds ===
 
 #[test]
 fun withdraw_proceeds_returns_raised() {
@@ -378,7 +383,13 @@ fun withdraw_proceeds_wrong_cap_aborts() {
 
     test.next_tx(tu::admin());
     let mut sale = tu::take_sale(&test);
-    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -413,7 +424,7 @@ fun withdraw_proceeds_before_finalize_aborts() {
     test.end();
 }
 
-// === withdraw_unsold_inventory (INV-18, INV-21, INV-24) ===
+// === withdraw_unsold_inventory ===
 
 // Only the unallocated slack is withdrawn; outstanding allocations stay backed.
 #[test]
@@ -447,7 +458,13 @@ fun withdraw_unsold_wrong_cap_aborts() {
 
     test.next_tx(tu::admin());
     let mut sale = tu::take_sale(&test);
-    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,

@@ -1,8 +1,7 @@
 // Init-phase setup + activation tests for `prefunded_sale`.
 //
-// Covers construction guards (INV-8), the Init-only / one-shot setup mutators
-// (INV-10), vault pairing preconditions (INV-11), and the activation gate
-// (INV-3, INV-12, INV-20). Allowlist coupling (INV-15) lives in
+// Covers construction guards, the Init-only / one-shot setup mutators, vault
+// pairing preconditions, and the activation gate. Allowlist coupling lives in
 // `allowlist_tests`; purchase/lifecycle live in their own files.
 module openzeppelin_sale::prefunded_sale_setup_tests;
 
@@ -15,7 +14,7 @@ use std::unit_test::{assert_eq, destroy};
 use sui::clock;
 use sui::test_scenario as ts;
 
-// === create_sale: construction guards (INV-8) ===
+// === create_sale: construction guards ===
 
 // A zero hard cap is rejected — every sale must have a bounded raise.
 #[test, expected_failure(abort_code = prefunded_sale::EHardCapZero)]
@@ -66,7 +65,7 @@ fun create_sale_rejects_inverted_time_range() {
 }
 
 // Happy path: a well-formed sale starts in Init with zeroed accounting and the
-// cap bound to the sale id (INV-5, INV-8, INV-20).
+// cap bound to the sale id.
 #[test]
 fun create_sale_initializes_in_init_phase() {
     let mut ctx = tx_context::dummy();
@@ -93,13 +92,19 @@ fun create_sale_initializes_in_init_phase() {
     destroy(cap);
 }
 
-// === deposit (INV-10, INV-21) ===
+// === deposit ===
 
 // Inventory accumulates across multiple deposits during Init.
 #[test]
 fun deposit_accumulates_inventory() {
     let mut ctx = tx_context::dummy();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -131,13 +136,19 @@ fun deposit_after_activate_aborts() {
     test.end();
 }
 
-// === set_per_buyer_cap (INV-10) ===
+// === set_per_buyer_cap ===
 
 // A zero per-buyer cap is rejected (it would block every purchase).
 #[test, expected_failure(abort_code = prefunded_sale::EPerBuyerCapZero)]
 fun set_per_buyer_cap_rejects_zero() {
     let mut ctx = tx_context::dummy();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -154,7 +165,13 @@ fun set_per_buyer_cap_rejects_zero() {
 #[test, expected_failure(abort_code = prefunded_sale::EPerBuyerCapAlreadySet)]
 fun set_per_buyer_cap_twice_aborts() {
     let mut ctx = tx_context::dummy();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -168,13 +185,19 @@ fun set_per_buyer_cap_twice_aborts() {
     destroy(cap);
 }
 
-// === set_vesting_schedule_params (INV-10, INV-17) ===
+// === set_vesting_schedule_params ===
 
 // Setting a schedule fills the Option; one-shot guard rejects a second call.
 #[test]
 fun set_vesting_schedule_params_fills_option() {
     let mut ctx = tx_context::dummy();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -191,7 +214,13 @@ fun set_vesting_schedule_params_fills_option() {
 #[test, expected_failure(abort_code = prefunded_sale::EVestingScheduleAlreadySet)]
 fun set_vesting_schedule_params_twice_aborts() {
     let mut ctx = tx_context::dummy();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -205,14 +234,20 @@ fun set_vesting_schedule_params_twice_aborts() {
     destroy(cap);
 }
 
-// === pair_refund_vault (INV-5, INV-10, INV-11) ===
+// === pair_refund_vault ===
 
 // A vault carrying pre-existing funds cannot be paired (funds would strand).
 #[test, expected_failure(abort_code = prefunded_sale::EVaultNotEmpty)]
 fun pair_rejects_nonempty_vault() {
     let mut test = ts::begin(tu::admin());
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -234,7 +269,13 @@ fun pair_rejects_nonempty_vault() {
 fun pair_rejects_mismatched_cap() {
     let mut test = ts::begin(tu::admin());
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -258,7 +299,13 @@ fun pair_rejects_mismatched_cap() {
 fun pair_rejects_inactive_vault() {
     let mut test = ts::begin(tu::admin());
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -280,7 +327,13 @@ fun pair_rejects_inactive_vault() {
 fun pair_twice_aborts() {
     let mut test = ts::begin(tu::admin());
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -299,14 +352,20 @@ fun pair_twice_aborts() {
     test.end();
 }
 
-// === enable_allowlist (INV-10, INV-15) ===
+// === enable_allowlist ===
 
 // enable_allowlist is one-shot: a second call aborts.
 #[test, expected_failure(abort_code = prefunded_sale::EAllowlistAlreadyEnabled)]
 fun enable_allowlist_twice_aborts() {
     let mut test = ts::begin(tu::admin());
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -324,7 +383,7 @@ fun enable_allowlist_twice_aborts() {
     test.end();
 }
 
-// === share_and_activate (INV-3, INV-12, INV-20) ===
+// === share_and_activate ===
 
 // Activation requires a paired vault.
 #[test, expected_failure(abort_code = prefunded_sale::EVaultRequiredForActivate)]
@@ -333,7 +392,13 @@ fun activate_without_vault_aborts() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(tu::opens());
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -356,7 +421,13 @@ fun activate_insufficient_inventory_aborts() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(tu::opens());
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(2), // requires hard_cap * 2 = 2_000
         1_000,
         0,
@@ -398,7 +469,13 @@ fun activate_after_close_aborts() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(5_001); // past closes_at_ms
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -417,8 +494,8 @@ fun activate_after_close_aborts() {
     test.end();
 }
 
-// A ticket minted for a different sale is rejected (INV-3). Code uses
-// ETicketSaleMismatch (code 62) — the invariants doc INV-12 still names the old
+// A ticket minted for a different sale is rejected. Code uses
+// ETicketSaleMismatch (code 62) — the invariants doc still names the old
 // EReceiptSaleMismatch; corrected since commit 547c315.
 #[test, expected_failure(abort_code = prefunded_sale::ETicketSaleMismatch)]
 fun activate_with_foreign_ticket_aborts() {
@@ -428,7 +505,13 @@ fun activate_with_foreign_ticket_aborts() {
     let ctx = test.ctx();
 
     // Sale A — the one we try to activate.
-    let (mut sale_a, cap_a) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale_a, cap_a) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -441,7 +524,13 @@ fun activate_with_foreign_ticket_aborts() {
     sale_a.pair_refund_vault(&vault_a, vault_cap_a);
 
     // Sale B — same type; its ticket pins B's id, not A's.
-    let (sale_b, cap_b) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (sale_b, cap_b) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,

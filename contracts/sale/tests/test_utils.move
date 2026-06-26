@@ -128,7 +128,9 @@ public fun create_and_activate_full(
 }
 
 /// Take the (single) shared sale.
-public fun take_sale(test: &Scenario): PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams> {
+public fun take_sale(
+    test: &Scenario,
+): PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams> {
     ts::take_shared<PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>>(test)
 }
 

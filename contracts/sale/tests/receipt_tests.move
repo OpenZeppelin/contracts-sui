@@ -1,4 +1,4 @@
-// Receipt construction / view / consume tests (INV-1).
+// Receipt construction / view / consume tests.
 //
 // `Receipt<S>` non-transferability is a *type-level* property (`key` only, no
 // `store`, package-private transfer path) enforced at compile time — it cannot
