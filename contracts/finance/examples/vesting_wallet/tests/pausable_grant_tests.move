@@ -1,11 +1,11 @@
 module openzeppelin_finance::example_pausable_grant_tests;
 
 use openzeppelin_finance::example_pausable_grant::{Self, PausableGrant, GrantAdminCap};
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, Released};
 use openzeppelin_finance::vesting_wallet_linear::{Self as linear, Linear, Params};
 use std::unit_test::{assert_eq, destroy};
 use sui::balance;
-use sui::coin::{Self, Coin};
+use sui::event;
 use sui::test_scenario as ts;
 
 /// Phantom coin marker for the vested asset.
@@ -55,11 +55,15 @@ fun release_flows_through_wrapper_to_beneficiary() {
     clock.set_for_testing(START_MS + DURATION_MS / 2);
     release(&mut grant, &clock);
 
-    scenario.next_tx(BENEFICIARY);
-    let paid = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
-    assert_eq!(paid.value(), TOTAL / 2);
+    // The half-vested payout was directed to the beneficiary.
+    let wallet_id = object::id(grant.inner());
+    let released = event::events_by_type<Released<Linear, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<Linear, USDC>(wallet_id, BENEFICIARY, TOTAL / 2),
+    );
 
-    destroy(paid);
     ts::return_shared(grant);
     destroy(clock);
     scenario.end();
@@ -107,11 +111,15 @@ fun resume_restores_releases() {
     // The full total is now releasable in one go.
     release(&mut grant, &clock);
 
-    scenario.next_tx(BENEFICIARY);
-    let paid = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
-    assert_eq!(paid.value(), TOTAL);
+    // What accrued during the pause is paid to the beneficiary in full.
+    let wallet_id = object::id(grant.inner());
+    let released = event::events_by_type<Released<Linear, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<Linear, USDC>(wallet_id, BENEFICIARY, TOTAL),
+    );
 
-    destroy(paid);
     destroy(cap);
     ts::return_shared(grant);
     destroy(clock);

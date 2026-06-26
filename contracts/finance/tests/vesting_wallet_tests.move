@@ -358,13 +358,6 @@ fun release_pays_releasable_to_beneficiary() {
     );
 
     destroy(wallet);
-
-    // The beneficiary owns exactly the released coin.
-    scenario.next_tx(BENEFICIARY);
-    let coin = scenario.take_from_sender<Coin<USDC>>();
-    assert_eq!(coin.value(), 400);
-
-    destroy(coin);
     scenario.end();
 }
 
@@ -585,34 +578,43 @@ fun beneficiary_params_and_id_are_immutable() {
     destroy(wallet);
 }
 
-// Released coins belong to the beneficiary and no later wallet operation
-// can reduce them - there is no clawback path.
+// Released funds belong to the beneficiary and no later wallet operation
+// can reduce them - there is no clawback path. The two payouts to the
+// beneficiary are attested by their `Released` events, which together sum to
+// exactly what was released.
 #[test]
 fun released_coins_stay_with_beneficiary() {
     let mut scenario = test_scenario::begin(@0x1);
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    let wallet_id = object::id(&wallet);
     wallet.deposit(mint(1000));
 
+    // First payout to the beneficiary: 400.
     let first = wallet.mint_vested_amount(TestCurve {}, 400);
     wallet.release(&first);
+    let released = event::events_by_type<Released<TestCurve, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<TestCurve, USDC>(wallet_id, BENEFICIARY, 400),
+    );
 
-    // Further wallet activity in a later transaction.
+    // Further wallet activity in a later transaction pays the newly-vested
+    // remainder (900 - 400 = 500); the earlier 400 is never reduced.
     scenario.next_tx(@0x1);
     let second = wallet.mint_vested_amount(TestCurve {}, 900);
     wallet.release(&second);
     assert_eq!(wallet.released(), 900);
+
+    let released = event::events_by_type<Released<TestCurve, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<TestCurve, USDC>(wallet_id, BENEFICIARY, 500),
+    );
+
     destroy(wallet);
-
-    // Both released coins are intact in the beneficiary's inventory; their total is
-    // exactly what was released, never reduced.
-    scenario.next_tx(BENEFICIARY);
-    let coin_a = scenario.take_from_sender<Coin<USDC>>();
-    let coin_b = scenario.take_from_sender<Coin<USDC>>();
-    assert_eq!(coin_a.value() + coin_b.value(), 900);
-
-    destroy(coin_a);
-    destroy(coin_b);
     scenario.end();
 }
 
@@ -627,6 +629,7 @@ fun beneficiary_can_be_object_address() {
     let object_addr = object::id_address(&placeholder);
 
     let mut wallet = new_wallet(object_addr, scenario.ctx());
+    let wallet_id = object::id(&wallet);
     wallet.deposit(mint(1000));
     let vested = wallet.mint_vested_amount(TestCurve {}, 1000);
     wallet.release(&vested);
@@ -634,12 +637,14 @@ fun beneficiary_can_be_object_address() {
     destroy(wallet);
     destroy(placeholder);
 
-    // The released coin landed in the object's address inventory.
-    scenario.next_tx(@0x1);
-    let coin = scenario.take_from_address<Coin<USDC>>(object_addr);
-    assert_eq!(coin.value(), 1000);
+    // The payout was directed at the object's address.
+    let released = event::events_by_type<Released<TestCurve, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<TestCurve, USDC>(wallet_id, object_addr, 1000),
+    );
 
-    destroy(coin);
     scenario.end();
 }
 
@@ -655,6 +660,7 @@ fun release_through_third_party_wrapper() {
     let mut scenario = test_scenario::begin(@0xCAFE); // unrelated sender drives the wrapper
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    let wallet_id = object::id(&wallet);
     wallet.deposit(mint(1000));
     let mut wrapper = wrap(wallet, scenario.ctx());
 
@@ -667,12 +673,14 @@ fun release_through_third_party_wrapper() {
 
     destroy(wrapper);
 
-    // The construction-time beneficiary received the released coin.
-    scenario.next_tx(BENEFICIARY);
-    let coin = scenario.take_from_sender<Coin<USDC>>();
-    assert_eq!(coin.value(), 400);
+    // The payout went to the construction-time beneficiary, not the driver.
+    let released = event::events_by_type<Released<TestCurve, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<TestCurve, USDC>(wallet_id, BENEFICIARY, 400),
+    );
 
-    destroy(coin);
     scenario.end();
 }
 
@@ -686,6 +694,7 @@ fun owned_handoff_does_not_redirect_cashflow() {
 
     // Alice is the beneficiary; the wallet is funded then handed to Bob.
     let mut wallet = new_wallet(alice, scenario.ctx());
+    let wallet_id = object::id(&wallet);
     wallet.deposit(mint(1000));
     transfer::public_transfer(wallet, bob);
 
@@ -697,10 +706,12 @@ fun owned_handoff_does_not_redirect_cashflow() {
     destroy(wallet);
 
     // Alice - not Bob - received the funds.
-    scenario.next_tx(alice);
-    let coin = scenario.take_from_sender<Coin<USDC>>();
-    assert_eq!(coin.value(), 400);
+    let released = event::events_by_type<Released<TestCurve, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<TestCurve, USDC>(wallet_id, alice, 400),
+    );
 
-    destroy(coin);
     scenario.end();
 }

@@ -271,8 +271,9 @@ one per integration boundary described above:
   teardown. Works with any present or future curve.
 - [`splitter`](examples/vesting_wallet/splitter.move) - the **beneficiary-as-object**
   pattern: point a wallet's `beneficiary` at a shared `Beneficiary` object so each
-  release lands as a `Receiving<Coin<C>>` that anyone can `disperse` to many receivers
-  by fixed weights. Composes with any curve and topology.
+  release settles into the object's accumulator, which anyone can `disperse` to many
+  receivers by fixed weights (crediting each via `balance::send_funds`). Composes with
+  any curve and topology.
 
 ## Security Notes
 

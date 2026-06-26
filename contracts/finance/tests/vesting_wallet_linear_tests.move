@@ -445,11 +445,6 @@ fun release_pays_step_portion_and_is_permissionless() {
 
     destroy(wallet);
 
-    test.next_tx(BENEFICIARY);
-    let coin = test.take_from_sender<coin::Coin<USDC>>();
-    assert_eq!(coin.value(), 500);
-    destroy(coin);
-
     destroy(clk);
     test.end();
 }
