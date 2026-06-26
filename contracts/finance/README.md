@@ -53,8 +53,8 @@ is not required up front.
 2. **Fund** - `deposit` a `Balance<C>`. Permissionless: anyone may fund, and funds added
    after the schedule starts participate retroactively.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
-   not-yet-released portion to the beneficiary. Permissionless and idempotent: if
-   nothing new has vested it is a no-op.
+   not-yet-released portion into the beneficiary's address balance. Permissionless
+   and idempotent: if nothing new has vested it is a no-op.
 4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`,
    `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
 5. **Tear down** - once drained (and any settled funds swept), `vesting_wallet::destroy_empty`

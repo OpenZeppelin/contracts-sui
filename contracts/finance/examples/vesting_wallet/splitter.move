@@ -5,8 +5,8 @@
 /// A `VestingWallet`'s `beneficiary` is just an address: `release` credits the payout
 /// to it via `balance::send_funds`, the funds-accumulator transfer. Point it at a
 /// shared `Beneficiary` and each release settles into the object's address balance;
-/// anyone can then poke `disperse` with the released amount to withdraw it from the
-/// object's accumulator and split it among the receivers - crediting each via
+/// anyone can then poke `disperse` to withdraw all of it from the object's accumulator
+/// and split it among the receivers - crediting each via
 /// `balance::send_funds` too - by their allocations, fixed at creation and free to
 /// differ between receivers. Each split emits a `Dispersed` event recording the
 /// per-receiver amounts.
@@ -27,6 +27,7 @@ module openzeppelin_finance::example_splitter;
 
 use openzeppelin_math::rounding;
 use openzeppelin_math::u64::mul_div;
+use sui::accumulator::AccumulatorRoot;
 use sui::balance::{Self, Balance};
 use sui::coin::Coin;
 use sui::event;
@@ -75,6 +76,15 @@ public struct Dispersed<phantom C> has copy, drop {
 /// Create and share a splitter, returning the object's address to use as a vesting
 /// wallet's `beneficiary`. Allocations are fixed here and may differ per receiver.
 ///
+/// #### Parameters
+/// - `receivers`: Payout recipients; must be non-empty.
+/// - `weights`: Allocation weight per receiver, parallel to `receivers`; each must be
+///   positive.
+/// - `ctx`: Transaction context, used to allocate the splitter's `UID`.
+///
+/// #### Returns
+/// - The shared splitter object's address, to set as a vesting wallet's `beneficiary`.
+///
 /// #### Aborts
 /// - `EBadConfig` if the vectors are empty or of unequal length.
 /// - `EZeroWeight` if any weight is zero.
@@ -95,19 +105,19 @@ public fun new(receivers: vector<address>, weights: vector<u64>, ctx: &mut TxCon
     addr
 }
 
-/// Withdraw `amount` of `C` from this object's funds accumulator - where a vesting
-/// wallet `release` credits its object beneficiary via `balance::send_funds` - and fan
-/// it out to the receivers by weight. Permissionless. `amount` is the released amount
-/// (e.g. read from the wallet's `Released` event).
+/// Withdraw *all* of this object's settled `C` - where a vesting wallet `release`
+/// credits its object beneficiary via `balance::send_funds` - and fan it out to the
+/// receivers by weight. Permissionless. Always processes the entire settled balance in
+/// one shot, so the rounding boundary is fixed by the configured split rather than by a
+/// caller-chosen amount; a splitter with no settled funds is a no-op.
 ///
 /// #### Parameters
 /// - `self`: The splitter holding the settled payout.
-/// - `amount`: The amount of `C` to withdraw from the object's accumulator and split.
-///
-/// #### Aborts
-/// - The funds-accumulator `InsufficientFundsForWithdraw` execution status, raised at
-///   `redeem_funds`, if the object's settled balance is below `amount`.
-public fun disperse<C>(self: &mut Beneficiary, amount: u64) {
+/// - `root`: The shared `AccumulatorRoot`, read to find the splitter's settled funds.
+public fun disperse<C>(self: &mut Beneficiary, root: &AccumulatorRoot) {
+    let addr = object::uid_to_address(&self.id);
+    let amount = balance::settled_funds_value<C>(root, addr);
+    if (amount == 0) return;
     let withdrawal = balance::withdraw_funds_from_object<C>(&mut self.id, amount);
     self.fan_out(balance::redeem_funds(withdrawal));
 }
@@ -168,21 +178,53 @@ fun fan_out<C>(self: &Beneficiary, mut payout: Balance<C>) {
 // === View helpers ===
 
 /// The configured payout recipients.
+///
+/// #### Parameters
+/// - `self`: The splitter to query.
+///
+/// #### Returns
+/// - The configured payout recipients.
 public fun receivers(self: &Beneficiary): vector<address> {
     self.receivers
 }
 
 /// The configured allocation weights, parallel to `receivers`.
+///
+/// #### Parameters
+/// - `self`: The splitter to query.
+///
+/// #### Returns
+/// - The configured allocation weights, parallel to `receivers`.
 public fun weights(self: &Beneficiary): vector<u64> {
     self.weights
 }
 
 /// The sum of all weights.
+///
+/// #### Parameters
+/// - `self`: The splitter to query.
+///
+/// #### Returns
+/// - The sum of all weights, the denominator of each receiver's share.
 public fun total_weight(self: &Beneficiary): u64 {
     self.total_weight
 }
 
 // === Test Helpers ===
+
+/// Disperse an explicit `amount` from this object's accumulator without the
+/// `AccumulatorRoot` settled-funds lookup, so unit tests can exercise the settled-funds
+/// fan-out path without constructing an `AccumulatorRoot` - which has no test constructor
+/// in the pinned Sui release.
+///
+/// TODO: remove this and route the test through `disperse` with a real `AccumulatorRoot`
+/// (via `accumulator::create_for_testing`) once that test helper ships in the published
+/// Sui mainnet framework.
+#[test_only]
+public fun disperse_for_testing<C>(self: &mut Beneficiary, amount: u64) {
+    let withdrawal = balance::withdraw_funds_from_object<C>(&mut self.id, amount);
+    self.fan_out(balance::redeem_funds(withdrawal));
+}
 
 /// Build a `Dispersed` event value for asserting against `event::events_by_type`.
 #[test_only]

@@ -45,12 +45,14 @@ fun release_to_splitter_fans_out_by_weight() {
     linear::release(&mut wallet, &clock);
     ts::return_shared(wallet);
 
-    // Anyone withdraws the released payout from the splitter's accumulator and fans it
-    // out to the three receivers.
+    // Anyone withdraws the full settled payout from the splitter's accumulator and fans
+    // it out to the three receivers. Uses the test-only bypass because `disperse` reads
+    // the settled balance from an `AccumulatorRoot`, which has no test constructor in the
+    // pinned Sui release.
     scenario.next_tx(EMPLOYER);
     let mut splitter = scenario.take_shared<Beneficiary>();
     let splitter_id = object::id(&splitter);
-    splitter.disperse<USDC>(TOTAL);
+    splitter.disperse_for_testing<USDC>(TOTAL);
 
     // 50/30/20 of the total, conserving every unit. The per-receiver credits land in
     // each address's accumulator (not takeable as coins in the unit-test VM), so the
