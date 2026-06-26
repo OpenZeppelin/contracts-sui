@@ -282,10 +282,8 @@ concise.
   in normal operation)"
 - State caller preconditions explicitly and map each to the error it fails with,
   one bullet per cause (e.g. "`EUnauthorized` if the caller lacks the role")
-- Keep terminology consistent with the implementation. "Avoid documenting impossible
-  paths" forbids inventing error paths the code cannot take - it does **not** excuse
-  omitting a real abort propagated from an internal call when an invariant makes it
-  unreachable; those are listed and marked, per the `#### Aborts` rule above
+- Keep terminology consistent with the implementation (e.g. avoid documenting
+  impossible paths)
 
   ```move
   /// Compute something.
