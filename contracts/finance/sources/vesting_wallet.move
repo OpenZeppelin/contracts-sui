@@ -495,9 +495,10 @@ public fun release<S: drop, P: copy + drop + store, C>(
 /// split as `VestedAmount`: one half stays callable without the witness, the curve gates
 /// the other.
 ///
-/// Coins `public_transfer`'d to a destroyed wallet's address after this call have no
-/// path back - pair destruction with halting any upstream emissions that target this
-/// wallet.
+/// Funds sent to a destroyed wallet's address after this call have no path back: a coin
+/// `public_transfer`'d there is unaddressable, and a balance `send_funds`'d there settles
+/// against an object whose `UID` is gone, so no `withdraw_funds_from_object` path can ever
+/// reclaim it. Pair destruction with halting any upstream emissions that target this wallet.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to destroy. Must hold a zero balance and have no pending
