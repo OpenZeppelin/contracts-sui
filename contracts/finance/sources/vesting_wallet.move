@@ -400,11 +400,7 @@ public fun release<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     vested: &VestedAmount<S>,
 ) {
-    let VestedAmount { wallet_id, amount: vested_amount } = vested;
-    assert!(wallet_id == object::id(wallet), EWalletMismatch);
-    assert!(*vested_amount >= wallet.released, EVestedBelowReleased);
-
-    let releasable = *vested_amount - wallet.released;
+    let releasable = wallet.releasable(vested);
     if (releasable == 0) return;
     assert!(releasable <= wallet.balance.value(), EInsufficientBalance);
 
