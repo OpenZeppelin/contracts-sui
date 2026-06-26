@@ -100,6 +100,10 @@ public fun new(receivers: vector<address>, weights: vector<u64>, ctx: &mut TxCon
 /// it out to the receivers by weight. Permissionless. `amount` is the released amount
 /// (e.g. read from the wallet's `Released` event).
 ///
+/// #### Parameters
+/// - `self`: The splitter holding the settled payout.
+/// - `amount`: The amount of `C` to withdraw from the object's accumulator and split.
+///
 /// #### Aborts
 /// - The funds-accumulator `InsufficientFundsForWithdraw` execution status, raised at
 ///   `redeem_funds`, if the object's settled balance is below `amount`.
@@ -112,6 +116,15 @@ public fun disperse<C>(self: &mut Beneficiary, amount: u64) {
 /// an upstream emitter (or a stray coin) - turn it into a `Balance`, and fan it out to
 /// the receivers by weight. The coin-object counterpart to `disperse`'s accumulator
 /// withdrawal. Permissionless.
+///
+/// #### Parameters
+/// - `self`: The splitter the coin was parked at.
+/// - `payout`: The `Coin<C>` `public_transfer`'d to this object's address, to be
+///   claimed and split.
+///
+/// #### Aborts
+/// - The native receive abort, raised at `transfer::public_receive`, if `payout` does
+///   not match a coin currently sent to this object's address (wrong id or version).
 public fun receive_and_disperse<C>(self: &mut Beneficiary, payout: Receiving<Coin<C>>) {
     let coin = transfer::public_receive(&mut self.id, payout);
     self.fan_out(coin.into_balance());
