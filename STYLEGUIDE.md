@@ -15,11 +15,14 @@ These conventions target **Move 2024** (module label syntax, receiver syntax,
 ## Naming
 
 - **Error constants**: `EPascalCase`, declared with `#[error(code = N)]`, type
-  `vector<u8>`, plain `"..."` string literal (NOT `b"..."`). Codes are sequential
-  from 0 and **append-only** - never renumber existing errors when adding new
-  ones. Callers (frontends, integrators, tests in other packages) may match on
-  the numeric abort code; renumbering silently breaks them. New errors go at the
-  bottom with `code = N+1`.
+  `vector<u8>`, plain `"..."` string literal (NOT `b"..."`). The message is plain,
+  user-facing English describing what went wrong - no field, function, or type
+  identifiers and no integer-type names (`u64`); that implementation detail belongs
+  in the constant's `///` doc-comment (see Documentation), not in the abort message.
+  Codes are sequential from 0 and **append-only** - never renumber existing errors
+  when adding new ones. Callers (frontends, integrators, tests in other packages) may
+  match on the numeric abort code; renumbering silently breaks them. New errors go at
+  the bottom with `code = N+1`.
 - **Regular constants**: `UPPER_SNAKE_CASE`
 - **Capability structs**: suffix with `Cap` (e.g. `AdminCap`)
 - **Event structs**: past tense (e.g. `RoleGranted`, `TraderAccountCreated`)
@@ -251,7 +254,13 @@ concise.
 - No JavaDoc-style `/** */`
 - Use regular dashes (`-`) instead of em dashes (`—`) in all prose, comments,
   and documentation
-- Document struct fields, complex params, and return values
+- Give every public type a `///` summary, and every event a `///` summary of the
+  form "Emitted by `fn` when ...". Also document complex params and return values
+- Document the fields of every non-event public type with a field-level `///` (skip
+  the self-evident `id: UID`); event fields may be documented more lightly
+- Give every error constant a `///` doc comment stating the condition that raises it
+  (e.g. "`set_per_buyer_cap` was called a second time"). Implementation detail
+  (field/function names) belongs here, not in the abort message string (see Naming)
 - Write for a human reader: prefer short, plain sentences over dense,
   multi-clause prose. Completeness (every param, return, and abort) is required,
   not verbosity
@@ -267,11 +276,16 @@ concise.
   already states what it returns needs neither. Always include an `#### Aborts`
   section whenever a function can abort, listing **every** cause it can raise -
   including native aborts (e.g. arithmetic overflow, division by zero) and
-  errors propagated from internal calls
+  errors propagated from internal or cross-module calls. List a propagated abort
+  even when an invariant makes it unreachable in practice, marking such cases - e.g.
+  "`refund_vault::EWrongVaultCap` (guarded by the paired-vault invariant; unreachable
+  in normal operation)"
 - State caller preconditions explicitly and map each to the error it fails with,
   one bullet per cause (e.g. "`EUnauthorized` if the caller lacks the role")
-- Keep terminology consistent with the implementation (e.g. avoid documenting
-  impossible paths)
+- Keep terminology consistent with the implementation. "Avoid documenting impossible
+  paths" forbids inventing error paths the code cannot take - it does **not** excuse
+  omitting a real abort propagated from an internal call when an invariant makes it
+  unreachable; those are listed and marked, per the `#### Aborts` rule above
 
   ```move
   /// Compute something.
