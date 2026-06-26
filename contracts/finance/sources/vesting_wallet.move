@@ -383,7 +383,7 @@ public fun sweep_settled<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     root: &AccumulatorRoot,
 ) {
-    let addr = object::uid_to_address(&wallet.id);
+    let addr = wallet.id.to_address();
     let amount = balance::settled_funds_value<C>(root, addr);
     if (amount == 0) return;
     let w = balance::withdraw_funds_from_object<C>(&mut wallet.id, amount);
@@ -419,28 +419,6 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     let amount = wallet.deposit_internal(coin.into_balance());
     if (amount == 0) return;
     event::emit(Received<S, C> { wallet_id: object::id(wallet), amount });
-}
-
-/// Join `balance` into the wallet's balance and return the amount added, leaving
-/// event emission to the caller. Shared by `deposit`, `sweep_settled`, and
-/// `receive_and_deposit`.
-///
-/// #### Aborts
-/// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
-///   `balance + released` (== `Σ(deposits)`) past `u64::MAX`.
-fun deposit_internal<S: drop, P: copy + drop + store, C>(
-    wallet: &mut VestingWallet<S, P, C>,
-    balance: Balance<C>,
-): u64 {
-    let amount = balance.value();
-
-    assert!(
-        std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
-        EBalanceOverflow,
-    );
-
-    wallet.balance.join(balance);
-    amount
 }
 
 /// Pay the not-yet-released portion attested by `vested` into the beneficiary's
@@ -518,29 +496,10 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
     root: &AccumulatorRoot,
 ): DestroyReceipt<S, P> {
     assert!(wallet.balance.value() == 0, ENotEmpty);
-    let settled = balance::settled_funds_value<C>(root, object::uid_to_address(&wallet.id));
+    let settled = balance::settled_funds_value<C>(root, wallet.id.to_address());
     assert!(settled == 0, EUnsweptFunds);
 
     wallet.finish_destroy()
-}
-
-/// Shared teardown for `destroy_empty`: consume the drained wallet, emit `Destroyed`, and
-/// return the receipt. Assumes the empty-balance and settled-funds gates have already
-/// passed.
-fun finish_destroy<S: drop, P: copy + drop + store, C>(
-    wallet: VestingWallet<S, P, C>,
-): DestroyReceipt<S, P> {
-    let wallet_id = object::id(&wallet);
-    let beneficiary = wallet.beneficiary;
-    let total_released = wallet.released;
-
-    let VestingWallet { id, balance, schedule_params, .. } = wallet;
-    balance.destroy_zero();
-    id.delete();
-
-    event::emit(Destroyed<S, C> { wallet_id, beneficiary, total_released });
-
-    DestroyReceipt { beneficiary, params: schedule_params }
 }
 
 /// Unwrap a `DestroyReceipt<S, P>` to recover the destroyed wallet's beneficiary and
@@ -593,35 +552,17 @@ public fun releasable<S: drop, P: copy + drop + store, C>(
 
 /// Read the cumulative vested total recorded in a `VestedAmount<S>` without
 /// consuming it.
-///
-/// #### Parameters
-/// - `vested`: The `VestedAmount<S>` to read.
-///
-/// #### Returns
-/// - The cumulative vested total recorded in `vested`.
 public fun amount<S>(vested: &VestedAmount<S>): u64 {
     vested.amount
 }
 
 /// Read the wallet's schedule parameters. Ungated - curve parameters are public
 /// information.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The wallet's stored schedule parameters.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params
 }
 
 /// Address that receives every `release`.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The address that receives every `release`.
 public fun beneficiary<S: drop, P: copy + drop + store, C>(
     wallet: &VestingWallet<S, P, C>,
 ): address {
@@ -629,25 +570,56 @@ public fun beneficiary<S: drop, P: copy + drop + store, C>(
 }
 
 /// Cumulative amount released so far.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The cumulative amount released so far.
 public fun released<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.released
 }
 
 /// Funds currently held by the wallet and not yet released.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The funds currently held by the wallet and not yet released.
 public fun balance<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.balance.value()
+}
+
+// === Private Functions ===
+
+/// Join `balance` into the wallet's balance and return the amount added, leaving
+/// event emission to the caller. Shared by `deposit`, `sweep_settled`, and
+/// `receive_and_deposit`.
+///
+/// #### Aborts
+/// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
+///   `balance + released` (== `Σ(deposits)`) past `u64::MAX`.
+fun deposit_internal<S: drop, P: copy + drop + store, C>(
+    wallet: &mut VestingWallet<S, P, C>,
+    balance: Balance<C>,
+): u64 {
+    let amount = balance.value();
+
+    assert!(
+        std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
+        EBalanceOverflow,
+    );
+
+    wallet.balance.join(balance);
+    amount
+}
+
+/// Shared teardown for `destroy_empty`: consume the drained wallet, emit `Destroyed`, and
+/// return the receipt. Assumes the empty-balance and settled-funds gates have already
+/// passed.
+fun finish_destroy<S: drop, P: copy + drop + store, C>(
+    wallet: VestingWallet<S, P, C>,
+): DestroyReceipt<S, P> {
+    let wallet_id = object::id(&wallet);
+    let beneficiary = wallet.beneficiary;
+    let total_released = wallet.released;
+
+    let VestingWallet { id, balance, schedule_params, .. } = wallet;
+    balance.destroy_zero();
+    id.delete();
+
+    event::emit(Destroyed<S, C> { wallet_id, beneficiary, total_released });
+
+    DestroyReceipt { beneficiary, params: schedule_params }
 }
 
 // === Test-Only Helpers ===
