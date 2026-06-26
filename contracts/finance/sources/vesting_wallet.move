@@ -17,7 +17,7 @@
 /// The wallet itself never interprets the schedule - it only enforces release
 /// accounting and conservation of funds. A curve module evaluates its curve for
 /// the current clock, mints a `VestedAmount<S>`, and `release` pays out the
-/// not-yet-released portion.
+/// not-yet-released portion into the beneficiary's address balance.
 ///
 /// This module ships no curve of its own. The built-in linear-with-cliff schedule
 /// lives in the sibling `vesting_wallet_linear` module - the reference curve, and the
@@ -405,14 +405,15 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     wallet.deposit(coin.into_balance());
 }
 
-/// Pay the not-yet-released portion attested by `vested` to the beneficiary.
-/// Permissionless: anyone holding references to the wallet and a `VestedAmount` can
-/// poke this. The recipient is always read fresh from `wallet.beneficiary` at call
-/// time. `vested` is borrowed, not consumed, so the same attestation can still be
-/// passed to a later call in the PTB.
+/// Pay the not-yet-released portion attested by `vested` into the beneficiary's
+/// address balance (via `balance::send_funds`) - no `Coin<C>` object is minted or
+/// transferred. Permissionless: anyone holding references to the wallet and a
+/// `VestedAmount` can poke this. The recipient is always read fresh from
+/// `wallet.beneficiary` at call time. `vested` is borrowed, not consumed, so the
+/// same attestation can still be passed to a later call in the PTB.
 ///
 /// If nothing new is vested since the last release (the wallet is already drained
-/// at this clock), the call is a no-op: no coin is transferred and no event is
+/// at this clock), the call is a no-op: nothing is paid out and no event is
 /// emitted.
 ///
 /// #### Parameters
