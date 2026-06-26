@@ -44,48 +44,79 @@ module openzeppelin_sale::receipt;
 
 // === Receipt ===
 
-/// Per-buyer claim ticket. One receipt per purchase. Non-transferable
-/// (see module doc).
-///
-/// Fields:
-/// - `sale_id`: identifies the issuing sale. Verified on every
-///   redemption path.
-/// - `buyer`: address that purchased. `claim` and `refund` assert
-///   `ctx.sender() == buyer`.
-/// - `paid`: payment amount in `P`'s smallest units. Refunds pay back
-///   exactly this amount.
-/// - `allocation`: sale token amount in `S`'s smallest units. `claim`
-///   returns exactly this amount as `Coin<S>`.
-/// - `purchased_at_ms`: timestamp at purchase time. Available to
-///   integrators that need time-anchored post-finalize logic.
+/// Per-buyer claim ticket. One receipt per purchase. Non-transferable (see module
+/// doc).
 public struct Receipt<phantom S> has key {
     id: UID,
+    /// Id of the issuing sale. Verified on every redemption path.
     sale_id: ID,
+    /// Address that purchased; `claim` and `refund` require this to be the sender.
     buyer: address,
+    /// Payment amount in the payment coin's smallest units. A refund returns exactly
+    /// this.
     paid: u64,
+    /// Sale-token amount in `S`'s smallest units. A claim returns exactly this.
     allocation: u64,
+    /// Timestamp (ms) at which the purchase happened.
     purchased_at_ms: u64,
 }
 
 // === Receipt views ===
 
+/// The id of the sale that issued this receipt.
+///
+/// #### Parameters
+/// - `r`: The receipt to read.
+///
+/// #### Returns
+/// - The issuing sale's id.
 public fun sale_id<S>(r: &Receipt<S>): ID { r.sale_id }
 
+/// The address that purchased, and the only address that may redeem this receipt.
+///
+/// #### Parameters
+/// - `r`: The receipt to read.
+///
+/// #### Returns
+/// - The buyer's address.
 public fun buyer<S>(r: &Receipt<S>): address { r.buyer }
 
+/// The payment amount backing this receipt, in `PaymentCoin`'s smallest units. A
+/// refund pays back exactly this amount.
+///
+/// #### Parameters
+/// - `r`: The receipt to read.
+///
+/// #### Returns
+/// - The amount paid at purchase.
 public fun paid<S>(r: &Receipt<S>): u64 { r.paid }
 
+/// The sale-token allocation promised by this receipt, in `S`'s smallest units. A
+/// claim returns exactly this amount.
+///
+/// #### Parameters
+/// - `r`: The receipt to read.
+///
+/// #### Returns
+/// - The promised allocation.
 public fun allocation<S>(r: &Receipt<S>): u64 { r.allocation }
 
+/// The timestamp (ms) at which the purchase happened.
+///
+/// #### Parameters
+/// - `r`: The receipt to read.
+///
+/// #### Returns
+/// - The purchase timestamp in milliseconds.
 public fun purchased_at_ms<S>(r: &Receipt<S>): u64 { r.purchased_at_ms }
 
 // === Package-internal helpers ===
 //
 // Receipt construction, delivery, and consumption are package-internal.
-// Sale flavors (`prefunded_sale`, future `minting_sale`) and the
-// vested-claim path (`prefunded_sale::claim_into_vesting` →
-// `vested_claim`) call into these helpers; no other code path can
-// produce or destroy a `Receipt<S>`.
+// Sale flavors (`prefunded_sale`, future `minting_sale`) call into these
+// helpers from their purchase and redemption paths (`claim`,
+// `claim_into_vesting`, `refund`); no other code path can produce or
+// destroy a `Receipt<S>`.
 
 /// Mint a fresh receipt. Sale flavors call this from `purchase`.
 public(package) fun new_receipt<S>(

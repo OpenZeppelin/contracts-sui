@@ -2,17 +2,17 @@
 /// for every purchase, for the whole sale.
 ///
 /// The simplest pricing shape and the one most sales use. The rate is
-/// committed at sale construction and never changes, so the sale's
-/// `max_rate` equals this curve's `rate` and the activation-time inventory
-/// backing (`inventory >= hard_cap * max_rate`) is a tight cover.
+/// committed at sale construction and never changes, so the activation
+/// backing this curve commits to (`required_inventory = hard_cap * rate`,
+/// via `activation_ticket`) is a tight cover.
 ///
 /// This module declares the `FixedRateCurve` witness and its `Params`, plus
-/// the integrator API around them (`params` / `create_sale` / `quote` /
-/// `rate`). It mirrors `vesting_wallet_linear`'s relationship to
-/// `vesting_wallet`: `params` validates and builds the config, `create_sale`
-/// is sugar that hands that config to `prefunded_sale::create_sale` (deriving
-/// `max_rate` from it so the two cannot drift), and `quote` is the only place
-/// a `Quote<FixedRateCurve>` can be minted.
+/// the integrator API around them (`params` / `activation_ticket` / `quote`
+/// / `rate`). It mirrors `vesting_wallet_linear`'s relationship to
+/// `vesting_wallet`: `params` validates and builds the config the integrator
+/// hands to `prefunded_sale::create_sale`, `activation_ticket` derives the
+/// inventory backing for `share_and_activate`, and `quote` is the only place
+/// a `Quote` for a `FixedRateCurve` sale can be minted.
 ///
 /// ### Why a separate module
 ///
@@ -25,11 +25,14 @@
 ///
 /// ### Purchase
 ///
-/// The buyer threads `quote + purchase` in the same PTB:
+/// The buyer threads `quote + purchase` in the same PTB. `quote` takes
+/// the payment as a `Balance` (the `Quote` carries it through to
+/// `purchase`); `purchase` consumes the quote and delivers a `Receipt`
+/// to the buyer:
 ///
 /// ```move
-/// let quote = fixed_rate_curve::quote(&sale, paid);
-/// prefunded_sale::purchase(&mut sale, payment, quote, allow, &clock, ctx);
+/// let quote = fixed_rate_curve::quote(&sale, payment.into_balance());
+/// prefunded_sale::purchase(&mut sale, quote, allow, &clock, ctx);
 /// ```
 module openzeppelin_sale::fixed_rate_curve;
 
@@ -38,11 +41,16 @@ use sui::balance::Balance;
 
 // === Errors ===
 
+/// `params` was called with `rate == 0`; a zero rate allocates nothing for any
+/// payment.
 #[error(code = 0)]
-const ERateZero: vector<u8> = "rate must be greater than zero";
+const ERateZero: vector<u8> = "The exchange rate must be greater than zero";
+
+/// `hard_cap * rate` would exceed `u64::MAX`, so the required inventory backing
+/// cannot be represented or guaranteed.
 #[error(code = 1)]
 const ERequiredInventoryOverflow: vector<u8> =
-    "Required inventory would overflow u64; cannot guarantee inventory backing";
+    "The required token inventory is too large to represent";
 
 // === Structs ===
 
@@ -60,16 +68,36 @@ public struct Params has copy, drop, store {
 
 // === Constructors ===
 
-/// Build a validated `Params`. The only way to obtain a `Params` outside
-/// this module (its field is module-private), so a protocol that drives
+/// Build a validated `Params`. The only way to obtain a `Params` outside this
+/// module (its field is module-private), so a protocol that drives
 /// `prefunded_sale::create_sale` directly can build the config itself.
 ///
-/// Aborts with `ERateZero` if `rate == 0`.
+/// #### Parameters
+/// - `rate`: Sale tokens (smallest units) allocated per 1 payment-coin smallest
+///   unit.
+///
+/// #### Returns
+/// - A validated `Params` carrying `rate`.
+///
+/// #### Aborts
+/// - `ERateZero` if `rate == 0`.
 public fun params(rate: u64): Params {
     assert!(rate > 0, ERateZero);
     Params { rate }
 }
 
+/// Mint the `ActivationTicket<FixedRateCurve>` that `share_and_activate` consumes,
+/// committing the inventory backing this curve requires: `hard_cap * rate`.
+///
+/// #### Parameters
+/// - `sale`: The sale to activate, read for its `hard_cap` and configured `rate`.
+///
+/// #### Returns
+/// - An `ActivationTicket<FixedRateCurve>` carrying `hard_cap * rate` as the required
+///   inventory.
+///
+/// #### Aborts
+/// - `ERequiredInventoryOverflow` if `hard_cap * rate` would exceed `u64::MAX`.
 public fun activation_ticket<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): ActivationTicket<FixedRateCurve> {
@@ -81,8 +109,22 @@ public fun activation_ticket<SaleCoin, PaymentCoin, VestingScheduleParams: copy 
 
 // === Quote ===
 
-/// Mint a `Quote<PaymentCoin>` for a buyer paying `paid` units. The
-/// allocation is `paid * rate`, u128-widened to detect overflow.
+/// Mint a `Quote<PaymentCoin>` for a buyer's `balance`. The allocation is
+/// `balance.value() * rate`, u128-widened to detect overflow. The `Quote` carries
+/// the balance through to `purchase`.
+///
+/// #### Parameters
+/// - `sale`: The sale being purchased from, read for its configured `rate`.
+/// - `balance`: The buyer's payment, moved into the returned `Quote`.
+///
+/// #### Returns
+/// - A single-use `Quote<PaymentCoin>` bound to `sale`, carrying both `balance` and
+///   the computed allocation.
+///
+/// #### Aborts
+/// - `prefunded_sale::EZeroPayment` if `balance` has zero value.
+/// - `prefunded_sale::EAllocationOverflow` if `balance.value() * rate` would exceed
+///   `u64::MAX`.
 public fun quote<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
     balance: Balance<PaymentCoin>,
@@ -93,7 +135,13 @@ public fun quote<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + sto
 
 // === Views ===
 
-/// The configured fixed rate.
+/// The configured fixed rate: sale tokens allocated per 1 payment-coin unit.
+///
+/// #### Parameters
+/// - `sale`: The sale to query.
+///
+/// #### Returns
+/// - The configured rate.
 public fun rate<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
     sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
 ): u64 {
