@@ -564,8 +564,8 @@ fun destroy_empty_returns_params_and_emits() {
     // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
     // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
     let receipt = wallet.destroy_empty_for_testing();
-    assert_eq!(vesting_wallet::test_receipt_beneficiary(&receipt), BENEFICIARY);
-    assert_eq!(vesting_wallet::test_receipt_params(&receipt), TestParams { tag: PARAMS_TAG });
+    assert_eq!(receipt.test_receipt_beneficiary(), BENEFICIARY);
+    assert_eq!(receipt.test_receipt_params(), TestParams { tag: PARAMS_TAG });
 
     let destroyed = event::events_by_type<Destroyed<TestCurve, USDC>>();
     assert_eq!(destroyed.length(), 1);
