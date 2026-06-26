@@ -197,12 +197,13 @@ public struct VestedAmount<phantom S> has drop {
 }
 
 /// Carries a destroyed wallet's beneficiary and schedule params back to its curve. A
-/// HOT POTATO - no abilities - so it cannot be dropped, stored, or copied: it MUST be
-/// consumed before the tx ends, and only `consume_receipt` (witness-gated) can consume
-/// it. This is what drags the curve into the PTB to finalize, and lets it veto by
-/// aborting.
+/// HOT POTATO that only `consume_receipt` (witness-gated) can consume.
+/// This is what drags the curve into the PTB to finalize, and lets it veto by aborting.
 public struct DestroyReceipt<phantom S, P> {
+    /// Beneficiary of the destroyed wallet, handed back for the curve to use.
     beneficiary: address,
+    /// Schedule parameters of the destroyed wallet, handed back for the curve to
+    /// destructure.
     params: P,
 }
 
@@ -330,6 +331,10 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
 /// A deposit of a zero-value coin is a no-op: the (empty) balance is consumed but
 /// nothing changes and no `Deposited` event is emitted.
 ///
+/// #### Parameters
+/// - `wallet`: The wallet to fund.
+/// - `balance`: The funds to add to the wallet's balance.
+///
 /// #### Aborts
 /// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
 ///   `balance + released` (== `Σ(deposits)`) past `u64::MAX`, which would
@@ -352,6 +357,18 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 
 /// Sweep `amount` from the wallet's own object address balance into its on-book
 /// `balance`, via `deposit`. The address-balance analogue of `receive_and_deposit`.
+///
+/// A wallet with no settled funds at its address is a no-op: nothing is swept and
+/// no `Deposited` event is emitted.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to sweep into.
+/// - `root`: The shared `AccumulatorRoot`, read to find the wallet's settled funds.
+///
+/// #### Aborts
+/// - `EBalanceOverflow` if sweeping the settled funds would push the wallet's
+///   lifetime total `balance + released` past `u64::MAX` (propagated from
+///   `deposit`).
 public fun sweep_settled<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     root: &AccumulatorRoot,
@@ -366,6 +383,11 @@ public fun sweep_settled<S: drop, P: copy + drop + store, C>(
 /// Claim a coin that an upstream emitter `public_transfer`'d to this wallet's
 /// object address, then funnel it through the standard deposit path. Used by
 /// emission schedules and payroll robots that don't hold a wallet reference.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to fund.
+/// - `receiving`: The `Coin<C>` transferred to the wallet's object address, to be
+///   claimed and deposited.
 ///
 /// #### Aborts
 /// - `EBalanceOverflow` if claiming the coin would overflow the wallet's
