@@ -276,14 +276,21 @@ concise.
   already states what it returns needs neither. Always include an `#### Aborts`
   section whenever a function can abort, listing **every** cause it can raise -
   including native aborts (e.g. arithmetic overflow, division by zero) and
-  errors propagated from internal or cross-module calls. List a propagated abort
-  even when an invariant makes it unreachable in practice, marking such cases - e.g.
+  errors propagated from internal or cross-module calls. An internal or
+  cross-module abort must be listed even when it is unreachable in normal
+  operation, because it is part of the function's full error surface; mark such
+  cases as unreachable rather than omitting them - e.g.
   "`refund_vault::EWrongVaultCap` (guarded by the paired-vault invariant; unreachable
-  in normal operation)"
+  in normal operation)". This is a deliberate exception to the rule against
+  documenting impossible paths below: the rule forbids inventing aborts that the
+  code can never reach, whereas these aborts are reachable in the callee and only
+  guarded out by a caller-side invariant, so they stay in the error surface
 - State caller preconditions explicitly and map each to the error it fails with,
   one bullet per cause (e.g. "`EUnauthorized` if the caller lacks the role")
 - Keep terminology consistent with the implementation (e.g. avoid documenting
-  impossible paths)
+  impossible paths) - but note the exception above for propagated internal or
+  cross-module aborts that are unreachable only because of a caller-side
+  invariant: those stay documented to preserve the full error surface
 
   ```move
   /// Compute something.
