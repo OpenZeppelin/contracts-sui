@@ -4,6 +4,3 @@ edition = "2024"
 
 [dependencies]
 openzeppelin_math = { local = "../core" }
-
-[addresses]
-openzeppelin_fp_math = "0x0"
