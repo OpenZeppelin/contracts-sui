@@ -14,7 +14,7 @@
 ///
 /// ```move
 /// let v = vesting_wallet_linear::vested_amount(grant.inner(), clock);
-/// grant.release(&v, ctx);
+/// grant.release(&v);
 /// ```
 ///
 /// # What the curve-agnostic core can and cannot do
@@ -26,7 +26,9 @@
 /// does not refund.
 ///
 /// Teardown follows the same split. `vesting_wallet::destroy_empty` is permissionless,
-/// but it requires a drained wallet and only hands back a `DestroyReceipt` that the
+/// but it requires a fully emptied wallet - no held balance *and* no unswept settled
+/// funds at its address (`sweep_settled` first) - and only hands back a `DestroyReceipt`
+/// that the
 /// curve module must consume with its witness `S`. A curve-agnostic wrapper has no `S`,
 /// so it cannot finalize teardown itself. What it *can* do is dissolve the wrapper:
 /// `unwrap` consumes the grant and its admin cap and returns the bare nested wallet, so
