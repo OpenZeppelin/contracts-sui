@@ -87,7 +87,6 @@
 module openzeppelin_finance::vesting_wallet;
 
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
 use sui::event;
 use sui::transfer::Receiving;
 
@@ -210,7 +209,7 @@ public struct Created<phantom S, P, phantom C> has copy, drop {
 }
 
 /// Emitted by `deposit` (and `receive_and_deposit`) when a non-zero amount is
-/// added. A deposit of a zero-value coin emits no event.
+/// added. A deposit of a zero-value balance emits no event.
 public struct Deposited<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
     /// Amount added to the balance by this deposit.
@@ -330,16 +329,16 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
 ///   indefinitely brick the release path.
 public fun deposit<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
-    coin: Coin<C>,
+    balance: Balance<C>,
 ) {
-    let amount = coin.value();
+    let amount = balance.value();
 
     assert!(
         std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
         EBalanceOverflow,
     );
 
-    wallet.balance.join(coin.into_balance());
+    wallet.balance.join(balance);
     if (amount == 0) return;
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
 }
@@ -360,7 +359,7 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     receiving: Receiving<Coin<C>>,
 ) {
     let coin = transfer::public_receive(&mut wallet.id, receiving);
-    wallet.deposit(coin);
+    wallet.deposit(coin.into_balance());
 }
 
 /// Pay the not-yet-released portion attested by `vested` to the beneficiary.
@@ -396,10 +395,12 @@ public fun release<S: drop, P: copy + drop + store, C>(
     if (releasable == 0) return;
     assert!(releasable <= wallet.balance.value(), EInsufficientBalance);
 
-    wallet.released = wallet.released + releasable;
-    let coin = coin::from_balance(wallet.balance.split(releasable), ctx);
     let beneficiary = wallet.beneficiary;
-    transfer::public_transfer(coin, beneficiary);
+
+    wallet.released = wallet.released + releasable;
+
+    let payout = wallet.balance.split(releasable);
+    balance::send_funds(payout, beneficiary);
 
     event::emit(Released<S, C> {
         wallet_id: object::id(wallet),
