@@ -105,6 +105,7 @@ public fun new(receivers: vector<address>, weights: vector<u64>, ctx: &mut TxCon
     addr
 }
 
+// TODO: add tests for this function once Sui supports creating AccumulatorRoot in tests.
 /// Withdraw *all* of this object's settled `C` - where a vesting wallet `release`
 /// credits its object beneficiary via `balance::send_funds` - and fan it out to the
 /// receivers by weight. Permissionless. Always processes the entire settled balance in
