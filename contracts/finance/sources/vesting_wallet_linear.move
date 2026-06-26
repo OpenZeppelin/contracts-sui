@@ -239,9 +239,10 @@ public fun new_continuous<C>(
 }
 
 /// Sugar for the common case: build a stepped wallet and immediately share it via
-/// `transfer::public_share_object`, returning the wallet's `DestroyCap` for the caller
-/// to route wherever teardown authority should live (held, forwarded, or wrapped) -
-/// whoever ends up holding it can later tear the wallet down.
+/// `transfer::public_share_object`, returning the shared wallet's `ID` (so the caller
+/// can reference it once it is no longer held by value) and its `DestroyCap` for the
+/// caller to route wherever teardown authority should live (held, forwarded, or
+/// wrapped) - whoever ends up holding the cap can later tear the wallet down.
 ///
 /// #### Parameters
 /// - `beneficiary`: Address that every release pays out to.
@@ -252,6 +253,7 @@ public fun new_continuous<C>(
 /// - `ctx`: Transaction context.
 ///
 /// #### Returns
+/// - The shared wallet's `ID`.
 /// - The shared wallet's `DestroyCap`, required later by `destroy`.
 ///
 /// #### Aborts
@@ -267,15 +269,16 @@ public fun create_and_share<C>(
     period_ms: u64,
     steps: u64,
     ctx: &mut TxContext,
-): DestroyCap {
+): (ID, DestroyCap) {
     let (wallet, cap) = new<C>(beneficiary, start_ms, cliff_ms, period_ms, steps, ctx);
+    let wallet_id = object::id(&wallet);
     transfer::public_share_object(wallet);
-    cap
+    (wallet_id, cap)
 }
 
 /// Sugar for the common case: build a continuous wallet and immediately share it via
-/// `transfer::public_share_object`, returning the wallet's `DestroyCap` for the caller
-/// to route wherever teardown authority should live.
+/// `transfer::public_share_object`, returning the shared wallet's `ID` and its
+/// `DestroyCap` for the caller to route wherever teardown authority should live.
 ///
 /// #### Parameters
 /// - `beneficiary`: Address that every release pays out to.
@@ -285,6 +288,7 @@ public fun create_and_share<C>(
 /// - `ctx`: Transaction context.
 ///
 /// #### Returns
+/// - The shared wallet's `ID`.
 /// - The shared wallet's `DestroyCap`, required later by `destroy`.
 ///
 /// #### Aborts
@@ -297,10 +301,11 @@ public fun create_and_share_continuous<C>(
     cliff_ms: u64,
     duration_ms: u64,
     ctx: &mut TxContext,
-): DestroyCap {
+): (ID, DestroyCap) {
     let (wallet, cap) = new_continuous<C>(beneficiary, start_ms, cliff_ms, duration_ms, ctx);
+    let wallet_id = object::id(&wallet);
     transfer::public_share_object(wallet);
-    cap
+    (wallet_id, cap)
 }
 
 // === Curve evaluation & release ===

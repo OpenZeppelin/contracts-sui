@@ -205,16 +205,25 @@ fun params_rejects_zero_period() {
     vesting_wallet_linear::params(0, 0, 0, 4);
 }
 
-// `create_and_share` puts the wallet into the shared topology.
+// `create_and_share` puts the wallet into the shared topology and returns its id + cap.
 #[test]
 fun create_and_share_shares_wallet() {
     let (mut test, clk) = setup(0);
 
-    let cap = vesting_wallet_linear::create_and_share<USDC>(BENEFICIARY, 0, 0, 1000, 4, test.ctx());
+    let (wallet_id, cap) = vesting_wallet_linear::create_and_share<USDC>(
+        BENEFICIARY,
+        0,
+        0,
+        1000,
+        4,
+        test.ctx(),
+    );
     destroy(cap);
 
     test.next_tx(@0x1);
     let wallet = test.take_shared<VestingWallet<Linear, Params, USDC>>();
+    // The returned id identifies the shared wallet.
+    assert_eq!(object::id(&wallet), wallet_id);
     assert_eq!(wallet.beneficiary(), BENEFICIARY);
     assert_eq!(vesting_wallet_linear::duration_ms(&wallet), 4000);
     test_scenario::return_shared(wallet);
@@ -223,12 +232,13 @@ fun create_and_share_shares_wallet() {
     test.end();
 }
 
-// `create_and_share_continuous` puts a continuous wallet into the shared topology.
+// `create_and_share_continuous` puts a continuous wallet into the shared topology and
+// returns its id + cap.
 #[test]
 fun create_and_share_continuous_shares_wallet() {
     let (mut test, clk) = setup(0);
 
-    let cap = vesting_wallet_linear::create_and_share_continuous<USDC>(
+    let (wallet_id, cap) = vesting_wallet_linear::create_and_share_continuous<USDC>(
         BENEFICIARY,
         0,
         0,
@@ -239,6 +249,7 @@ fun create_and_share_continuous_shares_wallet() {
 
     test.next_tx(@0x1);
     let wallet = test.take_shared<VestingWallet<Linear, Params, USDC>>();
+    assert_eq!(object::id(&wallet), wallet_id);
     assert_eq!(wallet.beneficiary(), BENEFICIARY);
     assert_eq!(vesting_wallet_linear::duration_ms(&wallet), 4000);
     assert_eq!(vesting_wallet_linear::period_ms(&wallet), 1);

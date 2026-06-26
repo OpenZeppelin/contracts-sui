@@ -50,7 +50,8 @@ is not required up front.
 1. **Create** - call `new` (stepped) or `new_continuous`, both returning the wallet
    by value (plus a `DestroyCap` that authorizes its later teardown) so you can fund and
    choose a topology in the same PTB. `create_and_share`/`create_and_share_continuous`
-   are sugar that builds the wallet, shares it, and returns the `DestroyCap` in one call.
+   are sugar that builds the wallet, shares it, and returns its `ID` and `DestroyCap` in
+   one call.
 2. **Fund** - `deposit` a `Coin<C>`. Permissionless: anyone may fund, and funds added
    after the schedule starts participate retroactively.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
@@ -96,7 +97,7 @@ public fun grant<C>(beneficiary: address, start_ms: u64, funds: Coin<C>, ctx: &m
 
 // Continuous one-year linear vest with a 90-day cliff.
 public fun stream<C>(beneficiary: address, start_ms: u64, ctx: &mut TxContext) {
-    let cap = vesting_wallet_linear::create_and_share_continuous<C>(
+    let (_wallet_id, cap) = vesting_wallet_linear::create_and_share_continuous<C>(
         beneficiary,
         start_ms,
         90 * DAY_MS,   // cliff_ms
