@@ -131,7 +131,9 @@ jobs:
   # merge (`continue-on-error`). It only runs once `test` is green.
   coverage:
     name: Coverage ${{ matrix.package }}
-    needs: [test]
+    # `setup` is needed for the package matrix below; `test` gates this on a
+    # green fast run so we never trace a broken build.
+    needs: [setup, test]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true
