@@ -620,6 +620,73 @@ fun destroy_empty_rejects_nonempty_balance() {
 //     abort
 // }
 
+// === Sweep ===
+
+// `sweep_settled` pulls settled funds parked at the wallet's object address into its
+// on-book `balance`, emits a single `Swept` (not `Deposited`), and conserves value.
+//
+// TODO: un-ignore once `accumulator::create_for_testing` ships in the published Sui
+// mainnet framework. Shares the same harness as the commented teardown tests above:
+// the `seed_root` helper, the `use sui::accumulator::{Self, AccumulatorRoot};` and
+// `use sui::test_scenario::Scenario;` imports, the `Swept` import from `vesting_wallet`,
+// and a VM that actually settles the funds parked at the address so `settled_funds_value`
+// returns non-zero.
+//
+// #[test]
+// fun sweep_settled_pulls_in_settled_funds_and_emits_swept() {
+//     let mut scenario = test_scenario::begin(@0x1);
+//     seed_root(&mut scenario, @0x1);
+//
+//     let wallet = new_wallet(BENEFICIARY, scenario.ctx());
+//     let wallet_id = object::id(&wallet);
+//     // Settle funds at the wallet's object address, then share it.
+//     balance::send_funds(mint(1000), wallet_id.to_address());
+//     transfer::public_share_object(wallet);
+//     scenario.next_tx(@0x1);
+//
+//     let mut wallet = scenario.take_shared<VestingWallet<TestCurve, TestParams, USDC>>();
+//     let root = scenario.take_shared<AccumulatorRoot>();
+//     wallet.sweep_settled(&root);
+//
+//     assert_eq!(wallet.balance(), 1000);
+//     let swept = event::events_by_type<Swept<TestCurve, USDC>>();
+//     assert_eq!(swept.length(), 1);
+//     assert_eq!(swept[0], vesting_wallet::test_new_swept<TestCurve, USDC>(wallet_id, 1000));
+//     // A sweep emits `Swept`, never `Deposited`.
+//     assert_eq!(event::events_by_type<Deposited<TestCurve, USDC>>().length(), 0);
+//
+//     test_scenario::return_shared(root);
+//     test_scenario::return_shared(wallet);
+//     scenario.end();
+// }
+
+// Sweeping a wallet with no settled funds at its address is a no-op: balance and
+// ledger are untouched and no `Swept` event is emitted.
+//
+// TODO: un-ignore once `accumulator::create_for_testing` ships (same harness as above).
+//
+// #[test]
+// fun sweep_settled_no_settled_funds_is_noop() {
+//     let mut scenario = test_scenario::begin(@0x1);
+//     seed_root(&mut scenario, @0x1);
+//
+//     let wallet = new_wallet(BENEFICIARY, scenario.ctx());
+//     transfer::public_share_object(wallet);
+//     scenario.next_tx(@0x1);
+//
+//     let mut wallet = scenario.take_shared<VestingWallet<TestCurve, TestParams, USDC>>();
+//     let root = scenario.take_shared<AccumulatorRoot>();
+//     wallet.sweep_settled(&root);
+//
+//     assert_eq!(wallet.balance(), 0);
+//     assert_eq!(wallet.released(), 0);
+//     assert_eq!(event::events_by_type<Swept<TestCurve, USDC>>().length(), 0);
+//
+//     test_scenario::return_shared(root);
+//     test_scenario::return_shared(wallet);
+//     scenario.end();
+// }
+
 // === State immutability ===
 
 // The beneficiary, schedule params, and id are all fixed across
