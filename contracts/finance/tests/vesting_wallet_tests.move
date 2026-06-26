@@ -6,6 +6,7 @@ use openzeppelin_finance::vesting_wallet::{
     VestedAmount,
     Created,
     Deposited,
+    Received,
     Released,
     Destroyed
 };
@@ -147,7 +148,7 @@ fun deposit_increases_balance_emits_and_is_permissionless() {
 }
 
 // Only receipts addressed to this wallet are claimable; doing so emits a single
-// `Deposited` (no separate `Received` event) and conserves funds.
+// `Received` event (not `Deposited`) and conserves funds.
 #[test]
 fun receive_and_deposit_claims_addressed_coin() {
     let mut scenario = test_scenario::begin(@0x1);
@@ -164,16 +165,18 @@ fun receive_and_deposit_claims_addressed_coin() {
     let coin_id = object::id(&coin);
     transfer::public_transfer(coin, wallet_addr);
 
-    // The wallet claims it through the standard deposit path.
+    // The wallet claims it, adding the coin to its balance.
     scenario.next_tx(@0x1);
     let mut wallet = scenario.take_shared<VestingWallet<TestCurve, TestParams, USDC>>();
     let receiving = test_scenario::receiving_ticket_by_id<Coin<USDC>>(coin_id);
     wallet.receive_and_deposit(receiving);
 
     assert_eq!(wallet.balance(), 1000);
-    let deposited = event::events_by_type<Deposited<TestCurve, USDC>>();
-    assert_eq!(deposited.length(), 1);
-    assert_eq!(deposited[0], vesting_wallet::test_new_deposited<TestCurve, USDC>(wallet_id, 1000));
+    let received = event::events_by_type<Received<TestCurve, USDC>>();
+    assert_eq!(received.length(), 1);
+    assert_eq!(received[0], vesting_wallet::test_new_received<TestCurve, USDC>(wallet_id, 1000));
+    // A claim emits `Received`, never `Deposited`.
+    assert_eq!(event::events_by_type<Deposited<TestCurve, USDC>>().length(), 0);
 
     test_scenario::return_shared(wallet);
     scenario.end();
@@ -216,18 +219,47 @@ fun receive_and_deposit_claims_addressed_coin_owned() {
     let coin_id = object::id(&coin);
     transfer::public_transfer(coin, wallet_addr);
 
-    // The holder takes their owned wallet and claims the coin through the deposit path.
+    // The holder takes their owned wallet and claims the coin.
     scenario.next_tx(holder);
     let mut wallet = scenario.take_from_sender<VestingWallet<TestCurve, TestParams, USDC>>();
     let receiving = test_scenario::receiving_ticket_by_id<Coin<USDC>>(coin_id);
     wallet.receive_and_deposit(receiving);
 
     assert_eq!(wallet.balance(), 1000);
-    let deposited = event::events_by_type<Deposited<TestCurve, USDC>>();
-    assert_eq!(deposited.length(), 1);
-    assert_eq!(deposited[0], vesting_wallet::test_new_deposited<TestCurve, USDC>(wallet_id, 1000));
+    let received = event::events_by_type<Received<TestCurve, USDC>>();
+    assert_eq!(received.length(), 1);
+    assert_eq!(received[0], vesting_wallet::test_new_received<TestCurve, USDC>(wallet_id, 1000));
 
     destroy(wallet);
+    scenario.end();
+}
+
+// Claiming a zero-value coin is a no-op: balance and ledger are untouched and no
+// `Received` event is emitted (mirroring `deposit` of a zero-value coin).
+#[test]
+fun receive_and_deposit_zero_value_coin_is_noop() {
+    let mut scenario = test_scenario::begin(@0x1);
+
+    let wallet = new_wallet(BENEFICIARY, scenario.ctx());
+    let wallet_addr = object::id_address(&wallet);
+    transfer::public_share_object(wallet);
+
+    // An upstream emitter sends a zero-value coin to the wallet's object address.
+    scenario.next_tx(@0x1);
+    let coin = coin::mint_for_testing<USDC>(0, scenario.ctx());
+    let coin_id = object::id(&coin);
+    transfer::public_transfer(coin, wallet_addr);
+
+    scenario.next_tx(@0x1);
+    let mut wallet = scenario.take_shared<VestingWallet<TestCurve, TestParams, USDC>>();
+    let receiving = test_scenario::receiving_ticket_by_id<Coin<USDC>>(coin_id);
+    wallet.receive_and_deposit(receiving);
+
+    assert_eq!(wallet.balance(), 0);
+    assert_eq!(wallet.released(), 0);
+    assert_eq!(event::events_by_type<Received<TestCurve, USDC>>().length(), 0);
+
+    test_scenario::return_shared(wallet);
     scenario.end();
 }
 
@@ -252,9 +284,9 @@ fun deposit_rejects_overflowing_total() {
     abort
 }
 
-// `receive_and_deposit` funnels through `deposit`, so the same overflow guard fires:
-// claiming a coin addressed to the wallet that would push `balance + released` past
-// u64::MAX aborts with `EOverflow`. (In production the already-transferred coin is
+// `receive_and_deposit` shares `deposit`'s balance logic, so the same overflow guard
+// fires: claiming a coin addressed to the wallet that would push `balance + released`
+// past u64::MAX aborts with `EOverflow`. (In production the already-transferred coin is
 // then stranded at the wallet's address - see the function's docs; here the abort
 // just rolls the claim back.)
 #[test, expected_failure(abort_code = vesting_wallet::EBalanceOverflow)]
@@ -276,7 +308,7 @@ fun receive_and_deposit_rejects_overflowing_total() {
     let coin_id = object::id(&coin);
     transfer::public_transfer(coin, wallet_addr);
 
-    // Claiming it would push balance + released to max + 1 -> EOverflow via `deposit`.
+    // Claiming it would push balance + released to max + 1 -> EOverflow.
     scenario.next_tx(@0x1);
     let mut wallet = scenario.take_shared<VestingWallet<TestCurve, TestParams, USDC>>();
     let receiving = test_scenario::receiving_ticket_by_id<Coin<USDC>>(coin_id);

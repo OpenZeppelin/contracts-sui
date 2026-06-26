@@ -217,11 +217,27 @@ public struct Created<phantom S, P, phantom C> has copy, drop {
     schedule_params: P,
 }
 
-/// Emitted by `deposit` (and `receive_and_deposit`) when a non-zero amount is
-/// added. A deposit of a zero-value balance emits no event.
+/// Emitted by `deposit` when a non-zero amount is added. A deposit of a
+/// zero-value balance emits no event.
 public struct Deposited<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
     /// Amount added to the balance by this deposit.
+    amount: u64,
+}
+
+/// Emitted by `sweep_settled` when a non-zero amount is added. A sweep of a
+/// zero-value balance emits no event.
+public struct Swept<phantom S, phantom C> has copy, drop {
+    wallet_id: ID,
+    /// Amount added to the balance by this sweep.
+    amount: u64,
+}
+
+/// Emitted by `receive_and_deposit` when a non-zero amount is added. A deposit
+/// of a zero-value coin emits no event.
+public struct Received<phantom S, phantom C> has copy, drop {
+    wallet_id: ID,
+    /// Amount added to the balance by this receival.
     amount: u64,
 }
 
@@ -344,23 +360,16 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     balance: Balance<C>,
 ) {
-    let amount = balance.value();
-
-    assert!(
-        std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
-        EBalanceOverflow,
-    );
-
-    wallet.balance.join(balance);
+    let amount = wallet.deposit_internal(balance);
     if (amount == 0) return;
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
 }
 
 /// Sweep `amount` from the wallet's own object address balance into its on-book
-/// `balance`, via `deposit`. The address-balance analogue of `receive_and_deposit`.
+/// `balance`.
 ///
 /// A wallet with no settled funds at its address is a no-op: nothing is swept and
-/// no `Deposited` event is emitted.
+/// no `Swept` event is emitted.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to sweep into.
@@ -378,12 +387,17 @@ public fun sweep_settled<S: drop, P: copy + drop + store, C>(
     let amount = balance::settled_funds_value<C>(root, addr);
     if (amount == 0) return;
     let w = balance::withdraw_funds_from_object<C>(&mut wallet.id, amount);
-    wallet.deposit(balance::redeem_funds(w));
+    // amount is already known and positive, so the returned value is redundant here.
+    _ = wallet.deposit_internal(balance::redeem_funds(w));
+    event::emit(Swept<S, C> { wallet_id: object::id(wallet), amount });
 }
 
 /// Claim a coin that an upstream emitter `public_transfer`'d to this wallet's
-/// object address, then funnel it through the standard deposit path. Used by
-/// emission schedules and payroll robots that don't hold a wallet reference.
+/// object address, then add it to the balance. Used by emission schedules and
+/// payroll robots that don't hold a wallet reference.
+///
+/// A claim of a zero-value coin is a no-op: the (empty) balance is consumed but
+/// nothing changes and no `Received` event is emitted.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to fund.
@@ -402,7 +416,31 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     receiving: Receiving<Coin<C>>,
 ) {
     let coin = transfer::public_receive(&mut wallet.id, receiving);
-    wallet.deposit(coin.into_balance());
+    let amount = wallet.deposit_internal(coin.into_balance());
+    if (amount == 0) return;
+    event::emit(Received<S, C> { wallet_id: object::id(wallet), amount });
+}
+
+/// Join `balance` into the wallet's balance and return the amount added, leaving
+/// event emission to the caller. Shared by `deposit`, `sweep_settled`, and
+/// `receive_and_deposit`.
+///
+/// #### Aborts
+/// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
+///   `balance + released` (== `Σ(deposits)`) past `u64::MAX`.
+fun deposit_internal<S: drop, P: copy + drop + store, C>(
+    wallet: &mut VestingWallet<S, P, C>,
+    balance: Balance<C>,
+): u64 {
+    let amount = balance.value();
+
+    assert!(
+        std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
+        EBalanceOverflow,
+    );
+
+    wallet.balance.join(balance);
+    amount
 }
 
 /// Pay the not-yet-released portion attested by `vested` into the beneficiary's
@@ -643,6 +681,18 @@ public fun test_new_created<S, P, C>(
 #[test_only]
 public fun test_new_deposited<S, C>(wallet_id: ID, amount: u64): Deposited<S, C> {
     Deposited { wallet_id, amount }
+}
+
+/// Build a `Swept` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_swept<S, C>(wallet_id: ID, amount: u64): Swept<S, C> {
+    Swept { wallet_id, amount }
+}
+
+/// Build a `Received` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_received<S, C>(wallet_id: ID, amount: u64): Received<S, C> {
+    Received { wallet_id, amount }
 }
 
 /// Build a `Released` event value for asserting against `event::events_by_type`.
