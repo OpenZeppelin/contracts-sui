@@ -50,15 +50,15 @@ is not required up front.
 1. **Create** - call `new` (stepped) or `new_continuous`, both returning the wallet
    by value so you can fund and choose a topology in the same PTB. `create_and_share`/
    `create_and_share_continuous` are sugar that builds the wallet and shares it in one call.
-2. **Fund** - `deposit` a `Coin<C>`. Permissionless: anyone may fund, and funds added
+2. **Fund** - `deposit` a `Balance<C>`. Permissionless: anyone may fund, and funds added
    after the schedule starts participate retroactively.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
    not-yet-released portion to the beneficiary. Permissionless and idempotent: if
    nothing new has vested it is a no-op.
 4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`,
    `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
-5. **Tear down** - once drained, `vesting_wallet::destroy_empty` reclaims the storage
-   rebate and returns a `DestroyReceipt`; hand that to `vesting_wallet_linear::destroy`,
+5. **Tear down** - once drained (and any settled funds swept), `vesting_wallet::destroy_empty`
+   reclaims the storage rebate and returns a `DestroyReceipt`; hand that to `vesting_wallet_linear::destroy`,
    which requires the schedule to have ended and the caller to be the beneficiary
    before accepting the teardown.
 
@@ -85,7 +85,7 @@ public fun grant<C>(beneficiary: address, start_ms: u64, funds: Coin<C>, ctx: &m
         4,            // steps
         ctx,
     );
-    wallet.deposit(funds);
+    wallet.deposit(funds.into_balance());
     transfer::public_share_object(wallet);
 }
 
@@ -101,8 +101,8 @@ public fun stream<C>(beneficiary: address, start_ms: u64, ctx: &mut TxContext) {
 }
 
 // Anyone can release; the beneficiary is read fresh from the wallet at call time.
-public fun claim<C>(wallet: &mut VestingWallet<Linear, Params, C>, clock: &Clock, ctx: &mut TxContext) {
-    vesting_wallet_linear::release(wallet, clock, ctx);
+public fun claim<C>(wallet: &mut VestingWallet<Linear, Params, C>, clock: &Clock) {
+    vesting_wallet_linear::release(wallet, clock);
 }
 
 // A read-only "what can I claim?" query for clients.
@@ -122,8 +122,9 @@ and you pick the topology:
 - **Owned** (fast path) - `transfer::public_transfer(wallet, holder)`. Only the
   holder can pass the wallet by `&mut`, so release is reachable from the holder's
   transactions only. Outside parties fund an owned wallet by `public_transfer`-ing a
-  `Coin<C>` to the wallet's object address; the holder then claims each with
-  `receive_and_deposit`.
+  `Coin<C>` to the wallet's object address (the holder claims each with
+  `receive_and_deposit`) or by settling a `Balance<C>` into the address (the holder
+  pulls it in with `sweep_settled`).
 
 The `beneficiary` is fixed at construction. To rotate the recipient, point
 `beneficiary` at a consumer-owned object and rotate ownership of that object instead.
@@ -194,7 +195,7 @@ The caller picks the curve module at the call site; the vault never knows which 
 
 ```move
 let v = vesting_wallet_linear::vested_amount(vault.inner(), clock);
-vault.release(&v, ctx);
+vault.release(&v);
 ```
 
 If `release` instead required the witness `S`, this would be impossible: a wrapper

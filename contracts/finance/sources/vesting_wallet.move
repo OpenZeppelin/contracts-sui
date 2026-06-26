@@ -78,8 +78,9 @@
 /// - **Owned** (fast path): `transfer::public_transfer(wallet, addr)` - only the
 ///   holder can pass the wallet by `&mut`, so funding and release are reachable
 ///   from the holder's transactions only. Outside parties fund it by
-///   `public_transfer`ing a `Coin<C>` to the wallet's object address; the holder
-///   then claims each with `receive_and_deposit`.
+///   `public_transfer`ing a `Coin<C>` to the wallet's object address (the holder
+///   claims each with `receive_and_deposit`) or by settling a `Balance<C>` into the
+///   address (the holder pulls it in with `sweep_settled`).
 ///
 /// The `beneficiary` is fixed at construction. To rotate the recipient, point
 /// `beneficiary` at a consumer-owned object and rotate ownership of that object
@@ -181,7 +182,7 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 ///
 /// ```move
 /// let v = some_curve::vested_amount(wrapper.inner(), clock);
-/// wrapper.release(&v, ctx);
+/// wrapper.release(&v);
 /// ```
 ///
 /// Handing out `&inner` is safe: it only allows views and curve-gated minting of an
@@ -325,10 +326,10 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     VestedAmount { wallet_id: object::id(wallet), amount }
 }
 
-/// Add a coin to the wallet's balance. Permissionless - the beneficiary's
+/// Add a `Balance<C>` to the wallet's balance. Permissionless - the beneficiary's
 /// identity is data, not a capability, and anyone may fund.
 ///
-/// A deposit of a zero-value coin is a no-op: the (empty) balance is consumed but
+/// A deposit of a zero-value balance is a no-op: the (empty) balance is consumed but
 /// nothing changes and no `Deposited` event is emitted.
 ///
 /// #### Parameters
