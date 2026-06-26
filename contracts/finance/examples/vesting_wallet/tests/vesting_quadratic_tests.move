@@ -3,6 +3,7 @@ module openzeppelin_finance::example_vesting_quadratic_tests;
 use openzeppelin_finance::example_vesting_quadratic::{Self as quadratic, Quadratic, Params};
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
 use std::unit_test::{assert_eq, destroy};
+use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
 use sui::test_scenario as ts;
 
@@ -26,7 +27,7 @@ fun create_and_share(scenario: &mut ts::Scenario) {
         BENEFICIARY,
         scenario.ctx(),
     );
-    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()));
+    wallet.deposit(balance::create_for_testing<USDC>(TOTAL));
     transfer::public_share_object(wallet);
 }
 
@@ -56,13 +57,13 @@ fun compose_create_fund_and_release_across_modules() {
     clock.set_for_testing(START_MS + DURATION_MS / 2);
     assert_eq!(quadratic::releasable(&wallet, &clock), TOTAL / 4);
     let vested = quadratic::vested_amount(&wallet, &clock);
-    wallet.release(&vested, scenario.ctx());
+    wallet.release(&vested);
     assert_eq!(wallet.released(), TOTAL / 4);
 
     // After end: everything remaining is releasable, draining the wallet.
     clock.set_for_testing(START_MS + DURATION_MS);
     assert_eq!(quadratic::releasable(&wallet, &clock), TOTAL - TOTAL / 4);
-    quadratic_release(&mut wallet, &clock, scenario.ctx());
+    quadratic_release(&mut wallet, &clock);
     assert_eq!(wallet.released(), TOTAL);
     assert_eq!(wallet.balance(), 0);
 
@@ -121,7 +122,7 @@ fun late_deposit_vests_at_current_proportion() {
     // Halfway through, top up by the original total. New total is 2*TOTAL, and the
     // halfway proportion (1/4) applies to all of it.
     clock.set_for_testing(START_MS + DURATION_MS / 2);
-    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()));
+    wallet.deposit(balance::create_for_testing<USDC>(TOTAL));
     assert_eq!(quadratic::releasable(&wallet, &clock), 2 * TOTAL / 4);
 
     ts::return_shared(wallet);
@@ -161,7 +162,7 @@ fun compose_destroy_after_drain() {
 
     // Run to the end and drain the wallet.
     clock.set_for_testing(START_MS + DURATION_MS);
-    quadratic_release(&mut wallet, &clock, scenario.ctx());
+    quadratic_release(&mut wallet, &clock);
     assert_eq!(wallet.balance(), 0);
 
     // Permissionless half reclaims the storage rebate; the witness-gated half consumes
@@ -242,8 +243,7 @@ fun params_rejects_overflowing_end() {
 fun quadratic_release(
     wallet: &mut VestingWallet<Quadratic, Params, USDC>,
     clock: &sui::clock::Clock,
-    ctx: &mut TxContext,
 ) {
     let vested = quadratic::vested_amount(wallet, clock);
-    wallet.release(&vested, ctx);
+    wallet.release(&vested);
 }

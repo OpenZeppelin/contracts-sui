@@ -3,6 +3,7 @@ module openzeppelin_finance::vesting_wallet_linear_tests;
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, Created, Released, Destroyed};
 use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params};
 use std::unit_test::{assert_eq, destroy};
+use sui::balance;
 use sui::clock::{Self, Clock};
 use sui::coin;
 use sui::event;
@@ -44,8 +45,8 @@ fun new_continuous(
     vesting_wallet_linear::new_continuous<USDC>(BENEFICIARY, start, cliff, duration, ctx)
 }
 
-fun fund(wallet: &mut VestingWallet<Linear, Params, USDC>, amount: u64, ctx: &mut TxContext) {
-    wallet.deposit(coin::mint_for_testing<USDC>(amount, ctx));
+fun fund(wallet: &mut VestingWallet<Linear, Params, USDC>, amount: u64) {
+    wallet.deposit(balance::create_for_testing(amount));
 }
 
 /// The curve's cumulative vested total at the given clock.
@@ -117,7 +118,7 @@ fun new_accepts_cliff_equal_to_duration() {
 
     // duration = 1000 * 4 = 4000.
     let mut wallet = new_stepped(0, 4000, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(3999);
     assert_eq!(wallet.vested(&clk), 0); // still gated by the cliff
@@ -171,7 +172,7 @@ fun params_drives_bare_primitive() {
 
     let p = vesting_wallet_linear::params(100, 250, 1000, 4);
     let mut wallet = vesting_wallet::new<Linear, Params, USDC>(p, BENEFICIARY, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     assert_eq!(vesting_wallet_linear::start_ms(&wallet), 100);
     assert_eq!(vesting_wallet_linear::cliff_ms(&wallet), 250);
@@ -240,7 +241,7 @@ fun vested_amount_pre_start_is_zero() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(1000, 0, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(999);
     assert_eq!(wallet.vested(&clk), 0);
@@ -257,7 +258,7 @@ fun vested_amount_is_a_staircase() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     // First period [0, 1000): zero steps elapsed, nothing vested.
     clk.set_for_testing(0);
@@ -291,7 +292,7 @@ fun vested_amount_pre_cliff_is_zero() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 500, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(0);
     assert_eq!(wallet.vested(&clk), 0);
@@ -317,7 +318,7 @@ fun vested_amount_at_cliff_jumps_to_catch_up() {
 
     // 8 steps of 1000ms (duration 8000); cliff at 3000 spans 3 full periods.
     let mut wallet = new_stepped(0, 3000, 1000, 8, test.ctx());
-    wallet.fund(8000, test.ctx());
+    wallet.fund(8000);
 
     clk.set_for_testing(2999);
     assert_eq!(wallet.vested(&clk), 0); // gated by the cliff
@@ -339,7 +340,7 @@ fun vested_amount_post_end_clamps_to_total() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     // Last boundary is the end (start + period * steps = 4000): full total.
     clk.set_for_testing(4000);
@@ -360,7 +361,7 @@ fun vested_amount_is_nondecreasing_in_time() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 1000, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     let mut prev = 0;
     vector[0u64, 500, 1000, 1500, 2000, 3000, 4000, 5000].do!(|sample| {
@@ -385,7 +386,7 @@ fun vested_amount_uses_u128_intermediate_at_max() {
     // 2 steps of (max / 2) each: duration = max - 1 (max is odd), end = max - 1.
     let half = max / 2;
     let mut wallet = new_stepped(0, 0, half, 2, test.ctx());
-    wallet.fund(max, test.ctx());
+    wallet.fund(max);
 
     // One step elapsed: max * 1 / 2 = floor(max / 2), with no overflow and no abort.
     clk.set_for_testing(half);
@@ -407,7 +408,7 @@ fun deposit_vests_as_if_from_start() {
     clk.set_for_testing(2000); // two steps elapsed
     assert_eq!(wallet.vested(&clk), 0); // nothing deposited yet
 
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
     // two of four steps elapsed, so half the fresh deposit is already vested.
     assert_eq!(wallet.vested(&clk), 500);
 
@@ -427,10 +428,10 @@ fun release_pays_step_portion_and_is_permissionless() {
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     let wallet_id = object::id(&wallet);
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(2000); // two steps => 500
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
 
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
@@ -461,17 +462,17 @@ fun release_then_release_within_same_period_is_noop() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(1000); // one step => 250
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
     assert_eq!(wallet.released(), 250);
     assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 1);
 
     // Still in the same period: nothing new, no event, no change.
     test.next_tx(@0x1);
     clk.set_for_testing(1999);
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
     assert_eq!(wallet.released(), 250);
     assert_eq!(wallet.balance(), 750);
     assert_eq!(event::events_by_type<Released<Linear, USDC>>().length(), 0);
@@ -488,12 +489,12 @@ fun releasable_view_matches_release() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(2000); // two steps => 500
     assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 500);
 
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
     assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
 
     destroy(wallet);
@@ -512,7 +513,7 @@ fun releasable_is_zero_pre_start_and_pre_cliff() {
 
     // Opens at 1000; cliff at start + 3000 spans 3 full periods.
     let mut wallet = new_stepped(1000, 3000, 1000, 8, test.ctx());
-    wallet.fund(8000, test.ctx());
+    wallet.fund(8000);
 
     clk.set_for_testing(999); // pre-start
     assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
@@ -531,10 +532,10 @@ fun full_release_after_end_then_releasable_zero() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(4000);
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
     assert_eq!(wallet.released(), 1000);
     assert_eq!(wallet.balance(), 0);
     assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
@@ -553,10 +554,10 @@ fun destroy_after_end_on_empty_wallet() {
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
     let wallet_id = object::id(&wallet);
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(4000);
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
     assert_eq!(wallet.balance(), 0);
 
     test.next_tx(BENEFICIARY);
@@ -594,7 +595,7 @@ fun destroy_rejects_nonempty_balance() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
-    wallet.fund(1, test.ctx());
+    wallet.fund(1);
     clk.set_for_testing(5000); // after end, so the ended gate cannot fire
     test.next_tx(BENEFICIARY);
     let receipt = wallet.destroy_empty();
@@ -624,9 +625,9 @@ fun create_deposit_release_in_one_flow() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_stepped(0, 0, 1000, 4, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
     clk.set_for_testing(2000); // two steps => 500
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
 
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
@@ -648,14 +649,14 @@ fun release_before_first_step_moves_no_funds() {
 
     // Opens at 1000, first tranche at 2000.
     let mut wallet = new_stepped(1000, 0, 1000, 4, test.ctx());
-    wallet.fund(1_000_000, test.ctx());
+    wallet.fund(1_000_000);
 
     clk.set_for_testing(999); // pre-start
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
     clk.set_for_testing(1000); // at start, first period, zero steps elapsed
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
     clk.set_for_testing(1999); // one ms before the first tranche
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
 
     assert_eq!(wallet.released(), 0);
     assert_eq!(wallet.balance(), 1_000_000);
@@ -715,7 +716,7 @@ fun new_continuous_accepts_cliff_equal_to_duration() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_continuous(0, 1000, 1000, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(999);
     assert_eq!(wallet.vested(&clk), 0); // still gated by the cliff
@@ -782,7 +783,7 @@ fun vested_amount_continuous_at_exact_start_is_zero() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_continuous(1000, 0, 1000, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(1000); // now == start_ms, elapsed == 0
     assert_eq!(wallet.vested(&clk), 0);
@@ -800,7 +801,7 @@ fun vested_amount_continuous_at_cliff_jumps_to_proportional() {
 
     // total = 1000, cliff = 1000, duration = 4000  =>  jump to 1000 * 1000 / 4000 = 250
     let mut wallet = new_continuous(0, 1000, 4000, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(999);
     assert_eq!(wallet.vested(&clk), 0);
@@ -818,7 +819,7 @@ fun vested_amount_continuous_is_linear_mid_schedule() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_continuous(0, 1000, 4000, test.ctx());
-    wallet.fund(1000, test.ctx());
+    wallet.fund(1000);
 
     clk.set_for_testing(2000);
     assert_eq!(wallet.vested(&clk), 500); // 1000 * 2000 / 4000
@@ -838,7 +839,7 @@ fun vested_amount_continuous_uses_u128_intermediate_at_max() {
     let max = std::u64::max_value!();
 
     let mut wallet = new_continuous(0, 0, max, test.ctx());
-    wallet.fund(max, test.ctx());
+    wallet.fund(max);
 
     clk.set_for_testing(max - 1);
     // max * (max - 1) / max == max - 1, with no overflow and no abort.
@@ -875,7 +876,7 @@ fun receive_and_deposit_then_release_in_one_flow() {
     let receiving = test_scenario::receiving_ticket_by_id<coin::Coin<USDC>>(coin_id);
     wallet.receive_and_deposit(receiving);
     clk.set_for_testing(500);
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx());
+    vesting_wallet_linear::release(&mut wallet, &clk);
 
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
@@ -898,20 +899,20 @@ fun retroactive_deposit_never_over_releases() {
     let (mut test, mut clk) = setup(0);
 
     let mut wallet = new_continuous(0, 0, 100, test.ctx());
-    wallet.fund(100, test.ctx());
+    wallet.fund(100);
 
     clk.set_for_testing(50);
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx()); // floor(100 * 50 / 100) = 50
+    vesting_wallet_linear::release(&mut wallet, &clk); // floor(100 * 50 / 100) = 50
     assert_eq!(wallet.released(), 50);
     assert_eq!(wallet.balance(), 50);
 
     // Late deposit; total is now 200, re-derived fresh at call time.
-    wallet.fund(100, test.ctx());
+    wallet.fund(100);
     let releasable = vesting_wallet_linear::releasable(&wallet, &clk);
     assert_eq!(releasable, 50); // floor(200 * 50 / 100) = 100 cumulative, minus 50 already released
     assert!(releasable <= wallet.balance()); // never exceeds the balance backing it
 
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx()); // does not abort, does not over-pay
+    vesting_wallet_linear::release(&mut wallet, &clk); // does not abort, does not over-pay
     assert_eq!(wallet.released(), 100);
     assert_eq!(wallet.balance(), 100);
     assert_eq!(wallet.balance() + wallet.released(), 200); // conserved: nothing minted from nowhere
@@ -932,13 +933,13 @@ fun overflowing_refund_is_rejected_at_deposit() {
     let max = std::u64::max_value!();
 
     let mut wallet = new_continuous(0, 0, max, test.ctx());
-    wallet.fund(max, test.ctx());
+    wallet.fund(max);
 
     clk.set_for_testing(1);
-    vesting_wallet_linear::release(&mut wallet, &clk, test.ctx()); // releases 1; balance = max - 1, released = 1
+    vesting_wallet_linear::release(&mut wallet, &clk); // releases 1; balance = max - 1, released = 1
 
     // balance + released == max already; refunding the released 1 would overflow it,
     // so the deposit is rejected here rather than bricking a later release.
-    wallet.fund(1, test.ctx());
+    wallet.fund(1);
     abort
 }

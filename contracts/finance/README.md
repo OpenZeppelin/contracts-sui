@@ -184,10 +184,9 @@ public fun inner<S: drop, P: copy + drop + store, C>(
 public fun release<S: drop, P: copy + drop + store, C>(
     self: &mut GatedVault<S, P, C>,
     vested: &VestedAmount<S>,
-    ctx: &mut TxContext,
 ) {
     // ... enforce protocol invariants (not paused, caller approved, ...) ...
-    self.inner.release(vested, ctx);
+    self.inner.release(vested);
 }
 ```
 

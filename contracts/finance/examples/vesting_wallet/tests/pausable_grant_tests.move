@@ -4,6 +4,7 @@ use openzeppelin_finance::example_pausable_grant::{Self, PausableGrant, GrantAdm
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
 use openzeppelin_finance::vesting_wallet_linear::{Self as linear, Linear, Params};
 use std::unit_test::{assert_eq, destroy};
+use sui::balance;
 use sui::coin::{Self, Coin};
 use sui::test_scenario as ts;
 
@@ -26,20 +27,16 @@ fun create_grant(scenario: &mut ts::Scenario) {
         BENEFICIARY,
         scenario.ctx(),
     );
-    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()));
+    wallet.deposit(balance::create_for_testing<USDC>(TOTAL));
     let cap = example_pausable_grant::new(wallet, scenario.ctx());
     transfer::public_transfer(cap, EMPLOYER);
 }
 
 // Evaluate the curve through the grant's immutable `inner()` view, then release
 // through the grant's own `release`. The caller never touches `&mut inner`.
-fun release(
-    grant: &mut PausableGrant<Linear, Params, USDC>,
-    clock: &sui::clock::Clock,
-    ctx: &mut TxContext,
-) {
+fun release(grant: &mut PausableGrant<Linear, Params, USDC>, clock: &sui::clock::Clock) {
     let vested = linear::vested_amount(grant.inner(), clock);
-    grant.release(&vested, ctx);
+    grant.release(&vested);
 }
 
 // Happy path: a curve-agnostic release flows through the wrapper to the beneficiary.
@@ -56,7 +53,7 @@ fun release_flows_through_wrapper_to_beneficiary() {
 
     // Halfway through the linear schedule: half is releasable.
     clock.set_for_testing(START_MS + DURATION_MS / 2);
-    release(&mut grant, &clock, scenario.ctx());
+    release(&mut grant, &clock);
 
     scenario.next_tx(BENEFICIARY);
     let paid = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
@@ -84,7 +81,7 @@ fun release_aborts_while_paused() {
     assert!(grant.is_paused());
 
     clock.set_for_testing(START_MS + DURATION_MS / 2);
-    release(&mut grant, &clock, scenario.ctx());
+    release(&mut grant, &clock);
 
     abort
 }
@@ -108,7 +105,7 @@ fun resume_restores_releases() {
     grant.resume(&cap);
 
     // The full total is now releasable in one go.
-    release(&mut grant, &clock, scenario.ctx());
+    release(&mut grant, &clock);
 
     scenario.next_tx(BENEFICIARY);
     let paid = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
@@ -136,7 +133,7 @@ fun unwrap_then_curve_teardown() {
     // Drain the grant at the end of the schedule.
     let mut grant = scenario.take_shared<PausableGrant<Linear, Params, USDC>>();
     clock.set_for_testing(START_MS + DURATION_MS);
-    release(&mut grant, &clock, scenario.ctx());
+    release(&mut grant, &clock);
 
     // Admin dissolves the wrapper, recovering the bare wallet, and forwards it to the
     // beneficiary so the beneficiary-gated curve teardown can run.

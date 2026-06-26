@@ -10,6 +10,7 @@ use openzeppelin_finance::vesting_wallet::{
     Destroyed
 };
 use std::unit_test::{assert_eq, destroy};
+use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
 use sui::event;
 use sui::test_scenario;
@@ -51,8 +52,8 @@ fun new_wallet(
     )
 }
 
-fun mint(amount: u64, ctx: &mut TxContext): Coin<USDC> {
-    coin::mint_for_testing<USDC>(amount, ctx)
+fun mint(amount: u64): Balance<USDC> {
+    balance::create_for_testing<USDC>(amount)
 }
 
 fun wrap(inner: VestingWallet<TestCurve, TestParams, USDC>, ctx: &mut TxContext): Wrapper {
@@ -67,8 +68,8 @@ fun inner(wrapper: &Wrapper): &VestingWallet<TestCurve, TestParams, USDC> {
 
 /// The wrapper's own `release`: takes a `&VestedAmount` (no witness) and delegates to
 /// the private `&mut inner`.
-fun release(wrapper: &mut Wrapper, vested: &VestedAmount<TestCurve>, ctx: &mut TxContext) {
-    wrapper.inner.release(vested, ctx);
+fun release(wrapper: &mut Wrapper, vested: &VestedAmount<TestCurve>) {
+    wrapper.inner.release(vested);
 }
 
 // === Construction & topology ===
@@ -130,7 +131,7 @@ fun deposit_increases_balance_emits_and_is_permissionless() {
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
     let wallet_id = object::id(&wallet);
-    wallet.deposit(mint(1000, scenario.ctx()));
+    wallet.deposit(mint(1000));
 
     assert_eq!(wallet.balance(), 1000);
     assert_eq!(wallet.released(), 0);
@@ -159,7 +160,7 @@ fun receive_and_deposit_claims_addressed_coin() {
 
     // An upstream emitter sends a coin to the wallet's object address.
     scenario.next_tx(@0x1);
-    let coin = mint(1000, scenario.ctx());
+    let coin = coin::mint_for_testing<USDC>(1000, scenario.ctx());
     let coin_id = object::id(&coin);
     transfer::public_transfer(coin, wallet_addr);
 
@@ -185,7 +186,7 @@ fun deposit_zero_value_coin_is_noop() {
     let mut scenario = test_scenario::begin(@0xCAFE);
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
-    wallet.deposit(mint(0, scenario.ctx()));
+    wallet.deposit(mint(0));
 
     assert_eq!(wallet.balance(), 0);
     assert_eq!(wallet.released(), 0);
@@ -211,7 +212,7 @@ fun receive_and_deposit_claims_addressed_coin_owned() {
 
     // An upstream emitter sends a coin to the wallet's object address.
     scenario.next_tx(@0x1);
-    let coin = mint(1000, scenario.ctx());
+    let coin = coin::mint_for_testing<USDC>(1000, scenario.ctx());
     let coin_id = object::id(&coin);
     transfer::public_transfer(coin, wallet_addr);
 
@@ -240,14 +241,14 @@ fun deposit_rejects_overflowing_total() {
     let max = std::u64::max_value!();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(max, &mut ctx)); // balance = max, released = 0
+    wallet.deposit(mint(max)); // balance = max, released = 0
 
     // Release 1 so released > 0 while balance + released stays == max.
     let vested = wallet.mint_vested_amount(TestCurve {}, 1);
-    wallet.release(&vested, &mut ctx); // released = 1, balance = max - 1
+    wallet.release(&vested); // released = 1, balance = max - 1
 
     // balance + released == max already, so any further deposit overflows.
-    wallet.deposit(mint(1, &mut ctx));
+    wallet.deposit(mint(1));
     abort
 }
 
@@ -263,15 +264,15 @@ fun receive_and_deposit_rejects_overflowing_total() {
 
     // Fund to max, release 1 so balance + released == max, then share the wallet.
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
-    wallet.deposit(mint(max, scenario.ctx()));
+    wallet.deposit(mint(max));
     let vested = wallet.mint_vested_amount(TestCurve {}, 1);
-    wallet.release(&vested, scenario.ctx()); // released = 1, balance = max - 1
+    wallet.release(&vested); // released = 1, balance = max - 1
     let wallet_addr = object::id_address(&wallet);
     transfer::public_share_object(wallet);
 
     // An upstream emitter sends a coin to the wallet's object address.
     scenario.next_tx(@0x1);
-    let coin = mint(1, scenario.ctx());
+    let coin = coin::mint_for_testing<USDC>(1, scenario.ctx());
     let coin_id = object::id(&coin);
     transfer::public_transfer(coin, wallet_addr);
 
@@ -314,7 +315,7 @@ fun release_rejects_vested_from_other_wallet() {
     let mut wallet_b = new_wallet(BENEFICIARY, &mut ctx);
     let vested_a = wallet_a.mint_vested_amount(TestCurve {}, 100);
 
-    wallet_b.release(&vested_a, &mut ctx);
+    wallet_b.release(&vested_a);
     abort
 }
 
@@ -341,10 +342,10 @@ fun release_pays_releasable_to_beneficiary() {
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
     let wallet_id = object::id(&wallet);
-    wallet.deposit(mint(1000, scenario.ctx()));
+    wallet.deposit(mint(1000));
 
     let vested = wallet.mint_vested_amount(TestCurve {}, 400);
-    wallet.release(&vested, scenario.ctx());
+    wallet.release(&vested);
 
     assert_eq!(wallet.released(), 400);
     assert_eq!(wallet.balance(), 600);
@@ -374,10 +375,10 @@ fun release_is_noop_when_nothing_releasable() {
     let mut scenario = test_scenario::begin(@0x1);
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
-    wallet.deposit(mint(1000, scenario.ctx()));
+    wallet.deposit(mint(1000));
 
     let vested = wallet.mint_vested_amount(TestCurve {}, 0);
-    wallet.release(&vested, scenario.ctx());
+    wallet.release(&vested);
 
     assert_eq!(wallet.released(), 0);
     assert_eq!(wallet.balance(), 1000);
@@ -394,16 +395,16 @@ fun release_again_at_same_total_is_noop() {
     let mut ctx = tx_context::dummy();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(1000, &mut ctx));
+    wallet.deposit(mint(1000));
 
     let vested = wallet.mint_vested_amount(TestCurve {}, 500);
-    wallet.release(&vested, &mut ctx);
+    wallet.release(&vested);
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
 
     let again = wallet.mint_vested_amount(TestCurve {}, 500);
     assert_eq!(wallet.releasable(&again), 0);
-    wallet.release(&again, &mut ctx);
+    wallet.release(&again);
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
 
@@ -417,15 +418,15 @@ fun release_is_monotone_across_increasing_totals() {
     let mut ctx = tx_context::dummy();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(1000, &mut ctx));
+    wallet.deposit(mint(1000));
 
     let first = wallet.mint_vested_amount(TestCurve {}, 100);
-    wallet.release(&first, &mut ctx);
+    wallet.release(&first);
     let after_first = wallet.released();
     assert_eq!(after_first, 100);
 
     let second = wallet.mint_vested_amount(TestCurve {}, 300);
-    wallet.release(&second, &mut ctx);
+    wallet.release(&second);
     assert_eq!(wallet.released(), 300);
 
     // monotone and conserved
@@ -442,13 +443,13 @@ fun release_rejects_vested_below_released() {
     let mut ctx = tx_context::dummy();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(1000, &mut ctx));
+    wallet.deposit(mint(1000));
 
     let high = wallet.mint_vested_amount(TestCurve {}, 200);
-    wallet.release(&high, &mut ctx);
+    wallet.release(&high);
 
     let regressed = wallet.mint_vested_amount(TestCurve {}, 100);
-    wallet.release(&regressed, &mut ctx);
+    wallet.release(&regressed);
     abort
 }
 
@@ -458,10 +459,10 @@ fun releasable_rejects_vested_below_released() {
     let mut ctx = tx_context::dummy();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(1000, &mut ctx));
+    wallet.deposit(mint(1000));
 
     let high = wallet.mint_vested_amount(TestCurve {}, 200);
-    wallet.release(&high, &mut ctx);
+    wallet.release(&high);
 
     let regressed = wallet.mint_vested_amount(TestCurve {}, 100);
     wallet.releasable(&regressed);
@@ -477,12 +478,12 @@ fun release_aborts_when_vested_exceeds_total() {
     let mut ctx = tx_context::dummy();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(100, &mut ctx));
+    wallet.deposit(mint(100));
 
     // Attest more than balance + released (= 100). `release` clears the wallet_id and
     // `>= released` guards, then `EInsufficientBalance` aborts before any coin is minted.
     let vested = wallet.mint_vested_amount(TestCurve {}, 200);
-    wallet.release(&vested, &mut ctx);
+    wallet.release(&vested);
     abort
 }
 
@@ -494,15 +495,15 @@ fun release_aborts_when_releasable_exceeds_remaining_balance() {
     let mut ctx = tx_context::dummy();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(100, &mut ctx));
+    wallet.deposit(mint(100));
 
     // Drain part of the balance: released = 60, balance = 40.
     let first = wallet.mint_vested_amount(TestCurve {}, 60);
-    wallet.release(&first, &mut ctx);
+    wallet.release(&first);
 
     // Attest 150 > balance + released (= 100); releasable = 90 > balance (= 40).
     let second = wallet.mint_vested_amount(TestCurve {}, 150);
-    wallet.release(&second, &mut ctx);
+    wallet.release(&second);
     abort
 }
 
@@ -513,10 +514,10 @@ fun release_allows_draining_exact_balance() {
     let mut ctx = tx_context::dummy();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(100, &mut ctx));
+    wallet.deposit(mint(100));
 
     let vested = wallet.mint_vested_amount(TestCurve {}, 100);
-    wallet.release(&vested, &mut ctx);
+    wallet.release(&vested);
 
     assert_eq!(wallet.released(), 100);
     assert_eq!(wallet.balance(), 0);
@@ -556,7 +557,7 @@ fun destroy_empty_rejects_nonempty_balance() {
     let mut ctx = tx_context::dummy();
 
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
-    wallet.deposit(mint(1, &mut ctx));
+    wallet.deposit(mint(1));
 
     let _receipt = wallet.destroy_empty();
     abort
@@ -573,9 +574,9 @@ fun beneficiary_params_and_id_are_immutable() {
     let mut wallet = new_wallet(BENEFICIARY, &mut ctx);
     let id_at_creation = object::id(&wallet);
 
-    wallet.deposit(mint(1000, &mut ctx));
+    wallet.deposit(mint(1000));
     let vested = wallet.mint_vested_amount(TestCurve {}, 300);
-    wallet.release(&vested, &mut ctx);
+    wallet.release(&vested);
 
     assert_eq!(wallet.beneficiary(), BENEFICIARY);
     assert_eq!(wallet.schedule_params(), TestParams { tag: PARAMS_TAG });
@@ -591,15 +592,15 @@ fun released_coins_stay_with_beneficiary() {
     let mut scenario = test_scenario::begin(@0x1);
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
-    wallet.deposit(mint(1000, scenario.ctx()));
+    wallet.deposit(mint(1000));
 
     let first = wallet.mint_vested_amount(TestCurve {}, 400);
-    wallet.release(&first, scenario.ctx());
+    wallet.release(&first);
 
     // Further wallet activity in a later transaction.
     scenario.next_tx(@0x1);
     let second = wallet.mint_vested_amount(TestCurve {}, 900);
-    wallet.release(&second, scenario.ctx());
+    wallet.release(&second);
     assert_eq!(wallet.released(), 900);
     destroy(wallet);
 
@@ -626,9 +627,9 @@ fun beneficiary_can_be_object_address() {
     let object_addr = object::id_address(&placeholder);
 
     let mut wallet = new_wallet(object_addr, scenario.ctx());
-    wallet.deposit(mint(1000, scenario.ctx()));
+    wallet.deposit(mint(1000));
     let vested = wallet.mint_vested_amount(TestCurve {}, 1000);
-    wallet.release(&vested, scenario.ctx());
+    wallet.release(&vested);
 
     destroy(wallet);
     destroy(placeholder);
@@ -654,12 +655,12 @@ fun release_through_third_party_wrapper() {
     let mut scenario = test_scenario::begin(@0xCAFE); // unrelated sender drives the wrapper
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());
-    wallet.deposit(mint(1000, scenario.ctx()));
+    wallet.deposit(mint(1000));
     let mut wrapper = wrap(wallet, scenario.ctx());
 
     // Curve-agnostic flow: mint against `&inner`, release through the wrapper.
     let vested = wrapper.inner().mint_vested_amount(TestCurve {}, 400);
-    wrapper.release(&vested, scenario.ctx());
+    wrapper.release(&vested);
 
     assert_eq!(wrapper.inner().released(), 400);
     assert_eq!(wrapper.inner().balance(), 600);
@@ -685,14 +686,14 @@ fun owned_handoff_does_not_redirect_cashflow() {
 
     // Alice is the beneficiary; the wallet is funded then handed to Bob.
     let mut wallet = new_wallet(alice, scenario.ctx());
-    wallet.deposit(mint(1000, scenario.ctx()));
+    wallet.deposit(mint(1000));
     transfer::public_transfer(wallet, bob);
 
     // Bob holds the wallet and pokes release.
     scenario.next_tx(bob);
     let mut wallet = scenario.take_from_sender<VestingWallet<TestCurve, TestParams, USDC>>();
     let vested = wallet.mint_vested_amount(TestCurve {}, 400);
-    wallet.release(&vested, scenario.ctx());
+    wallet.release(&vested);
     destroy(wallet);
 
     // Alice - not Bob - received the funds.

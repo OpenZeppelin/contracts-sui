@@ -318,14 +318,9 @@ public fun vested_amount<C>(
 /// #### Parameters
 /// - `wallet`: The wallet to release from.
 /// - `clock`: Sui `Clock`, read for the current timestamp.
-/// - `ctx`: Transaction context, used to mint the payout coin.
-public fun release<C>(
-    wallet: &mut VestingWallet<Linear, Params, C>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
+public fun release<C>(wallet: &mut VestingWallet<Linear, Params, C>, clock: &Clock) {
     let v = vested_amount(wallet, clock);
-    wallet.release(&v, ctx);
+    wallet.release(&v);
 }
 
 /// How much `release` would pay out right now, without the caller minting a

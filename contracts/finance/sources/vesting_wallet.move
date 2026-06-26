@@ -86,7 +86,9 @@
 /// instead.
 module openzeppelin_finance::vesting_wallet;
 
+use sui::accumulator::AccumulatorRoot;
 use sui::balance::{Self, Balance};
+use sui::coin::Coin;
 use sui::event;
 use sui::transfer::Receiving;
 
@@ -343,6 +345,19 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
 }
 
+/// Sweep `amount` from the wallet's own object address balance into its on-book
+/// `balance`, via `deposit`. The address-balance analogue of `receive_and_deposit`.
+public fun sweep_settled<S: drop, P: copy + drop + store, C>(
+    wallet: &mut VestingWallet<S, P, C>,
+    root: &AccumulatorRoot,
+) {
+    let addr = object::uid_to_address(&wallet.id);
+    let amount = balance::settled_funds_value<C>(root, addr);
+    if (amount == 0) return;
+    let w = balance::withdraw_funds_from_object<C>(&mut wallet.id, amount);
+    wallet.deposit(balance::redeem_funds(w));
+}
+
 /// Claim a coin that an upstream emitter `public_transfer`'d to this wallet's
 /// object address, then funnel it through the standard deposit path. Used by
 /// emission schedules and payroll robots that don't hold a wallet reference.
@@ -375,7 +390,6 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 /// #### Parameters
 /// - `wallet`: The wallet to release from.
 /// - `vested`: A `VestedAmount<S>` minted for this wallet by its curve module.
-/// - `ctx`: Transaction context, used to mint the payout coin.
 ///
 /// #### Aborts
 /// - `EWalletMismatch` if `vested` was not minted for this wallet.
@@ -385,7 +399,6 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 public fun release<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     vested: &VestedAmount<S>,
-    ctx: &mut TxContext,
 ) {
     let VestedAmount { wallet_id, amount: vested_amount } = vested;
     assert!(wallet_id == object::id(wallet), EWalletMismatch);

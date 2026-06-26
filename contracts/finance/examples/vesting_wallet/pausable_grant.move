@@ -113,10 +113,9 @@ public fun inner<S: drop, P: copy + drop + store, C>(
 public fun release<S: drop, P: copy + drop + store, C>(
     self: &mut PausableGrant<S, P, C>,
     vested: &VestedAmount<S>,
-    ctx: &mut TxContext,
 ) {
     assert!(!self.paused, EPaused);
-    self.inner.release(vested, ctx);
+    self.inner.release(vested);
 }
 
 /// Freeze releases. Idempotent.

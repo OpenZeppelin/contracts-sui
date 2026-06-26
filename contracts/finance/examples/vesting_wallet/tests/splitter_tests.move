@@ -37,11 +37,11 @@ fun release_to_splitter_fans_out_by_weight() {
 
     scenario.next_tx(EMPLOYER);
     let mut wallet = scenario.take_shared<VestingWallet<Linear, Params, USDC>>();
-    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()));
+    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()).into_balance());
 
     // Release the full total at the end of the schedule; it lands at the splitter.
     clock.set_for_testing(START_MS + DURATION_MS);
-    linear::release(&mut wallet, &clock, scenario.ctx());
+    linear::release(&mut wallet, &clock);
     ts::return_shared(wallet);
 
     // Anyone fans the parked payout out to the three receivers.
