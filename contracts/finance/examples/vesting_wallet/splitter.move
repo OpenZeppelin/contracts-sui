@@ -116,7 +116,7 @@ public fun new(receivers: vector<address>, weights: vector<u64>, ctx: &mut TxCon
 /// - `self`: The splitter holding the settled payout.
 /// - `root`: The shared `AccumulatorRoot`, read to find the splitter's settled funds.
 public fun disperse<C>(self: &mut Beneficiary, root: &AccumulatorRoot) {
-    let addr = object::uid_to_address(&self.id);
+    let addr = self.id.to_address();
     let amount = balance::settled_funds_value<C>(root, addr);
     if (amount == 0) return;
     let withdrawal = balance::withdraw_funds_from_object<C>(&mut self.id, amount);
@@ -139,6 +139,23 @@ public fun disperse<C>(self: &mut Beneficiary, root: &AccumulatorRoot) {
 public fun receive_and_disperse<C>(self: &mut Beneficiary, payout: Receiving<Coin<C>>) {
     let coin = transfer::public_receive(&mut self.id, payout);
     self.fan_out(coin.into_balance());
+}
+
+// === View helpers ===
+
+/// The configured payout recipients.
+public fun receivers(self: &Beneficiary): vector<address> {
+    self.receivers
+}
+
+/// The configured allocation weights, parallel to `receivers`.
+public fun weights(self: &Beneficiary): vector<u64> {
+    self.weights
+}
+
+/// The sum of all weights, the denominator of each receiver's share.
+public fun total_weight(self: &Beneficiary): u64 {
+    self.total_weight
 }
 
 // === Private Functions ===
@@ -176,42 +193,7 @@ fun fan_out<C>(self: &Beneficiary, mut payout: Balance<C>) {
     });
 }
 
-// === View helpers ===
-
-/// The configured payout recipients.
-///
-/// #### Parameters
-/// - `self`: The splitter to query.
-///
-/// #### Returns
-/// - The configured payout recipients.
-public fun receivers(self: &Beneficiary): vector<address> {
-    self.receivers
-}
-
-/// The configured allocation weights, parallel to `receivers`.
-///
-/// #### Parameters
-/// - `self`: The splitter to query.
-///
-/// #### Returns
-/// - The configured allocation weights, parallel to `receivers`.
-public fun weights(self: &Beneficiary): vector<u64> {
-    self.weights
-}
-
-/// The sum of all weights.
-///
-/// #### Parameters
-/// - `self`: The splitter to query.
-///
-/// #### Returns
-/// - The sum of all weights, the denominator of each receiver's share.
-public fun total_weight(self: &Beneficiary): u64 {
-    self.total_weight
-}
-
-// === Test Helpers ===
+// === Test-Only Helpers ===
 
 /// Disperse an explicit `amount` from this object's accumulator without the
 /// `AccumulatorRoot` settled-funds lookup, so unit tests can exercise the settled-funds

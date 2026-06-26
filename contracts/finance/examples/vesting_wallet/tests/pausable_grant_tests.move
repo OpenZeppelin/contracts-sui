@@ -176,7 +176,7 @@ fun foreign_cap_cannot_unwrap() {
     create_grant(&mut scenario);
     scenario.next_tx(EMPLOYER);
 
-    let grant_a = ts::take_shared_by_id<PausableGrant<Linear, Params, USDC>>(&scenario, id_a);
+    let grant_a = scenario.take_shared_by_id<PausableGrant<Linear, Params, USDC>>(id_a);
     // The sender holds two caps; the most recent one belongs to grant B.
     let cap_b = scenario.take_from_sender<GrantAdminCap>();
 
@@ -199,7 +199,7 @@ fun foreign_cap_cannot_pause() {
     create_grant(&mut scenario);
     scenario.next_tx(EMPLOYER);
 
-    let mut grant_a = ts::take_shared_by_id<PausableGrant<Linear, Params, USDC>>(&scenario, id_a);
+    let mut grant_a = scenario.take_shared_by_id<PausableGrant<Linear, Params, USDC>>(id_a);
     // The sender holds two caps; the most recent one belongs to grant B.
     let cap_b = scenario.take_from_sender<GrantAdminCap>();
 
@@ -221,7 +221,7 @@ fun foreign_cap_cannot_resume() {
     create_grant(&mut scenario);
     scenario.next_tx(EMPLOYER);
 
-    let mut grant_a = ts::take_shared_by_id<PausableGrant<Linear, Params, USDC>>(&scenario, id_a);
+    let mut grant_a = scenario.take_shared_by_id<PausableGrant<Linear, Params, USDC>>(id_a);
     // The sender holds two caps; the most recent one belongs to grant B.
     let cap_b = scenario.take_from_sender<GrantAdminCap>();
 
