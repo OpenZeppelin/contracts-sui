@@ -97,6 +97,12 @@ public struct Deposited has copy, drop {
 // === Public Functions ===
 
 /// Share a fresh, empty ledger and return its admin cap to the caller.
+///
+/// #### Parameters
+/// - `ctx`: Transaction context.
+///
+/// #### Returns
+/// - The `LedgerAdminCap` bound to the freshly shared ledger.
 public fun new(ctx: &mut TxContext): LedgerAdminCap {
     let ledger = BridgedTokenLedger { id: object::new(ctx), normalized_balance: 0 };
     let cap = LedgerAdminCap { id: object::new(ctx), ledger_id: object::id(&ledger) };
@@ -106,6 +112,11 @@ public fun new(ctx: &mut TxContext): LedgerAdminCap {
 
 /// Record a deposit of the token in its canonical 6-decimal form. The native `u64` amount
 /// is upcast to the 18-decimal basis (exact, no loss) and added to the unified balance.
+///
+/// #### Parameters
+/// - `self`: The ledger to credit.
+/// - `cap`: The admin cap bound to this ledger.
+/// - `native_amount`: Deposit amount in the canonical 6-decimal convention.
 ///
 /// #### Aborts
 /// - `EWrongLedger` if `cap` controls a different ledger.
@@ -119,6 +130,11 @@ public fun deposit_canonical(
 
 /// Record a deposit of the token in its bridged 9-decimal form. The native `u64` amount is
 /// upcast to the 18-decimal basis (exact, no loss) and added to the unified balance.
+///
+/// #### Parameters
+/// - `self`: The ledger to credit.
+/// - `cap`: The admin cap bound to this ledger.
+/// - `native_amount`: Deposit amount in the bridged 9-decimal convention.
 ///
 /// #### Aborts
 /// - `EWrongLedger` if `cap` controls a different ledger.
@@ -134,9 +150,17 @@ public fun deposit_wrapped(
 /// `normalized_amount` (expressed on the basis) and deduct it from the ledger.
 ///
 /// Returns the truncated native amount: downcasting from 18 to 6 decimals drops any
-/// sub-6-decimal dust toward zero. The full `normalized_amount` is still deducted from the
-/// basis balance, so the dropped dust stays in the ledger rather than being minted into
-/// existence - the anti-inflation invariant downcasting exists to protect.
+/// sub-6-decimal dust toward zero. Only the basis-equivalent of the amount actually paid is
+/// deducted, so any sub-unit dust in `normalized_amount` stays in the ledger for a later
+/// withdrawal rather than being paid out or forfeited.
+///
+/// #### Parameters
+/// - `self`: The ledger to draw from.
+/// - `cap`: The admin cap bound to this ledger.
+/// - `normalized_amount`: Amount to withdraw, expressed on the `NORMALIZED_DECIMALS` basis.
+///
+/// #### Returns
+/// - The native `u64` amount paid, in the canonical 6-decimal convention.
 ///
 /// #### Aborts
 /// - `EWrongLedger` if `cap` controls a different ledger.
@@ -152,8 +176,16 @@ public fun payout_canonical(
 /// Compute the native `u64` payout for a bridged (9-decimal) withdrawal of
 /// `normalized_amount` (expressed on the basis) and deduct it from the ledger.
 ///
-/// Like `payout_canonical`, the returned native amount is truncated toward zero when the
-/// basis carries finer precision than the target's 9 decimals.
+/// Like `payout_canonical`, the returned native amount is truncated toward zero, and only
+/// the basis-equivalent of what was paid is deducted - sub-unit dust stays in the ledger.
+///
+/// #### Parameters
+/// - `self`: The ledger to draw from.
+/// - `cap`: The admin cap bound to this ledger.
+/// - `normalized_amount`: Amount to withdraw, expressed on the `NORMALIZED_DECIMALS` basis.
+///
+/// #### Returns
+/// - The native `u64` amount paid, in the bridged 9-decimal convention.
 ///
 /// #### Aborts
 /// - `EWrongLedger` if `cap` controls a different ledger.
@@ -203,6 +235,13 @@ public fun wrapped_balance(self: &BridgedTokenLedger): u64 {
 
 /// Upcast a native `u64` amount in `source_decimals` onto the `NORMALIZED_DECIMALS` basis.
 /// A pure helper an integrator can call off the ledger to pre-compute a value.
+///
+/// #### Parameters
+/// - `native_amount`: The amount to upcast, in its own decimals.
+/// - `source_decimals`: Decimal convention of `native_amount`.
+///
+/// #### Returns
+/// - `native_amount` re-expressed on the `NORMALIZED_DECIMALS` basis.
 public fun to_normalized(native_amount: u64, source_decimals: u8): u256 {
     decimal_scaling::safe_upcast_balance(native_amount, source_decimals, NORMALIZED_DECIMALS)
 }
@@ -235,9 +274,10 @@ fun deposit(
     });
 }
 
-/// Shared payout path: deduct `normalized_amount` from the basis balance, then downcast it
-/// to a native `u64` amount in `target_decimals`. Deducting on the basis (before the lossy
-/// downcast) keeps truncated dust inside the ledger instead of paying it out.
+/// Shared payout path: downcast `normalized_amount` to a native `u64` amount in
+/// `target_decimals`, then deduct only the basis-equivalent of what was actually paid. Any
+/// sub-unit dust in `normalized_amount` (below the target precision) is left in the ledger
+/// for a later withdrawal rather than paid out or forfeited.
 fun payout(
     self: &mut BridgedTokenLedger,
     cap: &LedgerAdminCap,
@@ -247,6 +287,18 @@ fun payout(
     assert!(cap.ledger_id == object::id(self), EWrongLedger);
     assert!(normalized_amount <= self.normalized_balance, EInsufficientBalance);
 
-    self.normalized_balance = self.normalized_balance - normalized_amount;
-    decimal_scaling::safe_downcast_balance(normalized_amount, NORMALIZED_DECIMALS, target_decimals)
+    let paid_native = decimal_scaling::safe_downcast_balance(
+        normalized_amount,
+        NORMALIZED_DECIMALS,
+        target_decimals,
+    );
+    // Re-normalize the paid amount so the deduction matches exactly what left the ledger;
+    // the truncated remainder stays in `normalized_balance`.
+    let paid_on_basis = decimal_scaling::safe_upcast_balance(
+        paid_native,
+        target_decimals,
+        NORMALIZED_DECIMALS,
+    );
+    self.normalized_balance = self.normalized_balance - paid_on_basis;
+    paid_native
 }

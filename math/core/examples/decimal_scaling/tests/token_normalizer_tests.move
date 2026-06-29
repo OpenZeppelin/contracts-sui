@@ -97,8 +97,8 @@ fun round_trip_equals_original() {
 }
 
 // Downcasting from the 18-decimal basis to a coarser native precision TRUNCATES toward
-// zero. A payout carrying sub-unit dust below the target's precision drops that dust, and
-// the dropped value stays in the ledger (deducted on the basis, not minted away).
+// zero. A payout carrying sub-unit dust below the target's precision drops that dust from
+// the payout, and the dust stays in the ledger (only the amount actually paid is deducted).
 #[test]
 fun downcast_truncates_sub_unit_dust() {
     let mut scenario = ts::begin(ADMIN);
@@ -117,9 +117,9 @@ fun downcast_truncates_sub_unit_dust() {
     let paid = ledger_obj.payout_canonical(&cap, dusty);
     assert_eq!(paid, 1); // only 0.000001 paid; the rest is dust
 
-    // The full dusty value was still deducted on the basis, so 2.5e18 - 1.999...e12 remains.
-    // The truncated dust is retained in the ledger, never paid out.
-    assert_eq!(ledger_obj.normalized_balance(), CANONICAL_NORMALIZED - dusty);
+    // Only the basis-equivalent of the 1 unit actually paid (1e12) is deducted; the sub-unit
+    // dust requested above that stays in the ledger for a later withdrawal, not forfeited.
+    assert_eq!(ledger_obj.normalized_balance(), CANONICAL_NORMALIZED - 1_000_000_000_000);
 
     destroy(cap);
     ts::return_shared(ledger_obj);

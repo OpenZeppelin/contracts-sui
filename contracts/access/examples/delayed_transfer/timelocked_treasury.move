@@ -101,6 +101,9 @@ public fun withdraw(
 ///
 /// #### Returns
 /// - A `Coin<SUI>` for `amount`.
+///
+/// #### Aborts
+/// - `EWrongTreasury` if the wrapped key is not bound to this treasury.
 public fun withdraw_wrapped(
     self: &mut Treasury,
     wrapper: &DelayedTransferWrapper<TreasuryKey>,
