@@ -55,6 +55,13 @@ same rules:
   Examples are the integration-facing source of truth for AI agents and
   downstream integrators, the same way doc-comments are the source of truth for
   the generated API reference.
+- When you add a new package, give it a `README.md` whose `## Learn More`
+  section matches its siblings - including the `llms.txt` discovery bullet, using
+  the absolute
+  [`raw.githubusercontent.com`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt)
+  URL the sibling READMEs use (a relative link breaks once the README is rendered
+  on a registry or docs site). It is how AI integrators find the package; a
+  README that omits it is invisible to that path.
 
 ## A typical workflow
 
