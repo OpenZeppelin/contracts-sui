@@ -26,12 +26,21 @@ use openzeppelin_access::delayed_transfer::DelayedTransferWrapper;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 
+// === Errors ===
+
+/// A treasury key was presented for a different treasury than the one it controls.
+#[error(code = 0)]
+const EWrongTreasury: vector<u8> = "Treasury key was issued for a different treasury";
+
 // === Structs ===
 
-/// Bearer authority to withdraw from a `Treasury`. `key + store` so it can be wrapped by
-/// `delayed_transfer`.
+/// Authority to withdraw from a `Treasury`. `key + store` so it can be wrapped by
+/// `delayed_transfer`. Bound to one treasury via `treasury_id`, so a key only ever draws
+/// from the treasury that minted it.
 public struct TreasuryKey has key, store {
     id: UID,
+    /// Id of the `Treasury` this key controls.
+    treasury_id: ID,
 }
 
 /// A shared pool of funds that only the `TreasuryKey` holder may draw from.
@@ -52,26 +61,32 @@ public struct Treasury has key {
 /// #### Returns
 /// - The `TreasuryKey` controlling the freshly shared `Treasury`.
 public fun new(initial: Coin<SUI>, ctx: &mut TxContext): TreasuryKey {
-    transfer::share_object(Treasury { id: object::new(ctx), funds: initial.into_balance() });
-    TreasuryKey { id: object::new(ctx) }
+    let treasury = Treasury { id: object::new(ctx), funds: initial.into_balance() };
+    let key = TreasuryKey { id: object::new(ctx), treasury_id: object::id(&treasury) };
+    transfer::share_object(treasury);
+    key
 }
 
-/// Withdraw `amount`, presenting the bare key as authorization.
+/// Withdraw `amount`, presenting the treasury's bound key as authorization.
 ///
 /// #### Parameters
 /// - `self`: The treasury to draw from.
-/// - `key`: The treasury key authorizing the withdrawal.
+/// - `key`: The key bound to this treasury.
 /// - `amount`: Units to withdraw.
 /// - `ctx`: Transaction context.
 ///
 /// #### Returns
 /// - A `Coin<SUI>` for `amount`.
+///
+/// #### Aborts
+/// - `EWrongTreasury` if `key` is not the key bound to this treasury.
 public fun withdraw(
     self: &mut Treasury,
-    _: &TreasuryKey,
+    key: &TreasuryKey,
     amount: u64,
     ctx: &mut TxContext,
 ): Coin<SUI> {
+    assert!(key.treasury_id == object::id(self), EWrongTreasury);
     coin::from_balance(self.funds.split(amount), ctx)
 }
 

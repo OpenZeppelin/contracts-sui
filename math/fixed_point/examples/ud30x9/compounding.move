@@ -29,7 +29,10 @@
 /// scaled principal gives the compounded balance; `to_u64_trunc` truncates back
 /// to whole coin units for payout. For the small integer rates and horizons a
 /// savings product actually uses (e.g. `1.1^3`), every step here lands on an
-/// exact `ud30x9` value, so the results are exact, not approximations.
+/// exact `ud30x9` value, so those results are exact, not approximations. Rates
+/// that are not exactly representable at the `10^9` scale (say `1/3`) are still
+/// computed deterministically, but `div` rounds them and `pow` compounds that
+/// rounding - only the exactly-representable cases shown here are exact.
 ///
 /// ### What each operation demonstrates
 ///
@@ -78,6 +81,8 @@ use openzeppelin_fp_math::ud30x9_convert;
 /// - `ud30x9_base::EDivideByZero` if `rate_den` is zero.
 /// - `ud30x9_base::EOverflow` if the compounded multiplier or balance exceeds
 ///   the representable `UD30x9` range.
+/// - `ud30x9_convert::EIntegerOverflow` if the compounded balance exceeds
+///   `u64::MAX` before truncation to whole coin units.
 public fun balance_after(principal: u64, rate_num: u64, rate_den: u64, periods: u8): u64 {
     let multiplier = growth_multiplier(rate_num, rate_den);
     let principal_fp = ud30x9_convert::from_u64(principal);
@@ -100,6 +105,8 @@ public fun balance_after(principal: u64, rate_num: u64, rate_den: u64, periods: 
 /// #### Aborts
 /// - `ud30x9_base::EDivideByZero` if `rate_den` is zero.
 /// - `ud30x9_base::EOverflow` on multiplier or balance overflow.
+/// - `ud30x9_convert::EIntegerOverflow` if the compounded balance exceeds
+///   `u64::MAX` before truncation.
 public fun interest_after(principal: u64, rate_num: u64, rate_den: u64, periods: u8): u64 {
     balance_after(principal, rate_num, rate_den, periods) - principal
 }

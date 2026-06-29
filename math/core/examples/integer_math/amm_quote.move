@@ -51,6 +51,11 @@ const EZeroInput: vector<u8> = "Swap input amount must be non-zero";
 #[error(code = 2)]
 const EOverflow: vector<u8> = "Arithmetic result does not fit the integer type";
 
+/// `fee_bps` exceeded the basis-point denominator (100%); the fee would exceed the input
+/// and underflow `net_in`.
+#[error(code = 3)]
+const EFeeTooHigh: vector<u8> = "fee_bps must not exceed 10000 (100%)";
+
 // === Constants ===
 
 /// Denominator for fees expressed in basis points (1 bp = 0.01%); a 0.30% fee is `30`.
@@ -76,10 +81,12 @@ const BPS: u64 = 10_000;
 /// #### Aborts
 /// - `EEmptyReserves` if either reserve is zero.
 /// - `EZeroInput` if `amount_in` is zero.
+/// - `EFeeTooHigh` if `fee_bps` exceeds `10_000` (100%).
 /// - `EOverflow` if an intermediate `mul_div` overflows `u64`.
 public fun quote_swap_out(reserve_in: u64, reserve_out: u64, amount_in: u64, fee_bps: u64): u64 {
     assert!(reserve_in > 0 && reserve_out > 0, EEmptyReserves);
     assert!(amount_in > 0, EZeroInput);
+    assert!(fee_bps <= BPS, EFeeTooHigh);
 
     let net_in = amount_in - protocol_fee(amount_in, fee_bps);
     u64::mul_div(reserve_out, net_in, reserve_in + net_in, rounding::down()).destroy_or!(

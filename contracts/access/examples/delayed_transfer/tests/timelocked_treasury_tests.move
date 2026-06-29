@@ -123,3 +123,21 @@ fun cancel_clears_pending_schedule() {
     destroy(clock);
     scenario.end();
 }
+
+// A key minted for one treasury cannot withdraw from a different treasury.
+#[test, expected_failure(abort_code = vault::EWrongTreasury)]
+fun key_cannot_withdraw_from_foreign_treasury() {
+    let mut scenario = ts::begin(OWNER);
+    // Stand up treasury A (its key is unused here), then treasury B with its key.
+    let _key_a = vault::new(coin::mint_for_testing<SUI>(1_000, scenario.ctx()), scenario.ctx());
+    scenario.next_tx(OWNER);
+    let id_a = ts::most_recent_id_shared<Treasury>().destroy_some();
+    let key_b = vault::new(coin::mint_for_testing<SUI>(1_000, scenario.ctx()), scenario.ctx());
+
+    scenario.next_tx(OWNER);
+    let mut treasury_a = ts::take_shared_by_id<Treasury>(&scenario, id_a);
+    // Key B is bound to treasury B, so it cannot draw from treasury A.
+    destroy(treasury_a.withdraw(&key_b, 1, scenario.ctx()));
+
+    abort
+}

@@ -183,3 +183,28 @@ fun timelocked_root_admin_handoff() {
     destroy(clock);
     scenario.end();
 }
+
+// Governance retirement: the root admin schedules a renounce, the delay elapses, and the
+// finalized renounce leaves the registry permanently unmanaged (no default admin).
+#[test]
+fun timelocked_root_admin_renounce() {
+    let mut scenario = setup();
+    let mut clock = sui::clock::create_for_testing(scenario.ctx());
+
+    // The root admin schedules a renounce of the root role.
+    let mut registry = scenario.take_shared<AccessControl<EXAMPLE_REWARD_TREASURY>>();
+    registry.begin_default_admin_renounce(&clock, scenario.ctx());
+    assert!(registry.is_pending_default_admin_renounce());
+    ts::return_shared(registry);
+
+    // Once the timelock elapses, the admin finalizes and the root role is left vacant.
+    clock.increment_for_testing(PAST_DELAY_MS);
+    scenario.next_tx(ADMIN);
+    let mut registry = scenario.take_shared<AccessControl<EXAMPLE_REWARD_TREASURY>>();
+    registry.accept_default_admin_renounce(&clock, scenario.ctx());
+    assert_eq!(registry.default_admin(), option::none());
+
+    ts::return_shared(registry);
+    destroy(clock);
+    scenario.end();
+}

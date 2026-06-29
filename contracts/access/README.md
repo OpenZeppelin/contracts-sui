@@ -85,9 +85,9 @@ Docs:
 
 Complete integration examples live in [`examples/`](examples), one per module:
 
-- [`access_control`](examples/access_control/example_reward_treasury.move) - a shared reward treasury governed entirely by roles. The protocol's One-Time Witness is the root role, `set_role_admin` delegates pauser management to a guardian role, and privileged actions take an unforgeable `Auth<Role>` witness instead of a hand-rolled admin check. The tests also drive the timelocked root-admin handoff (transfer and renounce).
-- [`two_step_transfer`](examples/two_step_transfer/example_operator_handoff.move) - safe custody of an irreplaceable operator capability. The cap is wrapped so handing it to a new operator is an explicit initiate -> accept handshake, with cancel-and-reclaim and borrow-while-pending paths; the cap stays usable in place through `borrow`.
-- [`delayed_transfer`](examples/delayed_transfer/example_timelocked_treasury.move) - a treasury whose withdrawal key only changes hands, or is reclaimed, after a mandatory and visible delay: schedule -> wait -> execute for both transfers and unwraps, plus cancel. Day-to-day withdrawals borrow the key and never wait on the timelock.
+- [`access_control`](examples/access_control/reward_treasury.move) - a shared reward treasury governed entirely by roles. The protocol's One-Time Witness is the root role, `set_role_admin` delegates pauser management to a guardian role, and privileged actions take an unforgeable `Auth<Role>` witness instead of a hand-rolled admin check. The tests also drive the timelocked root-admin handoff (transfer and renounce).
+- [`two_step_transfer`](examples/two_step_transfer/operator_handoff.move) - safe custody of an irreplaceable operator capability. The cap is wrapped so handing it to a new operator is an explicit initiate -> accept handshake, with cancel-and-reclaim and borrow-while-pending paths; the cap stays usable in place through `borrow`.
+- [`delayed_transfer`](examples/delayed_transfer/timelocked_treasury.move) - a treasury whose withdrawal key only changes hands, or is reclaimed, after a mandatory and visible delay: schedule -> wait -> execute for both transfers and unwraps, plus cancel. Day-to-day withdrawals borrow the key and never wait on the timelock.
 
 ## Security Notes
 

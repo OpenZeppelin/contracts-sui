@@ -22,8 +22,8 @@
 ///
 /// This module is an **unaudited example**, provided purely to illustrate ways the
 /// `openzeppelin_math` vector primitives can be integrated. It is not production-ready and
-/// must not be deployed as-is: a real oracle additionally needs authenticated reporters,
-/// staleness checks, and deviation bounds.
+/// must not be deployed as-is: a real oracle additionally needs multiple independent
+/// reporters, staleness checks, and deviation bounds.
 module openzeppelin_math::example_median_oracle;
 
 use openzeppelin_math::rounding::RoundingMode;
@@ -34,6 +34,10 @@ use openzeppelin_math::vector as oz_vector;
 /// A median was requested before any price was reported.
 #[error(code = 0)]
 const ENoSamples: vector<u8> = "Oracle has no reported prices";
+
+/// A reporter cap was presented for a different oracle than the one it authorizes.
+#[error(code = 1)]
+const EWrongOracle: vector<u8> = "Reporter cap was issued for a different oracle";
 
 // === Constants ===
 
@@ -49,23 +53,42 @@ public struct PriceOracle has key {
     prices: vector<u64>,
 }
 
+/// Authority to report prices to one `PriceOracle`. Reporting is capability-gated so an
+/// arbitrary caller cannot poison the feed; the cap is bound to its oracle via `oracle_id`.
+public struct ReporterCap has key, store {
+    id: UID,
+    /// Id of the `PriceOracle` this cap may report to.
+    oracle_id: ID,
+}
+
 // === Public Functions ===
 
-/// Create and share an empty oracle.
+/// Create and share an empty oracle, returning a `ReporterCap` bound to it.
 ///
 /// #### Parameters
 /// - `ctx`: Transaction context.
-public fun new(ctx: &mut TxContext) {
-    transfer::share_object(PriceOracle { id: object::new(ctx), prices: vector[] });
+///
+/// #### Returns
+/// - A `ReporterCap` authorizing reports to the freshly shared oracle.
+public fun new(ctx: &mut TxContext): ReporterCap {
+    let oracle = PriceOracle { id: object::new(ctx), prices: vector[] };
+    let cap = ReporterCap { id: object::new(ctx), oracle_id: object::id(&oracle) };
+    transfer::share_object(oracle);
+    cap
 }
 
 /// Append a reported price, evicting the oldest sample once `MAX_SAMPLES` is exceeded so
-/// the stored window stays bounded.
+/// the stored window stays bounded. Gated by the oracle's `ReporterCap`.
 ///
 /// #### Parameters
 /// - `self`: The oracle to update.
+/// - `cap`: The reporter cap bound to this oracle.
 /// - `price`: The newly reported price.
-public fun report(self: &mut PriceOracle, price: u64) {
+///
+/// #### Aborts
+/// - `EWrongOracle` if `cap` is not bound to this oracle.
+public fun report(self: &mut PriceOracle, cap: &ReporterCap, price: u64) {
+    assert!(cap.oracle_id == object::id(self), EWrongOracle);
     self.prices.push_back(price);
     if (self.prices.length() > MAX_SAMPLES) {
         self.prices.remove(0);

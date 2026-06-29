@@ -117,3 +117,21 @@ fun non_recipient_cannot_accept() {
 
     abort
 }
+
+// An operator cap minted for one service cannot operate a different service.
+#[test, expected_failure(abort_code = handoff::EWrongService)]
+fun foreign_cap_cannot_operate() {
+    let mut scenario = ts::begin(OWNER);
+    // Stand up service A (its cap is unused here), then service B with its cap.
+    let _cap_a = handoff::new(scenario.ctx());
+    scenario.next_tx(OWNER);
+    let id_a = ts::most_recent_id_shared<Service>().destroy_some();
+    let cap_b = handoff::new(scenario.ctx());
+
+    scenario.next_tx(OWNER);
+    let mut service_a = ts::take_shared_by_id<Service>(&scenario, id_a);
+    // Cap B is bound to service B, so it cannot pause service A.
+    service_a.set_paused(&cap_b, true);
+
+    abort
+}

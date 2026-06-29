@@ -186,8 +186,8 @@ let third_up = one.div_away(ud30x9::wrap(3000000000)); // 0.333333334
 
 Complete, compilable integration examples live in [`examples/`](examples):
 
-- [`ud30x9`](examples/ud30x9/example_compounding.move) - a fixed-rate compound-interest / APY calculator: build a fractional rate from integers (`from_u64` + `div`), compound with `pow`, apply to a scaled principal with `mul`, and convert back to coin units with `to_u64_trunc`. Exact, not approximate.
-- [`sd29x9`](examples/sd29x9/example_zscore.move) - a downside-risk helper: a signed z-score `(value - mean) / stddev` (frequently negative) fed through the standard-normal `cdf` for a tail probability, demonstrating `sub` / `div` sign propagation, `negate` (via the `Φ(z) + Φ(-z) = 1` symmetry), `is_negative`, and narrowing to `UD30x9`.
+- [`ud30x9`](examples/ud30x9/compounding.move) - a fixed-rate compound-interest / APY calculator: build a fractional rate from integers (`from_u64` + `div`), compound with `pow`, apply to a scaled principal with `mul`, and convert back to coin units with `to_u64_trunc`. Exact, not approximate.
+- [`sd29x9`](examples/sd29x9/zscore.move) - a downside-risk helper: a signed z-score `(value - mean) / stddev` (frequently negative) fed through the standard-normal `cdf` for a tail probability, demonstrating `sub` / `div` sign propagation, `negate` (via the `Φ(z) + Φ(-z) = 1` symmetry), `is_negative`, and narrowing to `UD30x9`.
 
 ## Generated code
 

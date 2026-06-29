@@ -77,3 +77,10 @@ fun empty_pool_is_rejected() {
     amm::quote_swap_out(0, 1_000, 100, 0);
     abort
 }
+
+// A fee above 100% is rejected up front rather than underflowing the net input.
+#[test, expected_failure(abort_code = amm::EFeeTooHigh)]
+fun fee_above_one_hundred_percent_is_rejected() {
+    amm::quote_swap_out(1_000, 1_000, 100, 10_001);
+    abort
+}

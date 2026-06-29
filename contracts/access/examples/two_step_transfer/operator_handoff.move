@@ -26,24 +26,34 @@ module openzeppelin_access::example_operator_handoff;
 
 use openzeppelin_access::two_step_transfer::TwoStepTransferWrapper;
 
+// === Errors ===
+
+/// An operator cap was presented for a different service than the one it controls.
+#[error(code = 0)]
+const EWrongService: vector<u8> = "Operator cap was issued for a different service";
+
 // === Structs ===
 
-/// Bearer authority to operate a `Service`. `key + store` so it can be wrapped by
-/// `two_step_transfer`; possession alone authorizes operation.
+/// Authority to operate a `Service`. `key + store` so it can be wrapped by
+/// `two_step_transfer`. Bound to one service: it only operates the service whose
+/// `operator` field records this cap's id.
 public struct OperatorCap has key, store {
     id: UID,
 }
 
-/// A shared service whose paused state only the `OperatorCap` holder can toggle.
+/// A shared service whose paused state only its bound `OperatorCap` holder can toggle.
 public struct Service has key {
     id: UID,
+    /// Id of the `OperatorCap` authorized to operate this service.
+    operator: ID,
     paused: bool,
 }
 
 // === Public Functions ===
 
-/// Stand up a service: share the `Service` and return its `OperatorCap` for the caller to
-/// wrap with `two_step_transfer::wrap`.
+/// Stand up a service: mint its `OperatorCap`, record the cap's id on the service so the
+/// two are bound, share the `Service`, and return the cap for the caller to wrap with
+/// `two_step_transfer::wrap`.
 ///
 /// #### Parameters
 /// - `ctx`: Transaction context.
@@ -51,17 +61,26 @@ public struct Service has key {
 /// #### Returns
 /// - The `OperatorCap` controlling the freshly shared `Service`.
 public fun new(ctx: &mut TxContext): OperatorCap {
-    transfer::share_object(Service { id: object::new(ctx), paused: false });
-    OperatorCap { id: object::new(ctx) }
+    let cap = OperatorCap { id: object::new(ctx) };
+    transfer::share_object(Service {
+        id: object::new(ctx),
+        operator: object::id(&cap),
+        paused: false,
+    });
+    cap
 }
 
-/// Toggle the service's paused state, presenting the operator cap as authorization.
+/// Toggle the service's paused state, presenting its bound operator cap as authorization.
 ///
 /// #### Parameters
 /// - `self`: The service to toggle.
-/// - `cap`: The operator capability authorizing the change.
+/// - `cap`: The operator capability bound to this service.
 /// - `paused`: New paused state.
-public fun set_paused(self: &mut Service, _: &OperatorCap, paused: bool) {
+///
+/// #### Aborts
+/// - `EWrongService` if `cap` is not the cap bound to this service.
+public fun set_paused(self: &mut Service, cap: &OperatorCap, paused: bool) {
+    assert!(object::id(cap) == self.operator, EWrongService);
     self.paused = paused;
 }
 
