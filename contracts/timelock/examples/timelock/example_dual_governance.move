@@ -14,6 +14,10 @@
 /// routing error. Distinct witnesses (`FeeChangeAction` vs `EmergencyPauseAction`) keep
 /// the two `consume` paths and their audit trails separate.
 ///
+/// **Caveat:** the 1h-delayed "emergency" pause here demonstrates the dual-timelock
+/// mechanism (two delays for two risk classes); it is not an endorsement of timelocking a
+/// kill-switch. A true emergency stop should be instant - a delay on it defeats its purpose.
+///
 /// # Disclaimer
 ///
 /// This module is an **unaudited example**, provided purely to illustrate ways the
@@ -59,6 +63,8 @@ public struct Pool has key {
     fee_cap: OperationCap<FeeChangeAction, u16>,
     pause_cap: OperationCap<EmergencyPauseAction, bool>,
 }
+
+// === Events ===
 
 public struct FeeChanged has copy, drop { op_id: vector<u8>, new_fee_bps: u16 }
 public struct PauseChanged has copy, drop { op_id: vector<u8>, paused: bool }

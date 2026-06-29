@@ -8,7 +8,7 @@
 ///   and stores the cap inside the `Pool` it protects. It uses `timelock::new` + `share`
 ///   (not `new_shared`) precisely so it can mint the cap from the object before sharing.
 ///
-/// - **The canonical-timelock binding is structural (CPR-5).** The fee-change entries
+/// - **The canonical-timelock binding is structural.** The fee-change entries
 ///   pass `&pool.fee_cap` to the library's `*_with` functions, which assert
 ///   `object::id(timelock) == cap.timelock_id` internally. There is **no hand-written
 ///   `object::id` assert** in the op flow - an attacker cannot route a self-created,
@@ -16,10 +16,10 @@
 ///   replaces remembering an assert in every function.
 ///
 /// - **Zero type args + typed params.** `schedule_with` / `execute_with` infer
-///   `<R, Action, Params>` from `&pool.fee_cap` and the `&Auth<R>`; the new fee is passed
+///   `<Role, Action, Params>` from `&pool.fee_cap` and the `&Auth<Role>`; the new fee is passed
 ///   by value and comes back typed from `consume`. No BCS, no digest, no explicit `<...>`.
 ///
-/// - **The witness is the linchpin (CPR-1/CPR-2).** `FeeChangeAction` is `drop`-only and
+/// - **The witness is the linchpin.** `FeeChangeAction` is `drop`-only and
 ///   is never constructed outside this module, so only this module can `consume` a
 ///   fee-change ticket.
 ///
@@ -74,6 +74,8 @@ public struct Pool has key {
     fee_cap: OperationCap<FeeChangeAction, u16>,
 }
 
+// === Events ===
+
 /// Emitted when a scheduled fee change is applied.
 public struct FeeChanged has copy, drop {
     op_id: vector<u8>,
@@ -107,7 +109,7 @@ fun init(otw: EXAMPLE_AMM, ctx: &mut TxContext) {
 // === Fee-change pipeline (cap-bound; no manual id assert) ===
 
 /// Step 1 (`ProposerRole`): commit the intended fee. `&pool.fee_cap` binds this to the
-/// canonical timelock; `<R, Action, Params>` are all inferred from the cap and the auth.
+/// canonical timelock; `<Role, Action, Params>` are all inferred from the cap and the auth.
 public fun schedule_fee_change(
     timelock: &mut Timelock,
     pool: &Pool,

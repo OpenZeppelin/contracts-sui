@@ -111,7 +111,7 @@ fun test_timelocked_upgrade_happy() {
     scenario.end();
 }
 
-// === A self-created timelock cannot rush the upgrade (CPR-5) ===
+// === A self-created timelock cannot rush the upgrade ===
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
 fun test_fake_timelock_rejected() {
     let mut scenario = deploy();
@@ -181,4 +181,48 @@ fun test_authorize_before_ready() {
         scenario.ctx(),
     );
     abort
+}
+
+// === A canceller can drop a pending upgrade before it executes ===
+#[test]
+fun test_cancel_upgrade() {
+    let mut scenario = deploy();
+
+    // Grant the canceller role.
+    scenario.next_tx(PUBLISHER);
+    let mut ac = scenario.take_shared<AccessControl<EXAMPLE_UPGRADE_VAULT>>();
+    ac.grant_role<_, CancellerRole>(ALICE, scenario.ctx());
+    test_scenario::return_shared(ac);
+
+    let clk = clock::create_for_testing(scenario.ctx());
+
+    // ALICE (proposer) schedules an upgrade.
+    scenario.next_tx(ALICE);
+    let mut timelock = scenario.take_shared<Timelock>();
+    let vault = scenario.take_shared<UpgradeVault>();
+    let ac = scenario.take_shared<AccessControl<EXAMPLE_UPGRADE_VAULT>>();
+    let proposer = ac.new_auth<_, ProposerRole>(scenario.ctx());
+    let id = example_upgrade_vault::schedule_upgrade(
+        &mut timelock,
+        &vault,
+        &proposer,
+        0,
+        b"d",
+        b"s",
+        DAY_MS,
+        &clk,
+        scenario.ctx(),
+    );
+    assert!(timelock.is_operation(id));
+
+    // ALICE (canceller) cancels it before the delay elapses.
+    let canceller = ac.new_auth<_, CancellerRole>(scenario.ctx());
+    example_upgrade_vault::cancel_upgrade(&mut timelock, &vault, &canceller, id, scenario.ctx());
+    assert!(!timelock.is_operation(id));
+
+    test_scenario::return_shared(timelock);
+    test_scenario::return_shared(vault);
+    test_scenario::return_shared(ac);
+    clock::destroy_for_testing(clk);
+    scenario.end();
 }

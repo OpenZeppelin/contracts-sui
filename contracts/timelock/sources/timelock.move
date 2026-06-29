@@ -1,10 +1,10 @@
 /// Hash-keyed operation timelock with typed, on-chain operation parameters and a
 /// typed hot-potato execution ticket - a Sui-native take on OpenZeppelin's
-/// `TimelockController`.
+/// [`TimelockController`](https://docs.openzeppelin.com/contracts/5.x/api/governance#TimelockController).
 ///
 /// ### Lifecycle of a single operation
 ///
-/// 1. A holder of the proposer role calls `schedule<R, Action, Params>`, passing the
+/// 1. A holder of the proposer role calls `schedule<Role, Action, Params>`, passing the
 ///    actual operation parameters by value. The params are stored on-chain under a
 ///    dynamic field keyed by the operation id; the id is
 ///    `keccak256(DOMAIN_TAG || bcs(IdInput { action, payload_digest, predecessor, salt, timelock_id }))`
@@ -12,7 +12,7 @@
 ///    reproducible off-chain, so predecessors can be wired before the predecessor op
 ///    is even scheduled.
 /// 2. After the per-op delay elapses and before the grace window closes, a holder of
-///    the executor role calls `execute<R, Action, Params>` with the operation id
+///    the executor role calls `execute<Role, Action, Params>` with the operation id
 ///    (returned by `schedule`) - or anyone, if `open_executor == true`, via
 ///    `execute_open`. This marks the op `Done`, removes the stored params, and mints
 ///    an `ExecutionTicket<Action, Params>` carrying those typed params. It is a
@@ -23,8 +23,8 @@
 ///
 /// ### Authorization
 ///
-/// Hard dependency on `openzeppelin_access`. Every gated entry takes `&Auth<R>` and
-/// asserts `R` matches a role type bound into the `Timelock` at creation
+/// Hard dependency on `openzeppelin_access`. Every gated entry takes `&Auth<Role>` and
+/// asserts `Role` matches a role type bound into the `Timelock` at creation
 /// (`proposer_role` / `executor_role` / `canceller_role` / `admin_role`). Role types
 /// are immutable; membership is managed in the consumer's `AccessControl`. The
 /// timelock defines no roles of its own; it is generic over the consumer's role types.
@@ -33,17 +33,17 @@
 /// self-administered pipeline (each `schedule_* / execute_*` pair, gated by
 /// `admin_role`), so every configuration change is itself timelocked.
 ///
-/// ### Consumer prerequisites (Move cannot enforce these - see invariants ASM-1..)
+/// ### Consumer prerequisites (Move cannot enforce these)
 ///
 /// - **Bind the canonical Timelock.** The library cannot tell a legitimate `Timelock`
 ///   from an attacker-created one bound to the same role types. A consumer that takes
 ///   `&mut Timelock` MUST pin the canonical timelock id (e.g. store it next to the
 ///   protected resource and `assert!(object::id(tl) == expected)`), otherwise an actor
 ///   holding the relevant roles can route a self-created zero-delay timelock through
-///   the consumer and bypass the delay entirely. (CPR-5.)
+///   the consumer and bypass the delay entirely.
 /// - **Witness discipline.** `Action` witness types must have only `drop`, one per
 ///   consume function, and their construction must never leak across the package
-///   boundary (no public helper returning an `Action`). (CPR-1..3.)
+///   boundary (no public helper returning an `Action`).
 /// - **Predecessor `Done` is not effect-applied.** Order each `execute -> consume -> apply`
 ///   triple within a PTB so a dependent op's effect runs after its predecessor's.
 module openzeppelin_timelock::timelock;
@@ -59,7 +59,7 @@ use sui::table::{Self, Table};
 
 // === Errors ===
 
-/// The `&Auth<R>` role type does not match the role bound for this action.
+/// The `&Auth<Role>` role type does not match the role bound for this action.
 #[error(code = 0)]
 const EWrongRole: vector<u8> = "Auth role does not match the bound role for this action";
 
@@ -123,6 +123,17 @@ const EScheduleOverflow: vector<u8> = "Scheduled deadline (now + delay_ms) would
 #[error(code = 14)]
 const EWrongParams: vector<u8> = "Params type does not match the operation's stored params";
 
+/// The supplied `Action` type does not match the type the operation was scheduled with.
+/// The `Action` is hashed into the operation id, but `execute` takes the id directly, so
+/// the binding is re-checked at execute time against the stored `Action`.
+#[error(code = 15)]
+const EWrongAction: vector<u8> = "Action type does not match the operation's scheduled action";
+
+/// `predecessor` is non-empty but not a 32-byte operation id, so it could never match a
+/// scheduled op. Rejected at schedule time rather than leaving a silently un-executable op.
+#[error(code = 16)]
+const EInvalidPredecessor: vector<u8> = "Predecessor must be empty or a 32-byte operation id";
+
 // === Constants ===
 
 /// Upper bound on the configured `min_delay_ms` and `grace_period_ms`.
@@ -137,7 +148,7 @@ const DOMAIN_TAG: vector<u8> = b"OZ_Timelock_1_Sui";
 /// The per-protocol timelock registry. Shared object.
 ///
 /// `key`-only (no `store`): the only legal disposition is sharing, so a `Timelock`
-/// is always a shared object and can never be wrapped or address-owned (INV-3).
+/// is always a shared object and can never be wrapped or address-owned.
 /// Typed operation params are stored as dynamic fields directly on `id`, keyed by
 /// the operation id.
 public struct Timelock has key {
@@ -155,15 +166,17 @@ public struct Timelock has key {
 
 /// Stored per-operation state. Timestamps and predecessor are locked at schedule
 /// time, so later `min_delay_ms` / `grace_period_ms` changes never move an existing
-/// op (INV-25). The typed params live in a separate dynamic field keyed by the same id.
+/// op. The typed params live in a separate dynamic field keyed by the same id.
+/// `action` records the scheduled `Action` type so `execute` can re-check it (the id
+/// commits the `Action`, but execute takes the id directly).
 public enum OpTimestamp has drop, store {
-    Pending { ready_at_ms: u64, expires_at_ms: u64, predecessor: vector<u8> },
+    Pending { ready_at_ms: u64, expires_at_ms: u64, predecessor: vector<u8>, action: TypeName },
     Done,
 }
 
 /// Deferred authorization for one typed operation, carrying the scheduled params.
 /// Hot potato - NO abilities, so it must be consumed in the same transaction it is
-/// minted (INV-1). Minted only by `execute` / `execute_open`; destroyed only by
+/// minted. Minted only by `execute` / `execute_open`; destroyed only by
 /// `consume` (or in-module for self-admin ops).
 public struct ExecutionTicket<phantom Action, Params> {
     timelock_id: ID,
@@ -172,18 +185,18 @@ public struct ExecutionTicket<phantom Action, Params> {
 }
 
 /// A stored handle that binds an operation kind `(Action, Params)` to ONE `Timelock`
-/// instance. Carries NO authority on its own - combine it with `&Auth<R>` for role
+/// instance. Carries NO authority on its own - combine it with `&Auth<Role>` for role
 /// authorization. Mint one per operation kind at consumer `init` via `new_operation_cap`
 /// (against your canonical timelock) and store it inside the object you protect; the
-/// `*_with` entries then enforce the canonical-timelock binding for you (CPR-5), so you
+/// `*_with` entries then enforce the canonical-timelock binding for you, so you
 /// never hand-write the `object::id` assert. `store`-only: it cannot be copied or
 /// dropped, so it lives in your protected object.
 public struct OperationCap<phantom Action, phantom Params> has store {
     timelock_id: ID,
 }
 
-/// BCS preimage of every operation id (INV-22). Including `timelock_id` makes
-/// identical inputs hash differently across Timelock instances (INV-36).
+/// BCS preimage of every operation id. Including `timelock_id` makes
+/// identical inputs hash to different ids across `Timelock` instances.
 public struct IdInput has copy, drop {
     action: TypeName,
     payload_digest: vector<u8>,
@@ -203,13 +216,15 @@ public enum OperationState has copy, drop {
 
 /// Module-private marker witnesses (the `Action`) for the self-administered pipeline.
 /// Only this module can construct them, so only its own execute path can mint/redeem
-/// the corresponding `ExecutionTicket<MarkerWitness, _>` (INV-6).
+/// the corresponding `ExecutionTicket<MarkerWitness, _>`.
 public struct UpdateMinDelayWitness has drop {}
 public struct UpdateGracePeriodWitness has drop {}
 public struct SetOpenExecutorWitness has drop {}
 
 // === Events ===
 
+/// Emitted by `new` when a `Timelock` is created, recording its initial config and the
+/// four bound role types.
 public struct TimelockCreated has copy, drop {
     timelock_id: ID,
     min_delay_ms: u64,
@@ -220,6 +235,8 @@ public struct TimelockCreated has copy, drop {
     admin_role: TypeName,
 }
 
+/// Emitted by `schedule` when an operation is committed. `payload_digest` is
+/// `keccak256(bcs(params))`; the params themselves are not emitted.
 public struct OperationScheduled has copy, drop {
     id: vector<u8>,
     action: TypeName,
@@ -231,27 +248,33 @@ public struct OperationScheduled has copy, drop {
     proposer: address,
 }
 
+/// Emitted by `execute` / `execute_open` when an operation is executed and its ticket
+/// minted.
 public struct OperationExecuted has copy, drop {
     id: vector<u8>,
     action: TypeName,
     executor: address,
 }
 
+/// Emitted by `cancel` when a pending (Waiting / Ready / Expired) operation is cancelled.
 public struct OperationCancelled has copy, drop {
     id: vector<u8>,
     canceller: address,
 }
 
+/// Emitted by `execute_update_min_delay` when the configured `min_delay_ms` changes.
 public struct MinDelayChanged has copy, drop {
     previous_ms: u64,
     new_ms: u64,
 }
 
+/// Emitted by `execute_update_grace_period` when the configured `grace_period_ms` changes.
 public struct GracePeriodChanged has copy, drop {
     previous_ms: u64,
     new_ms: u64,
 }
 
+/// Emitted by `execute_set_open_executor` when open-executor mode is toggled.
 public struct OpenExecutorChanged has copy, drop {
     previous: bool,
     new: bool,
@@ -264,6 +287,10 @@ public struct OpenExecutorChanged has copy, drop {
 /// Mint a fresh `Timelock` bound to the four consumer role types. Returns the object
 /// by value; the caller must dispose of it via `share` (or use `new_shared`).
 ///
+/// #### Parameters
+/// - `min_delay_ms`: floor on every operation's delay; may be 0.
+/// - `grace_period_ms`: window, after an op becomes ready, during which it stays executable.
+///
 /// #### Aborts
 /// - `EInvalidConfig` if `min_delay_ms > MAX_DELAY_MS`, or `grace_period_ms` is zero
 ///   or `> MAX_DELAY_MS`.
@@ -272,7 +299,7 @@ public fun new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
     grace_period_ms: u64,
     ctx: &mut TxContext,
 ): Timelock {
-    // INV-10: configuration bounds. min_delay may be 0; grace must be > 0.
+    // Configuration bounds. min_delay may be 0; grace must be > 0.
     assert!(min_delay_ms <= MAX_DELAY_MS, EInvalidConfig);
     assert!(grace_period_ms > 0 && grace_period_ms <= MAX_DELAY_MS, EInvalidConfig);
 
@@ -302,6 +329,9 @@ public fun new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
 }
 
 /// Convenience constructor that shares the `Timelock` and returns its `ID`.
+///
+/// #### Aborts
+/// - `EInvalidConfig` on the same config bounds as `new`.
 public fun new_shared<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
     min_delay_ms: u64,
     grace_period_ms: u64,
@@ -326,6 +356,12 @@ public fun share(self: Timelock) {
 
 /// Pure operation-id derivation from a payload digest. Off-chain tooling computes
 /// `payload_digest = keccak256(bcs(params))` and reproduces the id from there.
+///
+/// #### Parameters
+/// - `timelock_id`: id of the target `Timelock`; domain-separates ids across instances.
+/// - `payload_digest`: `keccak256(bcs(params))` of the operation params.
+/// - `predecessor`: id of an op that must be `Done` first, or empty for none.
+/// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
 public fun hash_operation<Action>(
     timelock_id: ID,
     payload_digest: vector<u8>,
@@ -349,15 +385,22 @@ public fun hash_operation<Action>(
 /// Schedule an operation, storing its typed `params` on-chain. Caller must hold the
 /// proposer role. Returns the operation id.
 ///
+/// #### Parameters
+/// - `params`: the typed operation parameters; stored on-chain and returned by `consume`.
+/// - `predecessor`: id of an op that must be `Done` before this one, or empty for none.
+/// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
+/// - `delay_ms`: delay before the op becomes ready; must be `>= min_delay_ms`.
+///
 /// #### Aborts
-/// - `EWrongRole` if `R` is not the bound `proposer_role`.
+/// - `EWrongRole` if `Role` is not the bound `proposer_role`.
 /// - `EDelayTooShort` if `delay_ms < min_delay_ms`.
 /// - `EScheduleOverflow` if `now + delay_ms` (or that sum `+ grace_period_ms`) overflows u64.
+/// - `EInvalidPredecessor` if `predecessor` is non-empty and not a 32-byte id.
 /// - `EPredecessorIsSelf` if `predecessor` equals the computed id.
 /// - `EOperationAlreadyExists` if the id is already scheduled.
-public fun schedule<R, Action, Params: store + drop>(
+public fun schedule<Role, Action, Params: store + drop>(
     self: &mut Timelock,
-    _proposer_auth: &Auth<R>,
+    _proposer_auth: &Auth<Role>,
     params: Params,
     predecessor: vector<u8>,
     salt: vector<u8>,
@@ -365,56 +408,9 @@ public fun schedule<R, Action, Params: store + drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): vector<u8> {
-    // INV-8: role-type binding.
-    assert!(type_name::with_original_ids<R>() == self.proposer_role, EWrongRole);
+    // Role-type binding.
+    assert!(type_name::with_original_ids<Role>() == self.proposer_role, EWrongRole);
     schedule_internal<Action, Params>(self, params, predecessor, salt, delay_ms, clock, ctx)
-}
-
-fun schedule_internal<Action, Params: store + drop>(
-    self: &mut Timelock,
-    params: Params,
-    predecessor: vector<u8>,
-    salt: vector<u8>,
-    delay_ms: u64,
-    clock: &Clock,
-    ctx: &TxContext,
-): vector<u8> {
-    // INV-9 / INV-29: delay floor.
-    assert!(delay_ms >= self.min_delay_ms, EDelayTooShort);
-
-    // Guard the deadline math against u64 overflow with a documented error. Move aborts
-    // on overflow regardless; this names the failure (mirrors rate_limiter's #349).
-    let now = clock.timestamp_ms();
-    assert!(delay_ms <= std::u64::max_value!() - now, EScheduleOverflow);
-    let ready_at_ms = now + delay_ms;
-    // INV-25: grace window locked per-op at schedule time.
-    assert!(self.grace_period_ms <= std::u64::max_value!() - ready_at_ms, EScheduleOverflow);
-    let expires_at_ms = ready_at_ms + self.grace_period_ms;
-    let timelock_id = object::id(self);
-    let payload_digest = hash::keccak256(&bcs::to_bytes(&params));
-    let id = hash_operation<Action>(timelock_id, payload_digest, predecessor, salt);
-
-    // INV-12: predecessor must not be self.
-    assert!(predecessor != id, EPredecessorIsSelf);
-    // INV-11: id uniqueness.
-    assert!(!self.timestamps.contains(id), EOperationAlreadyExists);
-
-    self.timestamps.add(id, OpTimestamp::Pending { ready_at_ms, expires_at_ms, predecessor });
-    // Store the typed params under the timelock's UID, keyed by the op id.
-    df::add(&mut self.id, id, params);
-
-    event::emit(OperationScheduled {
-        id,
-        action: type_name::with_original_ids<Action>(),
-        payload_digest,
-        predecessor,
-        salt,
-        ready_at_ms,
-        expires_at_ms,
-        proposer: ctx.sender(),
-    });
-
-    id
 }
 
 // === Execution ===
@@ -424,19 +420,20 @@ fun schedule_internal<Action, Params: store + drop>(
 /// same PTB.
 ///
 /// #### Aborts
-/// - `EWrongRole` if `R` is not the bound `executor_role`.
+/// - `EWrongRole` if `Role` is not the bound `executor_role`.
+/// - `EWrongAction` if `Action` does not match the type the operation was scheduled with.
 /// - `EWrongParams` if `Params` does not match the type the operation was scheduled with.
 /// - `EOperationUnset`, `EOperationAlreadyDone`, `EDelayNotElapsed`,
 ///   `EOperationExpired`, `EPredecessorUnset`, `EPredecessorNotDone`.
-public fun execute<R, Action, Params: store + drop>(
+public fun execute<Role, Action, Params: store + drop>(
     self: &mut Timelock,
-    _executor_auth: &Auth<R>,
+    _executor_auth: &Auth<Role>,
     id: vector<u8>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ExecutionTicket<Action, Params> {
-    // INV-8: role-type binding.
-    assert!(type_name::with_original_ids<R>() == self.executor_role, EWrongRole);
+    // Role-type binding.
+    assert!(type_name::with_original_ids<Role>() == self.executor_role, EWrongRole);
     execute_internal<Action, Params>(self, id, clock, ctx)
 }
 
@@ -451,70 +448,15 @@ public fun execute_open<Action, Params: store + drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ExecutionTicket<Action, Params> {
-    // INV-19: open-executor gate.
+    // Open-executor gate.
     assert!(self.open_executor, EOpenExecutorDisabled);
     execute_internal<Action, Params>(self, id, clock, ctx)
-}
-
-fun execute_internal<Action, Params: store + drop>(
-    self: &mut Timelock,
-    id: vector<u8>,
-    clock: &Clock,
-    ctx: &TxContext,
-): ExecutionTicket<Action, Params> {
-    let timelock_id = object::id(self);
-
-    // INV-13: operation must exist.
-    assert!(self.timestamps.contains(id), EOperationUnset);
-
-    let now = clock.timestamp_ms();
-    // INV-14: must be Pending (not Done); read the locked window + predecessor.
-    let (ready_at_ms, expires_at_ms, predecessor) = match (self.timestamps.borrow(id)) {
-        OpTimestamp::Done => abort EOperationAlreadyDone,
-        OpTimestamp::Pending { ready_at_ms, expires_at_ms, predecessor } => (
-            *ready_at_ms,
-            *expires_at_ms,
-            *predecessor,
-        ),
-    };
-    // INV-15: delay elapsed. INV-16: not expired. Ready window is [ready, expires).
-    assert!(now >= ready_at_ms, EDelayNotElapsed);
-    assert!(now < expires_at_ms, EOperationExpired);
-
-    // INV-17: predecessor (if any) must be Done.
-    if (!predecessor.is_empty()) {
-        assert!(self.timestamps.contains(predecessor), EPredecessorUnset);
-        let predecessor_done = match (self.timestamps.borrow(predecessor)) {
-            OpTimestamp::Done => true,
-            OpTimestamp::Pending { .. } => false,
-        };
-        assert!(predecessor_done, EPredecessorNotDone);
-    };
-
-    // Named error if the caller supplied a `Params` type that doesn't match what the op was
-    // scheduled with. On the `*_with` (cap) path the type args are pinned by the
-    // `OperationCap`, so this only fires if a cap for a different `(Action, Params)` than the
-    // op was scheduled with is supplied.
-    assert!(df::exists_with_type<vector<u8>, Params>(&self.id, id), EWrongParams);
-
-    // INV-24 / INV-26: mark Done (sticky, at most once) and take the stored params.
-    *self.timestamps.borrow_mut(id) = OpTimestamp::Done;
-    let params = df::remove<vector<u8>, Params>(&mut self.id, id);
-
-    event::emit(OperationExecuted {
-        id,
-        action: type_name::with_original_ids<Action>(),
-        executor: ctx.sender(),
-    });
-
-    // INV-1 / INV-2: mint the typed hot potato carrying the params.
-    ExecutionTicket { timelock_id, id, params }
 }
 
 // === Ticket consumption ===
 
 /// Redeem an execution ticket, returning `(op_id, params)`. Two gates fire:
-/// timelock-binding (INV-20) and witness-by-value (INV-4 - `Action` is consumed, so
+/// timelock-binding and witness-by-value (`Action` is consumed, so
 /// only a module that can construct `Action` can call this). The params are the exact
 /// values committed at schedule time - there is no payload to re-supply or mismatch.
 ///
@@ -526,7 +468,7 @@ public fun consume<Action: drop, Params>(
     _witness: Action,
 ): (vector<u8>, Params) {
     let ExecutionTicket { timelock_id, id, params } = ticket;
-    // INV-20: ticket belongs to this timelock.
+    // Ticket belongs to this timelock.
     assert!(timelock_id == object::id(self), EWrongTimelock);
     (id, params)
 }
@@ -538,48 +480,27 @@ public fun consume<Action: drop, Params>(
 /// The operation's `Params` type must be named so the stored params can be cleaned up.
 ///
 /// #### Aborts
-/// - `EWrongRole` if `R` is not the bound `canceller_role`.
+/// - `EWrongRole` if `Role` is not the bound `canceller_role`.
 /// - `EOperationUnset` if no such operation.
 /// - `EOperationAlreadyDone` if the operation was already executed.
 /// - `EWrongParams` if `Params` does not match the type the operation was scheduled with.
-public fun cancel<R, Params: store + drop>(
+public fun cancel<Role, Params: store + drop>(
     self: &mut Timelock,
-    _canceller_auth: &Auth<R>,
+    _canceller_auth: &Auth<Role>,
     id: vector<u8>,
     ctx: &mut TxContext,
 ) {
-    // INV-8: role-type binding.
-    assert!(type_name::with_original_ids<R>() == self.canceller_role, EWrongRole);
+    // Role-type binding.
+    assert!(type_name::with_original_ids<Role>() == self.canceller_role, EWrongRole);
     cancel_internal<Params>(self, id, ctx)
-}
-
-fun cancel_internal<Params: store + drop>(self: &mut Timelock, id: vector<u8>, ctx: &TxContext) {
-    // INV-13: operation must exist.
-    assert!(self.timestamps.contains(id), EOperationUnset);
-    // INV-18: cannot cancel a Done operation.
-    let is_done = match (self.timestamps.borrow(id)) {
-        OpTimestamp::Done => true,
-        OpTimestamp::Pending { .. } => false,
-    };
-    assert!(!is_done, EOperationAlreadyDone);
-    // Named error if `Params` doesn't match the type the op was scheduled with. On the
-    // `*_with` (cap) path the type args are pinned by the `OperationCap`, so this only fires
-    // if a cap for a different `(Action, Params)` is supplied.
-    assert!(df::exists_with_type<vector<u8>, Params>(&self.id, id), EWrongParams);
-
-    // INV-23: Waiting/Ready/Expired -> Unset. Drop the stored params.
-    let _ = self.timestamps.remove(id);
-    let _params = df::remove<vector<u8>, Params>(&mut self.id, id);
-
-    event::emit(OperationCancelled { id, canceller: ctx.sender() });
 }
 
 // === Capability-bound entries (recommended) ===
 //
 // These mirror schedule / execute / execute_open / cancel but take an `OperationCap`
-// that binds the call to one `Timelock` instance. The library asserts the binding
-// (CPR-5) so the consumer never writes it, and `Action` / `Params` infer from the cap
-// (zero explicit type args at the call site). Role authorization is unchanged (`&Auth<R>`).
+// that binds the call to one `Timelock` instance. The library asserts the binding,
+// so the consumer never writes it, and `Action` / `Params` infer from the cap
+// (zero explicit type args at the call site). Role authorization is unchanged (`&Auth<Role>`).
 
 /// Mint an `OperationCap` binding `(Action, Params)` to this `Timelock`. Permissionless
 /// and authority-free: call it once at consumer `init` against your canonical timelock
@@ -594,10 +515,14 @@ public fun operation_cap_timelock_id<Action, Params>(cap: &OperationCap<Action, 
 }
 
 /// Like `schedule`, but the `OperationCap` enforces the canonical-timelock binding.
-public fun schedule_with<R, Action, Params: store + drop>(
+///
+/// #### Aborts
+/// - `EWrongTimelock` if `cap` is not bound to `self`.
+/// - Plus the same aborts as `schedule`.
+public fun schedule_with<Role, Action, Params: store + drop>(
     self: &mut Timelock,
     cap: &OperationCap<Action, Params>,
-    _proposer_auth: &Auth<R>,
+    proposer_auth: &Auth<Role>,
     params: Params,
     predecessor: vector<u8>,
     salt: vector<u8>,
@@ -606,25 +531,41 @@ public fun schedule_with<R, Action, Params: store + drop>(
     ctx: &mut TxContext,
 ): vector<u8> {
     assert!(cap.timelock_id == object::id(self), EWrongTimelock);
-    assert!(type_name::with_original_ids<R>() == self.proposer_role, EWrongRole);
-    schedule_internal<Action, Params>(self, params, predecessor, salt, delay_ms, clock, ctx)
+    schedule<Role, Action, Params>(
+        self,
+        proposer_auth,
+        params,
+        predecessor,
+        salt,
+        delay_ms,
+        clock,
+        ctx,
+    )
 }
 
 /// Like `execute`, but the `OperationCap` enforces the canonical-timelock binding.
-public fun execute_with<R, Action, Params: store + drop>(
+///
+/// #### Aborts
+/// - `EWrongTimelock` if `cap` is not bound to `self`.
+/// - Plus the same aborts as `execute`.
+public fun execute_with<Role, Action, Params: store + drop>(
     self: &mut Timelock,
     cap: &OperationCap<Action, Params>,
-    _executor_auth: &Auth<R>,
+    executor_auth: &Auth<Role>,
     id: vector<u8>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ExecutionTicket<Action, Params> {
     assert!(cap.timelock_id == object::id(self), EWrongTimelock);
-    assert!(type_name::with_original_ids<R>() == self.executor_role, EWrongRole);
-    execute_internal<Action, Params>(self, id, clock, ctx)
+    execute<Role, Action, Params>(self, executor_auth, id, clock, ctx)
 }
 
 /// Like `execute_open`, but the `OperationCap` enforces the canonical-timelock binding.
+///
+/// #### Aborts
+/// - `EWrongTimelock` if `cap` is not bound to `self`.
+/// - `EOpenExecutorDisabled` if open-executor mode is disabled.
+/// - Plus the same operation-state aborts as `execute`.
 public fun execute_open_with<Action, Params: store + drop>(
     self: &mut Timelock,
     cap: &OperationCap<Action, Params>,
@@ -633,29 +574,43 @@ public fun execute_open_with<Action, Params: store + drop>(
     ctx: &mut TxContext,
 ): ExecutionTicket<Action, Params> {
     assert!(cap.timelock_id == object::id(self), EWrongTimelock);
-    assert!(self.open_executor, EOpenExecutorDisabled);
-    execute_internal<Action, Params>(self, id, clock, ctx)
+    execute_open<Action, Params>(self, id, clock, ctx)
 }
 
 /// Like `cancel`, but the `OperationCap` enforces the canonical-timelock binding.
-public fun cancel_with<R, Action, Params: store + drop>(
+///
+/// #### Aborts
+/// - `EWrongTimelock` if `cap` is not bound to `self`.
+/// - Plus the same aborts as `cancel`.
+public fun cancel_with<Role, Action, Params: store + drop>(
     self: &mut Timelock,
     cap: &OperationCap<Action, Params>,
-    _canceller_auth: &Auth<R>,
+    canceller_auth: &Auth<Role>,
     id: vector<u8>,
     ctx: &mut TxContext,
 ) {
     assert!(cap.timelock_id == object::id(self), EWrongTimelock);
-    assert!(type_name::with_original_ids<R>() == self.canceller_role, EWrongRole);
-    cancel_internal<Params>(self, id, ctx)
+    cancel<Role, Params>(self, canceller_auth, id, ctx)
 }
 
 // === Self-administered configuration ===
 
 /// Schedule a `min_delay_ms` change (stored as the operation's params). Admin-gated.
-public fun schedule_update_min_delay<R>(
+///
+/// #### Parameters
+/// - `new_min_delay_ms`: the value applied when the scheduled op executes.
+/// - `predecessor`: id of an op that must be `Done` first, or empty for none.
+/// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
+/// - `delay_ms`: delay before this change becomes ready; must be `>= min_delay_ms`.
+///
+/// #### Aborts
+/// - `EWrongRole` if `Role` is not the bound `admin_role`.
+/// - `EInvalidConfig` if `new_min_delay_ms > MAX_DELAY_MS`.
+/// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
+///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+public fun schedule_update_min_delay<Role>(
     self: &mut Timelock,
-    _admin_auth: &Auth<R>,
+    _admin_auth: &Auth<Role>,
     new_min_delay_ms: u64,
     predecessor: vector<u8>,
     salt: vector<u8>,
@@ -663,7 +618,7 @@ public fun schedule_update_min_delay<R>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): vector<u8> {
-    assert!(type_name::with_original_ids<R>() == self.admin_role, EWrongRole);
+    assert!(type_name::with_original_ids<Role>() == self.admin_role, EWrongRole);
     assert!(new_min_delay_ms <= MAX_DELAY_MS, EInvalidConfig);
     schedule_internal<UpdateMinDelayWitness, u64>(
         self,
@@ -677,17 +632,27 @@ public fun schedule_update_min_delay<R>(
 }
 
 /// Execute a scheduled `min_delay_ms` change by id. Admin-gated. Applies the stored value.
-public fun execute_update_min_delay<R>(
+///
+/// #### Aborts
+/// - `EWrongRole` if `Role` is not the bound `admin_role`.
+/// - Plus the same operation-state aborts as `execute`.
+public fun execute_update_min_delay<Role>(
     self: &mut Timelock,
-    _admin_auth: &Auth<R>,
+    _admin_auth: &Auth<Role>,
     id: vector<u8>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(type_name::with_original_ids<R>() == self.admin_role, EWrongRole);
+    assert!(type_name::with_original_ids<Role>() == self.admin_role, EWrongRole);
     let ticket = execute_internal<UpdateMinDelayWitness, u64>(self, id, clock, ctx);
-    // INV-6: marker witness home - consume the ticket in-module, taking the stored value.
+    // Marker witness home - consume the ticket in-module, taking the stored value.
     let ExecutionTicket { timelock_id: _, id: _, params: new_min_delay_ms } = ticket;
+
+    // Re-assert the config bound at apply time. The bound is also checked in
+    // `schedule_update_min_delay`, but a config op can be staged via the generic `schedule`
+    // (marker witness types are public), bypassing that check - so enforce it here, where
+    // the value is actually applied.
+    assert!(new_min_delay_ms <= MAX_DELAY_MS, EInvalidConfig);
 
     let previous_ms = self.min_delay_ms;
     self.min_delay_ms = new_min_delay_ms;
@@ -695,9 +660,21 @@ public fun execute_update_min_delay<R>(
 }
 
 /// Schedule a `grace_period_ms` change. Admin-gated.
-public fun schedule_update_grace_period<R>(
+///
+/// #### Parameters
+/// - `new_grace_period_ms`: the value applied when the scheduled op executes.
+/// - `predecessor`: id of an op that must be `Done` first, or empty for none.
+/// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
+/// - `delay_ms`: delay before this change becomes ready; must be `>= min_delay_ms`.
+///
+/// #### Aborts
+/// - `EWrongRole` if `Role` is not the bound `admin_role`.
+/// - `EInvalidConfig` if `new_grace_period_ms` is zero or `> MAX_DELAY_MS`.
+/// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
+///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+public fun schedule_update_grace_period<Role>(
     self: &mut Timelock,
-    _admin_auth: &Auth<R>,
+    _admin_auth: &Auth<Role>,
     new_grace_period_ms: u64,
     predecessor: vector<u8>,
     salt: vector<u8>,
@@ -705,7 +682,7 @@ public fun schedule_update_grace_period<R>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): vector<u8> {
-    assert!(type_name::with_original_ids<R>() == self.admin_role, EWrongRole);
+    assert!(type_name::with_original_ids<Role>() == self.admin_role, EWrongRole);
     assert!(new_grace_period_ms > 0 && new_grace_period_ms <= MAX_DELAY_MS, EInvalidConfig);
     schedule_internal<UpdateGracePeriodWitness, u64>(
         self,
@@ -719,16 +696,25 @@ public fun schedule_update_grace_period<R>(
 }
 
 /// Execute a scheduled `grace_period_ms` change by id. Admin-gated.
-public fun execute_update_grace_period<R>(
+///
+/// #### Aborts
+/// - `EWrongRole` if `Role` is not the bound `admin_role`.
+/// - Plus the same operation-state aborts as `execute`.
+public fun execute_update_grace_period<Role>(
     self: &mut Timelock,
-    _admin_auth: &Auth<R>,
+    _admin_auth: &Auth<Role>,
     id: vector<u8>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(type_name::with_original_ids<R>() == self.admin_role, EWrongRole);
+    assert!(type_name::with_original_ids<Role>() == self.admin_role, EWrongRole);
     let ticket = execute_internal<UpdateGracePeriodWitness, u64>(self, id, clock, ctx);
     let ExecutionTicket { timelock_id: _, id: _, params: new_grace_period_ms } = ticket;
+
+    // Re-assert the config bound at apply time (see `execute_update_min_delay`): a config op
+    // staged via the generic `schedule` bypasses the schedule-side bound check, and
+    // `grace_period_ms == 0` would brick the timelock (empty ready window).
+    assert!(new_grace_period_ms > 0 && new_grace_period_ms <= MAX_DELAY_MS, EInvalidConfig);
 
     let previous_ms = self.grace_period_ms;
     self.grace_period_ms = new_grace_period_ms;
@@ -736,9 +722,20 @@ public fun execute_update_grace_period<R>(
 }
 
 /// Schedule an `open_executor` toggle. Admin-gated.
-public fun schedule_set_open_executor<R>(
+///
+/// #### Parameters
+/// - `value`: the `open_executor` setting applied when the scheduled op executes.
+/// - `predecessor`: id of an op that must be `Done` first, or empty for none.
+/// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
+/// - `delay_ms`: delay before this change becomes ready; must be `>= min_delay_ms`.
+///
+/// #### Aborts
+/// - `EWrongRole` if `Role` is not the bound `admin_role`.
+/// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
+///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+public fun schedule_set_open_executor<Role>(
     self: &mut Timelock,
-    _admin_auth: &Auth<R>,
+    _admin_auth: &Auth<Role>,
     value: bool,
     predecessor: vector<u8>,
     salt: vector<u8>,
@@ -746,7 +743,7 @@ public fun schedule_set_open_executor<R>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): vector<u8> {
-    assert!(type_name::with_original_ids<R>() == self.admin_role, EWrongRole);
+    assert!(type_name::with_original_ids<Role>() == self.admin_role, EWrongRole);
     schedule_internal<SetOpenExecutorWitness, bool>(
         self,
         value,
@@ -759,14 +756,18 @@ public fun schedule_set_open_executor<R>(
 }
 
 /// Execute a scheduled `open_executor` toggle by id. Admin-gated.
-public fun execute_set_open_executor<R>(
+///
+/// #### Aborts
+/// - `EWrongRole` if `Role` is not the bound `admin_role`.
+/// - Plus the same operation-state aborts as `execute`.
+public fun execute_set_open_executor<Role>(
     self: &mut Timelock,
-    _admin_auth: &Auth<R>,
+    _admin_auth: &Auth<Role>,
     id: vector<u8>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(type_name::with_original_ids<R>() == self.admin_role, EWrongRole);
+    assert!(type_name::with_original_ids<Role>() == self.admin_role, EWrongRole);
     let ticket = execute_internal<SetOpenExecutorWitness, bool>(self, id, clock, ctx);
     let ExecutionTicket { timelock_id: _, id: _, params: value } = ticket;
 
@@ -832,19 +833,164 @@ public fun operation_state(self: &Timelock, id: vector<u8>, clock: &Clock): Oper
 }
 
 /// Borrow the typed params of a pending operation (for off-chain inspection / UIs).
-/// Aborts if the id has no stored params (Unset or already Done).
+///
+/// #### Aborts
+/// - A `sui::dynamic_field` abort if the id has no stored `Params` (Unset or already Done).
 public fun operation_params<Params: store>(self: &Timelock, id: vector<u8>): &Params {
     df::borrow<vector<u8>, Params>(&self.id, id)
 }
 
 // === Private Functions ===
 
+fun schedule_internal<Action, Params: store + drop>(
+    self: &mut Timelock,
+    params: Params,
+    predecessor: vector<u8>,
+    salt: vector<u8>,
+    delay_ms: u64,
+    clock: &Clock,
+    ctx: &TxContext,
+): vector<u8> {
+    // Delay floor.
+    assert!(delay_ms >= self.min_delay_ms, EDelayTooShort);
+
+    // Guard the deadline math against u64 overflow with a documented error. Move aborts
+    // on overflow regardless; this names the failure (mirrors rate_limiter's #349).
+    let now = clock.timestamp_ms();
+    assert!(delay_ms <= std::u64::max_value!() - now, EScheduleOverflow);
+    let ready_at_ms = now + delay_ms;
+    // Grace window locked per-op at schedule time.
+    assert!(self.grace_period_ms <= std::u64::max_value!() - ready_at_ms, EScheduleOverflow);
+    let expires_at_ms = ready_at_ms + self.grace_period_ms;
+    let timelock_id = object::id(self);
+    let payload_digest = hash::keccak256(&bcs::to_bytes(&params));
+    let id = hash_operation<Action>(timelock_id, payload_digest, predecessor, salt);
+
+    // Fail fast: a non-empty predecessor must be a 32-byte op id, else it can never match
+    // a scheduled op and this op would be silently un-executable until cancelled.
+    assert!(predecessor.is_empty() || predecessor.length() == 32, EInvalidPredecessor);
+    // Predecessor must not be self.
+    assert!(predecessor != id, EPredecessorIsSelf);
+    // Id uniqueness.
+    assert!(!self.timestamps.contains(id), EOperationAlreadyExists);
+
+    self
+        .timestamps
+        .add(
+            id,
+            OpTimestamp::Pending {
+                ready_at_ms,
+                expires_at_ms,
+                predecessor,
+                action: type_name::with_original_ids<Action>(),
+            },
+        );
+    // Store the typed params under the timelock's UID, keyed by the op id.
+    df::add(&mut self.id, id, params);
+
+    event::emit(OperationScheduled {
+        id,
+        action: type_name::with_original_ids<Action>(),
+        payload_digest,
+        predecessor,
+        salt,
+        ready_at_ms,
+        expires_at_ms,
+        proposer: ctx.sender(),
+    });
+
+    id
+}
+
+fun execute_internal<Action, Params: store + drop>(
+    self: &mut Timelock,
+    id: vector<u8>,
+    clock: &Clock,
+    ctx: &TxContext,
+): ExecutionTicket<Action, Params> {
+    let timelock_id = object::id(self);
+
+    // Operation must exist.
+    assert!(self.timestamps.contains(id), EOperationUnset);
+
+    let now = clock.timestamp_ms();
+    // Must be Pending (not Done); read the locked window + predecessor.
+    let (ready_at_ms, expires_at_ms, predecessor, scheduled_action) = match (self
+        .timestamps
+        .borrow(id)) {
+        OpTimestamp::Done => abort EOperationAlreadyDone,
+        OpTimestamp::Pending { ready_at_ms, expires_at_ms, predecessor, action } => (
+            *ready_at_ms,
+            *expires_at_ms,
+            *predecessor,
+            *action,
+        ),
+    };
+    // Delay elapsed. Not expired. Ready window is [ready, expires).
+    assert!(now >= ready_at_ms, EDelayNotElapsed);
+    assert!(now < expires_at_ms, EOperationExpired);
+
+    // Predecessor (if any) must be Done.
+    if (!predecessor.is_empty()) {
+        assert!(self.timestamps.contains(predecessor), EPredecessorUnset);
+        let predecessor_done = match (self.timestamps.borrow(predecessor)) {
+            OpTimestamp::Done => true,
+            OpTimestamp::Pending { .. } => false,
+        };
+        assert!(predecessor_done, EPredecessorNotDone);
+    };
+
+    // Bind the op to the `(Action, Params)` it was scheduled with. The id commits the
+    // `Action` (it is hashed in) and the dynamic field commits the `Params` type, but
+    // `execute` takes the id directly - so re-check both here. Without the `Action` check,
+    // an op scheduled for one `Action` could be minted as a ticket for a different `Action`
+    // whose `Params` type happens to match. On the `*_with` (cap) path the type args are
+    // pinned by the `OperationCap`; these only fire if a cap for a different
+    // `(Action, Params)` than the op was scheduled with is supplied.
+    assert!(scheduled_action == type_name::with_original_ids<Action>(), EWrongAction);
+    assert!(df::exists_with_type<vector<u8>, Params>(&self.id, id), EWrongParams);
+
+    // Mark Done (sticky, at most once) and take the stored params.
+    *self.timestamps.borrow_mut(id) = OpTimestamp::Done;
+    let params = df::remove<vector<u8>, Params>(&mut self.id, id);
+
+    event::emit(OperationExecuted {
+        id,
+        action: type_name::with_original_ids<Action>(),
+        executor: ctx.sender(),
+    });
+
+    // Mint the typed hot potato carrying the params.
+    ExecutionTicket { timelock_id, id, params }
+}
+
+fun cancel_internal<Params: store + drop>(self: &mut Timelock, id: vector<u8>, ctx: &TxContext) {
+    // Operation must exist.
+    assert!(self.timestamps.contains(id), EOperationUnset);
+    // Cannot cancel a Done operation.
+    let is_done = match (self.timestamps.borrow(id)) {
+        OpTimestamp::Done => true,
+        OpTimestamp::Pending { .. } => false,
+    };
+    assert!(!is_done, EOperationAlreadyDone);
+    // Named error if `Params` doesn't match the type the op was scheduled with. On the
+    // `*_with` (cap) path the type args are pinned by the `OperationCap`, so this only fires
+    // if a cap for a different `(Action, Params)` is supplied.
+    assert!(df::exists_with_type<vector<u8>, Params>(&self.id, id), EWrongParams);
+
+    // Waiting/Ready/Expired -> Unset. Drop the stored params.
+    let _ = self.timestamps.remove(id);
+    let _params = df::remove<vector<u8>, Params>(&mut self.id, id);
+
+    event::emit(OperationCancelled { id, canceller: ctx.sender() });
+}
+
 /// Compute the observable state of an operation at time `now`.
 fun op_state(self: &Timelock, id: vector<u8>, now: u64): OperationState {
     if (!self.timestamps.contains(id)) return OperationState::Unset;
     match (self.timestamps.borrow(id)) {
         OpTimestamp::Done => OperationState::Done,
-        OpTimestamp::Pending { ready_at_ms, expires_at_ms, predecessor: _ } => {
+        OpTimestamp::Pending { ready_at_ms, expires_at_ms, .. } => {
             let ready_at_ms = *ready_at_ms;
             let expires_at_ms = *expires_at_ms;
             if (now < ready_at_ms) {

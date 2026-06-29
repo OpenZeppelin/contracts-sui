@@ -25,12 +25,15 @@ public struct AdminRole {}
 /// Consumer operation witness (the `Action`), drop-only, module-private construction.
 public struct TestAction has drop {}
 
+/// A second witness sharing `TestAction`'s `Params` type, to prove an op scheduled for one
+/// `Action` cannot be executed as another (`EWrongAction`).
+public struct OtherAction has drop {}
+
 const DEPLOYER: address = @0xA;
 
 // === Setup helpers ===
 
 #[test_only]
-#[allow(lint(share_owned))]
 fun setup(min_delay_ms: u64, grace_period_ms: u64): Scenario {
     let mut scenario = test_scenario::begin(DEPLOYER);
     {
@@ -257,7 +260,7 @@ fun test_cancel_happy() {
     scenario.end();
 }
 
-// === Role gating (INV-8) ===
+// === Role gating ===
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
 fun test_schedule_rejects_wrong_role() {
@@ -318,7 +321,7 @@ fun test_self_admin_rejects_non_admin() {
     abort
 }
 
-// === Delay / window (INV-9/15/16/30) ===
+// === Delay / window ===
 
 #[test, expected_failure(abort_code = timelock::EDelayTooShort)]
 fun test_schedule_rejects_short_delay() {
@@ -459,7 +462,7 @@ fun test_execute_at_exact_expiry_rejects() {
     abort
 }
 
-// === Lifecycle (INV-11/13/14/18/24/26) ===
+// === Lifecycle ===
 
 #[test, expected_failure(abort_code = timelock::EOperationAlreadyExists)]
 fun test_schedule_rejects_duplicate() {
@@ -558,7 +561,7 @@ fun test_cancel_rejects_done() {
     abort
 }
 
-// === consume gate (INV-20/36) ===
+// === consume gate ===
 
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
 fun test_consume_rejects_wrong_timelock() {
@@ -618,6 +621,31 @@ fun test_execute_rejects_wrong_params() {
     abort
 }
 
+// An op scheduled for one `Action` cannot be executed as a different `Action`, even when
+// the `Params` type matches - the `Action` is bound at schedule and re-checked at execute.
+#[test, expected_failure(abort_code = timelock::EWrongAction)]
+fun test_execute_rejects_wrong_action() {
+    let mut scenario = setup(0, 10000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let clk = clock::create_for_testing(scenario.ctx());
+    let p_auth = ac.new_auth<_, ProposerRole>(scenario.ctx());
+    // Scheduled as TestAction (Params = u64).
+    let id = tl.schedule<ProposerRole, TestAction, u64>(
+        &p_auth,
+        42,
+        vector[],
+        b"s",
+        0,
+        &clk,
+        scenario.ctx(),
+    );
+    let e_auth = ac.new_auth<_, ExecutorRole>(scenario.ctx());
+    // Executed as OtherAction with the SAME Params (u64) -> EWrongAction (not EWrongParams).
+    let _ticket = tl.execute<ExecutorRole, OtherAction, u64>(&e_auth, id, &clk, scenario.ctx());
+    abort
+}
+
 #[test, expected_failure(abort_code = timelock::EWrongParams)]
 fun test_cancel_rejects_wrong_params() {
     let mut scenario = setup(0, 10000);
@@ -640,7 +668,7 @@ fun test_cancel_rejects_wrong_params() {
     abort
 }
 
-// === Predecessor (INV-17) ===
+// === Predecessor ===
 
 #[test]
 fun test_predecessor_success() {
@@ -721,10 +749,12 @@ fun test_predecessor_unset() {
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
     let clk = clock::create_for_testing(scenario.ctx());
     let p_auth = ac.new_auth<_, ProposerRole>(scenario.ctx());
+    // A well-formed (32-byte) but nonexistent predecessor: passes the schedule-time length
+    // check, then fails at execute with EPredecessorUnset.
     let id = tl.schedule<ProposerRole, TestAction, u64>(
         &p_auth,
         42,
-        b"ghost",
+        hash::keccak256(&b"ghost"),
         b"b",
         0,
         &clk,
@@ -735,7 +765,28 @@ fun test_predecessor_unset() {
     abort
 }
 
-// === Open executor (INV-19) ===
+// A non-empty, non-32-byte predecessor is rejected at schedule (fail fast) rather than
+// becoming a silently un-executable op.
+#[test, expected_failure(abort_code = timelock::EInvalidPredecessor)]
+fun test_schedule_rejects_malformed_predecessor() {
+    let mut scenario = setup(0, 10000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let clk = clock::create_for_testing(scenario.ctx());
+    let p_auth = ac.new_auth<_, ProposerRole>(scenario.ctx());
+    let _id = tl.schedule<ProposerRole, TestAction, u64>(
+        &p_auth,
+        42,
+        b"not-32-bytes",
+        b"s",
+        0,
+        &clk,
+        scenario.ctx(),
+    );
+    abort
+}
+
+// === Open executor ===
 
 #[test, expected_failure(abort_code = timelock::EOpenExecutorDisabled)]
 fun test_execute_open_rejects_when_disabled() {
@@ -799,7 +850,7 @@ fun test_execute_open_succeeds_when_enabled() {
     scenario.end();
 }
 
-// === Self-administration (INV-25/28/33) ===
+// === Self-administration ===
 
 #[test]
 fun test_update_min_delay_succeeds() {
@@ -896,7 +947,7 @@ fun test_set_open_executor_emits_event() {
     scenario.end();
 }
 
-// INV-25/33: changing min_delay does not move an in-flight op's locked timing.
+// Changing min_delay does not move an in-flight op's locked timing.
 #[test]
 fun test_in_flight_op_keeps_timing_after_min_delay_change() {
     let mut scenario = setup(1000, 100000);
@@ -944,7 +995,7 @@ fun test_in_flight_op_keeps_timing_after_min_delay_change() {
     scenario.end();
 }
 
-// === Re-schedule semantics (INV-11/30) ===
+// === Re-schedule semantics ===
 
 #[test, expected_failure(abort_code = timelock::EOperationAlreadyExists)]
 fun test_reschedule_same_after_expiry_fails() {
@@ -1014,7 +1065,7 @@ fun test_reschedule_new_salt_after_expiry_ok() {
     scenario.end();
 }
 
-// === Views: state machine (INV-30) ===
+// === Views: state machine ===
 
 #[test]
 fun test_operation_state_transitions() {
@@ -1155,7 +1206,7 @@ fun test_cap_happy_zero_type_args() {
     scenario.end();
 }
 
-// Structural CPR-5: a cap minted for timelock A rejects timelock B - with NO manual
+// Structural binding: a cap minted for timelock A rejects timelock B - with NO manual
 // object::id assert anywhere in this test or the (would-be) consumer.
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
 fun test_cap_rejects_foreign_timelock() {
@@ -1367,6 +1418,54 @@ fun test_cap_cancel_rejects_wrong_role() {
 }
 
 // === Self-administration abort branches (role gate + config bounds) ===
+
+// Defense-in-depth: a config op can be staged through the generic `schedule` (marker witness
+// types are public), bypassing the schedule-side bound check - but the bound is re-asserted
+// at apply time. `grace = 0` would brick the timelock; `min_delay > MAX` is out of bounds.
+#[test, expected_failure(abort_code = timelock::EInvalidConfig)]
+fun test_execute_grace_bypass_rejected() {
+    let mut scenario = setup(0, 10000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let clk = clock::create_for_testing(scenario.ctx());
+    // Stage grace = 0 via the generic schedule (skips schedule_update_grace_period's check).
+    let p_auth = ac.new_auth<_, ProposerRole>(scenario.ctx());
+    let id = tl.schedule<ProposerRole, timelock::UpdateGracePeriodWitness, u64>(
+        &p_auth,
+        0,
+        vector[],
+        b"s",
+        0,
+        &clk,
+        scenario.ctx(),
+    );
+    // Admin executes -> apply-time bound re-check aborts with EInvalidConfig (not a brick).
+    let a_auth = ac.new_auth<_, AdminRole>(scenario.ctx());
+    tl.execute_update_grace_period<AdminRole>(&a_auth, id, &clk, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = timelock::EInvalidConfig)]
+fun test_execute_min_delay_bypass_rejected() {
+    let mut scenario = setup(0, 10000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let clk = clock::create_for_testing(scenario.ctx());
+    // Stage min_delay > MAX_DELAY_MS via the generic schedule.
+    let p_auth = ac.new_auth<_, ProposerRole>(scenario.ctx());
+    let id = tl.schedule<ProposerRole, timelock::UpdateMinDelayWitness, u64>(
+        &p_auth,
+        timelock::max_delay_ms() + 1,
+        vector[],
+        b"s",
+        0,
+        &clk,
+        scenario.ctx(),
+    );
+    let a_auth = ac.new_auth<_, AdminRole>(scenario.ctx());
+    tl.execute_update_min_delay<AdminRole>(&a_auth, id, &clk, scenario.ctx());
+    abort
+}
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
 fun test_schedule_update_grace_rejects_non_admin() {

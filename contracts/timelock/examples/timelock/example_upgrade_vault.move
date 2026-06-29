@@ -6,7 +6,7 @@
 /// 1. The publisher creates an `AccessControl` + `Timelock` (`init`), then deposits the
 ///    package `UpgradeCap` into a shared `UpgradeVault` via `wrap`. `wrap` mints an
 ///    `OperationCap` against the canonical timelock and stores it in the vault, so every
-///    vault entry is bound to that timelock structurally (CPR-5) - no hand-written
+///    vault entry is bound to that timelock structurally - no hand-written
 ///    `object::id` assert. The `UpgradeCap` arrives at the publisher only after the first
 ///    publish, so it is wrapped *after* `init`, not inside it.
 /// 2. A proposer `schedule_upgrade`s the `(policy, digest)` of the planned upgrade; they
@@ -40,7 +40,7 @@ const DAY_MS: u64 = 24 * 60 * 60 * 1_000;
 /// One-time witness for the `AccessControl` registry.
 public struct EXAMPLE_UPGRADE_VAULT has drop {}
 
-/// Operation witness for upgrade authorizations (`drop`-only, module-private) - CPR-1/2.
+/// Operation witness for upgrade authorizations (`drop`-only, module-private).
 public struct UpgradeAction has drop {}
 
 /// Timelocked upgrade parameters, stored on-chain by the timelock as the op's params.
@@ -84,6 +84,9 @@ fun init(otw: EXAMPLE_UPGRADE_VAULT, ctx: &mut TxContext) {
 
 /// Deposit the package `UpgradeCap` into a vault bound to `timelock`. Mints the op cap
 /// from the canonical (shared) timelock. Called by the publisher after `init`.
+///
+/// Permissionless by design: it is gated by possession of the `UpgradeCap` (a one-time
+/// publisher bootstrap), and the caller chooses which `timelock` the vault binds to.
 public fun wrap(cap: UpgradeCap, timelock: &Timelock, ctx: &mut TxContext) {
     let op_cap = timelock.new_operation_cap<UpgradeAction, UpgradeParams>();
     transfer::share_object(UpgradeVault { id: object::new(ctx), op_cap, cap });

@@ -91,7 +91,7 @@ fun test_fee_change_happy() {
     scenario.end();
 }
 
-// === The canonical-id binding stops a fake-timelock delay bypass (CPR-5) ===
+// === The canonical-id binding stops a fake-timelock delay bypass ===
 //
 // An actor with the executor role builds their OWN zero-delay timelock of the same role
 // types and tries to route it through execute_fee_change to apply a fee to the real pool

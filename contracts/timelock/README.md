@@ -128,11 +128,12 @@ Complete integration examples live in [`examples/timelock/`](examples/timelock):
 - **Consume the ticket in the same PTB.** `ExecutionTicket` has no abilities, so the transaction aborts unless `execute` / `execute_with` is followed by `consume`. This is what makes execute -> apply atomic.
 - **A predecessor being `Done` is not the same as its effect being applied.** Within one PTB, run each `execute -> consume -> apply` triple to completion before the next dependent op; the library only guarantees the predecessor op is `Done`, not that its effect ran.
 - **`min_delay_ms == 0` is permitted but unprotected** - no reaction window, and self-administered config changes are then instant.
-- **`Params` must match the scheduled op.** On the raw path a wrong `Params` aborts with `EWrongParams`; on the cap path `Params` is pinned by the `OperationCap`. A `delay_ms` so large that `now + delay_ms` would overflow aborts with `EScheduleOverflow` (never wraps).
+- **`Action` and `Params` must match the scheduled op.** `execute` re-checks both against the operation it was scheduled with (the `Action` is bound at schedule and re-verified, since the id is taken directly): a wrong `Action` aborts with `EWrongAction` and a wrong `Params` with `EWrongParams`. On the cap path both are pinned by the `OperationCap`. A `delay_ms` so large that `now + delay_ms` would overflow aborts with `EScheduleOverflow` (never wraps).
 - **Off-chain id reproduction.** Recompute an id as `keccak256(DOMAIN_TAG || bcs(IdInput { action, payload_digest, predecessor, salt, timelock_id }))` with `payload_digest = keccak256(bcs(params))`. The `action` is the BCS of a `TypeName` (the sharp edge for tooling) - cross-check against an on-chain `hash_operation<Action>` call before relying on predicted ids.
 
 ## Learn More
 
 - [Timelock package overview](https://docs.openzeppelin.com/contracts-sui/1.x/timelock)
 - [Timelock API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/timelock)
+- [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)
