@@ -29,14 +29,13 @@ import numpy as np
 from scipy.stats import norm
 
 from gaussian_codegen.shared import constants
+from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_nearest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
-WAD = constants.WAD
 SCALE = constants.SCALE_DECIMAL
 MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at 10^9 - default; the gate parses the committed value
 HALF_SCALE = SCALE // 2  # Φ(0) bit-exact
-U256_MAX = 2**256 - 1  # on-chain Move intermediates must fit u256
 
 COEFF_PATH = (
     REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "cdf_coefficients.move"
@@ -75,67 +74,6 @@ def parse_coefficients(text: str) -> tuple[list[tuple[int, bool]], list[tuple[in
     if len(den_mags) != len(den_negs):
         raise RuntimeError(f"DEN length mismatch: mags={len(den_mags)} vs negs={len(den_negs)}")
     return list(zip(num_mags, num_negs)), list(zip(den_mags, den_negs))
-
-
-# --- Sign-magnitude integer arithmetic mirroring the on-chain Move code ----
-SignedInt = tuple[int, bool]  # (magnitude, is_negative)
-
-
-def _canonicalize(sm: SignedInt) -> SignedInt:
-    """Zero is always (0, False)."""
-    return (0, False) if sm[0] == 0 else sm
-
-
-def add(a: SignedInt, b: SignedInt) -> SignedInt:
-    am, an = a
-    bm, bn = b
-    if am == 0:
-        return _canonicalize(b)
-    if bm == 0:
-        return _canonicalize(a)
-    if an == bn:
-        s = am + bm
-        if s > U256_MAX:
-            raise RuntimeError(f"u256 overflow in add: {am} + {bm}")
-        return (s, an)
-    if am > bm:
-        return (am - bm, an)
-    if bm > am:
-        return (bm - am, bn)
-    return (0, False)  # exact cancellation
-
-
-def mul_wad(a: SignedInt, b: SignedInt) -> SignedInt:
-    """`(a * b) / WAD` with floor-division on magnitudes (== mul_div with Down rounding)."""
-    am, an = a
-    bm, bn = b
-    prod = am * bm
-    if prod > U256_MAX:
-        raise RuntimeError(f"u256 overflow in mul_wad: {am} * {bm}")
-    mag = prod // WAD
-    return _canonicalize((mag, an ^ bn))
-
-
-def horner_eval(z: SignedInt, coeffs: list[SignedInt]) -> SignedInt:
-    if not coeffs:
-        raise RuntimeError("empty polynomial")
-    acc = _canonicalize(coeffs[-1])
-    for c in reversed(coeffs[:-1]):
-        acc = mul_wad(acc, z)
-        acc = add(acc, c)
-    return acc
-
-
-def mul_div_nearest(a: int, b: int, d: int) -> int:
-    """`(a * b) / d` rounded half-up (ties away from zero), mirroring the
-    on-chain `u256::mul_div(..., Nearest)` from `math/core` (round up iff
-    `rem >= d - rem`). Caller guarantees `d > 0`."""
-    prod = a * b
-    if prod > U256_MAX:
-        raise RuntimeError(f"u256 overflow in mul_div_nearest: {a} * {b}")
-    quot = prod // d
-    rem = prod - quot * d
-    return quot + 1 if rem >= d - rem else quot
 
 
 def cdf_simulate(
@@ -195,9 +133,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     text = args.coeffs.read_text(encoding="utf-8")
     num, den = parse_coefficients(text)
     max_z_raw = _parse_u128_const(text, "MAX_Z_RAW")
+    try:
+        coeffs_path = args.coeffs.relative_to(REPO_ROOT)
+    except ValueError:
+        coeffs_path = args.coeffs  # a --coeffs path outside the repo stays absolute
     print(
         f"Parsed {len(num)} numerator + {len(den)} denominator coefficients "
-        f"(MAX_Z_RAW = {max_z_raw}) from {args.coeffs.relative_to(REPO_ROOT)}"
+        f"(MAX_Z_RAW = {max_z_raw}) from {coeffs_path}"
     )
 
     grid = np.linspace(0.0, max_z_raw / SCALE, args.n)

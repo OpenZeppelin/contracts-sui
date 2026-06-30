@@ -26,6 +26,7 @@ from scipy.interpolate import AAA
 from scipy.stats import norm
 
 from gaussian_codegen.shared import constants
+from gaussian_codegen.shared.aaa import aaa_to_rational_polys, evaluate_rational, horner_eval_mpf
 from gaussian_codegen.shared.reference import DPS
 
 # AAA emits a RuntimeWarning when it hits `max_terms` before satisfying `rtol`.
@@ -62,63 +63,6 @@ def reference_values_float(grid: np.ndarray) -> np.ndarray:
     article's nominal error is 3.35e-9, three orders of magnitude above float64
     precision). mpmath at 100 dps is reserved for validation and quantization."""
     return norm.cdf(grid)
-
-
-def aaa_to_rational_polys(aaa_obj) -> tuple[list[mpf], list[mpf]]:
-    """Convert a scipy AAA barycentric form into explicit polynomials N(z), D(z)
-    with coefficients in *ascending power order*. Both polynomials have degree
-    `m - 1` where `m = len(support_points)`.
-
-    The transformation is:
-
-        N(z) = Σ_j w_j y_j Π_{k≠j} (z − z_k)
-        D(z) = Σ_j w_j Π_{k≠j} (z − z_k)
-
-    Then we rescale by D(0) so that the constant term of D is exactly 1.
-    """
-    mp.dps = DPS
-    sp = [mpf(float(z)) for z in aaa_obj.support_points]
-    sv = [mpf(float(y)) for y in aaa_obj.support_values]
-    w = [mpf(float(wj)) for wj in aaa_obj.weights]
-    m = len(sp)
-
-    num: list[mpf] = [mpf(0)] * m
-    den: list[mpf] = [mpf(0)] * m
-
-    for j in range(m):
-        # build Π_{k≠j} (z − z_k) as ascending-order coefficients
-        prod: list[mpf] = [mpf(1)]
-        for k in range(m):
-            if k == j:
-                continue
-            scaled: list[mpf] = [mpf(0)] * (len(prod) + 1)
-            for i, c in enumerate(prod):
-                scaled[i] += c * (-sp[k])
-                scaled[i + 1] += c
-            prod = scaled
-        for i in range(m):
-            num[i] += w[j] * sv[j] * prod[i]
-            den[i] += w[j] * prod[i]
-
-    d0 = den[0]
-    if d0 == 0:
-        raise RuntimeError("AAA produced a denominator with zero constant term - cannot normalize")
-    num = [c / d0 for c in num]
-    den = [c / d0 for c in den]
-    return num, den
-
-
-def horner_eval_mpf(coeffs: Sequence[mpf], z) -> mpf:
-    """Evaluate a polynomial in ascending-power coefficients via Horner."""
-    z_mpf = mpf(z)
-    acc = mpf(0)
-    for c in reversed(list(coeffs)):
-        acc = acc * z_mpf + c
-    return acc
-
-
-def evaluate_rational(num: Sequence[mpf], den: Sequence[mpf], z) -> mpf:
-    return horner_eval_mpf(num, z) / horner_eval_mpf(den, z)
 
 
 def measure_error(num: Sequence[mpf], den: Sequence[mpf], grid: np.ndarray) -> tuple[float, float]:
