@@ -1,0 +1,550 @@
+// Init-phase setup + activation tests for `prefunded_sale`.
+//
+// Covers construction guards, the Init-only / one-shot setup mutators, vault
+// pairing preconditions, and the activation gate. Allowlist coupling lives in
+// `allowlist_tests`; purchase/lifecycle live in their own files.
+module openzeppelin_sale::prefunded_sale_setup_tests;
+
+use openzeppelin_finance::vesting_wallet_linear::{Self, Params as VParams};
+use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
+use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
+use openzeppelin_sale::refund_vault;
+use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
+use std::unit_test::{assert_eq, destroy};
+use sui::clock;
+use sui::test_scenario as ts;
+
+// === create_sale: construction guards ===
+
+// A zero hard cap is rejected — every sale must have a bounded raise.
+#[test, expected_failure(abort_code = prefunded_sale::EHardCapZero)]
+fun create_sale_rejects_zero_hard_cap() {
+    let mut ctx = tx_context::dummy();
+    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+        fixed_rate_curve::params(1),
+        0,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+    destroy(sale);
+    destroy(cap);
+}
+
+// soft_cap must not exceed hard_cap.
+#[test, expected_failure(abort_code = prefunded_sale::EInvalidCapsOrdering)]
+fun create_sale_rejects_soft_cap_above_hard() {
+    let mut ctx = tx_context::dummy();
+    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+        fixed_rate_curve::params(1),
+        100,
+        101,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+    destroy(sale);
+    destroy(cap);
+}
+
+// opens_at_ms must be strictly less than closes_at_ms.
+#[test, expected_failure(abort_code = prefunded_sale::EInvalidTimeRange)]
+fun create_sale_rejects_inverted_time_range() {
+    let mut ctx = tx_context::dummy();
+    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+        fixed_rate_curve::params(1),
+        100,
+        0,
+        5_000,
+        5_000,
+        &mut ctx,
+    );
+    destroy(sale);
+    destroy(cap);
+}
+
+// Happy path: a well-formed sale starts in Init with zeroed accounting and the
+// cap bound to the sale id.
+#[test]
+fun create_sale_initializes_in_init_phase() {
+    let mut ctx = tx_context::dummy();
+    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+        fixed_rate_curve::params(2),
+        1_000,
+        500,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+
+    assert_eq!(sale.phase().is_init(), true);
+    assert_eq!(sale.hard_cap(), 1_000);
+    assert_eq!(sale.soft_cap(), 500);
+    assert_eq!(sale.raised(), 0);
+    assert_eq!(sale.inventory_total(), 0);
+    assert_eq!(sale.total_allocated(), 0);
+    assert_eq!(sale.requires_allowlist(), false);
+    assert_eq!(sale.vesting_schedule_params().is_none(), true);
+    assert_eq!(cap.cap_sale_id(), object::id(&sale));
+
+    destroy(sale);
+    destroy(cap);
+}
+
+// === deposit ===
+
+// Inventory accumulates across multiple deposits during Init.
+#[test]
+fun deposit_accumulates_inventory() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+
+    sale.deposit(tu::sale_balance(300));
+    sale.deposit(tu::sale_balance(700));
+    assert_eq!(sale.inventory_total(), 1_000);
+    assert_eq!(sale.inventory_remaining(), 1_000);
+
+    destroy(sale);
+    destroy(cap);
+}
+
+// deposit is Init-only: it aborts once the sale is Active.
+#[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotInit)]
+fun deposit_after_activate_aborts() {
+    let (mut test, clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(tu::admin());
+    let mut sale = tu::take_sale(&test);
+    sale.deposit(tu::sale_balance(1)); // aborts: ENotInit
+    tu::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
+// === set_per_buyer_cap ===
+
+// A zero per-buyer cap is rejected (it would block every purchase).
+#[test, expected_failure(abort_code = prefunded_sale::EPerBuyerCapZero)]
+fun set_per_buyer_cap_rejects_zero() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+    sale.set_per_buyer_cap(0, &mut ctx);
+    destroy(sale);
+    destroy(cap);
+}
+
+// set_per_buyer_cap is one-shot.
+#[test, expected_failure(abort_code = prefunded_sale::EPerBuyerCapAlreadySet)]
+fun set_per_buyer_cap_twice_aborts() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+    sale.set_per_buyer_cap(100, &mut ctx);
+    sale.set_per_buyer_cap(200, &mut ctx); // aborts
+    destroy(sale);
+    destroy(cap);
+}
+
+// === set_vesting_schedule_params ===
+
+// Setting a schedule fills the Option; one-shot guard rejects a second call.
+#[test]
+fun set_vesting_schedule_params_fills_option() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4));
+    assert_eq!(sale.vesting_schedule_params().is_some(), true);
+    destroy(sale);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = prefunded_sale::EVestingScheduleAlreadySet)]
+fun set_vesting_schedule_params_twice_aborts() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4));
+    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 8)); // aborts
+    destroy(sale);
+    destroy(cap);
+}
+
+// === pair_refund_vault ===
+
+// A vault carrying pre-existing funds cannot be paired (funds would strand).
+#[test, expected_failure(abort_code = prefunded_sale::EVaultNotEmpty)]
+fun pair_rejects_nonempty_vault() {
+    let mut test = ts::begin(tu::admin());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    let (mut vault, vault_cap) = refund_vault::new<USDC>(ctx);
+    vault.deposit(&vault_cap, tu::pay_balance(1)); // taint the vault
+    sale.pair_refund_vault(&vault, vault_cap); // aborts: EVaultNotEmpty
+    destroy(sale);
+    destroy(cap);
+    destroy(vault);
+    test.end();
+}
+
+// A cap that does not match the provided vault is rejected.
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+fun pair_rejects_mismatched_cap() {
+    let mut test = ts::begin(tu::admin());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
+    let (other_vault, other_cap) = refund_vault::new<USDC>(ctx);
+    sale.pair_refund_vault(&vault, other_cap); // cap is for other_vault -> EWrongVault
+    destroy(sale);
+    destroy(cap);
+    destroy(vault);
+    destroy(other_vault);
+    destroy(vault_cap);
+    test.end();
+}
+
+// A vault not in Active state cannot be paired.
+#[test, expected_failure(abort_code = prefunded_sale::EVaultNotActive)]
+fun pair_rejects_inactive_vault() {
+    let mut test = ts::begin(tu::admin());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    let (mut vault, vault_cap) = refund_vault::new<USDC>(ctx);
+    vault.flip_to_refunding(&vault_cap); // no longer Active
+    sale.pair_refund_vault(&vault, vault_cap); // aborts: EVaultNotActive
+    destroy(sale);
+    destroy(cap);
+    destroy(vault);
+    test.end();
+}
+
+// Pairing twice aborts (one-shot).
+#[test, expected_failure(abort_code = prefunded_sale::EVaultAlreadyPaired)]
+fun pair_twice_aborts() {
+    let mut test = ts::begin(tu::admin());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    let (vault1, vault_cap1) = refund_vault::new<USDC>(ctx);
+    let (vault2, vault_cap2) = refund_vault::new<USDC>(ctx);
+    sale.pair_refund_vault(&vault1, vault_cap1);
+    sale.pair_refund_vault(&vault2, vault_cap2); // aborts
+    destroy(sale);
+    destroy(cap);
+    destroy(vault1);
+    destroy(vault2);
+    test.end();
+}
+
+// === enable_allowlist ===
+
+// enable_allowlist is one-shot: a second call aborts.
+#[test, expected_failure(abort_code = prefunded_sale::EAllowlistAlreadyEnabled)]
+fun enable_allowlist_twice_aborts() {
+    let mut test = ts::begin(tu::admin());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    let admin1 = sale.enable_allowlist(ctx);
+    assert_eq!(sale.requires_allowlist(), true);
+    let admin2 = sale.enable_allowlist(ctx); // aborts: EAllowlistAlreadyEnabled
+    destroy(sale);
+    destroy(cap);
+    destroy(admin1);
+    destroy(admin2);
+    test.end();
+}
+
+// === share_and_activate ===
+
+// Activation requires a paired vault.
+#[test, expected_failure(abort_code = prefunded_sale::EVaultRequiredForActivate)]
+fun activate_without_vault_aborts() {
+    let mut test = ts::begin(tu::admin());
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(tu::opens());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    sale.deposit(tu::sale_balance(1_000));
+    let ticket = fixed_rate_curve::activation_ticket(&sale);
+    sale.share_and_activate(ticket, &clk); // aborts: no vault paired
+    destroy(cap);
+    destroy(clk);
+    test.end();
+}
+
+// Activation rejects inventory below `hard_cap * rate`.
+#[test, expected_failure(abort_code = prefunded_sale::EInsufficientInventoryAtActivate)]
+fun activate_insufficient_inventory_aborts() {
+    let mut test = ts::begin(tu::admin());
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(tu::opens());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(2), // requires hard_cap * 2 = 2_000
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    sale.deposit(tu::sale_balance(1_999)); // one short
+    let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
+    sale.pair_refund_vault(&vault, vault_cap);
+    let ticket = fixed_rate_curve::activation_ticket(&sale);
+    sale.share_and_activate(ticket, &clk); // aborts
+    destroy(cap);
+    destroy(vault);
+    destroy(clk);
+    test.end();
+}
+
+// Boundary: inventory exactly equal to `hard_cap * rate` activates.
+#[test]
+fun activate_at_exact_required_inventory_ok() {
+    let (mut test, clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 2, 1_000, 0, 2_000);
+
+    test.next_tx(tu::admin());
+    let sale = tu::take_sale(&test);
+    assert_eq!(sale.phase().is_active(), true);
+    assert_eq!(sale.inventory_total(), 2_000);
+    tu::return_sale(sale);
+
+    destroy(clk);
+    test.end();
+}
+
+// Activation after the window has closed is rejected.
+#[test, expected_failure(abort_code = prefunded_sale::EActivationAfterClose)]
+fun activate_after_close_aborts() {
+    let mut test = ts::begin(tu::admin());
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(5_001); // past closes_at_ms
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    sale.deposit(tu::sale_balance(1_000));
+    let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
+    sale.pair_refund_vault(&vault, vault_cap);
+    let ticket = fixed_rate_curve::activation_ticket(&sale);
+    sale.share_and_activate(ticket, &clk); // aborts
+    destroy(cap);
+    destroy(vault);
+    destroy(clk);
+    test.end();
+}
+
+// A ticket minted for a different sale is rejected. Code uses
+// ETicketSaleMismatch (code 62) — the invariants doc still names the old
+// EReceiptSaleMismatch; corrected since commit 547c315.
+#[test, expected_failure(abort_code = prefunded_sale::ETicketSaleMismatch)]
+fun activate_with_foreign_ticket_aborts() {
+    let mut test = ts::begin(tu::admin());
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(tu::opens());
+    let ctx = test.ctx();
+
+    // Sale A — the one we try to activate.
+    let (mut sale_a, cap_a) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    sale_a.deposit(tu::sale_balance(1_000));
+    let (vault_a, vault_cap_a) = refund_vault::new<USDC>(ctx);
+    sale_a.pair_refund_vault(&vault_a, vault_cap_a);
+
+    // Sale B — same type; its ticket pins B's id, not A's.
+    let (sale_b, cap_b) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    let foreign_ticket = fixed_rate_curve::activation_ticket(&sale_b);
+
+    sale_a.share_and_activate(foreign_ticket, &clk); // aborts: ETicketSaleMismatch
+    destroy(cap_a);
+    destroy(cap_b);
+    destroy(sale_b);
+    destroy(vault_a);
+    destroy(clk);
+    test.end();
+}

@@ -27,6 +27,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - `cdf`: the standard-normal cumulative distribution function `Φ(z)` for `UD30x9` and `SD29x9` fixed-point inputs. (#345)
 
+### `openzeppelin_sale`
+
+#### Added
+
+- `prefunded_sale` module: a fixed-price, pre-funded token sale (presale / IDO) over a fixed inventory, generic over a witness-gated pricing curve, with an `Init -> Active -> Finalized | Cancelled` lifecycle and permissionless buyer redemption (`purchase`, `finalize`, `cancel_after_close`, `claim` / `refund`). (#414)
+- `fixed_rate_curve` module: the built-in `allocation = paid * rate` curve, minting the `Quote` and `ActivationTicket` a `FixedRateCurve` sale requires. (#414)
+- `refund_vault` module: a generic refundable escrow over `Balance<P>` that holds proceeds on cancel and pays buyers back individually; usable standalone. (#414)
+
 ## 1.3.0 (15-06-2026)
 
 ### `openzeppelin_math`
