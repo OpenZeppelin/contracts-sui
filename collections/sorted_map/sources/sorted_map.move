@@ -41,18 +41,22 @@
 ///
 /// # Aborts
 ///
-/// Only three operations abort; everything else is total (returns `Option`/`bool`/
-/// `vector`): `borrow`/`borrow_mut` (`EKeyNotFound`), `destroy_empty` (`ENotEmpty`),
-/// `pop_front`/`pop_back` (`EEmpty`). All aborts originate in this module, so consumer
-/// `#[expected_failure]` tests must pin `location = openzeppelin_sorted_map::sorted_map`.
+/// Four operations abort; everything else is total (returns `Option`/`bool`/`vector`):
+/// `borrow`/`borrow_mut` (`EKeyNotFound`), `destroy_empty` (`ENotEmpty`), `pop_front`/
+/// `pop_back` (`EEmpty`), and the forced-public `split_off` (`EBadSplit`, an out-of-range
+/// bounds guard - not part of the supported total API). All aborts originate in this
+/// module, so consumer `#[expected_failure]` tests must pin
+/// `location = openzeppelin_sorted_map::sorted_map`.
 ///
 /// # Library internals are forced-public
 ///
 /// Move 2024 macro hygiene requires every symbol a macro body references to be `public`
 /// at the consumer's expansion site, so `search!`, `insert_at`, `remove_at`,
-/// `make_entry`, `entry_key`, etc. are `public`. They are NOT a supported mutation API.
-/// In particular `insert_at`/`remove_at` write at a caller-given index with no order
-/// check - calling them directly can corrupt sorted order. Use the macro API.
+/// `make_entry`, `entry_key`, etc. - plus the bulk primitives `split_off`/`append` (added
+/// for the `big_sorted_map` sibling) - are `public`. They are NOT a supported mutation
+/// API. In particular `insert_at`/`remove_at`/`append` write at a caller-given position
+/// with no order check, and `split_off` aborts `EBadSplit` on an out-of-range index -
+/// calling them directly can corrupt sorted order. Use the macro API.
 ///
 /// # Upgrade policy
 ///

@@ -68,7 +68,7 @@ fun split_off_boundary_indices() {
     sm::destroy_empty(ret2);
 }
 
-// === split_off at > len aborts EBadSplit at the LIBRARY location (the 6th abort carve-out) ===
+// === split_off at > len aborts EBadSplit at the LIBRARY location (the forced-public surface's only abort) ===
 
 #[test]
 #[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EBadSplit, location = openzeppelin_sorted_map::sorted_map)]
