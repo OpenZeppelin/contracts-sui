@@ -1,8 +1,8 @@
 module openzeppelin_sorted_set::unlock_queue_tests;
 
-use sui::test_scenario::{Self as ts};
 use openzeppelin_sorted_set::unlock_queue::{Self, UnlockQueue};
 use std::unit_test::assert_eq;
+use sui::test_scenario as ts;
 
 const ALICE: address = @0x0A;
 const BOB: address = @0x0B;
@@ -24,14 +24,14 @@ fun drain_earliest_first() {
     ts::next_tx(&mut scenario, BOB);
     {
         let mut q = ts::take_shared<UnlockQueue>(&scenario);
-        assert_eq!(unlock_queue::pending(&q), 3);                       // {10, 20, 30}
-        assert_eq!(unlock_queue::next_deadline(&q), option::some(10));  // earliest, O(1) peek
-        assert_eq!(unlock_queue::last_deadline(&q), option::some(30));  // latest, O(1) peek
+        assert_eq!(unlock_queue::pending(&q), 3); // {10, 20, 30}
+        assert_eq!(unlock_queue::next_deadline(&q), option::some(10)); // earliest, O(1) peek
+        assert_eq!(unlock_queue::last_deadline(&q), option::some(30)); // latest, O(1) peek
 
-        assert!(unlock_queue::schedule(&mut q, 25));                   // new -> true
-        assert!(!unlock_queue::schedule(&mut q, 10));                  // duplicate -> false, no abort
-        assert_eq!(unlock_queue::pending(&q), 4);                       // {10, 20, 25, 30}
-        assert!(unlock_queue::deadlines_well_formed(&q));             // order oracle on a POPULATED set (n=4)
+        assert!(unlock_queue::schedule(&mut q, 25)); // new -> true
+        assert!(!unlock_queue::schedule(&mut q, 10)); // duplicate -> false, no abort
+        assert_eq!(unlock_queue::pending(&q), 4); // {10, 20, 25, 30}
+        assert!(unlock_queue::deadlines_well_formed(&q)); // order oracle on a POPULATED set (n=4)
         ts::return_shared(q);
     };
 
@@ -39,17 +39,17 @@ fun drain_earliest_first() {
     ts::next_tx(&mut scenario, CAROL);
     {
         let mut q = ts::take_shared<UnlockQueue>(&scenario);
-        assert_eq!(unlock_queue::process_earliest(&mut q), 10);        // pop_front: smallest
+        assert_eq!(unlock_queue::process_earliest(&mut q), 10); // pop_front: smallest
         assert_eq!(unlock_queue::process_earliest(&mut q), 20);
-        assert_eq!(unlock_queue::pending(&q), 2);                       // {25, 30}
+        assert_eq!(unlock_queue::pending(&q), 2); // {25, 30}
         assert_eq!(unlock_queue::next_deadline(&q), option::some(25));
 
-        assert!(unlock_queue::cancel(&mut q, 30));                     // remove the tail
-        assert_eq!(unlock_queue::pending(&q), 1);                       // {25}
-        assert_eq!(unlock_queue::process_latest(&mut q), 25);          // pop_back: largest (now only)
+        assert!(unlock_queue::cancel(&mut q, 30)); // remove the tail
+        assert_eq!(unlock_queue::pending(&q), 1); // {25}
+        assert_eq!(unlock_queue::process_latest(&mut q), 25); // pop_back: largest (now only)
 
         assert!(unlock_queue::is_empty(&q));
-        assert!(unlock_queue::deadlines_well_formed(&q));             // an empty set is well-formed
+        assert!(unlock_queue::deadlines_well_formed(&q)); // an empty set is well-formed
         ts::return_shared(q);
     };
 
@@ -64,7 +64,12 @@ fun drain_earliest_first() {
 // wrapped map's location (`openzeppelin_sorted_map::sorted_map`, code 2) here would make this test
 // FAIL - that branch is never reached through the set's own `pop_*`.
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_set::sorted_set::EEmpty, location = openzeppelin_sorted_set::sorted_set)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_set::sorted_set::EEmpty,
+        location = openzeppelin_sorted_set::sorted_set,
+    ),
+]
 fun process_empty_queue_aborts() {
     let mut scenario = ts::begin(ALICE);
 
@@ -84,7 +89,7 @@ fun process_empty_queue_aborts() {
     {
         let mut q = ts::take_shared<UnlockQueue>(&scenario);
         unlock_queue::process_earliest(&mut q); // aborts here
-        ts::return_shared(q);                   // unreachable; satisfies the type checker
+        ts::return_shared(q); // unreachable; satisfies the type checker
     };
 
     ts::end(scenario);

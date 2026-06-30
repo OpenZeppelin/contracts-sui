@@ -2,8 +2,8 @@
 /// (next/prev, ceiling/floor on integer keys).
 module openzeppelin_sorted_map::tick_registry_tests;
 
-use sui::test_scenario::{Self as ts};
 use openzeppelin_sorted_map::tick_registry::{Self, TickRegistry};
+use sui::test_scenario as ts;
 
 const ALICE: address = @0x0A;
 const BOB: address = @0x0B;
@@ -95,10 +95,12 @@ fun tick_navigation_walkthrough() {
 // activated aborts the library's `EKeyNotFound` at `location = ...::sorted_map` (the
 // abort originates in the library, not here). Gate with `contains_tick` to avoid it.
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
-    location = openzeppelin_sorted_map::sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_inactive_tick_aborts() {
     let mut scenario = ts::begin(ALICE);
     {

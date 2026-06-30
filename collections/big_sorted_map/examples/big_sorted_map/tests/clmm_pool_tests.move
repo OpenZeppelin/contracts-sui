@@ -2,9 +2,9 @@
 /// signature integration) and the `EInvalidDegree` floor guard.
 module openzeppelin_big_sorted_map::clmm_pool_tests;
 
-use sui::test_scenario::{Self as ts};
 use openzeppelin_big_sorted_map::clmm_pool::{Self, Pool};
 use std::unit_test::assert_eq;
+use sui::test_scenario as ts;
 
 const PUBLISHER: address = @0x0F;
 const KEEPER: address = @0x0E;
@@ -102,10 +102,12 @@ fun clmm_swap_crosses_ticks_in_place() {
 // attacker could use to blow the dynamic-field load budget. A degree below the floor is
 // rejected at construction, before any object is created.
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EInvalidDegree,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EInvalidDegree,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun deploy_below_degree_floor_aborts() {
     let mut scenario = ts::begin(PUBLISHER);
     {

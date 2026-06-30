@@ -18,7 +18,9 @@ use std::unit_test::assert_eq;
 // Referencing `T` via `type_name::with_defining_ids` keeps the parameter used; the
 // ability constraint on each function is the actual assertion.
 fun needs_store<T: store>() { let _ = std::type_name::with_defining_ids<T>(); }
+
 fun needs_copy<T: copy>() { let _ = std::type_name::with_defining_ids<T>(); }
+
 fun needs_drop<T: drop>() { let _ = std::type_name::with_defining_ids<T>(); }
 
 #[test]

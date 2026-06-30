@@ -10,7 +10,7 @@
 /// and stays far under the 256-locals limit.
 module openzeppelin_sorted_map::differential_tests;
 
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use openzeppelin_sorted_map::test_util as u;
 use std::unit_test::assert_eq;
 

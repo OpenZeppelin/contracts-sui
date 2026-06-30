@@ -12,7 +12,7 @@ module openzeppelin_big_sorted_map::conservation_tests;
 
 use openzeppelin_big_sorted_map::big_sorted_map::{Self as bsm, BigSortedMap};
 use openzeppelin_big_sorted_map::test_util as u;
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use std::unit_test::assert_eq;
 
 fun wf(m: &BigSortedMap<u64, u::NoDrop>): bool { u::bsm_well_formed(m, 4, 3, true) }
@@ -70,8 +70,8 @@ fun nodrop_upsert_returns_old_value() {
     // replace key 4's value; the OLD NoDrop must be returned (some), not silently burned.
     let ret = u::ins_nd(&mut map, 4, u::nd(40404));
     let old = ret.destroy_some();
-    assert_eq!(u::nd_unwrap(old), 4000);      // the displaced value, conserved
-    assert_eq!(bsm::length(&map), 7);          // upsert, not a fresh insert
+    assert_eq!(u::nd_unwrap(old), 4000); // the displaced value, conserved
+    assert_eq!(bsm::length(&map), 7); // upsert, not a fresh insert
     assert_eq!(u::nd_value_id(&map, 4), 40404); // new value in place
     assert!(wf(&map));
     u::drain_destroy_nd(map);
@@ -197,7 +197,7 @@ fun nodrop_bridge_roundtrip_conserves() {
 // === into_sorted_map's depth-0 single-leaf-root branch conserves every NoDrop ===
 // into_sorted_map has two disjoint drain branches; the depth-0 (min_leaf_index==ROOT_INDEX) branch -
 // take_root -> append the inline leaf's V-multiset -> reinstall a fresh empty leaf root - has zero
-// coverage under ANY V (every other call site drains depth>=1). A drop/mis-thread of the inline
+// coverage under ANY V (every other call site drains depth>=1). A drop/misthreading of the inline
 // leaf's values is silent under V:drop; only a NoDrop witness on THIS branch catches it.
 
 // Pins branch: into_sorted_map / given a depth-0 single-leaf-root NoDrop tree / it drains move-only and reinstalls an empty leaf root

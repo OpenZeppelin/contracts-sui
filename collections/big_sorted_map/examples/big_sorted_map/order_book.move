@@ -23,7 +23,7 @@
 /// source against the comparator you thread and aborts `ESourceNotSortedUnderComparator`
 /// before writing any of THAT tree's nodes - so a snapshot built in the wrong order is
 /// caught, not silently turned into tree-wide corruption. (Struct fields evaluate
-/// left-to-right, so the asks tree is built first; a mis-ordered `bids_snapshot` aborts
+/// left-to-right, so the asks tree is built first; a misordered `bids_snapshot` aborts
 /// only after the asks object already exists this tx - the whole tx then reverts,
 /// committing nothing.) Each bridge is a full comparator-descent macro, so each lives in
 /// its OWN one-line wrapper fun (`build_asks` / `build_bids`): two macro expansions in one
@@ -63,7 +63,7 @@ use openzeppelin_sorted_map::sorted_map::SortedMap;
 
 /// Aggregate resting size at one price. `store` so it can live in a node; `copy + drop`
 /// for convenience.
-public struct Level has store, copy, drop {
+public struct Level has copy, drop, store {
     size: u64,
 }
 
@@ -102,7 +102,7 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
 /// `asks_snapshot` MUST be ascending under `<` and `bids_snapshot` MUST be descending under
 /// `|a,b| *a > *b`. Each bridge re-validates its OWN source and aborts
 /// `ESourceNotSortedUnderComparator` before writing any of THAT tree's nodes. The asks tree
-/// is bridged first (struct fields evaluate left-to-right), so a mis-ordered `bids_snapshot`
+/// is bridged first (struct fields evaluate left-to-right), so a misordered `bids_snapshot`
 /// aborts only after the asks object has been built this tx - corruption is prevented by
 /// whole-tx revert (nothing commits), not by nothing having executed. Returns the book's `ID`.
 public fun migrate_and_share(
@@ -138,15 +138,13 @@ fun build_bids(snapshot: SortedMap<u64, Level>, ctx: &mut TxContext): BigSortedM
 /// expansion wrappers below. That is the whole point: the merge-upsert is composed from
 /// jumps, never pasted into one body.
 public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
-    if (asks_has(book, price)) asks_bump(book, price, size)
-    else asks_add(book, price, size);
+    if (asks_has(book, price)) asks_bump(book, price, size) else asks_add(book, price, size);
 }
 
 /// Add `size` at `price` on the bid side, merging if present. Bids descend, so every
 /// wrapper threads the same `|a,b| *a > *b`.
 public fun place_bid(book: &mut OrderBook, price: u64, size: u64) {
-    if (bids_has(book, price)) bids_bump(book, price, size)
-    else bids_add(book, price, size);
+    if (bids_has(book, price)) bids_bump(book, price, size) else bids_add(book, price, size);
 }
 
 // One comparator-macro expansion per wrapper body.

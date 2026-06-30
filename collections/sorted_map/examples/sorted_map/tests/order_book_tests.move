@@ -2,9 +2,9 @@
 /// reverse-`_by`, pagination, the EKeyNotFound abort).
 module openzeppelin_sorted_map::order_book_tests;
 
-use sui::test_scenario::{Self as ts};
 use openzeppelin_sorted_map::order_book::{Self, OrderBook};
 use openzeppelin_sorted_map::sorted_map;
+use sui::test_scenario as ts;
 
 const ALICE: address = @0x0A;
 const BOB: address = @0x0B;
@@ -40,7 +40,7 @@ fun order_book_lifecycle() {
     {
         let mut book = ts::take_shared<OrderBook>(&scenario);
         order_book::place_ask(&mut book, 100, 3); // 100 -> 13
-        order_book::place_bid(&mut book, 99, 2);  // 99  -> 6
+        order_book::place_bid(&mut book, 99, 2); // 99  -> 6
         ts::return_shared(book);
     };
 
@@ -50,8 +50,8 @@ fun order_book_lifecycle() {
         let book = ts::take_shared<OrderBook>(&scenario);
 
         assert!(order_book::best_ask(&book) == option::some(100)); // lowest ask
-        assert!(order_book::best_bid(&book) == option::some(99));  // highest bid (descending head)
-        assert!(order_book::ask_size_at(&book, 100) == 13);        // merged, not duplicated
+        assert!(order_book::best_bid(&book) == option::some(99)); // highest bid (descending head)
+        assert!(order_book::ask_size_at(&book, 100) == 13); // merged, not duplicated
 
         // Full ascending depth.
         assert!(order_book::ask_levels(&book, 0, true, 10) == vector[100, 101, 102]);
@@ -60,7 +60,7 @@ fun order_book_lifecycle() {
         assert!(order_book::ask_levels(&book, 101, false, 2) == vector[102]);
 
         // A consumer's test reaches the library's #[test_only] order oracle, both ways.
-        assert!(order_book::bids_well_formed(&book));                     // encapsulated _by oracle
+        assert!(order_book::bids_well_formed(&book)); // encapsulated _by oracle
         assert!(sorted_map::is_well_formed!(order_book::asks_ref(&book))); // direct bare oracle
 
         ts::return_shared(book);
@@ -85,10 +85,12 @@ fun order_book_lifecycle() {
 // module, not in this consumer module - so `#[expected_failure]` must pin
 // `location = openzeppelin_sorted_map::sorted_map`.
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
-    location = openzeppelin_sorted_map::sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun ask_size_at_absent_aborts() {
     let mut scenario = ts::begin(ALICE);
 
@@ -108,7 +110,7 @@ fun ask_size_at_absent_aborts() {
     {
         let book = ts::take_shared<OrderBook>(&scenario);
         order_book::ask_size_at(&book, 555); // aborts here
-        ts::return_shared(book);             // unreachable; satisfies the type checker
+        ts::return_shared(book); // unreachable; satisfies the type checker
     };
     ts::end(scenario);
 }

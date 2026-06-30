@@ -107,8 +107,8 @@ fun keys_immutable_returned_by_value() {
     assert_eq!(retained, option::some(1));
     // mutate the tree: a value via borrow_mut (&mut V, never &mut K), and remove/insert the min.
     u::set(&mut map, 5, 5555);
-    u::rem(&mut map, 1);            // remove the old min
-    u::ins(&mut map, 0, 0);         // add a new min
+    u::rem(&mut map, 1); // remove the old min
+    u::ins(&mut map, 0, 0); // add a new min
     // LOAD-BEARING: the LIVE tree's min actually changed (this could fail if rem/ins/borrow_mut
     // had desynced key position); the retained copy staying some(1) is value-semantics, not a test.
     assert_eq!(bsm::head(&map), option::some(0));
@@ -141,10 +141,10 @@ fun owned_transfer_roundtrip_children_travel() {
     sc.next_tx(owner);
     {
         let mut map = sc.take_from_address<BigSortedMap<u64, u64>>(owner);
-        assert_eq!(bsm::length(&map), 10);    // cached length survived the handoff
-        assert_eq!(u::get(&map, 7), 70);      // a df-stored key/value traveled with the object
+        assert_eq!(bsm::length(&map), 10); // cached length survived the handoff
+        assert_eq!(u::get(&map, 7), 70); // a df-stored key/value traveled with the object
         assert!(u::bsm_well_formed(&map, 4, 3, true));
-        u::ins(&mut map, 11, 110);              // mutate as the new owner
+        u::ins(&mut map, 11, 110); // mutate as the new owner
         assert_eq!(u::get(&map, 11), 110);
         transfer::public_transfer(map, owner);
     };

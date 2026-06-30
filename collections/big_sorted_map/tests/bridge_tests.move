@@ -6,9 +6,9 @@
 /// bridge lives in `conservation_tests`. The well-formedness check is asserted on every built tree.
 module openzeppelin_big_sorted_map::bridge_tests;
 
-use openzeppelin_big_sorted_map::big_sorted_map::{Self as bsm};
+use openzeppelin_big_sorted_map::big_sorted_map as bsm;
 use openzeppelin_big_sorted_map::test_util as u;
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use std::unit_test::assert_eq;
 
 // === from -> into round-trip at an uneven size (5 leaves of 3,3,3,2,2 at degree 3) ===
@@ -38,8 +38,8 @@ fun from_into_roundtrip_uneven_tail() {
         assert_eq!(u::sm_get(&back, k), k * 10);
         k = k + 1;
     };
-    bsm::destroy_empty(map);   // map emptied by the drain
-    let _drop_back = back;     // back is u64/u64 (droppable)
+    bsm::destroy_empty(map); // map emptied by the drain
+    let _drop_back = back; // back is u64/u64 (droppable)
 }
 
 // === the half-full tail holds across the worst-case sizes (naive pack would underflow) ===

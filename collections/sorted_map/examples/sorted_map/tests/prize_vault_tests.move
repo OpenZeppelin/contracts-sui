@@ -2,10 +2,10 @@
 /// cap-gated writes, ordered payout, drain-then-destroy, the ENotEmpty safety net).
 module openzeppelin_sorted_map::prize_vault_tests;
 
-use sui::test_scenario::{Self as ts};
+use openzeppelin_sorted_map::prize_vault::{Self, PrizeVault, OrganizerCap};
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
-use openzeppelin_sorted_map::prize_vault::{Self, PrizeVault, OrganizerCap};
+use sui::test_scenario as ts;
 
 const ORGANIZER: address = @0x0A;
 const FIRST: address = @0x01;
@@ -101,10 +101,12 @@ fun fund_payout_destroy() {
 // holds value. The abort is the library's ENotEmpty, at the library location - the
 // transaction reverts and the vault (with its coin) stands.
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_sorted_map::sorted_map::ENotEmpty,
-    location = openzeppelin_sorted_map::sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::ENotEmpty,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun close_nonempty_vault_aborts() {
     let mut scenario = ts::begin(ORGANIZER);
 

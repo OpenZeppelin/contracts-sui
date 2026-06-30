@@ -14,7 +14,7 @@ module openzeppelin_big_sorted_map::cursor_tests;
 
 use openzeppelin_big_sorted_map::big_sorted_map::{Self as bsm, BigSortedMap};
 use openzeppelin_big_sorted_map::test_util as u;
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use std::unit_test::assert_eq;
 
 fun build(n: u64, ctx: &mut TxContext): BigSortedMap<u64, u64> {
@@ -92,8 +92,8 @@ fun cursor_mutates_value_in_place() {
     // read the key at offset 0 of the located leaf, then mutate ITS value through the cursor.
     let key0 = *sm::key_at(bsm::node_leaf(bsm::borrow_node(&map, leaf_id)), 0);
     *bsm::leaf_value_at_mut(&mut map, leaf_id, 0) = 99_999;
-    assert_eq!(u::get(&map, key0), 99_999);          // the mutation took effect via the cursor
-    assert!(u::bsm_well_formed(&map, 4, 3, true));  // keys still sorted (only V changed)
+    assert_eq!(u::get(&map, key0), 99_999); // the mutation took effect via the cursor
+    assert!(u::bsm_well_formed(&map, 4, 3, true)); // keys still sorted (only V changed)
     u::drain_destroy(map);
 }
 

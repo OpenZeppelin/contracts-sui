@@ -15,7 +15,7 @@
 /// non-`drop` `V`.
 module openzeppelin_sorted_map::structural_tests;
 
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use openzeppelin_sorted_map::test_util::{Self as u, NoDrop};
 use std::unit_test::assert_eq;
 
@@ -35,7 +35,7 @@ fun split_off_moves_suffix() {
     assert!(sm::head(&m) == option::some(10) && sm::tail(&m) == option::some(20));
     assert!(sm::head(&ret) == option::some(30) && sm::tail(&ret) == option::some(50));
     assert!(*sm::tail(&m).borrow() < *sm::head(&ret).borrow()); // disjoint: retained < returned
-    assert!(u::get(&m, 10) == 1 && u::get(&ret, 40) == 4);      // values travelled with their keys
+    assert!(u::get(&m, 10) == 1 && u::get(&ret, 40) == 4); // values travelled with their keys
 }
 
 // === split_off boundary indices: at==0 (self emptied) and at==len (result empty), both valid ===
@@ -71,7 +71,12 @@ fun split_off_boundary_indices() {
 // === split_off at > len aborts EBadSplit at the LIBRARY location (the forced-public surface's only abort) ===
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EBadSplit, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EBadSplit,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun split_off_at_gt_len_aborts() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -189,8 +194,8 @@ fun append_violated_precondition_corrupts() {
 fun split_off_then_append_roundtrip() {
     let mut m = u::build_scrambled(40);
     let before = u::kfrom(&m, 0, true, 1000); // full ascending key list
-    let part = sm::split_off(&mut m, 17);     // m keeps [0,17); part = [17,40)
-    sm::append(&mut m, part);                 // precondition m.tail < part.head holds by construction
+    let part = sm::split_off(&mut m, 17); // m keeps [0,17); part = [17,40)
+    sm::append(&mut m, part); // precondition m.tail < part.head holds by construction
     assert_eq!(u::kfrom(&m, 0, true, 1000), before); // identical key sequence restored
     assert!(sm::length(&m) == 40 && u::wf(&m));
 }

@@ -77,8 +77,37 @@ fun multi_level_growth_equal_depth() {
     // middle-out insertion order so splits happen at interior positions (exercises slot
     // discipline: the left half's routing entry is inserted at the RECORDED child index, not the end).
     let order = vector[
-        50u64, 25, 75, 12, 37, 62, 87, 6, 18, 31, 43, 56, 68, 81, 93,
-        3, 9, 15, 21, 28, 34, 40, 46, 53, 59, 65, 71, 78, 84, 90, 96,
+        50u64,
+        25,
+        75,
+        12,
+        37,
+        62,
+        87,
+        6,
+        18,
+        31,
+        43,
+        56,
+        68,
+        81,
+        93,
+        3,
+        9,
+        15,
+        21,
+        28,
+        34,
+        40,
+        46,
+        53,
+        59,
+        65,
+        71,
+        78,
+        84,
+        90,
+        96,
     ];
     let mut i = 0;
     while (i < order.length()) {
@@ -215,7 +244,7 @@ fun merge_folds_right_into_left_and_collapses_root() {
     // remove 1: L0=[1,2] -> [2] underflows; neither sibling has spare (L1=[3,4] has 2) -> MERGE.
     // merge folds the RIGHT (L1) into the LEFT (L0) -> [2,3,4]; root drops to one child -> COLLAPSE.
     assert_eq!(u::rem(&mut map, 1), option::some(10));
-    assert_eq!(u::tree_depth(&map), 0);     // the only height-decrease path
+    assert_eq!(u::tree_depth(&map), 0); // the only height-decrease path
     assert!(u::root_is_leaf(&map));
     assert_eq!(u::root_child_count(&map), 3); // promoted leaf [2,3,4]
     assert!(bsm::head(&map) == option::some(2) && bsm::tail(&map) == option::some(4));

@@ -251,12 +251,18 @@ public fun sm_build_desc(n: u64): SortedMap<u64, u64> {
 }
 
 /// `from_sorted_map` at forced low degree (inner 4 / leaf 3) -> a multi-level bulk build.
-public fun from_sm_lowdeg(source: SortedMap<u64, u64>, ctx: &mut TxContext): BigSortedMap<u64, u64> {
+public fun from_sm_lowdeg(
+    source: SortedMap<u64, u64>,
+    ctx: &mut TxContext,
+): BigSortedMap<u64, u64> {
     bsm::from_sorted_map_with_config!(source, 4, 3, ctx)
 }
 
 /// `from_sorted_map` at default degrees (one-shot path).
-public fun from_sm_default(source: SortedMap<u64, u64>, ctx: &mut TxContext): BigSortedMap<u64, u64> {
+public fun from_sm_default(
+    source: SortedMap<u64, u64>,
+    ctx: &mut TxContext,
+): BigSortedMap<u64, u64> {
     bsm::from_sorted_map!(source, ctx)
 }
 
@@ -275,7 +281,10 @@ public fun from_sm_rev(source: SortedMap<u64, u64>, ctx: &mut TxContext): BigSor
 /// otherwise exercised with a non-`<` comparator). Threads a reverse `>` lambda into the
 /// default-degree dispatch (distinct body from `from_sorted_map!`'s hardwired `<` and from
 /// `from_sorted_map_with_config_by!`'s explicit degrees). One macro expansion.
-public fun from_sm_default_rev(source: SortedMap<u64, u64>, ctx: &mut TxContext): BigSortedMap<u64, u64> {
+public fun from_sm_default_rev(
+    source: SortedMap<u64, u64>,
+    ctx: &mut TxContext,
+): BigSortedMap<u64, u64> {
     bsm::from_sorted_map_by!(source, |a, b| *a > *b, ctx)
 }
 
@@ -373,8 +382,7 @@ public fun bsm_well_formed<V: store>(
     // independent leaf-chain walk (forward + backward links, global order, count).
     let ok_chain = check_leaf_chain(map, len_cached, ascending);
     // head/tail read the CACHED spine pointers; they must equal the structural extremes.
-    let ok_extremes =
-        bsm::head(map) == option::some(gmin) && bsm::tail(map) == option::some(gmax);
+    let ok_extremes = bsm::head(map) == option::some(gmin) && bsm::tail(map) == option::some(gmax);
     ok_struct && ok_unique && ok_len && ok_chain && ok_extremes
 }
 
@@ -632,7 +640,11 @@ public fun root_routing_ck_tag(map: &BigSortedMap<CoarseKey, u64>, idx: u64): u6
 
 /// The `tag` of the key at `key_idx` in the root's child leaf at `child_idx` (CoarseKey map) -
 /// reads one level below an inner root to observe a leaf-max's stored bytes after an upsert.
-public fun child_leaf_ck_tag(map: &BigSortedMap<CoarseKey, u64>, child_idx: u64, key_idx: u64): u64 {
+public fun child_leaf_ck_tag(
+    map: &BigSortedMap<CoarseKey, u64>,
+    child_idx: u64,
+    key_idx: u64,
+): u64 {
     let root = bsm::borrow_node(map, bsm::root_index());
     let child_id = bsm::child_id_at(root, child_idx);
     ck_tag(sm::key_at(bsm::node_leaf(bsm::borrow_node(map, child_id)), key_idx))

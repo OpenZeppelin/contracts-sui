@@ -7,14 +7,19 @@
 /// complement: every non-carve-out op returns none/false/empty on a miss instead of aborting.
 module openzeppelin_sorted_map::abort_tests;
 
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use openzeppelin_sorted_map::test_util as u;
 use std::unit_test::assert_eq;
 
 // === borrow / borrow_mut on an absent key -> EKeyNotFound ===
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_absent_below_head() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -23,7 +28,12 @@ fun borrow_absent_below_head() {
 }
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_absent_above_tail() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -32,7 +42,12 @@ fun borrow_absent_above_tail() {
 }
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_absent_interior_gap() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -41,14 +56,24 @@ fun borrow_absent_interior_gap() {
 }
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_empty_map() {
     let m = sm::new<u64, u64>();
     u::get(&m, 1);
 }
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_mut_absent() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -56,7 +81,12 @@ fun borrow_mut_absent() {
 }
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_mut_absent_interior_gap() {
     // The interior-gap (idx < n) companion to borrow_mut_absent: a pre-assert &mut read
     // would hand back a live &mut to the SUCCESSOR (30) instead of aborting.
@@ -69,7 +99,12 @@ fun borrow_mut_absent_interior_gap() {
 // === destroy_empty on a non-empty map -> ENotEmpty ===
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::ENotEmpty, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::ENotEmpty,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun destroy_empty_nonempty() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 1, 1);
@@ -79,7 +114,12 @@ fun destroy_empty_nonempty() {
 // === pop_front / pop_back on an empty map -> EEmpty ===
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EEmpty, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EEmpty,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun pop_front_empty() {
     let mut m = sm::new<u64, u64>();
     let (_k, _v) = sm::pop_front(&mut m);
@@ -87,7 +127,12 @@ fun pop_front_empty() {
 }
 
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EEmpty, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EEmpty,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun pop_back_empty() {
     let mut m = sm::new<u64, u64>();
     let (_k, _v) = sm::pop_back(&mut m); // n-1 underflow guarded by the empty check

@@ -12,7 +12,7 @@
 /// under the ~256-locals limit.
 module openzeppelin_sorted_set::differential_tests;
 
-use openzeppelin_sorted_set::sorted_set::{Self as ss};
+use openzeppelin_sorted_set::sorted_set as ss;
 use openzeppelin_sorted_set::test_util as u;
 use std::unit_test::assert_eq;
 

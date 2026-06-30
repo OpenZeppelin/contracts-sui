@@ -26,7 +26,7 @@ module openzeppelin_sorted_map::tick_registry;
 use openzeppelin_sorted_map::sorted_map::{Self, SortedMap};
 
 /// Per-tick liquidity state.
-public struct TickInfo has store, copy, drop {
+public struct TickInfo has copy, drop, store {
     liquidity_net: u64,
     fee_growth: u128,
 }

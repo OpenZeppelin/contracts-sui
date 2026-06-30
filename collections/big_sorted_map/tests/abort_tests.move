@@ -11,16 +11,18 @@ module openzeppelin_big_sorted_map::abort_tests;
 
 use openzeppelin_big_sorted_map::big_sorted_map::{Self as bsm, BigSortedMap};
 use openzeppelin_big_sorted_map::test_util as u;
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use std::unit_test::assert_eq;
 
 // === code 0 - EMapNotEmpty: destroy_empty on a non-empty tree ===
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EMapNotEmpty,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EMapNotEmpty,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun destroy_empty_nonempty_aborts() {
     let mut ctx = tx_context::dummy();
     let mut map = bsm::new<u64, u64>(&mut ctx);
@@ -31,10 +33,12 @@ fun destroy_empty_nonempty_aborts() {
 // === code 1 - EKeyNotFound: borrow / borrow_mut on an absent key ===
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EKeyNotFound,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EKeyNotFound,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun borrow_absent_aborts_at_bsm() {
     let mut ctx = tx_context::dummy();
     let mut map = bsm::new_with_config<u64, u64>(4, 3, &mut ctx);
@@ -45,10 +49,12 @@ fun borrow_absent_aborts_at_bsm() {
 }
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EKeyNotFound,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EKeyNotFound,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun borrow_mut_absent_aborts_at_bsm() {
     let mut ctx = tx_context::dummy();
     let mut map = bsm::new_with_config<u64, u64>(4, 3, &mut ctx);
@@ -65,10 +71,12 @@ fun borrow_mut_absent_aborts_at_bsm() {
 
 // Pins branch: borrow / given populated multi-level tree / when key in an interior gap / it aborts EKeyNotFound
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EKeyNotFound,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EKeyNotFound,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun borrow_interior_gap_miss_aborts_at_bsm() {
     let mut ctx = tx_context::dummy();
     let mut map = bsm::new_with_config<u64, u64>(4, 3, &mut ctx); // inner4/leaf3 -> multi-level
@@ -80,10 +88,12 @@ fun borrow_interior_gap_miss_aborts_at_bsm() {
 
 // Pins branch: borrow_mut / given populated multi-level tree / when key in an interior gap / it aborts EKeyNotFound
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EKeyNotFound,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EKeyNotFound,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun borrow_mut_interior_gap_miss_aborts_at_bsm() {
     let mut ctx = tx_context::dummy();
     let mut map = bsm::new_with_config<u64, u64>(4, 3, &mut ctx);
@@ -96,10 +106,12 @@ fun borrow_mut_interior_gap_miss_aborts_at_bsm() {
 // === code 2 - EEmpty: pop_front / pop_back on an empty tree ===
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EEmpty,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EEmpty,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun pop_front_empty_aborts() {
     let mut ctx = tx_context::dummy();
     let mut map = bsm::new<u64, u64>(&mut ctx);
@@ -108,10 +120,12 @@ fun pop_front_empty_aborts() {
 }
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EEmpty,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EEmpty,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun pop_back_empty_aborts() {
     let mut ctx = tx_context::dummy();
     let mut map = bsm::new<u64, u64>(&mut ctx);
@@ -120,10 +134,12 @@ fun pop_back_empty_aborts() {
 }
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EEmpty,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EEmpty,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun pop_front_after_draining_aborts() {
     // Drain a singleton, then pop the now-empty tree: still EEmpty (the empty check is first).
     let mut ctx = tx_context::dummy();
@@ -137,10 +153,12 @@ fun pop_front_after_draining_aborts() {
 // === code 3 - EInvalidDegree: new_with_config below the half-fill floor (the DoS guard) ===
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EInvalidDegree,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EInvalidDegree,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun new_with_config_low_leaf_degree_aborts() {
     let mut ctx = tx_context::dummy();
     // leaf degree 2 < LEAF_MIN_DEGREE (3) - would allow a 1-entry-per-leaf scan attack.
@@ -149,10 +167,12 @@ fun new_with_config_low_leaf_degree_aborts() {
 }
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EInvalidDegree,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EInvalidDegree,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun new_with_config_low_inner_degree_aborts() {
     let mut ctx = tx_context::dummy();
     // inner degree 3 < INNER_MIN_DEGREE (4).
@@ -167,10 +187,12 @@ fun new_with_config_low_inner_degree_aborts() {
 // degree. (The 10_000 threshold is provisional - OQ-4.)
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EWouldExceedTier1EntryHeuristic,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EWouldExceedTier1EntryHeuristic,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun into_sorted_map_over_capacity_aborts() {
     let mut ctx = tx_context::dummy();
     let mut src = sm::new<u64, u64>();
@@ -183,13 +205,15 @@ fun into_sorted_map_over_capacity_aborts() {
     u::drain_destroy(map);
 }
 
-// === code 5 - ESourceNotSortedUnderComparator: from_sorted_map source mis-ordered ===
+// === code 5 - ESourceNotSortedUnderComparator: from_sorted_map source misordered ===
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::ESourceNotSortedUnderComparator,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::ESourceNotSortedUnderComparator,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun from_sorted_map_unsorted_source_aborts() {
     let mut ctx = tx_context::dummy();
     let src = u::sm_build(6); // ASCENDING [1..6] under the map's default `<`
@@ -202,10 +226,12 @@ fun from_sorted_map_unsorted_source_aborts() {
 // === code 6 - EWrongNodeKind: an asserting node accessor used on the wrong node kind ===
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EWrongNodeKind,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EWrongNodeKind,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun wrong_node_kind_inner_accessor_on_leaf_aborts() {
     let mut ctx = tx_context::dummy();
     let map = bsm::new<u64, u64>(&mut ctx); // empty tree: the root is a LEAF
@@ -222,10 +248,12 @@ fun wrong_node_kind_inner_accessor_on_leaf_aborts() {
 
 // Pins branch: node_leaf / given an INNER node / when the leaf accessor is applied / it aborts EWrongNodeKind at the bsm location
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EWrongNodeKind,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EWrongNodeKind,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun wrong_node_kind_leaf_accessor_on_inner_aborts() {
     let mut ctx = tx_context::dummy();
     // 4 inserts at leaf_max 3 split the leaf root -> the root becomes an INNER node.
@@ -241,10 +269,12 @@ fun wrong_node_kind_leaf_accessor_on_inner_aborts() {
 // === EBadSplit (sorted_map code 3) - the SOLE cross-module abort (location = sorted_map) ===
 
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_sorted_map::sorted_map::EBadSplit,
-    location = openzeppelin_sorted_map::sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EBadSplit,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun split_off_out_of_bounds_aborts_at_sorted_map() {
     let mut s = u::sm_build(3); // len 3
     let extra = sm::split_off(&mut s, 100); // at > len -> EBadSplit at the MAP's location

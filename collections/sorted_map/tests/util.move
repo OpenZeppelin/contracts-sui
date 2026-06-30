@@ -77,9 +77,13 @@ public fun set(m: &mut SortedMap<u64, u64>, k: u64, v: u64) { *sm::borrow_mut!(m
 
 public fun rm(m: &mut SortedMap<u64, u64>, k: u64): Option<u64> { sm::remove!(m, &k) }
 
-public fun fnext(m: &SortedMap<u64, u64>, k: u64, inc: bool): Option<u64> { sm::find_next!(m, &k, inc) }
+public fun fnext(m: &SortedMap<u64, u64>, k: u64, inc: bool): Option<u64> {
+    sm::find_next!(m, &k, inc)
+}
 
-public fun fprev(m: &SortedMap<u64, u64>, k: u64, inc: bool): Option<u64> { sm::find_prev!(m, &k, inc) }
+public fun fprev(m: &SortedMap<u64, u64>, k: u64, inc: bool): Option<u64> {
+    sm::find_prev!(m, &k, inc)
+}
 
 public fun nxt(m: &SortedMap<u64, u64>, k: u64): Option<u64> { sm::next_key!(m, &k) }
 
@@ -100,7 +104,9 @@ public fun ins_rev(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
     sm::insert_by!(m, k, v, |a, b| *a > *b)
 }
 
-public fun has_rev(m: &SortedMap<u64, u64>, k: u64): bool { sm::contains_by!(m, &k, |a, b| *a > *b) }
+public fun has_rev(m: &SortedMap<u64, u64>, k: u64): bool {
+    sm::contains_by!(m, &k, |a, b| *a > *b)
+}
 
 public fun get_rev(m: &SortedMap<u64, u64>, k: u64): u64 { *sm::borrow_by!(m, &k, |a, b| *a > *b) }
 
@@ -125,9 +131,13 @@ public fun fprev_rev(m: &SortedMap<u64, u64>, k: u64, inc: bool): Option<u64> {
     sm::find_prev_by!(m, &k, inc, |a, b| *a > *b)
 }
 
-public fun nxt_rev(m: &SortedMap<u64, u64>, k: u64): Option<u64> { sm::next_key_by!(m, &k, |a, b| *a > *b) }
+public fun nxt_rev(m: &SortedMap<u64, u64>, k: u64): Option<u64> {
+    sm::next_key_by!(m, &k, |a, b| *a > *b)
+}
 
-public fun prv_rev(m: &SortedMap<u64, u64>, k: u64): Option<u64> { sm::prev_key_by!(m, &k, |a, b| *a > *b) }
+public fun prv_rev(m: &SortedMap<u64, u64>, k: u64): Option<u64> {
+    sm::prev_key_by!(m, &k, |a, b| *a > *b)
+}
 
 public fun kfrom_rev(m: &SortedMap<u64, u64>, from: u64, inc: bool, lim: u64): vector<u64> {
     sm::keys_from_by!(m, &from, inc, lim, |a, b| *a > *b)
@@ -197,15 +207,21 @@ public fun head_ck_tag(m: &SortedMap<CoarseKey, u64>): u64 {
     ck_tag(h.borrow())
 }
 
-public fun wf_ck(m: &SortedMap<CoarseKey, u64>): bool { sm::is_well_formed_by!(m, |a, b| a.id < b.id) }
+public fun wf_ck(m: &SortedMap<CoarseKey, u64>): bool {
+    sm::is_well_formed_by!(m, |a, b| a.id < b.id)
+}
 
 // ===========================================================================
 // Thin wrappers - distinct instantiations coexist
 // ===========================================================================
 
-public fun ins_bid(m: &mut SortedMap<u64, Bid>, k: u64, v: Bid): Option<Bid> { sm::insert!(m, k, v) }
+public fun ins_bid(m: &mut SortedMap<u64, Bid>, k: u64, v: Bid): Option<Bid> {
+    sm::insert!(m, k, v)
+}
 
-public fun ins_ask(m: &mut SortedMap<u64, Ask>, k: u64, v: Ask): Option<Ask> { sm::insert!(m, k, v) }
+public fun ins_ask(m: &mut SortedMap<u64, Ask>, k: u64, v: Ask): Option<Ask> {
+    sm::insert!(m, k, v)
+}
 
 public fun get_bid_px(m: &SortedMap<u64, Bid>, k: u64): u64 { bid_px(sm::borrow!(m, &k)) }
 

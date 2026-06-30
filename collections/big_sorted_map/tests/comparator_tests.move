@@ -12,7 +12,7 @@
 /// commented snippet at the end.
 module openzeppelin_big_sorted_map::comparator_tests;
 
-use openzeppelin_big_sorted_map::big_sorted_map::{Self as bsm};
+use openzeppelin_big_sorted_map::big_sorted_map as bsm;
 use openzeppelin_big_sorted_map::test_util as u;
 use std::unit_test::assert_eq;
 
@@ -60,8 +60,8 @@ fun nonstrict_comparator_duplicates_caught_by_well_formed_check() {
     // `<=` is NOT a strict order: derived equality (`!lt(a,b) && !lt(b,a)`) never fires, so
     // re-inserting key 2 is treated as FRESH and a DUPLICATE 2 lands (length grows).
     let ret = u::ins_le(&mut map, 2, 999);
-    assert!(ret.is_none());             // not detected as a replace
-    assert_eq!(bsm::length(&map), 4);    // a duplicate key was created
+    assert!(ret.is_none()); // not detected as a replace
+    assert_eq!(bsm::length(&map), 4); // a duplicate key was created
     // THE POINT: the well-formedness check now returns FALSE - adjacent equal keys are not strictly
     // increasing. A black-box reachability test would not notice; the well-formedness check is the catch.
     assert!(!u::bsm_well_formed(&map, 4, 3, true));
@@ -104,8 +104,8 @@ fun inconsistent_comparator_remove_strands() {
     // a MISS - remove is total, so it returns none WITHOUT aborting, leaving key 3 present and
     // STRANDED. The library cannot detect this; only the consumer's correct-comparator discipline can.
     assert!(u::rem_rev(&mut map, 3).is_none());
-    assert!(u::has(&map, 3));            // still present under the true order
-    assert_eq!(bsm::length(&map), 12);    // nothing removed
+    assert!(u::has(&map, 3)); // still present under the true order
+    assert_eq!(bsm::length(&map), 12); // nothing removed
     assert!(u::bsm_well_formed(&map, 4, 3, true)); // the tree itself is still well-formed (just a missed op)
     u::drain_destroy(map);
 }
@@ -124,9 +124,9 @@ fun coarse_upsert_stores_new_leaf_key_bytes() {
     // upsert id=2 with a byte-distinct key (tag 77) and a new value: id compares EQUAL, so it is a
     // replace - and the stored KEY bytes must become the caller's new bytes.
     let old = u::ins_ck(&mut map, u::ck(2, 77), 222);
-    assert_eq!(old, option::some(20));            // replace returns the old value
-    assert_eq!(bsm::length(&map), 3);             // not a fresh insert
-    assert_eq!(u::get_ck(&map, 2), 222);          // new value stored
+    assert_eq!(old, option::some(20)); // replace returns the old value
+    assert_eq!(bsm::length(&map), 3); // not a fresh insert
+    assert_eq!(u::get_ck(&map, 2), 222); // new value stored
     assert_eq!(u::root_leaf_ck_tag(&map, 1), 77); // NEW key bytes stored at the leaf
     u::drain_destroy_ck(map);
 }
@@ -151,8 +151,8 @@ fun coarse_upsert_of_subtree_max_propagates_to_routing() {
     assert_eq!(old, option::some(2));
     // the new key bytes must propagate into BOTH the leaf max AND the routing key.
     assert_eq!(u::child_leaf_ck_tag(&map, 0, 1), 88); // left leaf's max key bytes updated
-    assert_eq!(u::root_routing_ck_tag(&map, 0), 88);  // routing key bytes updated (the tree-level claim)
-    assert_eq!(u::root_routing_ck_id(&map, 0), 20);   // id (the lt-class) unchanged
+    assert_eq!(u::root_routing_ck_tag(&map, 0), 88); // routing key bytes updated (the tree-level claim)
+    assert_eq!(u::root_routing_ck_id(&map, 0), 20); // id (the lt-class) unchanged
     u::drain_destroy_ck(map);
 }
 
@@ -186,9 +186,9 @@ fun coarse_remove_of_subtree_max_refreshes_routing_bytes() {
     assert_eq!(bsm::length(&map), 5);
     // on the REMOVE path: routing key 0 now carries id=15 AND its NEW bytes
     // tag=99 (not a stale {20,0} byte-copy and not a tag-zeroed synthetic).
-    assert_eq!(u::root_routing_ck_id(&map, 0), 15);  // routing id updated to the new subtree max
+    assert_eq!(u::root_routing_ck_id(&map, 0), 15); // routing id updated to the new subtree max
     assert_eq!(u::root_routing_ck_tag(&map, 0), 99); // NEW max BYTES propagated on the remove path
-    assert_eq!(u::get_ck(&map, 15), 6);              // id=15 still reachable with its value
+    assert_eq!(u::get_ck(&map, 15), 6); // id=15 still reachable with its value
     u::drain_destroy_ck(map);
 }
 

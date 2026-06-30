@@ -9,7 +9,7 @@
 /// why a non-deterministic comparator corrupts order.
 module openzeppelin_sorted_map::comparator_tests;
 
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use openzeppelin_sorted_map::test_util::{Self as u, CoarseKey};
 use std::unit_test::assert_eq;
 
@@ -41,7 +41,7 @@ fun reverse_comparator_consistent() {
     assert_eq!(sm::head(&m), option::some(30));
     assert_eq!(sm::tail(&m), option::some(10));
     assert!(u::wf_rev(&m)); // well-formed under `>` ...
-    assert!(!u::wf(&m));    // ... but NOT under `<` (it is genuinely reversed)
+    assert!(!u::wf(&m)); // ... but NOT under `<` (it is genuinely reversed)
     assert!(u::has_rev(&m, 20) && u::get_rev(&m, 20) == 2);
     // every value conserved
     assert_eq!(u::rm_rev(&mut m, 30), option::some(3));
@@ -62,7 +62,7 @@ fun nonstrict_comparator_duplicates() {
     // equality `!(a<=b) && !(b<=a)` is unsatisfiable for a non-strict relation.)
     u::ins_le(&mut m, 5, 2).destroy_none();
     assert_eq!(sm::length(&m), 2); // TWO entries comparing equal
-    assert!(!u::wf(&m));           // the well-formedness check catches the non-strict disorder
+    assert!(!u::wf(&m)); // the well-formedness check catches the non-strict disorder
 }
 
 // === Footgun (b): mixing `<` (build) and `>` (remove) strands a present key ===
@@ -77,8 +77,8 @@ fun mixed_comparator_strands() {
     // the wrong way, and reports not-found -> nothing removed, value stranded.
     assert_eq!(u::rm_gt(&mut m, 10), option::none());
     assert_eq!(sm::length(&m), 3); // unchanged
-    assert!(u::wf(&m));            // still well-formed under the original `<`
-    assert!(u::has(&m, 10));       // 10 still reachable under `<`
+    assert!(u::wf(&m)); // still well-formed under the original `<`
+    assert!(u::has(&m, 10)); // 10 still reachable under `<`
 }
 
 // === Public-but-unchecked surface: insert_at at a wrong index corrupts order ===
@@ -104,9 +104,9 @@ fun remove_at_misuse_returns_value() {
     u::ins(&mut m, 20, 2);
     u::ins(&mut m, 30, 3);
     let v = sm::remove_at(&mut m, 0); // direct index op: returns whatever is at index 0
-    assert_eq!(v, 1);                 // value moved out, not lost (move semantics)
+    assert_eq!(v, 1); // value moved out, not lost (move semantics)
     assert_eq!(sm::length(&m), 2);
-    assert!(u::wf(&m));               // removing the head left [20,30] well-formed
+    assert!(u::wf(&m)); // removing the head left [20,30] well-formed
 }
 
 // === Out-of-bounds index aborts inside std::vector, not the library ===
@@ -137,8 +137,8 @@ fun upsert_coarse_comparator_key_bytes() {
     // upsert with the SAME id but a DIFFERENT tag (same class under id-order)
     let old = u::ins_ck(&mut m, u::ck(1, 200), 20);
     assert_eq!(old, option::some(10)); // displaced value returned
-    assert_eq!(sm::length(&m), 1);     // exactly one entry
-    assert_eq!(u::get_ck(&m, 1), 20);  // new value won
+    assert_eq!(sm::length(&m), 1); // exactly one entry
+    assert_eq!(u::get_ck(&m, 1), 20); // new value won
     assert_eq!(u::head_ck_tag(&m), 200); // the NEW key bytes survived
 }
 
@@ -150,14 +150,19 @@ fun contains_borrow_agree_by() {
     u::ins_ck(&mut m, u::ck(10, 0), 1).destroy_none();
     u::ins_ck(&mut m, u::ck(20, 0), 2).destroy_none();
     assert!(u::has_ck(&m, 10) && u::get_ck(&m, 10) == 1); // present: contains AND borrow succeed
-    assert!(!u::has_ck(&m, 15));                          // absent: contains false
+    assert!(!u::has_ck(&m, 15)); // absent: contains false
 }
 
 /// The other half of the contains/borrow agreement under a custom comparator: when
 /// `contains_by` is false, the matching `borrow_by` aborts EKeyNotFound at the library
 /// location (it does not succeed).
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_by_absent_aborts() {
     let mut m = sm::new<CoarseKey, u64>();
     u::ins_ck(&mut m, u::ck(10, 0), 1).destroy_none();
@@ -205,15 +210,15 @@ fun navigation_by_reverse_comparator() {
     u::ins_rev(&mut m, 20, 2); // physical order under `>`: [30, 20, 10]
     // forward cursor under `>` walks 30 -> 20 -> 10 and terminates at the lt-tail
     assert!(u::nxt_rev(&m, 30) == option::some(20) && u::nxt_rev(&m, 20) == option::some(10));
-    assert_eq!(u::nxt_rev(&m, 10), option::none());              // next of lt-tail == none
+    assert_eq!(u::nxt_rev(&m, 10), option::none()); // next of lt-tail == none
     assert_eq!(u::prv_rev(&m, 10), option::some(20));
-    assert_eq!(u::prv_rev(&m, 30), option::none());             // prev of lt-head == none
+    assert_eq!(u::prv_rev(&m, 30), option::none()); // prev of lt-head == none
     // ceiling vs strict-next on a present key, then an absent target (lt-relative)
-    assert_eq!(u::fnext_rev(&m, 20, true), option::some(20));   // include returns self
-    assert_eq!(u::fnext_rev(&m, 20, false), option::some(10));  // strict-next under `>` is 10
-    assert_eq!(u::fnext_rev(&m, 25, true), option::some(20));   // absent: lt-ceiling is 20
-    assert_eq!(u::fprev_rev(&m, 20, false), option::some(30));  // strict-prev under `>` is 30
-    assert_eq!(u::fprev_rev(&m, 5, true), sm::tail(&m));        // lt-floor at the extreme == tail
+    assert_eq!(u::fnext_rev(&m, 20, true), option::some(20)); // include returns self
+    assert_eq!(u::fnext_rev(&m, 20, false), option::some(10)); // strict-next under `>` is 10
+    assert_eq!(u::fnext_rev(&m, 25, true), option::some(20)); // absent: lt-ceiling is 20
+    assert_eq!(u::fprev_rev(&m, 20, false), option::some(30)); // strict-prev under `>` is 30
+    assert_eq!(u::fprev_rev(&m, 5, true), sm::tail(&m)); // lt-floor at the extreme == tail
 }
 
 // === `keys_from_by` under a reverse comparator: contiguous lt-ascending page, resumable ===
@@ -225,10 +230,10 @@ fun keys_from_by_reverse_comparator() {
     u::ins_rev(&mut m, 20, 2);
     u::ins_rev(&mut m, 30, 3); // physical [30, 20, 10]
     assert_eq!(u::kfrom_rev(&m, 30, true, 2), vector[30, 20]);
-    assert_eq!(u::kfrom_rev(&m, 20, false, 2), vector[10]);       // resume: no overlap, no gap
+    assert_eq!(u::kfrom_rev(&m, 20, false, 2), vector[10]); // resume: no overlap, no gap
     assert_eq!(u::kfrom_rev(&m, 35, true, 10), vector[30, 20, 10]); // from beyond lt-head -> full
-    assert_eq!(u::kfrom_rev(&m, 5, true, 10), vector[]);          // from past lt-tail -> empty
-    assert_eq!(u::kfrom_rev(&m, 30, true, 0), vector[]);          // limit 0 -> empty
+    assert_eq!(u::kfrom_rev(&m, 5, true, 10), vector[]); // from past lt-tail -> empty
+    assert_eq!(u::kfrom_rev(&m, 30, true, 0), vector[]); // limit 0 -> empty
 }
 
 // === borrow_mut_by (the one point-access `_by` macro otherwise never invoked) ===
@@ -242,15 +247,20 @@ fun borrow_mut_by_persists_order_safe() {
     u::ins_ck(&mut m, u::ck(20, 1), 200).destroy_none();
     u::ins_ck(&mut m, u::ck(30, 1), 300).destroy_none();
     u::set_ck(&mut m, 20, 999); // *borrow_mut_by!(.., |a,b| a.id < b.id) = 999
-    assert_eq!(u::get_ck(&m, 20), 999);                          // write persisted
-    assert!(u::wf_ck(&m));                                       // order intact (key not desynced)
+    assert_eq!(u::get_ck(&m, 20), 999); // write persisted
+    assert!(u::wf_ck(&m)); // order intact (key not desynced)
     assert!(u::get_ck(&m, 10) == 100 && u::get_ck(&m, 30) == 300); // neighbors untouched
 }
 
 /// Absent key under a custom comparator: borrow_mut_by aborts EKeyNotFound at the library
 /// location (the mutable companion to borrow_by_absent_aborts).
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EKeyNotFound,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun borrow_mut_by_absent_aborts() {
     let mut m = sm::new<CoarseKey, u64>();
     u::ins_ck(&mut m, u::ck(10, 0), 1).destroy_none();

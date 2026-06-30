@@ -7,7 +7,7 @@
 /// test function approaches the 256-locals limit.
 module openzeppelin_sorted_map::core_tests;
 
-use openzeppelin_sorted_map::sorted_map::{Self as sm};
+use openzeppelin_sorted_map::sorted_map as sm;
 use openzeppelin_sorted_map::test_util as u;
 use std::unit_test::assert_eq;
 
@@ -33,8 +33,8 @@ fun insert_fresh_grows() {
     assert_eq!(u::ins(&mut m, 20, 200), option::none()); // none on fresh
     assert_eq!(u::ins(&mut m, 10, 100), option::none());
     assert_eq!(u::ins(&mut m, 30, 300), option::none());
-    assert_eq!(sm::length(&m), 3);     // +1 each
-    assert!(u::wf(&m));                 // sorted, no dups
+    assert_eq!(sm::length(&m), 3); // +1 each
+    assert!(u::wf(&m)); // sorted, no dups
     assert_eq!(u::get(&m, 10), 100);
     assert_eq!(u::get(&m, 20), 200);
     assert_eq!(u::get(&m, 30), 300);
@@ -47,8 +47,8 @@ fun insert_upsert_replaces() {
     u::ins(&mut m, 20, 200);
     // Re-insert an existing key: length unchanged, returns some(old), new value wins.
     assert_eq!(u::ins(&mut m, 10, 999), option::some(100)); // some(old)
-    assert_eq!(sm::length(&m), 2);                          // no growth
-    assert_eq!(u::get(&m, 10), 999);                        // new value
+    assert_eq!(sm::length(&m), 2); // no growth
+    assert_eq!(u::get(&m, 10), 999); // new value
     assert!(u::wf(&m));
     // Repeated replace stays constant (no duplicates / +2).
     assert_eq!(u::ins(&mut m, 10, 111), option::some(999));
@@ -97,7 +97,7 @@ fun borrow_mut_preserves_order() {
     let t = *sm::tail(&m).borrow();
     u::set(&mut m, h, 12345);
     u::set(&mut m, t, 67890);
-    assert!(u::wf(&m));                       // order intact after value mutation
+    assert!(u::wf(&m)); // order intact after value mutation
     assert_eq!(sm::head(&m), option::some(h)); // extremes unchanged
     assert_eq!(sm::tail(&m), option::some(t));
     assert_eq!(u::get(&m, h), 12345);
@@ -137,7 +137,7 @@ fun remove_head_tail_middle() {
     assert_eq!(u::rm(&mut m, 40), option::some(4)); // tail
     assert_eq!(u::rm(&mut m, 20), option::some(2)); // middle
     assert_eq!(sm::length(&m), 1);
-    assert!(u::wf(&m));                             // shift kept order
+    assert!(u::wf(&m)); // shift kept order
     assert_eq!(sm::head(&m), option::some(30));
     assert!(!u::has(&m, 20));
 }
@@ -147,10 +147,10 @@ fun remove_absent_none() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
     u::ins(&mut m, 30, 3);
-    assert_eq!(u::rm(&mut m, 5), option::none());  // below head
+    assert_eq!(u::rm(&mut m, 5), option::none()); // below head
     assert_eq!(u::rm(&mut m, 35), option::none()); // above tail
     assert_eq!(u::rm(&mut m, 20), option::none()); // interior gap
-    assert_eq!(sm::length(&m), 2);                 // unchanged
+    assert_eq!(sm::length(&m), 2); // unchanged
     assert!(u::wf(&m));
 }
 
@@ -187,10 +187,10 @@ fun pop_front_back_drains() {
     u::ins(&mut m, 30, 3);
     let (k0, v0) = sm::pop_front(&mut m); // smallest
     assert!(k0 == 10 && v0 == 1);
-    let (k1, v1) = sm::pop_back(&mut m);  // largest
+    let (k1, v1) = sm::pop_back(&mut m); // largest
     assert!(k1 == 30 && v1 == 3);
     assert_eq!(sm::length(&m), 1);
-    let (k2, v2) = sm::pop_back(&mut m);  // length-1 map: no n-1 underflow
+    let (k2, v2) = sm::pop_back(&mut m); // length-1 map: no n-1 underflow
     assert!(k2 == 20 && v2 == 2);
     assert!(sm::is_empty(&m));
     sm::destroy_empty(m);
@@ -273,12 +273,12 @@ fun navigation_boundary_duality() {
     u::ins(&mut m, 30, 3);
     let h = *sm::head(&m).borrow();
     let t = *sm::tail(&m).borrow();
-    assert_eq!(u::nxt(&m, t), option::none());            // forward walk stops at tail
+    assert_eq!(u::nxt(&m, t), option::none()); // forward walk stops at tail
     assert_eq!(u::prv(&m, t), option::some(20));
-    assert_eq!(u::prv(&m, h), option::none());            // backward walk stops at head
+    assert_eq!(u::prv(&m, h), option::none()); // backward walk stops at head
     assert_eq!(u::nxt(&m, h), option::some(20));
-    assert_eq!(u::fnext(&m, 5, true), sm::head(&m));      // find_next(k<=H,true) == head
-    assert_eq!(u::fprev(&m, 35, true), sm::tail(&m));     // find_prev(k>=T,true) == tail
+    assert_eq!(u::fnext(&m, 5, true), sm::head(&m)); // find_next(k<=H,true) == head
+    assert_eq!(u::fprev(&m, 35, true), sm::tail(&m)); // find_prev(k>=T,true) == tail
 }
 
 // === Pagination ===

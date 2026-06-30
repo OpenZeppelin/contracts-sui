@@ -206,9 +206,9 @@ public struct BigSortedMap<K: copy + drop + store, V: store> has key, store {
 /// post-publish, so the deferred blessed cursor's layout must exist now.
 public struct Node<K: copy + drop + store, V: store> has store {
     is_leaf: bool,
-    leaf: SortedMap<K, V>,    // populated iff is_leaf
+    leaf: SortedMap<K, V>, // populated iff is_leaf
     inner: SortedMap<K, u64>, // populated iff !is_leaf  (value = child node id)
-    prev: u64,                // same-level sibling links; NULL_INDEX terminates the chain
+    prev: u64, // same-level sibling links; NULL_INDEX terminates the chain
     next: u64,
 }
 
@@ -290,9 +290,7 @@ public fun node_inner<K: copy + drop + store, V: store>(n: &Node<K, V>): &Sorted
 }
 
 /// Mutable view of an inner node's routing map. Aborts `EWrongNodeKind` on a leaf.
-fun node_inner_mut<K: copy + drop + store, V: store>(
-    n: &mut Node<K, V>,
-): &mut SortedMap<K, u64> {
+fun node_inner_mut<K: copy + drop + store, V: store>(n: &mut Node<K, V>): &mut SortedMap<K, u64> {
     assert!(!n.is_leaf, EWrongNodeKind);
     &mut n.inner
 }
@@ -363,10 +361,7 @@ fun take_root<K: copy + drop + store, V: store>(map: &mut BigSortedMap<K, V>): N
 }
 
 /// Move `node` INTO the (currently `None`) inline root slot. Pairs with `take_root`.
-fun fill_root<K: copy + drop + store, V: store>(
-    map: &mut BigSortedMap<K, V>,
-    node: Node<K, V>,
-) {
+fun fill_root<K: copy + drop + store, V: store>(map: &mut BigSortedMap<K, V>, node: Node<K, V>) {
     map.root.fill(node);
 }
 
@@ -406,11 +401,7 @@ public fun max_key<K: copy + drop + store, V: store>(n: &Node<K, V>): K {
 /// true for the right-spine bump (new_key > all, idx is last) and the delete-max cascade
 /// (new_key stays strictly between the idx-1 and idx+1 routing keys, because the child's key
 /// RANGE relative to its siblings is unchanged).
-fun set_routing_key_at<K: copy + drop + store, V: store>(
-    n: &mut Node<K, V>,
-    idx: u64,
-    new_key: K,
-) {
+fun set_routing_key_at<K: copy + drop + store, V: store>(n: &mut Node<K, V>, idx: u64, new_key: K) {
     let inner = node_inner_mut(n);
     let child_id = sorted_map::remove_at(inner, idx); // returns the u64 child id (move out)
     sorted_map::insert_at(inner, idx, sorted_map::make_entry(new_key, child_id));
@@ -846,14 +837,14 @@ fun refresh_max_along_path<K: copy + drop + store, V: store>(
     let mut j = child_idxs.length();
     while (j > 0) {
         j = j - 1;
-        let anc_id = *path.borrow(j);
+        let ancestor_id = *path.borrow(j);
         let ci = *child_idxs.borrow(j);
         // The descended child's subtree-max became `new_key`, so its routing key at THIS ancestor
         // MUST be rewritten regardless of the child's position - including an INTERIOR (non-last)
         // child (the delete-max / byte-refresh case; omitting this write strands a stale-high
         // routing key).
-        let is_last = ci + 1 == node_len(borrow_node(map, anc_id));
-        set_routing_key_at(borrow_node_mut(map, anc_id), ci, copy new_key);
+        let is_last = ci + 1 == node_len(borrow_node(map, ancestor_id));
+        set_routing_key_at(borrow_node_mut(map, ancestor_id), ci, copy new_key);
         // Ascend only if this child was the ancestor's LAST child - then the ancestor's OWN max
         // also became `new_key`; otherwise the ancestor's max is unchanged and we stop.
         if (!is_last) break;
@@ -927,7 +918,7 @@ fun split_child<K: copy + drop + store, V: store>(
         lm // inner split: no leaf-chain / min-max fixup (leaves are deeper)
     };
     // Insert the left half's routing entry at the recorded descent index (NOT at the
-    // parent's end, which would mis-order a non-rightmost-child split).
+    // parent's end, which would misorder a non-rightmost-child split).
     sorted_map::insert_at(
         node_inner_mut(borrow_node_mut(map, parent_id)),
         ci,
@@ -1134,10 +1125,18 @@ fun borrow_from_left<K: copy + drop + store, V: store>(
     let child_id = child_id_at(borrow_node(map, parent_id), ci);
     if (is_leaf(borrow_node(map, child_id))) {
         let (k, v) = sorted_map::pop_back(node_leaf_mut(borrow_node_mut(map, left_id)));
-        sorted_map::insert_at(node_leaf_mut(borrow_node_mut(map, child_id)), 0, sorted_map::make_entry(k, v));
+        sorted_map::insert_at(
+            node_leaf_mut(borrow_node_mut(map, child_id)),
+            0,
+            sorted_map::make_entry(k, v),
+        );
     } else {
         let (k, cid) = sorted_map::pop_back(node_inner_mut(borrow_node_mut(map, left_id)));
-        sorted_map::insert_at(node_inner_mut(borrow_node_mut(map, child_id)), 0, sorted_map::make_entry(k, cid));
+        sorted_map::insert_at(
+            node_inner_mut(borrow_node_mut(map, child_id)),
+            0,
+            sorted_map::make_entry(k, cid),
+        );
     };
     let left_new_max = max_key(borrow_node(map, left_id));
     set_routing_key_at(borrow_node_mut(map, parent_id), ci - 1, left_new_max);
@@ -1157,11 +1156,19 @@ fun borrow_from_right<K: copy + drop + store, V: store>(
     if (is_leaf(borrow_node(map, child_id))) {
         let (k, v) = sorted_map::pop_front(node_leaf_mut(borrow_node_mut(map, right_id)));
         let n = node_len(borrow_node(map, child_id));
-        sorted_map::insert_at(node_leaf_mut(borrow_node_mut(map, child_id)), n, sorted_map::make_entry(k, v));
+        sorted_map::insert_at(
+            node_leaf_mut(borrow_node_mut(map, child_id)),
+            n,
+            sorted_map::make_entry(k, v),
+        );
     } else {
         let (k, cid) = sorted_map::pop_front(node_inner_mut(borrow_node_mut(map, right_id)));
         let n = node_len(borrow_node(map, child_id));
-        sorted_map::insert_at(node_inner_mut(borrow_node_mut(map, child_id)), n, sorted_map::make_entry(k, cid));
+        sorted_map::insert_at(
+            node_inner_mut(borrow_node_mut(map, child_id)),
+            n,
+            sorted_map::make_entry(k, cid),
+        );
     };
     let child_new_max = max_key(borrow_node(map, child_id));
     set_routing_key_at(borrow_node_mut(map, parent_id), ci, child_new_max);
@@ -1179,7 +1186,10 @@ fun merge_pair<K: copy + drop + store, V: store>(
 ) {
     let left_id = child_id_at(borrow_node(map, parent_id), left_ci);
     let right_id = child_id_at(borrow_node(map, parent_id), left_ci + 1);
-    let Node { is_leaf, leaf: r_leaf, inner: r_inner, prev: _, next: r_next } = remove_node(map, right_id);
+    let Node { is_leaf, leaf: r_leaf, inner: r_inner, prev: _, next: r_next } = remove_node(
+        map,
+        right_id,
+    );
     if (is_leaf) {
         sorted_map::destroy_empty(r_inner); // dormant-empty
         sorted_map::append(node_leaf_mut(borrow_node_mut(map, left_id)), r_leaf); // left absorbs right
@@ -1761,9 +1771,7 @@ public fun into_sorted_map<K: copy + drop + store, V: store>(
 /// nodes: at each, it probes the first child to learn whether the children are leaves (equal
 /// depth -> all children of a node are the same kind) and descends only when they are inner, so
 /// it never enumerates the (many) leaves. ~O(inner-node count) df reads.
-fun collect_inner_ids<K: copy + drop + store, V: store>(
-    map: &BigSortedMap<K, V>,
-): vector<u64> {
+fun collect_inner_ids<K: copy + drop + store, V: store>(map: &BigSortedMap<K, V>): vector<u64> {
     let mut inner_ids = vector[];
     let mut queue = vector[ROOT_INDEX];
     while (!queue.is_empty()) {
@@ -1852,7 +1860,13 @@ public macro fun from_sorted_map_with_config<$K: copy + drop + store, $V: store>
     $leaf_max_degree: u64,
     $ctx: &mut TxContext,
 ): BigSortedMap<$K, $V> {
-    from_sorted_map_with_config_by!($source, $inner_max_degree, $leaf_max_degree, |a, b| *a < *b, $ctx)
+    from_sorted_map_with_config_by!(
+        $source,
+        $inner_max_degree,
+        $leaf_max_degree,
+        |a, b| *a < *b,
+        $ctx,
+    )
 }
 
 // === Test-Only Helpers ===

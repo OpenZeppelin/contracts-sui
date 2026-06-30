@@ -49,7 +49,7 @@ use openzeppelin_sorted_map::sorted_map;
 /// liquidity when price crosses this tick upward (real CLMMs use a signed type; a `u64`
 /// keeps the example focused on the cursor). `crossed` flips the first time a swap crosses
 /// it - observable proof the in-place walk reached this tick.
-public struct Tick has store, copy, drop {
+public struct Tick has copy, drop, store {
     liquidity_net: u64,
     crossed: bool,
 }

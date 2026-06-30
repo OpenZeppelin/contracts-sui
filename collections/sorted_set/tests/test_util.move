@@ -14,8 +14,8 @@
 /// coarse struct key, bad-comparator and `inner_mut`-misuse drivers, and ability witnesses.
 module openzeppelin_sorted_set::test_util;
 
-use openzeppelin_sorted_set::sorted_set::{Self as ss, SortedSet};
 use openzeppelin_sorted_map::sorted_map;
+use openzeppelin_sorted_set::sorted_set::{Self as ss, SortedSet};
 
 // ===========================================================================
 // Thin wrappers - u64, bare forms (built-in integer `<`)
@@ -72,9 +72,13 @@ public fun fprev_rev(s: &SortedSet<u64>, k: u64, inc: bool): Option<u64> {
     ss::find_prev_by!(s, &k, inc, |a, b| *a > *b)
 }
 
-public fun nkey_rev(s: &SortedSet<u64>, k: u64): Option<u64> { ss::next_key_by!(s, &k, |a, b| *a > *b) }
+public fun nkey_rev(s: &SortedSet<u64>, k: u64): Option<u64> {
+    ss::next_key_by!(s, &k, |a, b| *a > *b)
+}
 
-public fun pkey_rev(s: &SortedSet<u64>, k: u64): Option<u64> { ss::prev_key_by!(s, &k, |a, b| *a > *b) }
+public fun pkey_rev(s: &SortedSet<u64>, k: u64): Option<u64> {
+    ss::prev_key_by!(s, &k, |a, b| *a > *b)
+}
 
 public fun page_rev(s: &SortedSet<u64>, from: u64, inc: bool, lim: u64): vector<u64> {
     ss::keys_from_by!(s, &from, inc, lim, |a, b| *a > *b)

@@ -4,10 +4,10 @@
 /// integrator most needs to understand here (both pinned to `big_sorted_map`).
 module openzeppelin_big_sorted_map::order_book_tests;
 
-use sui::test_scenario::{Self as ts};
 use openzeppelin_big_sorted_map::order_book::{Self, OrderBook, Level};
 use openzeppelin_sorted_map::sorted_map::{Self, SortedMap};
 use std::unit_test::assert_eq;
+use sui::test_scenario as ts;
 
 const PUBLISHER: address = @0x0F;
 const ALICE: address = @0x0A;
@@ -76,8 +76,8 @@ fun order_book_migration_lifecycle() {
         let mut book = ts::take_shared<OrderBook>(&scenario);
         order_book::place_ask(&mut book, 100, 3); // 100 -> 13 (merge)
         order_book::place_ask(&mut book, 103, 2); // new
-        order_book::place_bid(&mut book, 99, 2);  // 99  -> 6  (merge)
-        order_book::place_bid(&mut book, 97, 5);  // new
+        order_book::place_bid(&mut book, 99, 2); // 99  -> 6  (merge)
+        order_book::place_bid(&mut book, 97, 5); // new
         ts::return_shared(book);
     };
 
@@ -86,8 +86,8 @@ fun order_book_migration_lifecycle() {
     {
         let book = ts::take_shared<OrderBook>(&scenario);
         assert_eq!(order_book::best_ask(&book), option::some(100)); // lowest ask
-        assert_eq!(order_book::best_bid(&book), option::some(99));  // highest bid (descending head)
-        assert_eq!(order_book::ask_size_at(&book, 100), 13);        // merged, not duplicated
+        assert_eq!(order_book::best_bid(&book), option::some(99)); // highest bid (descending head)
+        assert_eq!(order_book::ask_size_at(&book, 100), 13); // merged, not duplicated
         assert_eq!(order_book::ask_count(&book), 4);
         // Full ascending depth, then paginate: a first page, then resume strictly after its
         // last key - the pages tile with no gap or overlap.
@@ -130,10 +130,12 @@ fun order_book_migration_lifecycle() {
 // (that would orphan its dynamic-field nodes), so `close` aborts unless both sides are
 // drained first. The abort originates in the library module.
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::EMapNotEmpty,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::EMapNotEmpty,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun close_nonempty_book_aborts() {
     let mut scenario = ts::begin(PUBLISHER);
 
@@ -151,17 +153,19 @@ fun close_nonempty_book_aborts() {
     ts::end(scenario); // unreachable; satisfies the type checker
 }
 
-// === Scenario 3 - migrating a mis-ordered snapshot aborts ESourceNotSortedUnderComparator ===
+// === Scenario 3 - migrating a misordered snapshot aborts ESourceNotSortedUnderComparator ===
 //
 // The bid bridge threads `|a,b| *a > *b` and re-validates the source against it BEFORE
 // writing any node. A bid snapshot built ascending (the classic "I already have a sorted
 // map, just bridge it" slip) is not sorted under `>`, so the guard fires - turning what
 // would otherwise be silent tree-wide corruption into a clean, pre-write abort at the library.
 #[test]
-#[expected_failure(
-    abort_code = openzeppelin_big_sorted_map::big_sorted_map::ESourceNotSortedUnderComparator,
-    location = openzeppelin_big_sorted_map::big_sorted_map,
-)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_big_sorted_map::big_sorted_map::ESourceNotSortedUnderComparator,
+        location = openzeppelin_big_sorted_map::big_sorted_map,
+    ),
+]
 fun migrate_misordered_bids_aborts() {
     let mut scenario = ts::begin(PUBLISHER);
 

@@ -43,12 +43,12 @@ fun conservation_drain_nodrop() {
         k = k + 1;
     };
     while (!sm::is_empty(&m)) {
-        let (kk, w) = sm::pop_front(&mut m);        // smallest remaining key
+        let (kk, w) = sm::pop_front(&mut m); // smallest remaining key
         assert_eq!(u::nd_unwrap(w), kk * 7 + 1); // popped value matches its own key
         cnt_out = cnt_out + 1;
     };
     assert_eq!(cnt_out, n); // exactly n values came back out (none lost, none fabricated)
-    sm::destroy_empty(m);   // map drained to empty: every value left via a return path
+    sm::destroy_empty(m); // map drained to empty: every value left via a return path
 }
 
 // === destroy_empty on a NON-EMPTY resource-V map aborts ENotEmpty (no bulk value loss) ===
@@ -57,7 +57,12 @@ fun conservation_drain_nodrop() {
 // bulk-discard stored resources. The abort consumes the still-owned NoDrop as the tx unwinds -
 // the test compiles BECAUSE the map is moved into destroy_empty.
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_map::sorted_map::ENotEmpty, location = openzeppelin_sorted_map::sorted_map)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::ENotEmpty,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
 fun destroy_empty_nonempty_nodrop() {
     let mut m = sm::new<u64, NoDrop>();
     u::ins_nd(&mut m, 1, u::nd(1)).destroy_none();

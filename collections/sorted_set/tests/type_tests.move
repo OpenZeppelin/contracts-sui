@@ -5,14 +5,14 @@ module openzeppelin_sorted_set::type_tests;
 
 use openzeppelin_sorted_set::sorted_set::{Self as ss, SortedSet};
 use openzeppelin_sorted_set::test_util as u;
-use sui::test_scenario as ts;
 use std::unit_test::assert_eq;
+use sui::test_scenario as ts;
 
 // A consumer's own object embedding a set BY VALUE - the only way to share it.
 public struct Watch has key { id: UID, s: SortedSet<u64> }
 
 // A store+drop wrapper to witness the set embeds as a `store` field and falls out of scope.
-public struct Box has store, drop { s: SortedSet<u64> }
+public struct Box has drop, store { s: SortedSet<u64> }
 
 // === SortedSet<K> is UNCONDITIONALLY copy + drop + store for every admissible K ===
 

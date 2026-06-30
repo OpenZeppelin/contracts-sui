@@ -9,7 +9,7 @@
 /// `sorted_map::is_well_formed[_by]!(inner_ref(&set))` turns each violation into a red test.
 module openzeppelin_sorted_set::comparator_tests;
 
-use openzeppelin_sorted_set::sorted_set::{Self as ss};
+use openzeppelin_sorted_set::sorted_set as ss;
 use openzeppelin_sorted_set::test_util as u;
 use std::unit_test::assert_eq;
 
@@ -17,6 +17,7 @@ use std::unit_test::assert_eq;
 // `abort`) so the expanded search! body stays statically reachable - an inline aborting lambda
 // makes the macro's loop body dead code, which the lint flags both here and in the shipped map.
 const EAbortingComparator: u64 = 0xCAFE;
+
 fun aborting_lt(_a: &u64, _b: &u64): bool { abort EAbortingComparator }
 
 // === a reverse comparator used CONSISTENTLY is legitimate ===

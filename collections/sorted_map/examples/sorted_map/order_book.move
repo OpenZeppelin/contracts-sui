@@ -30,7 +30,7 @@ module openzeppelin_sorted_map::order_book;
 use openzeppelin_sorted_map::sorted_map::{Self, SortedMap};
 
 /// Aggregate resting size at one price.
-public struct Level has store, copy, drop {
+public struct Level has copy, drop, store {
     size: u64,
 }
 

@@ -83,7 +83,7 @@ const EEmpty: vector<u8> = "Map is empty";
 
 /// `split_off` was called with `at > length`. A bounds guard only, not an order check.
 /// Unreachable via correct `big_sorted_map` operation; ships as a defensive guard for
-/// direct mis-callers of the forced-public surface, pinning the abort at this module.
+/// direct misuse of the forced-public surface, pinning the abort at this module.
 #[error(code = 3)]
 const EBadSplit: vector<u8> = "Split index out of bounds";
 
@@ -156,15 +156,13 @@ public fun is_empty<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): bo
 /// Smallest key under the comparator, or `none` if empty. O(1). With a reverse
 /// comparator this returns the largest numeric key.
 public fun head<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): Option<K> {
-    if (map.entries.is_empty()) option::none()
-    else option::some(map.entries.borrow(0).key)
+    if (map.entries.is_empty()) option::none() else option::some(map.entries.borrow(0).key)
 }
 
 /// Largest key under the comparator, or `none` if empty. O(1).
 public fun tail<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): Option<K> {
     let n = map.entries.length();
-    if (n == 0) option::none()
-    else option::some(map.entries.borrow(n - 1).key)
+    if (n == 0) option::none() else option::some(map.entries.borrow(n - 1).key)
 }
 
 // === Macro-internal accessors and search (forced-public; NOT a supported API) ===
@@ -226,10 +224,7 @@ public fun insert_at<K: copy + drop + store, V: store>(
 ///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
-public fun remove_at<K: copy + drop + store, V: store>(
-    map: &mut SortedMap<K, V>,
-    i: u64,
-): V {
+public fun remove_at<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>, i: u64): V {
     let Entry { key: _, value } = map.entries.remove(i);
     value
 }

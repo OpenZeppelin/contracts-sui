@@ -1,9 +1,9 @@
 module openzeppelin_sorted_set::validator_set_tests;
 
-use sui::test_scenario::{Self as ts};
 use openzeppelin_sorted_set::sorted_set;
 use openzeppelin_sorted_set::validator_set::{Self, Validator, ValidatorSet};
 use std::unit_test::assert_eq;
+use sui::test_scenario as ts;
 
 const ALICE: address = @0x0A;
 const BOB: address = @0x0B;
@@ -39,11 +39,14 @@ fun struct_key_ranking() {
         // head = highest stake under `outranks`.
         assert_eq!(validator_set::top(&vs), option::some(validator_set::validator(300, VAL_B)));
         // ranking is highest-stake-first.
-        assert_eq!(validator_set::ranking(&vs), vector[
-            validator_set::validator(300, VAL_B),
-            validator_set::validator(200, VAL_C),
-            validator_set::validator(100, VAL_A),
-        ]);
+        assert_eq!(
+            validator_set::ranking(&vs),
+            vector[
+                validator_set::validator(300, VAL_B),
+                validator_set::validator(200, VAL_C),
+                validator_set::validator(100, VAL_A),
+            ],
+        );
         assert!(validator_set::validators_well_formed(&vs)); // _by order oracle
         ts::return_shared(vs);
     };
@@ -58,13 +61,16 @@ fun struct_key_ranking() {
         assert!(validator_set::restake(&mut vs, validator_set::validator(100, VAL_A), 250));
         assert!(!validator_set::is_registered(&vs, &validator_set::validator(100, VAL_A)));
         assert!(validator_set::is_registered(&vs, &validator_set::validator(250, VAL_A)));
-        assert_eq!(validator_set::count(&vs), 3);             // cardinality preserved
+        assert_eq!(validator_set::count(&vs), 3); // cardinality preserved
 
-        assert_eq!(validator_set::ranking(&vs), vector[
-            validator_set::validator(300, VAL_B),
-            validator_set::validator(250, VAL_A),
-            validator_set::validator(200, VAL_C),
-        ]);
+        assert_eq!(
+            validator_set::ranking(&vs),
+            vector[
+                validator_set::validator(300, VAL_B),
+                validator_set::validator(250, VAL_A),
+                validator_set::validator(200, VAL_C),
+            ],
+        );
 
         // Deregister the leader; VAL_A is promoted to top.
         assert!(validator_set::deregister(&mut vs, &validator_set::validator(300, VAL_B)));
@@ -94,9 +100,17 @@ fun coarse_comparator_silently_collapses_distinct_validators() {
     let b = validator_set::validator(100, VAL_B); // distinct addr, SAME stake
 
     // First insert lands.
-    assert!(sorted_set::insert_by!(&mut s, a, |x, y| validator_set::stake(x) > validator_set::stake(y)));
+    assert!(
+        sorted_set::insert_by!(&mut s, a, |x, y| validator_set::stake(x) > validator_set::stake(y)),
+    );
     // Second compares EQUAL under stake-only -> "already present" -> false (NO abort).
-    assert!(!sorted_set::insert_by!(&mut s, b, |x, y| validator_set::stake(x) > validator_set::stake(y)));
+    assert!(
+        !sorted_set::insert_by!(
+            &mut s,
+            b,
+            |x, y| validator_set::stake(x) > validator_set::stake(y),
+        ),
+    );
 
     // Silent collapse: only ONE element, and last-write-wins keeps b's address, dropping a's.
     assert_eq!(sorted_set::length(&s), 1);

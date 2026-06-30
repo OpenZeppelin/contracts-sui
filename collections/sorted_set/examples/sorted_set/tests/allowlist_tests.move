@@ -1,9 +1,9 @@
 module openzeppelin_sorted_set::allowlist_tests;
 
-use sui::test_scenario::{Self as ts};
-use sui::event;
 use openzeppelin_sorted_set::allowlist::{Self, Allowlist, Approved, Revoked};
 use std::unit_test::assert_eq;
+use sui::event;
+use sui::test_scenario as ts;
 
 const ALICE: address = @0x0A;
 const BOB: address = @0x0B;
@@ -27,11 +27,11 @@ fun membership_lifecycle() {
     ts::next_tx(&mut scenario, ALICE);
     {
         let mut list = ts::take_from_sender<Allowlist>(&scenario);
-        assert_eq!(allowlist::count(&list), 2);               // {3, 7}, not 3 inputs
-        assert_eq!(allowlist::members(&list), vector[3, 7]);  // ascending, de-duplicated
+        assert_eq!(allowlist::count(&list), 2); // {3, 7}, not 3 inputs
+        assert_eq!(allowlist::members(&list), vector[3, 7]); // ascending, de-duplicated
 
         let added = allowlist::approve(&mut list, 5);
-        assert!(added);                                      // newly added -> true
+        assert!(added); // newly added -> true
         assert_eq!(event::events_by_type<Approved>().length(), 1); // emitted once
         assert_eq!(allowlist::count(&list), 3);
         ts::return_to_sender(&scenario, list);
@@ -42,17 +42,17 @@ fun membership_lifecycle() {
     {
         let mut list = ts::take_from_sender<Allowlist>(&scenario);
         let again = allowlist::approve(&mut list, 5);
-        assert!(!again);                                     // already present -> false
+        assert!(!again); // already present -> false
         assert_eq!(event::events_by_type<Approved>().length(), 0); // polarity: no emit on re-add
-        assert_eq!(allowlist::count(&list), 3);               // unchanged
+        assert_eq!(allowlist::count(&list), 3); // unchanged
 
         let revoked = allowlist::revoke(&mut list, 3);
-        assert!(revoked);                                    // was present -> true
+        assert!(revoked); // was present -> true
         assert_eq!(event::events_by_type<Revoked>().length(), 1);
         assert!(!allowlist::is_approved(&list, 3));
-        assert!(allowlist::members_well_formed(&list));      // order oracle: still sorted
+        assert!(allowlist::members_well_formed(&list)); // order oracle: still sorted
 
-        allowlist::transfer_to(list, BOB);                   // hand the owned object to BOB
+        allowlist::transfer_to(list, BOB); // hand the owned object to BOB
     };
 
     // Tx4 - BOB: now owns the list, sees the same membership; revoking an absent id is total.
@@ -63,7 +63,7 @@ fun membership_lifecycle() {
         assert!(!allowlist::is_approved(&list, 3));
 
         let r = allowlist::revoke(&mut list, 99);
-        assert!(!r);                                         // absent -> false, no abort
+        assert!(!r); // absent -> false, no abort
         assert_eq!(event::events_by_type<Revoked>().length(), 0);
         assert_eq!(allowlist::count(&list), 2);
         ts::return_to_sender(&scenario, list);
@@ -79,7 +79,12 @@ fun membership_lifecycle() {
 // does exactly that, aborting the integrator's OWN `EAlreadyApproved` (NOT a library abort -
 // the location is this example package, not openzeppelin_sorted_set).
 #[test]
-#[expected_failure(abort_code = openzeppelin_sorted_set::allowlist::EAlreadyApproved, location = openzeppelin_sorted_set::allowlist)]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_set::allowlist::EAlreadyApproved,
+        location = openzeppelin_sorted_set::allowlist,
+    ),
+]
 fun approve_strict_rejects_duplicate() {
     let mut scenario = ts::begin(ALICE);
 
@@ -91,7 +96,7 @@ fun approve_strict_rejects_duplicate() {
     {
         let mut list = ts::take_from_sender<Allowlist>(&scenario);
         allowlist::approve_strict(&mut list, 1); // aborts here: 1 is already approved
-        ts::return_to_sender(&scenario, list);   // unreachable; satisfies the type checker
+        ts::return_to_sender(&scenario, list); // unreachable; satisfies the type checker
     };
 
     ts::end(scenario);
