@@ -165,7 +165,7 @@ public fun new<K: copy + drop + store>(): SortedSet<K> {
 /// - A one-element set.
 public fun singleton<K: copy + drop + store>(key: K): SortedSet<K> {
     let mut set = new();
-    sorted_map::insert_at(&mut set.inner, 0, sorted_map::make_entry(key, unit()));
+    set.inner.insert_at(0, sorted_map::make_entry(key, unit()));
     set
 }
 
@@ -207,23 +207,23 @@ public macro fun from_keys<$K: copy + drop + store>($keys: vector<$K>): SortedSe
 
 /// Number of distinct keys.
 public fun length<K: copy + drop + store>(set: &SortedSet<K>): u64 {
-    sorted_map::length(&set.inner)
+    set.inner.length()
 }
 
 /// True iff the set holds no keys.
 public fun is_empty<K: copy + drop + store>(set: &SortedSet<K>): bool {
-    sorted_map::is_empty(&set.inner)
+    set.inner.is_empty()
 }
 
 /// Smallest key under the comparator, or `none` if empty. O(1). With a reverse comparator
 /// this is the largest numeric key.
 public fun head<K: copy + drop + store>(set: &SortedSet<K>): Option<K> {
-    sorted_map::head(&set.inner)
+    set.inner.head()
 }
 
 /// Largest key under the comparator, or `none` if empty. O(1).
 public fun tail<K: copy + drop + store>(set: &SortedSet<K>): Option<K> {
-    sorted_map::tail(&set.inner)
+    set.inner.tail()
 }
 
 // === Pop extremes (regular funs; abort EEmpty) ===
@@ -241,7 +241,7 @@ public fun tail<K: copy + drop + store>(set: &SortedSet<K>): Option<K> {
 /// - `EEmpty` if the set is empty.
 public fun pop_front<K: copy + drop + store>(set: &mut SortedSet<K>): K {
     assert!(!is_empty(set), EEmpty);
-    let (key, _unit) = sorted_map::pop_front(&mut set.inner);
+    let (key, _unit) = set.inner.pop_front();
     key
 }
 
@@ -255,7 +255,7 @@ public fun pop_front<K: copy + drop + store>(set: &mut SortedSet<K>): K {
 /// - `EEmpty` if the set is empty.
 public fun pop_back<K: copy + drop + store>(set: &mut SortedSet<K>): K {
     assert!(!is_empty(set), EEmpty);
-    let (key, _unit) = sorted_map::pop_back(&mut set.inner);
+    let (key, _unit) = set.inner.pop_back();
     key
 }
 
@@ -271,15 +271,8 @@ public fun pop_back<K: copy + drop + store>(set: &mut SortedSet<K>): K {
 /// #### Returns
 /// - Every key, in ascending comparator order.
 public fun keys<K: copy + drop + store>(set: &SortedSet<K>): vector<K> {
-    let entries = sorted_map::entries_ref(&set.inner);
-    let n = entries.length();
-    let mut out = vector[];
-    let mut i = 0;
-    while (i < n) {
-        out.push_back(*sorted_map::entry_key(entries.borrow(i)));
-        i = i + 1;
-    };
-    out
+    let entries = set.inner.entries_ref();
+    vector::tabulate!(entries.length(), |i| *entries.borrow(i).entry_key())
 }
 
 // === Membership (macros: bare + `_by`) ===
