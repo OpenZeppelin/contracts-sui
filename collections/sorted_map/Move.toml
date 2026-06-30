@@ -1,0 +1,6 @@
+[package]
+name = "openzeppelin_sorted_map"
+edition = "2024"
+
+[addresses]
+openzeppelin_sorted_map = "0x0"
