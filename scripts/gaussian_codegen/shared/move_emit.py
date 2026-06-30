@@ -5,6 +5,11 @@ import difflib
 import subprocess
 import sys
 from pathlib import Path
+from typing import Sequence
+
+from mpmath import mp, mpf
+
+from gaussian_codegen.shared import constants
 
 
 def fmt_u128(n: int) -> str:
@@ -37,6 +42,27 @@ def _grouped(digits: str) -> str:
         chunks.append(digits[max(0, i - 3) : i])
         i -= 3
     return "_".join(reversed(chunks))
+
+
+def quantize(c_str: str) -> tuple[int, bool]:
+    """Quantize a high-precision coefficient string at unit scale to a
+    `(u128 magnitude, bool is_negative)` pair at WAD scale, half-up rounding.
+
+    The u128 range is enforced downstream by `fmt_u128` when the literal is
+    rendered, so it is not re-checked here."""
+    mp.dps = constants.DPS
+    c = mpf(c_str)
+    is_neg = c < 0
+    mag_real = (-c if is_neg else c) * mpf(constants.WAD)
+    mag = int(mag_real + mpf("0.5"))
+    if mag == 0:
+        is_neg = False  # canonicalize zero
+    return mag, bool(is_neg)
+
+
+def render_vector(name: str, ty: str, items: Sequence[str], indent: str = "    ") -> str:
+    body = f",\n{indent}".join(items)
+    return f"const {name}: vector<{ty}> = vector[\n{indent}{body},\n];"
 
 
 def auto_generated_banner(source: str) -> str:

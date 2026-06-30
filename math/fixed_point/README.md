@@ -18,7 +18,7 @@ openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
 
 - Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`, `sqrt`
 - Logarithms: `log2`, `ln`, `log10`
-- Distributions: `cdf` (standard-normal CDF `Φ`)
+- Distributions: `cdf` (standard-normal CDF `Φ`), `pdf` (standard-normal PDF `φ`)
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`, `unchecked_lshift`, `unchecked_rshift`
 
@@ -161,6 +161,42 @@ Limitations: the approximation is defined on `|z| ≤ 6.3` and saturates outside
 that range; `10⁻⁹` is the finest distinction the output can represent. There is
 no floating point - results are exact fixed-point integer arithmetic.
 
+## Standard-normal PDF
+
+`φ(z)` is the standard-normal probability density function
+`e^(-z^2/2) / sqrt(2*pi)`: the height of the bell curve at `z`, and the
+derivative of `Φ`. It appears in options Greeks (gamma, vega), maximum-likelihood
+objectives, and density estimation. Both fixed-point types expose it:
+
+- `UD30x9::pdf` takes non-negative `z` and returns `φ(z) ∈ [0, φ(0)]`.
+- `SD29x9::pdf` takes signed `z` and returns `φ(z) ∈ [0, φ(0)]` (always non-negative).
+
+Properties:
+
+- **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
+  empirical worst case `~6 × 10⁻¹⁰`.
+- **Domain**: effective input range `|z| ≤ 6.5`; beyond that the result
+  saturates to `0`.
+- **Peak**: `φ(0) = 0.398942280` (`1/sqrt(2*pi)`), returned exactly.
+- **Symmetry**: even - `pdf(z)` equals `pdf(z.negate())` for every `SD29x9`
+  input except `min()`, whose negation is not representable.
+- **Execution**: pure, deterministic, and object-free integer math - no storage,
+  no Sui objects; identical inputs always yield identical outputs.
+
+```move
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
+
+let z = ud30x9::wrap(1_000_000_000); // 1.0
+let d = z.pdf(); // 0.241970725  (height of the bell curve at z = 1)
+
+let neg = sd29x9::wrap(1_000_000_000, true); // -1.0
+let e = neg.pdf(); // 0.241970725  (φ is even)
+```
+
+Limitations: the approximation is defined on `|z| ≤ 6.5` and saturates to `0`
+outside that range; `10⁻⁹` is the finest distinction the output can represent.
+
 ## Usage Example
 
 ```move
@@ -191,12 +227,14 @@ Complete, compilable integration examples live in [`examples/`](examples):
 
 ## Generated code
 
-The standard-normal CDF (`cdf`) is backed by an AAA-rational approximation whose
-coefficients and test vectors are generated offline and must **not** be
-hand-edited (each carries an `AUTO-GENERATED` banner):
+The standard-normal CDF (`cdf`) and PDF (`pdf`) are backed by AAA-rational
+approximations whose coefficients and test vectors are generated offline and must
+**not** be hand-edited (each carries an `AUTO-GENERATED` banner):
 
 - `sources/internal/cdf_coefficients.move`
+- `sources/internal/pdf_coefficients.move`
 - `tests/{sd29x9_tests,ud30x9_tests}/cdf_test_vectors.move`
+- `tests/{sd29x9_tests,ud30x9_tests}/pdf_test_vectors.move`
 
 To regenerate them - or to re-validate the committed coefficients against
 `scipy` - see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).

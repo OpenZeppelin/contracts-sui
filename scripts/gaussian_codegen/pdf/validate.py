@@ -1,21 +1,24 @@
-"""Re-validate the committed `cdf_coefficients.move` against scipy.
+"""Re-validate the committed `pdf_coefficients.move` against scipy.
 
-Reads the (u128, bool) coefficient tables out of the committed Move source and
-runs the on-chain CDF computation in Python using **integer arithmetic that
-mirrors the Move implementation exactly**:
+Mirrors `cdf/validate.py`. Reads the (u128, bool) coefficient tables out of the
+committed Move source and re-runs the on-chain PDF computation in Python using
+the shared sign-magnitude integer arithmetic (the exact mirror of the Move
+`horner` module):
 
   - z_raw at 10^9 → z_wad at 10^18 (multiply by 10^9).
-  - Horner inner step: `acc = (acc.mag * z_wad) // 10^18 + c_i`, with
-    sign-magnitude tracking and floor-division on the magnitude (matches
-    `mul_div(..., Down)` in `math/core/sources/u256.move`).
-  - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up
-    (ties away from zero) nearest rounding, mirroring the on-chain
-    `u256::mul_div(..., Nearest)` from `math/core/sources/u256.move`.
+  - Horner inner step via `shared.arithmetic` (floor-division mul_wad, sign-
+    magnitude add).
+  - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up nearest
+    rounding.
 
 Asserts, over a 10,000-point grid, that the worst-case absolute error vs
-`scipy.stats.norm.cdf` stays within `TARGET_ERROR_ULP` × 10^-9 and that the
-outputs are monotone non-decreasing. Returns non-zero exit on failure,
-suitable for CI.
+`scipy.stats.norm.pdf` stays within `TARGET_ERROR_ULP` × 10^-9 and that the
+outputs are monotone non-increasing on [0, PDF_MAX_Z]. Returns non-zero exit on
+failure, suitable for CI.
+
+φ is even, so the signed `sd29x9_base::pdf` path just evaluates `pdf_nonneg_raw`
+on |z| (no reflection, no z=0 special case); there is no extra signed branch to
+mirror here. The on-chain evenness is covered by the Move test vectors.
 """
 from __future__ import annotations
 
@@ -34,13 +37,12 @@ from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_n
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 SCALE = constants.SCALE_DECIMAL
-MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at 10^9 - default; the gate parses the committed value
-HALF_SCALE = SCALE // 2  # Φ(0) bit-exact
+MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.5 at 10^9 - default; the gate parses the committed value
 
 COEFF_PATH = (
-    REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "cdf_coefficients.move"
+    REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "pdf_coefficients.move"
 )
-TARGET_ERROR_ULP = 5  # ≤ 5 ULP at 10^-9 (== INV-17 contract)
+TARGET_ERROR_ULP = 5  # ≤ 5 ULP at 10^-9
 
 
 def _parse_u128_vector(text: str, name: str) -> list[int]:
@@ -76,48 +78,34 @@ def parse_coefficients(text: str) -> tuple[list[tuple[int, bool]], list[tuple[in
     return list(zip(num_mags, num_negs)), list(zip(den_mags, den_negs))
 
 
-def cdf_simulate(
+def pdf_simulate(
     z_raw: int,
-    neg: bool,
     num: list[SignedInt],
     den: list[SignedInt],
     max_z_raw: int = MAX_Z_RAW,
 ) -> int:
-    """Mirror the on-chain `sd29x9_base::cdf` for a (z_raw at 10^9, neg) input.
+    """Mirror the on-chain `pdf::pdf_nonneg_raw` for a z_raw (at 10^9) input.
 
     `max_z_raw` is the saturation cutoff; the CI gate passes the value parsed
-    from the committed `cdf_coefficients.move` so the simulation tracks the
+    from the committed `pdf_coefficients.move` so the simulation tracks the
     on-chain bound instead of a Python copy that could silently drift from it."""
     if z_raw >= max_z_raw:
-        return 0 if neg else SCALE
-    if z_raw == 0:
-        return HALF_SCALE  # Φ(0) bit-exact special case (INV-12)
+        return 0  # tail saturates to 0
 
     z_wad: SignedInt = (z_raw * SCALE, False)  # 10^9 → 10^18
     n_acc = horner_eval(z_wad, num)
     d_acc = horner_eval(z_wad, den)
     if n_acc[1]:
-        raise RuntimeError(f"N negative at z_raw={z_raw} - INV-8 violation")
+        raise RuntimeError(f"N negative at z_raw={z_raw} - pdf::EInternalNumNegative")
     if d_acc[1] or d_acc[0] == 0:
-        raise RuntimeError(f"D non-positive at z_raw={z_raw} - INV-7 violation")
+        raise RuntimeError(f"D non-positive at z_raw={z_raw} - pdf::EInternalDenNonPositive")
 
     # Final ratio: phi_raw = round(N * 10^9 / D) with Nearest (half-up) rounding.
-    phi_raw = mul_div_nearest(n_acc[0], SCALE, d_acc[0])
-    if phi_raw > SCALE:
-        phi_raw = SCALE  # last-ULP overshoot guard (INV-9)
-
-    if neg:
-        # INV-14: cdf_nonneg ≥ 5e8 on [0, 6.3], so this never underflows
-        if phi_raw < HALF_SCALE:
-            raise RuntimeError(
-                f"cdf_nonneg returned {phi_raw} < {HALF_SCALE} at z_raw={z_raw} - INV-14 violation"
-            )
-        phi_raw = SCALE - phi_raw
-    return phi_raw
+    return mul_div_nearest(n_acc[0], SCALE, d_acc[0])
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate quantized CDF coefficients.")
+    parser = argparse.ArgumentParser(description="Validate quantized PDF coefficients.")
     parser.add_argument("--n", type=int, default=10000, help="validation grid size")
     parser.add_argument("--coeffs", type=pathlib.Path, default=COEFF_PATH)
     args = parser.parse_args(argv)
@@ -145,51 +133,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     grid = np.linspace(0.0, max_z_raw / SCALE, args.n)
     worst_err = 0.0
     worst_z = 0.0
-    worst_neg = False
-    prev_phi_pos = 0
+    prev_phi: int | None = None
     for z in grid:
-        # Quantize first and measure against Φ at the quantized input, so the
-        # gate scores the on-chain function at its own representable inputs
-        # rather than folding input-quantization skew into the error.
+        # Quantize first and measure against φ at the quantized input, so the
+        # gate scores the on-chain function at its own representable inputs.
         z_raw = int(round(float(z) * SCALE))
         zf = z_raw / SCALE
-        phi_pos = cdf_simulate(z_raw, False, num, den, max_z_raw)
-        # Also drive the negative branch: this exercises the reflection and the
-        # INV-14 underflow guard inside cdf_simulate, neither of which the
-        # positive path reaches.
-        phi_neg = cdf_simulate(z_raw, True, num, den, max_z_raw)
-        if phi_neg != SCALE - phi_pos:
-            print(
-                f"FAIL: reflection broken at z_raw={z_raw}: "
-                f"Φ(-z)={phi_neg} != {SCALE} - {phi_pos}",
-                file=sys.stderr,
-            )
-            return 1
-        # Monotonicity: Φ is non-decreasing, and in the far tail its true
-        # increment falls below the 10^-9 output resolution, so the fit's
+        phi = pdf_simulate(z_raw, num, den, max_z_raw)
+        # Monotonicity: φ is non-increasing, and in the far tail its true
+        # decrement falls below the 10^-9 output resolution, so the fit's
         # error wiggle could in principle invert neighboring outputs. Gate
         # against any inversion at grid resolution.
-        if phi_pos < prev_phi_pos:
+        if prev_phi is not None and phi > prev_phi:
             print(
                 f"FAIL: monotonicity broken at z_raw={z_raw}: "
-                f"Φ(z)={phi_pos} < previous {prev_phi_pos}",
+                f"φ(z)={phi} > previous {prev_phi}",
                 file=sys.stderr,
             )
             return 1
-        prev_phi_pos = phi_pos
-        for neg, phi_raw in ((False, phi_pos), (True, phi_neg)):
-            ref = float(norm.cdf(-zf if neg else zf))
-            err = abs(phi_raw / SCALE - ref)
-            if err > worst_err:
-                worst_err = err
-                worst_z = zf
-                worst_neg = neg
+        prev_phi = phi
+        # φ is even, so the signed path returns this same value for ±z; one
+        # measurement per |z| suffices (norm.pdf(-zf) == norm.pdf(zf)).
+        ref = float(norm.pdf(zf))
+        err = abs(phi / SCALE - ref)
+        if err > worst_err:
+            worst_err = err
+            worst_z = zf
 
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
-    sign = "-" if worst_neg else "+"
-    print(f"Monotonicity: non-decreasing across all {args.n} grid points ✓")
-    print(f"Worst error: {worst_err:.3e} = {err_ulp} ULP at z={sign}{worst_z:.5f}")
+    print(f"Monotonicity: non-increasing across all {args.n} grid points ✓")
+    print(f"Worst error: {worst_err:.3e} = {err_ulp} ULP at z=±{worst_z:.5f}")
     print(f"Target:      {target_abs:.3e} = {TARGET_ERROR_ULP} ULP")
     if worst_err <= target_abs:
         print(f"PASS: max_error_quantized = {worst_err:.3e} ≤ {target_abs:.3e} ✓")

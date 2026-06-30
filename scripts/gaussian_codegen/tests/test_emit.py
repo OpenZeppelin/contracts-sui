@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from gaussian_codegen.cdf import emit_test_vectors as tv
-from gaussian_codegen.cdf.emit_coefficients import quantize
 from gaussian_codegen.shared import constants
+from gaussian_codegen.shared.move_emit import quantize
 
 WAD = constants.WAD
 SCALE = constants.SCALE_DECIMAL
