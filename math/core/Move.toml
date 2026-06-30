@@ -1,6 +1,3 @@
 [package]
 name = "openzeppelin_math"
 edition = "2024"
-
-[addresses]
-openzeppelin_math = "0x0"
