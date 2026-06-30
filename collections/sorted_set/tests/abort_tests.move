@@ -62,6 +62,18 @@ fun inner_mut_direct_pop_empty_aborts_at_map() {
     u::misuse_pop_front_inner(&mut s);
 }
 
+#[test]
+#[expected_failure(
+    abort_code = openzeppelin_sorted_map::sorted_map::EEmpty,
+    location = openzeppelin_sorted_map::sorted_map,
+)]
+fun inner_mut_direct_pop_back_empty_aborts_at_map() {
+    // Symmetric to the pop_front bypass: a direct sorted_map::pop_back through inner_mut on an
+    // empty inner map ALSO leaks the MAP's location with the MAP's code 2, not the set's code 0.
+    let mut s = ss::new<u64>();
+    u::misuse_pop_back_inner(&mut s);
+}
+
 // === affirmative total API: every non-pop op returns none/false/empty, never aborts ===
 
 #[test]

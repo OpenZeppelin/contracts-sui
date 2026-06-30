@@ -119,6 +119,15 @@ fun insert_at_oob_aborts_in_vector() {
     sm::insert_at(&mut m, 5, sm::make_entry(99, 9)); // index 5 on a length-1 map
 }
 
+// The `remove_at` companion: an out-of-bounds index aborts inside std::vector, not the library.
+#[test]
+#[expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS, location = std::vector)]
+fun remove_at_oob_aborts_in_vector() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    sm::remove_at(&mut m, 5); // index 5 on a length-1 map
+}
+
 // === Upsert stores the NEW key bytes, observable under a coarse comparator ===
 
 #[test]

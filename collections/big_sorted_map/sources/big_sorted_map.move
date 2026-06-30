@@ -56,7 +56,7 @@
 /// `set_routing_key_at`) are PRIVATE - nothing external needs them. The forced-public surface is
 /// NOT a supported API: calling it directly can corrupt routing/order. Separately published for a
 /// hand-rolled cursor: `locate_leaf_by!`, `borrow_node{,_mut}`, `node_leaf{,_mut}`, `leaf_next`/
-/// `leaf_prev`, `null_index`. Use the macro + regular-fun consumer surface.
+/// `leaf_prev`, `null_index`, `root_index`. Use the macro + regular-fun consumer surface.
 ///
 /// # Upgrade policy
 /// The on-chain layout (container + node + the frozen `prev`/`next` leaf links) is frozen at
@@ -1607,6 +1607,11 @@ public fun build_from_sorted_default<K: copy + drop + store, V: store>(
 /// builds inner levels bottom-up the same way, so every node - including each level's rightmost
 /// - holds >= ceil(m/2) entries. ~1 df add per node, so a tier-1-sized source fits the
 /// df cap. Values are MOVED (the source's `SortedMap`s become node payloads) - no copy/drop.
+///
+/// #### Aborts
+///
+/// - `EInvalidDegree` if `leaf_max_degree` or `inner_max_degree` is below the min-fill
+///   floor (via `new_with_config`).
 public fun build_from_sorted<K: copy + drop + store, V: store>(
     source: SortedMap<K, V>,
     inner_max_degree: u64,
@@ -1848,4 +1853,24 @@ public macro fun from_sorted_map_with_config<$K: copy + drop + store, $V: store>
     $ctx: &mut TxContext,
 ): BigSortedMap<$K, $V> {
     from_sorted_map_with_config_by!($source, $inner_max_degree, $leaf_max_degree, |a, b| *a < *b, $ctx)
+}
+
+// === Test-Only Helpers ===
+
+/// TEST ONLY. Count the live df arena nodes by probing every id ever handed out
+/// (`FIRST_ALLOC_INDEX ..< next_node_index`; ids are monotone and never reused, so this range is
+/// the exact universe of allocated nodes). The inline root is NOT a df, so it is never counted.
+/// After a full drain to empty this must be 0 - a teardown regression that strands a node leaves
+/// its df present here, so the orphan-accounting test fails loudly instead of silently leaking.
+#[test_only]
+public fun live_df_node_count_for_testing<K: copy + drop + store, V: store>(
+    map: &BigSortedMap<K, V>,
+): u64 {
+    let mut count = 0;
+    let mut id = FIRST_ALLOC_INDEX;
+    while (id < map.next_node_index) {
+        if (df::exists(&map.id, id)) count = count + 1;
+        id = id + 1;
+    };
+    count
 }

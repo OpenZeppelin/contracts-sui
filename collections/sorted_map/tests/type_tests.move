@@ -110,6 +110,22 @@ fun key_at_positional_read() {
     assert_eq!(*sm::key_at(&m, 1), 20);
 }
 
+// `value_at`/`value_at_mut` are the value-side companions to `key_at`: low-level positional
+// accessors that no `sorted_map` macro uses but `big_sorted_map` calls across packages. This
+// pins both the read (`value_at`) and the order-safe write (`value_at_mut` yields `&mut V`) at
+// sorted_map's own audited boundary.
+#[test]
+fun value_at_reads_and_writes() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    assert_eq!(*sm::value_at(&m, 0), 1);
+    assert_eq!(*sm::value_at(&m, 1), 2);
+    *sm::value_at_mut(&mut m, 1) = 99; // write through the &mut V
+    assert_eq!(*sm::value_at(&m, 1), 99); // re-read confirms the mutation persisted
+    assert_eq!(u::get(&m, 20), 99); // and the public borrow agrees
+}
+
 // ===========================================================================
 // NEGATIVE compile-facts (NOT runnable `#[test]`s - they must FAIL to compile).
 // Kept as commented snippets; exercised by review / a CI compile-fail harness.

@@ -205,6 +205,12 @@ fun navigation_table() {
     // include-floor HITS (symmetry with the find_next include hits above):
     assert_eq!(u::fprev(&s, 30, true), option::some(30)); // at-tail include floor
     assert_eq!(u::fprev(&s, 20, true), option::some(20)); // interior include floor
+    // Any key a navigation op RETURNS must be a member - compose each non-none
+    // result back into contains!. (A returned key that failed membership would be a desync.)
+    assert!(u::has(&s, u::fnext(&s, 15, true).destroy_some())); // ceiling-of-gap result is present
+    assert!(u::has(&s, u::fprev(&s, 25, true).destroy_some())); // floor-of-gap result is present
+    assert!(u::has(&s, u::nkey(&s, 10).destroy_some())); // next_key result is present
+    assert!(u::has(&s, u::pkey(&s, 30).destroy_some())); // prev_key result is present
 }
 
 #[test]

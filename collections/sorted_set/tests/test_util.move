@@ -123,6 +123,12 @@ public fun misuse_pop_front_inner(s: &mut SortedSet<u64>) {
     let (_k, _u) = sorted_map::pop_front(ss::inner_mut(s));
 }
 
+/// Direct `pop_back` on the inner map - the symmetric bypass of the set's own `EEmpty`.
+/// On an empty inner map this aborts at the MAP's location/code, not the set's.
+public fun misuse_pop_back_inner(s: &mut SortedSet<u64>) {
+    let (_k, _u) = sorted_map::pop_back(ss::inner_mut(s));
+}
+
 // ===========================================================================
 // Ability witnesses - instantiating these proves the ability holds
 // ===========================================================================

@@ -224,6 +224,35 @@ fun merge_folds_right_into_left_and_collapses_root() {
     u::drain_destroy(map);
 }
 
+// === drain a multi-level tree to empty, then assert NO df node is left orphaned under the UID ===
+// The no-leak invariant has two halves: the oracle walks every REACHABLE node, but `object::delete`
+// silently orphans any df left stranded under the UID, which a reachable-only walk cannot see. This
+// pins the ORPHAN half: ids are monotone and never reused, so after a full drain every id ever handed
+// out must be FREE. `live_df_node_count_for_testing` probes the whole alloc range; a teardown
+// regression that strands a node leaves its df present, so this assert fails instead of leaking.
+
+#[test]
+fun drain_to_empty_leaves_no_orphan_df_nodes() {
+    let mut ctx = tx_context::dummy();
+    // min-degree floor (inner 4 / leaf 3): a small insert count forces depth >= 2 with many df nodes.
+    let mut map = bsm::new_with_config<u64, u64>(4, 3, &mut ctx);
+    let n = 40u64;
+    let mut k = 1u64;
+    while (k <= n) { u::ins(&mut map, k, k * 10); k = k + 1; };
+    assert!(u::tree_depth(&map) >= 2); // genuinely multi-level: real inner df nodes were allocated
+    assert!(bsm::live_df_node_count_for_testing(&map) > 0); // df arena is non-empty before the drain
+    // Paged drain to empty (the prescribed teardown for a large tree).
+    loop {
+        let (keys, _vals) = bsm::pop_front_n(&mut map, 8);
+        if (keys.is_empty()) break;
+    };
+    assert!(bsm::is_empty(&map));
+    assert!(wf(&map)); // back to a well-formed single empty leaf root
+    // THE pin: every allocated df id has been freed - zero orphans stranded under the UID.
+    assert_eq!(bsm::live_df_node_count_for_testing(&map), 0);
+    bsm::destroy_empty(map);
+}
+
 // === grow to a multi-level tree, then drain to empty; depth shrinks back, well-formedness holds ===
 
 #[test]
