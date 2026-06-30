@@ -36,9 +36,11 @@ use sui::coin::Coin;
 use sui::sui::SUI;
 
 /// The provided capability does not authorize this vault.
-const EWrongVault: u64 = 0;
+#[error(code = 0)]
+const EWrongVault: vector<u8> = "Capability does not authorize this vault";
 /// `pay_rank` was asked for a rank that holds no prize.
-const ENoSuchRank: u64 = 1;
+#[error(code = 1)]
+const ENoSuchRank: vector<u8> = "No prize at this rank";
 
 /// Shared prize pool. `prizes` maps rank -> the coin awarded for that rank.
 public struct PrizeVault has key {

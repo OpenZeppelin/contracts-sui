@@ -3,6 +3,7 @@
 module openzeppelin_sorted_map::prize_vault_tests;
 
 use openzeppelin_sorted_map::prize_vault::{Self, PrizeVault, OrganizerCap};
+use std::unit_test::assert_eq;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 use sui::test_scenario as ts;
@@ -36,7 +37,7 @@ fun fund_payout_destroy() {
         prize_vault::fund(&mut vault, &cap, 3, coin::mint_for_testing<SUI>(25, scenario.ctx()));
         prize_vault::fund(&mut vault, &cap, 1, coin::mint_for_testing<SUI>(100, scenario.ctx()));
         prize_vault::fund(&mut vault, &cap, 2, coin::mint_for_testing<SUI>(50, scenario.ctx()));
-        assert!(prize_vault::unclaimed(&vault) == 3);
+        assert_eq!(prize_vault::unclaimed(&vault), 3);
         ts::return_to_sender(&scenario, cap);
         ts::return_shared(vault);
     };
@@ -48,18 +49,21 @@ fun fund_payout_destroy() {
         let cap = ts::take_from_sender<OrganizerCap>(&scenario);
 
         let (r1, c1) = prize_vault::pay_next(&mut vault, &cap);
-        assert!(r1 == 1 && c1.value() == 100);
+        assert_eq!(r1, 1);
+        assert_eq!(c1.value(), 100);
         transfer::public_transfer(c1, FIRST);
 
         let (r2, c2) = prize_vault::pay_next(&mut vault, &cap);
-        assert!(r2 == 2 && c2.value() == 50);
+        assert_eq!(r2, 2);
+        assert_eq!(c2.value(), 50);
         transfer::public_transfer(c2, SECOND);
 
         let (r3, c3) = prize_vault::pay_next(&mut vault, &cap);
-        assert!(r3 == 3 && c3.value() == 25);
+        assert_eq!(r3, 3);
+        assert_eq!(c3.value(), 25);
         transfer::public_transfer(c3, THIRD);
 
-        assert!(prize_vault::unclaimed(&vault) == 0);
+        assert_eq!(prize_vault::unclaimed(&vault), 0);
         ts::return_to_sender(&scenario, cap);
         ts::return_shared(vault);
     };
@@ -76,19 +80,19 @@ fun fund_payout_destroy() {
     ts::next_tx(&mut scenario, FIRST);
     {
         let c = ts::take_from_sender<Coin<SUI>>(&scenario);
-        assert!(c.value() == 100);
+        assert_eq!(c.value(), 100);
         coin::burn_for_testing(c);
     };
     ts::next_tx(&mut scenario, SECOND);
     {
         let c = ts::take_from_sender<Coin<SUI>>(&scenario);
-        assert!(c.value() == 50);
+        assert_eq!(c.value(), 50);
         coin::burn_for_testing(c);
     };
     ts::next_tx(&mut scenario, THIRD);
     {
         let c = ts::take_from_sender<Coin<SUI>>(&scenario);
-        assert!(c.value() == 25);
+        assert_eq!(c.value(), 25);
         coin::burn_for_testing(c);
     };
 

@@ -102,7 +102,8 @@ fun order_book_migration_lifecycle() {
     {
         let mut book = ts::take_shared<OrderBook>(&scenario);
         let (price, size) = order_book::fill_best_ask(&mut book);
-        assert!(price == 100 && size == 13);
+        assert_eq!(price, 100);
+        assert_eq!(size, 13);
         assert_eq!(order_book::best_ask(&book), option::some(101));
         ts::return_shared(book);
     };

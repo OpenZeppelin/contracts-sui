@@ -123,7 +123,6 @@ fun destroy_empty_nonempty() {
 fun pop_front_empty() {
     let mut m = sm::new<u64, u64>();
     let (_k, _v) = sm::pop_front(&mut m);
-    sm::destroy_empty(m); // unreachable
 }
 
 #[test]
@@ -136,7 +135,6 @@ fun pop_front_empty() {
 fun pop_back_empty() {
     let mut m = sm::new<u64, u64>();
     let (_k, _v) = sm::pop_back(&mut m); // n-1 underflow guarded by the empty check
-    sm::destroy_empty(m); // unreachable
 }
 
 // === Total API: every non-carve-out op returns none/false/empty, never aborts ===

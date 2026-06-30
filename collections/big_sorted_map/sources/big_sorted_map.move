@@ -109,7 +109,7 @@ const ESourceNotSortedUnderComparator: vector<u8> = "Source map is not sorted un
 #[error(code = 6)]
 const EWrongNodeKind: vector<u8> = "Wrong node kind for this accessor";
 
-// === Module constants ===
+// === Constants ===
 
 /// The "no node" sentinel id. Terminates the leaf chain at both
 /// ends and marks an absent child. `alloc_id` never returns it.
@@ -338,6 +338,9 @@ fun remove_node<K: copy + drop + store, V: store>(
 }
 
 /// Dual-source immutable node borrow: inline root for `ROOT_INDEX`, else the df.
+///
+/// #### Aborts
+/// - Natively (in `dynamic_field`) if `id != ROOT_INDEX` and no node is stored under `id`.
 public fun borrow_node<K: copy + drop + store, V: store>(
     map: &BigSortedMap<K, V>,
     id: u64,
@@ -346,6 +349,9 @@ public fun borrow_node<K: copy + drop + store, V: store>(
 }
 
 /// Dual-source mutable node borrow: inline root for `ROOT_INDEX`, else the df.
+///
+/// #### Aborts
+/// - Natively (in `dynamic_field`) if `id != ROOT_INDEX` and no node is stored under `id`.
 public fun borrow_node_mut<K: copy + drop + store, V: store>(
     map: &mut BigSortedMap<K, V>,
     id: u64,
@@ -376,6 +382,7 @@ fun fill_root<K: copy + drop + store, V: store>(map: &mut BigSortedMap<K, V>, no
 ///
 /// #### Aborts
 /// - `EWrongNodeKind` if `n` is a leaf (via `node_inner`).
+/// - Natively (out of bounds, in `std::vector`) if `idx` is past the routing map's length.
 public fun child_id_at<K: copy + drop + store, V: store>(n: &Node<K, V>, idx: u64): u64 {
     *sorted_map::value_at(node_inner(n), idx)
 }
@@ -385,6 +392,9 @@ public fun child_id_at<K: copy + drop + store, V: store>(n: &Node<K, V>, idx: u6
 /// routing key (which already equals the whole-subtree max). Returns `K` by copy.
 /// Precondition: `n` is non-empty (every non-root node is half-full; the root is non-empty
 /// unless the tree is empty, where callers short-circuit on `length`).
+///
+/// #### Aborts
+/// - Natively (arithmetic underflow on `length - 1`, then out of bounds) if `n` is empty.
 public fun max_key<K: copy + drop + store, V: store>(n: &Node<K, V>): K {
     if (n.is_leaf) {
         let m = node_leaf(n);

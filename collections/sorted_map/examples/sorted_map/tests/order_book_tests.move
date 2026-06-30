@@ -4,6 +4,7 @@ module openzeppelin_sorted_map::order_book_tests;
 
 use openzeppelin_sorted_map::order_book::{Self, OrderBook};
 use openzeppelin_sorted_map::sorted_map;
+use std::unit_test::assert_eq;
 use sui::test_scenario as ts;
 
 const ALICE: address = @0x0A;
@@ -49,15 +50,15 @@ fun order_book_lifecycle() {
     {
         let book = ts::take_shared<OrderBook>(&scenario);
 
-        assert!(order_book::best_ask(&book) == option::some(100)); // lowest ask
-        assert!(order_book::best_bid(&book) == option::some(99)); // highest bid (descending head)
-        assert!(order_book::ask_size_at(&book, 100) == 13); // merged, not duplicated
+        assert_eq!(order_book::best_ask(&book), option::some(100)); // lowest ask
+        assert_eq!(order_book::best_bid(&book), option::some(99)); // highest bid (descending head)
+        assert_eq!(order_book::ask_size_at(&book, 100), 13); // merged, not duplicated
 
         // Full ascending depth.
-        assert!(order_book::ask_levels(&book, 0, true, 10) == vector[100, 101, 102]);
+        assert_eq!(order_book::ask_levels(&book, 0, true, 10), vector[100, 101, 102]);
         // Paginate: a first page, then resume strictly after its last key - pages tile.
-        assert!(order_book::ask_levels(&book, 0, true, 2) == vector[100, 101]);
-        assert!(order_book::ask_levels(&book, 101, false, 2) == vector[102]);
+        assert_eq!(order_book::ask_levels(&book, 0, true, 2), vector[100, 101]);
+        assert_eq!(order_book::ask_levels(&book, 101, false, 2), vector[102]);
 
         // A consumer's test reaches the library's #[test_only] order oracle, both ways.
         assert!(order_book::bids_well_formed(&book)); // encapsulated _by oracle
@@ -71,8 +72,9 @@ fun order_book_lifecycle() {
     {
         let mut book = ts::take_shared<OrderBook>(&scenario);
         let (price, size) = order_book::fill_best_ask(&mut book);
-        assert!(price == 100 && size == 13);
-        assert!(order_book::best_ask(&book) == option::some(101));
+        assert_eq!(price, 100);
+        assert_eq!(size, 13);
+        assert_eq!(order_book::best_ask(&book), option::some(101));
         ts::return_shared(book);
     };
 

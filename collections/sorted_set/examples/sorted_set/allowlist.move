@@ -44,7 +44,8 @@ use openzeppelin_sorted_map::sorted_map;
 /// `approve_strict` was asked to add an id that is already approved. This is the integrator's
 /// OWN opt-in error - it recovers `vec_set::insert`'s abort-on-duplicate on top of the set's
 /// total `insert!`. It is NOT a library abort.
-const EAlreadyApproved: u64 = 0;
+#[error(code = 0)]
+const EAlreadyApproved: vector<u8> = "Id is already approved";
 
 /// An allowlist of approved token ids. The embedded `SortedSet<u64>` is the only state.
 public struct Allowlist has key {
