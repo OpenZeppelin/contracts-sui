@@ -66,6 +66,18 @@ let med = vector::median!(&vector[5u64, 1, 9, 3, 7], rounding::down());
 // med = 5
 ```
 
+## Examples
+
+> [!Warning]
+> These are **unaudited illustrations** of how the primitives can be integrated, not production-ready code.
+
+Complete, compilable integration examples live in [`examples/`](examples):
+
+- [`integer_math`](examples/integer_math/amm_quote.move) - a constant-product AMM pricing toolkit: `mul_div` for swap quotes (output rounded down, fee rounded up), `sqrt` for LP shares, `average`, `mul_shr` for a Q32.32 factor, and `log10` for magnitude, plus the same `mul_div` one width up on `u256` returning `none` on overflow.
+- [`rounding`](examples/rounding/fee_split.move) - a solvency-preserving fee/payout splitter: round one side with the chosen `RoundingMode`, derive the other as the remainder, so the parts always sum to the whole. Shows why Down/Up/Nearest is an economic decision.
+- [`vector`](examples/vector/median_oracle.move) - a bounded median price oracle: `median_u64` for a manipulation-resistant aggregate and the `quick_sort!` macro for a sorted view.
+- [`decimal_scaling`](examples/decimal_scaling/token_normalizer.move) - a ledger that reconciles one token's 6-decimal canonical and 9-decimal bridged forms onto a common 18-decimal `u256` basis with `safe_upcast_balance` / `safe_downcast_balance`, where downcasting truncates dust to preserve solvency.
+
 ## Learn More
 
 - [Integer math package overview](https://docs.openzeppelin.com/contracts-sui/1.x/math)
