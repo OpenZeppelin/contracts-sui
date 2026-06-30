@@ -133,13 +133,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     grid = np.linspace(0.0, max_z_raw / SCALE, args.n)
     worst_err = 0.0
     worst_z = 0.0
-    prev_phi: int | None = None  # φ is monotone non-increasing on [0, PDF_MAX_Z]
+    prev_phi: int | None = None
     for z in grid:
         # Quantize first and measure against φ at the quantized input, so the
         # gate scores the on-chain function at its own representable inputs.
         z_raw = int(round(float(z) * SCALE))
         zf = z_raw / SCALE
         phi = pdf_simulate(z_raw, num, den, max_z_raw)
+        # Monotonicity: φ is non-increasing, and in the far tail its true
+        # decrement falls below the 10^-9 output resolution, so the fit's
+        # error wiggle could in principle invert neighboring outputs. Gate
+        # against any inversion at grid resolution.
         if prev_phi is not None and phi > prev_phi:
             print(
                 f"FAIL: monotonicity broken at z_raw={z_raw}: "

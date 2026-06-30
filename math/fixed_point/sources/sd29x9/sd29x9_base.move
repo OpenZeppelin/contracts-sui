@@ -224,8 +224,11 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// #### Behavior
 /// - Even: `pdf(z) == pdf(z.negate())` for every input except `sd29x9::min()`,
 ///   whose negation is not representable.
-/// - Monotone non-increasing in `|z|`; the peak `φ(0) = 0.398942280` is returned
-///   exactly.
+/// - Monotone non-increasing in `|z|` across the dense offline validation grid
+///   (enforced by the codegen CI gate); the peak `φ(0) = 0.398942280` is
+///   returned exactly. A 1-ULP local inversion between neighboring raw inputs is
+///   not formally excluded in the far tail (`|z| ≳ 5.3`), where the true `φ`
+///   decrement drops below the `10⁻⁹` output resolution.
 /// - Saturates exactly to `0` for `|z| ≥ 6.5`. At that bound `φ` is already
 ///   `~2.7 × 10⁻¹⁰`, below the output's `10⁻⁹` resolution.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Empirical
