@@ -10,7 +10,7 @@ agree to float64 precision; `sanity_check_against_scipy()` asserts it.
 """
 from __future__ import annotations
 
-from mpmath import mp, mpf, ncdf, npdf
+from mpmath import erfinv, mp, mpf, ncdf, npdf, sqrt
 
 from gaussian_codegen.shared.constants import DPS, SCALE_DECIMAL
 
@@ -47,9 +47,34 @@ def phi_raw_at_decimal(z, scale: int = SCALE_DECIMAL) -> int:
     return int(val + mpf("0.5"))
 
 
+def ppf(p) -> mpf:
+    """Standard-normal quantile (inverse CDF) `Φ⁻¹(p)` at 100 dps.
+
+    Uses the closed form `Φ⁻¹(p) = sqrt(2) · erfinv(2p − 1)`, which mpmath
+    evaluates accurately across the whole open interval `(0, 1)` - including the
+    deep tail, where `scipy.stats.norm.ppf` (float64) is off by up to ~5e-9 and is
+    therefore *not* a usable oracle here. Accepts any value mpmath can coerce.
+    """
+    _ensure_dps()
+    return sqrt(mpf(2)) * erfinv(2 * mpf(p) - 1)
+
+
+def z_raw_at_decimal(p, scale: int = SCALE_DECIMAL) -> tuple[int, bool]:
+    """`Φ⁻¹(p)` as a `(magnitude, is_negative)` integer pair at the given decimal
+    scale, nearest-rounded (ties up on the magnitude).
+
+    Defaults to scale=10^9 (the SD29x9 raw scale). Used when emitting test
+    vectors so the expected value is the Move return type's exact bit pattern.
+    """
+    z = ppf(p)
+    neg = z < 0
+    mag = (-z if neg else z) * mpf(scale)
+    return int(mag + mpf("0.5")), bool(neg)
+
+
 def sanity_check_against_scipy(tolerance: float = 1e-15) -> None:
-    """Spot-check the mpmath oracles against scipy.stats.norm.cdf / norm.pdf at
-    well-known points."""
+    """Spot-check the mpmath oracles against scipy.stats.norm.cdf / norm.pdf /
+    norm.ppf at well-known points."""
     from scipy.stats import norm
 
     for z_str in ("0", "0.5", "1", "2", "3", "6.3"):
@@ -69,6 +94,18 @@ def sanity_check_against_scipy(tolerance: float = 1e-15) -> None:
         if diff > tolerance:
             raise AssertionError(
                 f"mpmath φ disagrees with scipy at z={z_str}: "
+                f"mpmath={ours}, scipy={theirs}, diff={diff:.2e}"
+            )
+
+    # Central points only: scipy's float64 ppf loses accuracy in the deep tail,
+    # so the mpmath erfinv oracle is checked against it only where they agree.
+    for p_str in ("0.5", "0.6", "0.75", "0.9", "0.975"):
+        ours = float(ppf(p_str))
+        theirs = float(norm.ppf(float(p_str)))
+        diff = abs(ours - theirs)
+        if diff > tolerance:
+            raise AssertionError(
+                f"mpmath Φ⁻¹ disagrees with scipy at p={p_str}: "
                 f"mpmath={ours}, scipy={theirs}, diff={diff:.2e}"
             )
 
