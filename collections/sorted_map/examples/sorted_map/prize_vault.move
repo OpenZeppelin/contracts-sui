@@ -41,6 +41,9 @@ const EWrongVault: vector<u8> = "Capability does not authorize this vault";
 /// `pay_rank` was asked for a rank that holds no prize.
 #[error(code = 1)]
 const ENoSuchRank: vector<u8> = "No prize at this rank";
+/// `fund` was called for a rank that already holds a prize (one coin per rank).
+#[error(code = 2)]
+const ERankAlreadyFunded: vector<u8> = "Rank already funded";
 
 /// Shared prize pool. `prizes` maps rank -> the coin awarded for that rank.
 public struct PrizeVault has key {
@@ -69,14 +72,15 @@ fun assert_cap(vault: &PrizeVault, cap: &OrganizerCap) {
     assert!(cap.vault == object::id(vault), EWrongVault);
 }
 
-/// Fund the prize at `rank` with `coin` (one coin per rank). `insert!` returns the
-/// displaced value as an `Option<Coin>`; on a fresh slot that is `none`, but since
-/// `Coin` has no `drop` we must explicitly `destroy_none()` it - the return of `insert!`
-/// on a resource map cannot just be ignored.
+/// Fund the prize at `rank` with `coin` (one coin per rank). Aborts `ERankAlreadyFunded` if the
+/// rank is already funded - a named guard that keeps `fund` clean: without it a re-fund would make
+/// `insert!` return `some(old_coin)`, and the follow-up `destroy_none()` would abort with the
+/// opaque foreign `std::option::EOPTION_IS_SET`. On the guarded fresh slot `insert!` returns
+/// `none`, which `destroy_none()` consumes (a resource map's `insert!` return cannot be ignored).
 public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64, coin: Coin<SUI>) {
     assert_cap(vault, cap);
-    let displaced = sorted_map::insert!(&mut vault.prizes, rank, coin);
-    displaced.destroy_none();
+    assert!(!sorted_map::contains!(&vault.prizes, &rank), ERankAlreadyFunded);
+    sorted_map::insert!(&mut vault.prizes, rank, coin).destroy_none();
 }
 
 /// Pay the champion: remove and return the lowest-rank `(rank, coin)` via `pop_front`.

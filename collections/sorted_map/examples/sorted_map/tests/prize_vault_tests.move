@@ -1,5 +1,5 @@
 /// Scenario walkthroughs for `prize_vault` - the resource pattern (Coin<SUI> values,
-/// cap-gated writes, ordered payout, drain-then-destroy, the ENotEmpty safety net).
+/// cap-gated writes, ordered payout, drain-then-destroy, and the ENotEmpty/EEmpty safety nets).
 module openzeppelin_sorted_map::prize_vault_tests;
 
 use openzeppelin_sorted_map::prize_vault::{Self, PrizeVault, OrganizerCap};
@@ -134,6 +134,39 @@ fun close_nonempty_vault_aborts() {
         let vault = ts::take_shared<PrizeVault>(&scenario);
         let cap = ts::take_from_sender<OrganizerCap>(&scenario);
         prize_vault::close(vault, cap); // aborts here
+    };
+    ts::end(scenario);
+}
+
+// === Scenario 6 - paying from an empty vault aborts EEmpty (the library's other abort) ===
+//
+// prize_vault's second library abort: `pay_next` -> `pop_front` on an empty map asserts
+// EEmpty at the library location, so an over-eager payout reverts cleanly.
+#[test]
+#[
+    expected_failure(
+        abort_code = openzeppelin_sorted_map::sorted_map::EEmpty,
+        location = openzeppelin_sorted_map::sorted_map,
+    ),
+]
+fun pay_next_on_empty_vault_aborts() {
+    let mut scenario = ts::begin(ORGANIZER);
+
+    // Tx1 - ORGANIZER: create an empty vault; keep its bound cap.
+    {
+        let (_, cap) = prize_vault::create(scenario.ctx());
+        transfer::public_transfer(cap, ORGANIZER);
+    };
+    // Tx2 - ORGANIZER: pay from the still-empty vault -> EEmpty (aborts inside pay_next).
+    ts::next_tx(&mut scenario, ORGANIZER);
+    {
+        let mut vault = ts::take_shared<PrizeVault>(&scenario);
+        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
+        let (_r, c) = prize_vault::pay_next(&mut vault, &cap); // aborts here (empty)
+        // Unreachable past the abort; kept well-formed for the resource checker.
+        coin::burn_for_testing(c);
+        ts::return_to_sender(&scenario, cap);
+        ts::return_shared(vault);
     };
     ts::end(scenario);
 }
