@@ -132,7 +132,7 @@ public fun abs(x: UD30x9): UD30x9 {
 ///
 /// Returns the probability `Φ(z) ∈ [0.5, 1]` represented as `UD30x9`. Since
 /// `UD30x9` inputs are inherently non-negative, the output is always at least
-/// `0.5`. The implementation evaluates an AAA-rational approximation
+/// `0.5`. The implementation evaluates a rational approximation
 /// `N(z) / D(z)` at WAD scale (`10^36`) via Horner's method on a sign-magnitude
 /// `u256` accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a
 /// single nearest-rounding step.
@@ -148,13 +148,15 @@ public fun abs(x: UD30x9): UD30x9 {
 ///   which `Φ` rounds to `1` at the `10⁻⁹` output resolution, so the cut-off is
 ///   lossless.
 /// - `Φ(0)` is exactly `0.5`.
-/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
-///   worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). The committed
+///   coefficients are far tighter: every output is within 1 ULP of `Φ` and
+///   ~99.1% are correctly rounded (empirical worst case `~5 × 10⁻¹⁰`).
 /// - Monotone non-decreasing between every pair of adjacent representable
-///   inputs. The `10^36` accumulation scale holds floor-truncation noise far
-///   below the true per-step increment, and the codegen CI gate confirms this
-///   exhaustively over the at-risk tail (`z ≥ 4`, where the increment is
-///   smallest), so no 1-ULP inversion occurs.
+///   inputs. The shipped rational is monotone as a real function, and the `10^36`
+///   accumulation scale holds floor-truncation noise far below the true per-step
+///   increment, so the quantized output cannot invert; the codegen CI gate
+///   verifies both (full-domain continuous monotonicity plus an exhaustive tail
+///   re-check).
 /// - Pure, deterministic, and object-free: identical inputs always produce
 ///   identical outputs; touches no storage or Sui objects.
 ///
@@ -179,7 +181,7 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///
 /// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` represented
 /// as `UD30x9`, where the peak is `φ(0) = 0.398942280`. The implementation
-/// evaluates an AAA-rational approximation `N(z) / D(z)` at WAD scale (`10^36`)
+/// evaluates a rational approximation `N(z) / D(z)` at WAD scale (`10^36`)
 /// via Horner's method on a sign-magnitude `u256` accumulator; the final ratio is
 /// cast back to `UD30x9` (`10^9`) in a single nearest-rounding step.
 ///
@@ -191,15 +193,17 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///
 /// #### Behavior
 /// - Monotone non-increasing in `z` between every pair of adjacent representable
-///   inputs; the peak `φ(0) = 0.398942280` is returned exactly. The `10^36`
-///   accumulation scale holds floor-truncation noise far below the true per-step
-///   decrement, and the codegen CI gate confirms this exhaustively over the
-///   at-risk tail (`z ≥ 4`), so no 1-ULP inversion occurs.
+///   inputs; the peak `φ(0) = 0.398942280` is returned exactly. The shipped
+///   rational is monotone as a real function, and the `10^36` accumulation scale
+///   holds floor-truncation noise far below the true per-step decrement, so the
+///   quantized output cannot invert; the codegen CI gate verifies both
+///   (full-domain continuous monotonicity plus an exhaustive tail re-check).
 /// - Saturates exactly to `0` for `z ≥ 6.402729806` - the analytical point at
 ///   which `φ` rounds to `0` at the `10⁻⁹` output resolution (`φ ≈ 5 × 10⁻¹⁰`
 ///   there), so the cut-off is lossless.
-/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
-///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). The committed
+///   coefficients are far tighter: every output is within 1 ULP of `φ` and
+///   ~98.7% are correctly rounded (empirical worst case `~5 × 10⁻¹⁰`).
 /// - Pure, deterministic, and object-free: identical inputs always produce
 ///   identical outputs; touches no storage or Sui objects.
 ///

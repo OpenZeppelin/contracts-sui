@@ -55,13 +55,33 @@ numerical work; *evaluating* them is trivial. So we split it:
   constant gas. See `../../math/fixed_point/sources/internal/cdf.move` (and the shared primitives in
   `../../math/fixed_point/sources/internal/horner.move`).
 
-**Why AAA, and why Python.** The fitting algorithm is **AAA** (Adaptive
-Antoulas–Anderson). You hand it samples of a function and it automatically
-produces a near-optimal rational fit - no hand-tuning of degree or coefficient
-placement. It ships in `scipy.interpolate.AAA` (added in SciPy 1.15.0), and the
-high-precision reference math uses `mpmath`. Neither could run on-chain - they
-need floats and arbitrary precision and are far too expensive - which is exactly
-why this half lives here, offline, and only the cheap half ships in Move.
+**What we optimize: the function that ships.** The on-chain code does not
+evaluate the ideal rational - it evaluates a *quantized integer pipeline*:
+coefficients rounded to `u128` at the `10³⁶` scale, a floor-truncating Horner
+loop, and a final nearest-rounding divide back to the `10⁹` output scale. So the
+right objective is not "minimize the continuous approximation error" but
+"maximize the number of representable inputs whose **exact integer output** is
+correctly rounded." `derive.py` optimizes exactly that: it scores each candidate
+by running it through a bit-identical Python mirror of the Move evaluator
+(`shared/arithmetic.py`) against a 100-digit `mpmath` oracle and counting
+correctly-rounded outputs, then keeps the strictly-monotone candidate with the
+fewest misses.
+
+**How the fit is found.** Two ingredients, both offline-only:
+
+- A strong starting rational, from two independent seeds - **AAA** (Adaptive
+  Antoulas–Anderson, `scipy.interpolate.AAA`, added in SciPy 1.15.0), which
+  automatically produces a near-optimal rational with no hand-tuning, and an
+  independent linearized-minimax seed (`shared/fit.py`). Having both is a
+  cross-check that the result is not an artifact of one method.
+- A **descending-`p` IRLS homotopy** (`shared/fit.py`) that refines each seed,
+  walking the fit from a least-squares/`L1` objective down toward the
+  correctly-rounded *count* (an `L0` objective) the shipped function cares about.
+
+`mpmath` carries the high-precision reference and the ill-conditioned fit linear
+algebra; neither `scipy` nor `mpmath` could run on-chain - they need floats and
+arbitrary precision and are far too expensive - which is exactly why this half
+lives here, offline, and only the cheap half ships in Move.
 
 Even symmetry makes it cheaper still: we fit only the right half
 `[0, 6.109410205]` (the point at which Φ rounds to 1 at `10⁻⁹` resolution) and
@@ -73,27 +93,31 @@ Three stages, four scripts. Generation flows left to right; `validate.py` is an
 independent re-check that closes the loop.
 
 ```text
-derive.py ──► .derive_output.json ──┬─► emit_coefficients.py ──► cdf_coefficients.move
-(AAA fit)        (chosen coeffs)     └─► emit_test_vectors.py  ──► cdf_test_vectors.move (×2)
+derive.py ──────────► .derive_output.json ──┬─► emit_coefficients.py ──► cdf_coefficients.move
+(count-optimized fit)     (chosen coeffs)    └─► emit_test_vectors.py  ──► cdf_test_vectors.move (×2)
 
 validate.py ──► parses the committed cdf_coefficients.move, re-runs it, checks vs scipy
 ```
 
-- **`derive.py`** - runs the AAA fit at the pinned polynomial degree (held fixed
-  across regenerations so a precision/domain change never silently moves it),
-  checks it meets the `5×10⁻⁹` error target, and writes the coefficients to a JSON
-  intermediate. `--report` prints the full per-degree error sweep.
+- **`derive.py`** - fits the rational at the pinned polynomial degree (held fixed
+  across regenerations so a precision/domain change never silently moves it) by
+  scoring candidates through the exact integer pipeline and selecting the
+  strictly-monotone one with the most correctly-rounded outputs, then writes the
+  coefficients to a JSON intermediate. `--report` prints the full candidate table.
 - **`emit_coefficients.py`** - reads that JSON, quantizes the coefficients to
   fixed-point integers, and writes `cdf_coefficients.move`.
 - **`emit_test_vectors.py`** - emits the Move test vectors (expected Φ at chosen
   `z`, taken straight from the high-precision `mpmath` oracle).
 - **`validate.py`** - the independent check, and the CI gate. It does **not**
   re-derive: it parses the committed `cdf_coefficients.move` and re-runs the
-  exact on-chain integer arithmetic (at the `10^36` accumulation scale) in Python.
+  exact on-chain integer arithmetic (at the `10³⁶` accumulation scale) in Python.
   It asserts the quantized error stays within budget (≤ 5 ULP at `10⁻⁹`) against
-  `scipy`, plus two exhaustive tail gates (`shared/gates.py`): neighbor-resolution
-  monotonicity (no 1-ULP inversion between adjacent raw inputs) and u256 overflow
-  margin (the peak Horner product clears `2^256`).
+  `scipy` and checks the `shared/gates.py` gates: full-domain continuous
+  monotonicity of the shipped rational (which at `10³⁶` guarantees a monotone
+  quantized output across every adjacent input), an exhaustive re-check of the far
+  tail, and the u256 overflow margin (the peak Horner product clears `2²⁵⁶`).
+  `--report` additionally measures the exact-pipeline correctly-rounded rate over
+  every representable input (slow; the authoritative accuracy figure).
 
 The split is deliberate. Deriving needs the heavy `scipy`/`mpmath` machinery;
 validating only needs to confirm the *committed* numbers are still correct,
@@ -137,7 +161,7 @@ works from any directory. `make -C scripts/gaussian_codegen install` does the sa
 ## Generate (CDF)
 
 ```sh
-python -m gaussian_codegen.cdf.derive            # AAA fit + degree sweep → .derive_output.json
+python -m gaussian_codegen.cdf.derive            # count-optimized fit → .derive_output.json
 python -m gaussian_codegen.cdf.emit_coefficients # → math/fixed_point/sources/internal/cdf_coefficients.move
 python -m gaussian_codegen.cdf.emit_test_vectors # → tests/{sd29x9_tests,ud30x9_tests}/cdf_test_vectors.move
 python -m gaussian_codegen.cdf.validate          # re-checks the committed coefficient module against scipy
@@ -146,7 +170,7 @@ python -m gaussian_codegen.cdf.validate          # re-checks the committed coeff
 ## Generate (PDF)
 
 ```sh
-python -m gaussian_codegen.pdf.derive            # AAA fit + degree sweep → .derive_output.json
+python -m gaussian_codegen.pdf.derive            # count-optimized fit → .derive_output.json
 python -m gaussian_codegen.pdf.emit_coefficients # → math/fixed_point/sources/internal/pdf_coefficients.move
 python -m gaussian_codegen.pdf.emit_test_vectors # → tests/{sd29x9_tests,ud30x9_tests}/pdf_test_vectors.move
 python -m gaussian_codegen.pdf.validate          # re-checks the committed coefficient module against scipy
@@ -185,22 +209,26 @@ CI runs `validate.py`, both `--check` drift guards (`emit_coefficients` and
 `emit_test_vectors`), and the Python unit tests (`pytest`); it runs `npm ci` so
 the emitters can format. Re-deriving the fit (`derive.py`) stays local-only: CI
 checks the committed coefficients against the committed `.derive_output.json`
-rather than re-running the AAA fit, whose result is sensitive to solver and
+rather than re-running the fit, whose result is sensitive to solver and
 library versions.
 
 ## `.derive_output.json` schema
 
-The contract between `derive.py` and the emitters. Coefficients are decimal
-strings (serialized from mpmath at 100 dps); everything else is informational.
+The contract between `derive.py` and the emitters. Only `num_coeffs_str` /
+`den_coeffs_str` feed the emitters (the coefficients are decimal strings
+serialized from mpmath at 100 dps); everything else records how the fit was
+chosen and is informational.
 
 | Key | Type | Meaning |
 |-----|------|---------|
-| `degree` / `n_coeffs` | int | Chosen polynomial degree and coefficient count |
-| `max_error` / `worst_z` | float | Worst-case error of the float fit and where it occurs |
-| `target_error` | float | The error budget the sweep had to meet |
-| `max_z` / `wad` / `scale_decimal` | str | The domain bound and scales (see `shared/constants.py`) |
+| `degree` / `n_coeffs` | int | Polynomial degree (pinned) and coefficient count |
+| `method` / `selected` | str | Fit method and the winning candidate tag (e.g. `aaa/p=0.42`) |
+| `p_schedule` / `pin_zero_slope` | list / bool | IRLS homotopy exponents; whether `R'(0)=0` was pinned (PDF) |
+| `max_z` / `wad` / `scale_decimal` | str | Domain bound and scales (see `shared/constants.py`) |
 | `num_coeffs_str` / `den_coeffs_str` | list[str] | N(z), D(z) coefficients, ascending power order |
-| `support_points` / `support_values` / `weights` | list[float] | Raw AAA barycentric form (audit aid) |
+| `max_coeff_bits` | int | Widest quantized coefficient in bits (must be `< 128`) |
+| `sup_error` / `sup_error_z` | float | Continuous worst-case `|R − f|` and where (informational) |
+| `grid_correctly_rounded` / `grid_total` / `grid_correct_rate` | int / float | Exact-pipeline correctly-rounded tally on the selection grid |
 
 ## Layout
 
@@ -209,9 +237,12 @@ gaussian_codegen/
 ├── Makefile             # install / regen / validate / check / ci / test
 ├── shared/
 │   ├── constants.py     # single source of truth: WAD scales, domain bounds
-│   ├── aaa.py           # AAA barycentric → explicit-polynomial conversion
+│   ├── aaa.py           # AAA barycentric → explicit-polynomial conversion (fit seed)
+│   ├── fit.py           # minimax seed + descending-p IRLS rational fitter
+│   ├── refit.py         # scores candidates through the pipeline, selects the best
+│   ├── accuracy.py      # exact-pipeline correctly-rounded / within-1-ULP metrics
 │   ├── arithmetic.py    # sign-magnitude u256 mirror of the Move horner primitives
-│   ├── gates.py         # exhaustive neighbor-monotonicity + u256 overflow gates
+│   ├── gates.py         # continuous + tail monotonicity and u256 overflow gates
 │   ├── reference.py     # mpmath oracle for Φ / φ at 100 dps
 │   └── move_emit.py     # Move literal / banner / drift-check helpers
 ├── cdf/
@@ -219,7 +250,7 @@ gaussian_codegen/
 │   ├── emit_coefficients.py
 │   ├── emit_test_vectors.py
 │   └── validate.py
-└── tests/               # pytest: quantizer, emitter boundary, arithmetic mirror
+└── tests/               # pytest: quantizer, emitter boundary, arithmetic mirror, fit + accuracy
 ```
 
 ## Adding a new function family
