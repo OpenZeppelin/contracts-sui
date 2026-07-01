@@ -10,8 +10,8 @@ use std::unit_test::assert_eq;
 // === Constants ===
 
 const SCALE: u128 = 1_000_000_000; // SD29x9 raw scale (10^9)
-const MAX_Z_RAW: u128 = 6_500_000_000; // 6.5 at SD29x9 scale
-const ONE_WAD: u128 = 1_000_000_000_000_000_000; // 1.0 at WAD scale (coefficient injection)
+const MAX_Z_RAW: u128 = 6_402_729_806; // 6.402729806 at SD29x9 scale
+const ONE_WAD: u128 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 1.0 at WAD scale (10^36, coefficient injection)
 
 // 5 ULP at the SD29x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
 const TOLERANCE: u128 = 5;
@@ -88,8 +88,9 @@ fun saturation_at_sd29x9_extremes() {
 }
 
 #[test]
-fun max_z_raw_is_six_point_five() {
-    // Pin the saturation domain bound. Moving the domain would slip past the
+fun max_z_raw_is_analytical_saturation_point() {
+    // Pin the saturation domain bound to 6.402729806 - the smallest z whose φ
+    // rounds to 0 at the 10^9 scale. Moving the domain would slip past the
     // behavioral saturation tests and the Python sweep, but is caught here.
     assert_eq!(pdf_coefficients::max_z_raw(), MAX_Z_RAW);
 }
@@ -119,7 +120,7 @@ fun output_range_bounded_by_peak() {
 #[test]
 fun monotonic_decreasing_in_magnitude() {
     // φ is unimodal with its peak at 0; on the non-negative half it is
-    // non-increasing. Sweep magnitudes across [0, 6.5].
+    // non-increasing. Sweep magnitudes across [0, 6.402729806].
     let n: u64 = 64;
     let step = MAX_Z_RAW / ((n - 1) as u128);
     let mut prev: u128 = PDF_0_RAW; // φ at |z| = 0 is the peak
@@ -192,7 +193,7 @@ fun coefficient_arrays_have_matching_lengths() {
 fun numerator_negative_aborts() {
     // A constant numerator of -1.0 forces N(z) < 0 on the central domain.
     let _ = pdf::eval_rational_for_test(
-        SCALE, // z = 1.0, inside [0, 6.5)
+        SCALE, // z = 1.0, inside [0, 6.402729806)
         vector[ONE_WAD],
         vector[true],
         vector[ONE_WAD],
