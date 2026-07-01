@@ -62,7 +62,7 @@ fun digest_of(value: u64): vector<u8> {
 // === Construction ===
 
 #[test]
-fun test_new_emits_event_and_sets_config() {
+fun new_emits_event_and_sets_config() {
     let mut scenario = test_scenario::begin(DEPLOYER);
     let id = timelock::new_shared<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
         1000,
@@ -98,7 +98,7 @@ fun test_new_emits_event_and_sets_config() {
 }
 
 #[test, expected_failure(abort_code = timelock::EInvalidConfig)]
-fun test_new_rejects_zero_grace() {
+fun new_rejects_zero_grace() {
     let mut scenario = test_scenario::begin(DEPLOYER);
     let _tl = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
         0,
@@ -109,7 +109,7 @@ fun test_new_rejects_zero_grace() {
 }
 
 #[test, expected_failure(abort_code = timelock::EInvalidConfig)]
-fun test_new_rejects_excessive_grace() {
+fun new_rejects_excessive_grace() {
     let mut scenario = test_scenario::begin(DEPLOYER);
     let _tl = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
         0,
@@ -120,7 +120,7 @@ fun test_new_rejects_excessive_grace() {
 }
 
 #[test, expected_failure(abort_code = timelock::EInvalidConfig)]
-fun test_new_rejects_excessive_min_delay() {
+fun new_rejects_excessive_min_delay() {
     let mut scenario = test_scenario::begin(DEPLOYER);
     let _tl = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
         timelock::max_delay_ms() + 1,
@@ -131,7 +131,7 @@ fun test_new_rejects_excessive_min_delay() {
 }
 
 #[test]
-fun test_min_delay_zero_allows_instant_op() {
+fun min_delay_zero_allows_instant_op() {
     let mut scenario = setup(0, 1000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -165,7 +165,7 @@ fun test_min_delay_zero_allows_instant_op() {
 // === Happy path ===
 
 #[test]
-fun test_schedule_execute_consume_happy() {
+fun schedule_execute_consume_happy() {
     let mut scenario = setup(1000, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -227,7 +227,7 @@ fun test_schedule_execute_consume_happy() {
 }
 
 #[test]
-fun test_cancel_happy() {
+fun cancel_happy() {
     let mut scenario = setup(1000, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -263,7 +263,7 @@ fun test_cancel_happy() {
 // === Role gating ===
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_schedule_rejects_wrong_role() {
+fun schedule_rejects_wrong_role() {
     let mut scenario = setup(0, 1000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -282,7 +282,7 @@ fun test_schedule_rejects_wrong_role() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_execute_rejects_wrong_role() {
+fun execute_rejects_wrong_role() {
     let mut scenario = setup(0, 1000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -293,7 +293,7 @@ fun test_execute_rejects_wrong_role() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_cancel_rejects_wrong_role() {
+fun cancel_rejects_wrong_role() {
     let mut scenario = setup(0, 1000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -303,7 +303,7 @@ fun test_cancel_rejects_wrong_role() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_self_admin_rejects_non_admin() {
+fun self_admin_rejects_non_admin() {
     let mut scenario = setup(0, 1000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -324,7 +324,7 @@ fun test_self_admin_rejects_non_admin() {
 // === Delay / window ===
 
 #[test, expected_failure(abort_code = timelock::EDelayTooShort)]
-fun test_schedule_rejects_short_delay() {
+fun schedule_rejects_short_delay() {
     let mut scenario = setup(1000, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -345,7 +345,7 @@ fun test_schedule_rejects_short_delay() {
 // EScheduleOverflow: a delay so large that `now + delay_ms` overflows aborts with a named
 // error rather than the generic VM arithmetic abort (mirrors rate_limiter #349).
 #[test, expected_failure(abort_code = timelock::EScheduleOverflow)]
-fun test_schedule_rejects_overflow_delay() {
+fun schedule_rejects_overflow_delay() {
     let mut scenario = setup(0, 1000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -365,7 +365,7 @@ fun test_schedule_rejects_overflow_delay() {
 }
 
 #[test, expected_failure(abort_code = timelock::EDelayNotElapsed)]
-fun test_execute_rejects_before_ready() {
+fun execute_rejects_before_ready() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -388,7 +388,7 @@ fun test_execute_rejects_before_ready() {
 }
 
 #[test]
-fun test_execute_at_exact_ready_succeeds() {
+fun execute_at_exact_ready_succeeds() {
     let mut scenario = setup(0, 100);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -417,7 +417,7 @@ fun test_execute_at_exact_ready_succeeds() {
 }
 
 #[test, expected_failure(abort_code = timelock::EOperationExpired)]
-fun test_execute_rejects_when_expired() {
+fun execute_rejects_when_expired() {
     let mut scenario = setup(0, 100);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -440,7 +440,7 @@ fun test_execute_rejects_when_expired() {
 }
 
 #[test, expected_failure(abort_code = timelock::EOperationExpired)]
-fun test_execute_at_exact_expiry_rejects() {
+fun execute_at_exact_expiry_rejects() {
     let mut scenario = setup(0, 100);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -465,7 +465,7 @@ fun test_execute_at_exact_expiry_rejects() {
 // === Lifecycle ===
 
 #[test, expected_failure(abort_code = timelock::EOperationAlreadyExists)]
-fun test_schedule_rejects_duplicate() {
+fun schedule_rejects_duplicate() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -493,7 +493,7 @@ fun test_schedule_rejects_duplicate() {
 }
 
 #[test, expected_failure(abort_code = timelock::EOperationAlreadyDone)]
-fun test_execute_rejects_redo() {
+fun execute_rejects_redo() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -517,7 +517,7 @@ fun test_execute_rejects_redo() {
 }
 
 #[test, expected_failure(abort_code = timelock::EOperationUnset)]
-fun test_execute_rejects_unknown() {
+fun execute_rejects_unknown() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -528,7 +528,7 @@ fun test_execute_rejects_unknown() {
 }
 
 #[test, expected_failure(abort_code = timelock::EOperationUnset)]
-fun test_cancel_rejects_unknown() {
+fun cancel_rejects_unknown() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -538,7 +538,7 @@ fun test_cancel_rejects_unknown() {
 }
 
 #[test, expected_failure(abort_code = timelock::EOperationAlreadyDone)]
-fun test_cancel_rejects_done() {
+fun cancel_rejects_done() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -564,7 +564,7 @@ fun test_cancel_rejects_done() {
 // === consume gate ===
 
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
-fun test_consume_rejects_wrong_timelock() {
+fun consume_rejects_wrong_timelock() {
     let mut scenario = setup(0, 10000);
     let mut tl_a = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -599,7 +599,7 @@ fun test_consume_rejects_wrong_timelock() {
 // `EWrongParams`. (On the `*_with` cap path this is impossible - `Params` is inferred.)
 
 #[test, expected_failure(abort_code = timelock::EWrongParams)]
-fun test_execute_rejects_wrong_params() {
+fun execute_rejects_wrong_params() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -624,7 +624,7 @@ fun test_execute_rejects_wrong_params() {
 // An op scheduled for one `Action` cannot be executed as a different `Action`, even when
 // the `Params` type matches - the `Action` is bound at schedule and re-checked at execute.
 #[test, expected_failure(abort_code = timelock::EWrongAction)]
-fun test_execute_rejects_wrong_action() {
+fun execute_rejects_wrong_action() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -647,7 +647,7 @@ fun test_execute_rejects_wrong_action() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongParams)]
-fun test_cancel_rejects_wrong_params() {
+fun cancel_rejects_wrong_params() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -671,7 +671,7 @@ fun test_cancel_rejects_wrong_params() {
 // === Predecessor ===
 
 #[test]
-fun test_predecessor_success() {
+fun predecessor_success() {
     let mut scenario = setup(0, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -713,7 +713,7 @@ fun test_predecessor_success() {
 }
 
 #[test, expected_failure(abort_code = timelock::EPredecessorNotDone)]
-fun test_predecessor_blocks_until_done() {
+fun predecessor_blocks_until_done() {
     let mut scenario = setup(0, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -743,7 +743,7 @@ fun test_predecessor_blocks_until_done() {
 }
 
 #[test, expected_failure(abort_code = timelock::EPredecessorUnset)]
-fun test_predecessor_unset() {
+fun predecessor_unset() {
     let mut scenario = setup(0, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -768,7 +768,7 @@ fun test_predecessor_unset() {
 // A non-empty, non-32-byte predecessor is rejected at schedule (fail fast) rather than
 // becoming a silently un-executable op.
 #[test, expected_failure(abort_code = timelock::EInvalidPredecessor)]
-fun test_schedule_rejects_malformed_predecessor() {
+fun schedule_rejects_malformed_predecessor() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -789,7 +789,7 @@ fun test_schedule_rejects_malformed_predecessor() {
 // === Open executor ===
 
 #[test, expected_failure(abort_code = timelock::EOpenExecutorDisabled)]
-fun test_execute_open_rejects_when_disabled() {
+fun execute_open_rejects_when_disabled() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -809,7 +809,7 @@ fun test_execute_open_rejects_when_disabled() {
 }
 
 #[test]
-fun test_execute_open_succeeds_when_enabled() {
+fun execute_open_succeeds_when_enabled() {
     let mut scenario = setup(0, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -853,7 +853,7 @@ fun test_execute_open_succeeds_when_enabled() {
 // === Self-administration ===
 
 #[test]
-fun test_update_min_delay_succeeds() {
+fun update_min_delay_succeeds() {
     let mut scenario = setup(1000, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -886,7 +886,7 @@ fun test_update_min_delay_succeeds() {
 }
 
 #[test]
-fun test_update_grace_period_succeeds() {
+fun update_grace_period_succeeds() {
     let mut scenario = setup(0, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -917,7 +917,7 @@ fun test_update_grace_period_succeeds() {
 }
 
 #[test]
-fun test_set_open_executor_emits_event() {
+fun set_open_executor_emits_event() {
     let mut scenario = setup(0, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -949,7 +949,7 @@ fun test_set_open_executor_emits_event() {
 
 // Changing min_delay does not move an in-flight op's locked timing.
 #[test]
-fun test_in_flight_op_keeps_timing_after_min_delay_change() {
+fun in_flight_op_keeps_timing_after_min_delay_change() {
     let mut scenario = setup(1000, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -998,7 +998,7 @@ fun test_in_flight_op_keeps_timing_after_min_delay_change() {
 // === Re-schedule semantics ===
 
 #[test, expected_failure(abort_code = timelock::EOperationAlreadyExists)]
-fun test_reschedule_same_after_expiry_fails() {
+fun reschedule_same_after_expiry_fails() {
     let mut scenario = setup(0, 100);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1028,7 +1028,7 @@ fun test_reschedule_same_after_expiry_fails() {
 }
 
 #[test]
-fun test_reschedule_new_salt_after_expiry_ok() {
+fun reschedule_new_salt_after_expiry_ok() {
     let mut scenario = setup(0, 100);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1068,7 +1068,7 @@ fun test_reschedule_new_salt_after_expiry_ok() {
 // === Views: state machine ===
 
 #[test]
-fun test_operation_state_transitions() {
+fun operation_state_transitions() {
     let mut scenario = setup(0, 100);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1141,7 +1141,7 @@ fun test_operation_state_transitions() {
 // === Misc public API ===
 
 #[test]
-fun test_share_makes_timelock_shared() {
+fun share_makes_timelock_shared() {
     let mut scenario = test_scenario::begin(DEPLOYER);
     let tl = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
         0,
@@ -1158,7 +1158,7 @@ fun test_share_makes_timelock_shared() {
 }
 
 #[test]
-fun test_hash_operation_deterministic() {
+fun hash_operation_deterministic() {
     let mut scenario = test_scenario::begin(DEPLOYER);
     let tl_id = timelock::new_shared<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
         0,
@@ -1182,7 +1182,7 @@ fun test_hash_operation_deterministic() {
 // Full cycle via the cap path. The `<...>` are written ONCE at new_operation_cap;
 // schedule_with / execute_with carry ZERO explicit type args (all inferred from the cap).
 #[test]
-fun test_cap_happy_zero_type_args() {
+fun cap_happy_zero_type_args() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1209,7 +1209,7 @@ fun test_cap_happy_zero_type_args() {
 // Structural binding: a cap minted for timelock A rejects timelock B - with NO manual
 // object::id assert anywhere in this test or the (would-be) consumer.
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
-fun test_cap_rejects_foreign_timelock() {
+fun cap_rejects_foreign_timelock() {
     let mut scenario = setup(0, 10000);
     let tl_a = scenario.take_shared<Timelock>();
     let mut tl_b = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
@@ -1228,7 +1228,7 @@ fun test_cap_rejects_foreign_timelock() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_cap_schedule_rejects_wrong_role() {
+fun cap_schedule_rejects_wrong_role() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1240,7 +1240,7 @@ fun test_cap_schedule_rejects_wrong_role() {
 }
 
 #[test]
-fun test_cap_cancel() {
+fun cap_cancel() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1261,7 +1261,7 @@ fun test_cap_cancel() {
 }
 
 #[test]
-fun test_cap_execute_open() {
+fun cap_execute_open() {
     let mut scenario = setup(0, 100000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1299,7 +1299,7 @@ fun test_cap_execute_open() {
 }
 
 #[test]
-fun test_operation_cap_timelock_id() {
+fun operation_cap_timelock_id() {
     let scenario = setup(0, 1000);
     let tl = scenario.take_shared<Timelock>();
     let cap = tl.new_operation_cap<TestAction, u64>();
@@ -1309,10 +1309,20 @@ fun test_operation_cap_timelock_id() {
     scenario.end();
 }
 
+#[test]
+fun operation_cap_can_be_destroyed() {
+    let scenario = setup(0, 1000);
+    let tl = scenario.take_shared<Timelock>();
+    let cap = tl.new_operation_cap<TestAction, u64>();
+    cap.destroy_operation_cap();
+    test_scenario::return_shared(tl);
+    scenario.end();
+}
+
 // === Overflow: second guard (now + delay fits, but + grace overflows) ===
 
 #[test, expected_failure(abort_code = timelock::EScheduleOverflow)]
-fun test_schedule_rejects_overflow_grace() {
+fun schedule_rejects_overflow_grace() {
     let mut scenario = setup(0, 1000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1334,7 +1344,7 @@ fun test_schedule_rejects_overflow_grace() {
 // === Cap-path abort branches (execute_with / execute_open_with / cancel_with) ===
 
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
-fun test_cap_execute_rejects_foreign_timelock() {
+fun cap_execute_rejects_foreign_timelock() {
     let mut scenario = setup(0, 10000);
     let tl_a = scenario.take_shared<Timelock>();
     let mut tl_b = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
@@ -1352,7 +1362,7 @@ fun test_cap_execute_rejects_foreign_timelock() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_cap_execute_rejects_wrong_role() {
+fun cap_execute_rejects_wrong_role() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1364,7 +1374,7 @@ fun test_cap_execute_rejects_wrong_role() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
-fun test_cap_execute_open_rejects_foreign_timelock() {
+fun cap_execute_open_rejects_foreign_timelock() {
     let mut scenario = setup(0, 10000);
     let tl_a = scenario.take_shared<Timelock>();
     let mut tl_b = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
@@ -1380,7 +1390,7 @@ fun test_cap_execute_open_rejects_foreign_timelock() {
 }
 
 #[test, expected_failure(abort_code = timelock::EOpenExecutorDisabled)]
-fun test_cap_execute_open_rejects_when_disabled() {
+fun cap_execute_open_rejects_when_disabled() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let clk = clock::create_for_testing(scenario.ctx());
@@ -1391,7 +1401,7 @@ fun test_cap_execute_open_rejects_when_disabled() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
-fun test_cap_cancel_rejects_foreign_timelock() {
+fun cap_cancel_rejects_foreign_timelock() {
     let mut scenario = setup(0, 10000);
     let tl_a = scenario.take_shared<Timelock>();
     let mut tl_b = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
@@ -1407,7 +1417,7 @@ fun test_cap_cancel_rejects_foreign_timelock() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_cap_cancel_rejects_wrong_role() {
+fun cap_cancel_rejects_wrong_role() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1423,7 +1433,7 @@ fun test_cap_cancel_rejects_wrong_role() {
 // types are public), bypassing the schedule-side bound check - but the bound is re-asserted
 // at apply time. `grace = 0` would brick the timelock; `min_delay > MAX` is out of bounds.
 #[test, expected_failure(abort_code = timelock::EInvalidConfig)]
-fun test_execute_grace_bypass_rejected() {
+fun execute_grace_bypass_rejected() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1446,7 +1456,7 @@ fun test_execute_grace_bypass_rejected() {
 }
 
 #[test, expected_failure(abort_code = timelock::EInvalidConfig)]
-fun test_execute_min_delay_bypass_rejected() {
+fun execute_min_delay_bypass_rejected() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1468,7 +1478,7 @@ fun test_execute_min_delay_bypass_rejected() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_schedule_update_grace_rejects_non_admin() {
+fun schedule_update_grace_rejects_non_admin() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1487,7 +1497,7 @@ fun test_schedule_update_grace_rejects_non_admin() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_schedule_set_open_executor_rejects_non_admin() {
+fun schedule_set_open_executor_rejects_non_admin() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1506,7 +1516,7 @@ fun test_schedule_set_open_executor_rejects_non_admin() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_execute_update_min_delay_rejects_non_admin() {
+fun execute_update_min_delay_rejects_non_admin() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1517,7 +1527,7 @@ fun test_execute_update_min_delay_rejects_non_admin() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_execute_update_grace_rejects_non_admin() {
+fun execute_update_grace_rejects_non_admin() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1528,7 +1538,7 @@ fun test_execute_update_grace_rejects_non_admin() {
 }
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_execute_set_open_executor_rejects_non_admin() {
+fun execute_set_open_executor_rejects_non_admin() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1539,7 +1549,7 @@ fun test_execute_set_open_executor_rejects_non_admin() {
 }
 
 #[test, expected_failure(abort_code = timelock::EInvalidConfig)]
-fun test_schedule_update_min_delay_rejects_excessive() {
+fun schedule_update_min_delay_rejects_excessive() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1558,7 +1568,7 @@ fun test_schedule_update_min_delay_rejects_excessive() {
 }
 
 #[test, expected_failure(abort_code = timelock::EInvalidConfig)]
-fun test_schedule_update_grace_rejects_zero() {
+fun schedule_update_grace_rejects_zero() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
@@ -1577,7 +1587,7 @@ fun test_schedule_update_grace_rejects_zero() {
 }
 
 #[test, expected_failure(abort_code = timelock::EInvalidConfig)]
-fun test_schedule_update_grace_rejects_excessive() {
+fun schedule_update_grace_rejects_excessive() {
     let mut scenario = setup(0, 10000);
     let mut tl = scenario.take_shared<Timelock>();
     let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();

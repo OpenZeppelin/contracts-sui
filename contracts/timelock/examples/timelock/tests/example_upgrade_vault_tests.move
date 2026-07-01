@@ -54,7 +54,7 @@ fun deploy(): Scenario {
 // it, which consumes the timelock ticket and authorizes the package upgrade, yielding an
 // UpgradeTicket for the PTB's Upgrade command.
 #[test]
-fun test_timelocked_upgrade_happy() {
+fun timelocked_upgrade_happy() {
     let mut scenario = deploy();
     let mut clk = clock::create_for_testing(scenario.ctx());
     clk.set_for_testing(0);
@@ -113,7 +113,7 @@ fun test_timelocked_upgrade_happy() {
 
 // === A self-created timelock cannot rush the upgrade ===
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
-fun test_fake_timelock_rejected() {
+fun fake_timelock_rejected() {
     let mut scenario = deploy();
     let clk = clock::create_for_testing(scenario.ctx());
 
@@ -142,7 +142,7 @@ fun test_fake_timelock_rejected() {
 
 // === Authorizing before the delay elapses is rejected ===
 #[test, expected_failure(abort_code = timelock::EDelayNotElapsed)]
-fun test_authorize_before_ready() {
+fun authorize_before_ready() {
     let mut scenario = deploy();
     let clk = clock::create_for_testing(scenario.ctx()); // stays at 0
 
@@ -185,7 +185,7 @@ fun test_authorize_before_ready() {
 
 // === A canceller can drop a pending upgrade before it executes ===
 #[test]
-fun test_cancel_upgrade() {
+fun cancel_upgrade() {
     let mut scenario = deploy();
 
     // Grant the canceller role.

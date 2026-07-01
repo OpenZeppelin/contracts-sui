@@ -37,7 +37,7 @@ fun deploy(): Scenario {
 
 // === Happy path: a fee change goes through the full delay cycle ===
 #[test]
-fun test_fee_change_happy() {
+fun fee_change_happy() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();
@@ -97,7 +97,7 @@ fun test_fee_change_happy() {
 // types and tries to route it through execute_fee_change to apply a fee to the real pool
 // with no delay. The pool's `OperationCap` binding rejects it - with no consumer assert.
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
-fun test_fake_timelock_rejected() {
+fun fake_timelock_rejected() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();
@@ -128,7 +128,7 @@ fun test_fake_timelock_rejected() {
 
 // === Wrong role cannot schedule (library-direct) ===
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
-fun test_wrong_role_cannot_schedule() {
+fun wrong_role_cannot_schedule() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();
@@ -156,7 +156,7 @@ fun test_wrong_role_cannot_schedule() {
 
 // === Execute before the delay elapses ===
 #[test, expected_failure(abort_code = timelock::EDelayNotElapsed)]
-fun test_execute_before_ready() {
+fun execute_before_ready() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();
@@ -189,7 +189,7 @@ fun test_execute_before_ready() {
 
 // === Predecessor ordering: B (predecessor A) cannot execute before A is done ===
 #[test, expected_failure(abort_code = timelock::EPredecessorNotDone)]
-fun test_predecessor_blocks_until_done() {
+fun predecessor_blocks_until_done() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();
@@ -252,7 +252,7 @@ fun test_predecessor_blocks_until_done() {
 
 // === Predecessor ordering: A then B, each effect applied in order ===
 #[test]
-fun test_predecessor_ordering_happy() {
+fun predecessor_ordering_happy() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();
@@ -330,7 +330,7 @@ fun test_predecessor_ordering_happy() {
 
 // === Cancel a pending fee change ===
 #[test]
-fun test_cancel_fee_change() {
+fun cancel_fee_change() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();
@@ -370,7 +370,7 @@ fun test_cancel_fee_change() {
 
 // === Self-administered delay change (TimelockAdminRole) ===
 #[test]
-fun test_self_admin_delay_change() {
+fun self_admin_delay_change() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();
@@ -425,7 +425,7 @@ fun test_self_admin_delay_change() {
 // with the CONSUMER's error (code 0) - distinct from the library's timelock::EWrongTimelock,
 // which guards the cap-bound op flow.
 #[test, expected_failure(abort_code = example_amm::EWrongTimelock)]
-fun test_self_admin_rejects_foreign_timelock() {
+fun self_admin_rejects_foreign_timelock() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_AMM>>();

@@ -35,7 +35,7 @@ fun deploy(): Scenario {
 
 // === Routine governance and emergency response run on separate timelocks ===
 #[test]
-fun test_dual_routine_and_emergency() {
+fun dual_routine_and_emergency() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_DUAL_GOVERNANCE>>();
@@ -139,7 +139,7 @@ fun test_dual_routine_and_emergency() {
 
 // === A main-class action cannot be routed through the emergency timelock ===
 #[test, expected_failure(abort_code = timelock::EWrongTimelock)]
-fun test_misroute_fee_through_emergency() {
+fun misroute_fee_through_emergency() {
     let mut scenario = deploy();
 
     let mut ac = scenario.take_shared<AccessControl<EXAMPLE_DUAL_GOVERNANCE>>();

@@ -437,7 +437,10 @@ public fun execute<Role, Action, Params: store + drop>(
     execute_internal<Action, Params>(self, id, clock, ctx)
 }
 
-/// Execute a ready operation in open-executor mode (no `Auth` required).
+/// Execute a ready operation in open-executor mode (no `Auth` required). Open mode lifts
+/// only the executor-role gate on minting the ticket; consumption stays witness-gated, so a
+/// caller who cannot construct `Action` cannot `consume` the returned ticket - and since it
+/// has no abilities, their transaction aborts (reverting the state change atomically).
 ///
 /// #### Aborts
 /// - `EOpenExecutorDisabled` if `open_executor` is false.
@@ -512,6 +515,14 @@ public fun new_operation_cap<Action, Params>(self: &Timelock): OperationCap<Acti
 /// The `Timelock` id an `OperationCap` is bound to.
 public fun operation_cap_timelock_id<Action, Params>(cap: &OperationCap<Action, Params>): ID {
     cap.timelock_id
+}
+
+/// Destroy an `OperationCap`, e.g. when decommissioning the object that stored it. An
+/// `OperationCap` has `store` but not `drop`, so it cannot be discarded implicitly; this is
+/// the explicit disposal. The cap carries no authority - a fresh one is always mintable via
+/// `new_operation_cap`.
+public fun destroy_operation_cap<Action, Params>(cap: OperationCap<Action, Params>) {
+    let OperationCap { timelock_id: _ } = cap;
 }
 
 /// Like `schedule`, but the `OperationCap` enforces the canonical-timelock binding.
