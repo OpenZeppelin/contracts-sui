@@ -33,7 +33,7 @@ information:
 - [`contracts/README.md`](./contracts/README.md) → per-package READMEs (e.g.
   [`contracts/access/README.md`](./contracts/access/README.md))
 - [`math/README.md`](./math/README.md) → per-package READMEs
-- [`collections/README.md`](./collections/README.md) → per-package READMEs
+- [`collections/README.md`](./collections/README.md) → the `openzeppelin_collections` package README (modules `sorted_map`, `sorted_set`, `big_sorted_map`)
 
 This document covers only the *principles* behind the layout, never the catalog.
 

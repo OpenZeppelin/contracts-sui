@@ -1,0 +1,10 @@
+[package]
+name = "openzeppelin_collections"
+edition = "2024"
+
+# The Sui framework + MoveStdlib are implicit system dependencies in Move 2024.
+# `sorted_set` and `big_sorted_map` consume `sorted_map` as sibling modules within
+# this same package, so there is no cross-package dependency to declare.
+
+[addresses]
+openzeppelin_collections = "0x0"

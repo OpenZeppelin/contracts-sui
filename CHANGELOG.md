@@ -27,24 +27,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - `cdf`: the standard-normal cumulative distribution function `Φ(z)` for `UD30x9` and `SD29x9` fixed-point inputs. (#345)
 
-### `openzeppelin_sorted_map`
+### `openzeppelin_collections`
 
 #### Added
 
-- New `openzeppelin_sorted_map` package: a generic, ordered key-value map (`SortedMap<K, V>`) backed by a single sorted vector. A UID-less value type you embed in your own object like `sui::vec_map::VecMap`, with ordered reads (head/tail, floor/ceiling, bounded pagination), O(log N) lookup, and exactly one stored-object access per operation. Bare (built-in integer `<`) and `_by` (custom comparator) macro forms. (#261)
-- `split_off`, `append`, and the `EBadSplit` error: forced-public positional primitives that support the `openzeppelin_big_sorted_map` sibling (a B+Tree node's payload is a `SortedMap`). They write/move at a caller-given position with no order check - internal-use, not an ordering-safe API. (#321)
-
-### `openzeppelin_sorted_set`
-
-#### Added
-
-- New `openzeppelin_sorted_set` package: a generic, ordered set of unique keys (`SortedSet<K>`), a thin wrapper over `SortedMap<K, Unit>`. Fills the gap left by the unordered `sui::vec_set` - iterates in comparator order, with nearest-neighbour navigation and bounded pagination. A UID-less value type, unconditionally `copy + drop + store`; `insert`/`remove` are total, returning `bool` rather than aborting on duplicates. Bare and `_by` macro forms. (#118)
-
-### `openzeppelin_big_sorted_map`
-
-#### Added
-
-- New `openzeppelin_big_sorted_map` package: the large tier of the sorted-map family - a generic, ordered key-value B+Tree (`BigSortedMap<K, V>`) for data past `SortedMap`'s single-object (~250 KB) ceiling. A Sui object whose non-root nodes are dynamic fields, reusing an unmodified `SortedMap` as each node's payload and mirroring its query API. Orphan-safe drain-then-`destroy_empty` teardown, a min-degree floor that bounds scan cost, and a mandatory `keys_from` limit. Bare and `_by` macro forms. (#321)
+- New `openzeppelin_collections` package: an ordered-collections family in a single package, with three modules - `sorted_map`, `sorted_set`, and `big_sorted_map`. All provide bare (built-in integer `<`) and `_by` (custom comparator) macro forms. (#261, #118, #321)
+  - `sorted_map`: a generic, ordered key-value map (`SortedMap<K, V>`) backed by a single sorted vector. A UID-less value type you embed in your own object like `sui::vec_map::VecMap`, with ordered reads (head/tail, floor/ceiling, bounded pagination), O(log N) lookup, and exactly one stored-object access per operation. Includes the forced-public positional primitives `split_off`/`append` and the `EBadSplit` error that back the `big_sorted_map` module; they write/move at a caller-given position with no order check - internal-use, not an ordering-safe API. (#261)
+  - `sorted_set`: a generic, ordered set of unique keys (`SortedSet<K>`), a thin wrapper over `sorted_map`. Fills the gap left by the unordered `sui::vec_set` - iterates in comparator order, with nearest-neighbour navigation and bounded pagination. A UID-less value type, unconditionally `copy + drop + store`; `insert`/`remove` are total, returning `bool` rather than aborting on duplicates. (#118)
+  - `big_sorted_map`: the large tier - a generic, ordered key-value B+Tree (`BigSortedMap<K, V>`) for data past `SortedMap`'s single-object (~256 KB) ceiling. A Sui object whose non-root nodes are dynamic fields, reusing `sorted_map` as each node's payload and mirroring its query API. Orphan-safe drain-then-`destroy_empty` teardown, a min-degree floor that bounds scan cost, and a mandatory `keys_from` limit. (#321)
 
 ## 1.3.0 (15-06-2026)
 

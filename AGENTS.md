@@ -34,13 +34,13 @@ Either way the rules come from `STYLEGUIDE.md`; the procedure restates none of t
 
 ## Packages
 
-Each `Move.toml` directory under `contracts/`, `math/`, and `collections/` is a separate package.
+Each `Move.toml` directory under `contracts/` and `math/` is a separate package; `collections/` is itself the single `openzeppelin_collections` package (modules `sorted_map`, `sorted_set`, `big_sorted_map`).
 For the catalog - what each package/module does, install snippets, docs links -
 read the group and package READMEs (the single source of truth):
 
 - [`contracts/README.md`](./contracts/README.md) + each package's `README.md`
 - [`math/README.md`](./math/README.md) + each package's `README.md`
-- [`collections/README.md`](./collections/README.md) + each package's `README.md`
+- [`collections/README.md`](./collections/README.md) (the `openzeppelin_collections` package README)
 
 For agents **integrating this library into a downstream project** (rather than
 contributing to this repo), [`llms.txt`](./llms.txt) is the discovery entry point -
