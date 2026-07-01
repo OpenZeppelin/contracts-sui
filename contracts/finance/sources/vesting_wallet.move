@@ -17,7 +17,7 @@
 /// The wallet itself never interprets the schedule - it only enforces release
 /// accounting and conservation of funds. A curve module evaluates its curve for
 /// the current clock, mints a `VestedAmount<S>`, and `release` pays out the
-/// not-yet-released portion.
+/// not-yet-released portion into the beneficiary's address balance.
 ///
 /// This module ships no curve of its own. The built-in linear-with-cliff schedule
 /// lives in the sibling `vesting_wallet_linear` module - the reference curve, and the
@@ -58,7 +58,7 @@
 ///    itself (calling `vesting_wallet::new` directly) without routing through `new`.
 /// 3. A `vested(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
 ///    that ends in `vesting_wallet::mint_vested_amount(wallet, MyCurve {}, amount)`.
-/// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet)` to get a
+/// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet, root)` to get a
 ///    `DestroyReceipt<MyCurve, MyParams>`, then
 ///    `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover the
 ///    beneficiary and parameters for the curve module to destructure.
@@ -78,16 +78,18 @@
 /// - **Owned** (fast path): `transfer::public_transfer(wallet, addr)` - only the
 ///   holder can pass the wallet by `&mut`, so funding and release are reachable
 ///   from the holder's transactions only. Outside parties fund it by
-///   `public_transfer`ing a `Coin<C>` to the wallet's object address; the holder
-///   then claims each with `receive_and_deposit`.
+///   `public_transfer`ing a `Coin<C>` to the wallet's object address (the holder
+///   claims each with `receive_and_deposit`) or by settling a `Balance<C>` into the
+///   address (the holder pulls it in with `sweep_settled`).
 ///
 /// The `beneficiary` is fixed at construction. To rotate the recipient, point
 /// `beneficiary` at a consumer-owned object and rotate ownership of that object
 /// instead.
 module openzeppelin_finance::vesting_wallet;
 
+use sui::accumulator::AccumulatorRoot;
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
+use sui::coin::Coin;
 use sui::event;
 use sui::transfer::Receiving;
 
@@ -116,6 +118,11 @@ const EBalanceOverflow: vector<u8> = "Deposit would overflow the wallet's lifeti
 /// so the current balance cannot cover the releasable amount.
 #[error(code = 4)]
 const EInsufficientBalance: vector<u8> = "Releasable amount exceeds the wallet's balance";
+
+/// `destroy_empty` was called on a wallet that still has unswept settled funds at
+/// its object address. Call `sweep_settled` first.
+#[error(code = 5)]
+const EUnsweptFunds: vector<u8> = "Wallet has unswept settled funds at its address";
 
 // === Structs ===
 
@@ -175,7 +182,7 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 ///
 /// ```move
 /// let v = some_curve::vested_amount(wrapper.inner(), clock);
-/// wrapper.release(&v, ctx);
+/// wrapper.release(&v);
 /// ```
 ///
 /// Handing out `&inner` is safe: it only allows views and curve-gated minting of an
@@ -191,12 +198,13 @@ public struct VestedAmount<phantom S> has drop {
 }
 
 /// Carries a destroyed wallet's beneficiary and schedule params back to its curve. A
-/// HOT POTATO - no abilities - so it cannot be dropped, stored, or copied: it MUST be
-/// consumed before the tx ends, and only `consume_receipt` (witness-gated) can consume
-/// it. This is what drags the curve into the PTB to finalize, and lets it veto by
-/// aborting.
+/// HOT POTATO that only `consume_receipt` (witness-gated) can consume.
+/// This is what drags the curve into the PTB to finalize, and lets it veto by aborting.
 public struct DestroyReceipt<phantom S, P> {
+    /// Beneficiary of the destroyed wallet, handed back for the curve to use.
     beneficiary: address,
+    /// Schedule parameters of the destroyed wallet, handed back for the curve to
+    /// destructure.
     params: P,
 }
 
@@ -209,11 +217,27 @@ public struct Created<phantom S, P, phantom C> has copy, drop {
     schedule_params: P,
 }
 
-/// Emitted by `deposit` (and `receive_and_deposit`) when a non-zero amount is
-/// added. A deposit of a zero-value coin emits no event.
+/// Emitted by `deposit` when a non-zero amount is added. A deposit of a
+/// zero-value balance emits no event.
 public struct Deposited<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
     /// Amount added to the balance by this deposit.
+    amount: u64,
+}
+
+/// Emitted by `sweep_settled` when a non-zero amount is added. A sweep of a
+/// zero-value balance emits no event.
+public struct Swept<phantom S, phantom C> has copy, drop {
+    wallet_id: ID,
+    /// Amount added to the balance by this sweep.
+    amount: u64,
+}
+
+/// Emitted by `receive_and_deposit` when a non-zero amount is added. A deposit
+/// of a zero-value coin emits no event.
+public struct Received<phantom S, phantom C> has copy, drop {
+    wallet_id: ID,
+    /// Amount added to the balance by this receival.
     amount: u64,
 }
 
@@ -318,11 +342,15 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     VestedAmount { wallet_id: object::id(wallet), amount }
 }
 
-/// Add a coin to the wallet's balance. Permissionless - the beneficiary's
+/// Add a `Balance<C>` to the wallet's balance. Permissionless - the beneficiary's
 /// identity is data, not a capability, and anyone may fund.
 ///
-/// A deposit of a zero-value coin is a no-op: the (empty) balance is consumed but
+/// A deposit of a zero-value balance is a no-op: the (empty) balance is consumed but
 /// nothing changes and no `Deposited` event is emitted.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to fund.
+/// - `balance`: The funds to add to the wallet's balance.
 ///
 /// #### Aborts
 /// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
@@ -330,23 +358,51 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
 ///   indefinitely brick the release path.
 public fun deposit<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
-    coin: Coin<C>,
+    balance: Balance<C>,
 ) {
-    let amount = coin.value();
-
-    assert!(
-        std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
-        EBalanceOverflow,
-    );
-
-    wallet.balance.join(coin.into_balance());
+    let amount = wallet.deposit_internal(balance);
     if (amount == 0) return;
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
 }
 
+/// Sweep `amount` from the wallet's own object address balance into its on-book
+/// `balance`.
+///
+/// A wallet with no settled funds at its address is a no-op: nothing is swept and
+/// no `Swept` event is emitted.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to sweep into.
+/// - `root`: The shared `AccumulatorRoot`, read to find the wallet's settled funds.
+///
+/// #### Aborts
+/// - `EBalanceOverflow` if sweeping the settled funds would push the wallet's
+///   lifetime total `balance + released` past `u64::MAX` (propagated from
+///   `deposit`).
+public fun sweep_settled<S: drop, P: copy + drop + store, C>(
+    wallet: &mut VestingWallet<S, P, C>,
+    root: &AccumulatorRoot,
+) {
+    let addr = wallet.id.to_address();
+    let amount = balance::settled_funds_value<C>(root, addr);
+    if (amount == 0) return;
+    let w = balance::withdraw_funds_from_object<C>(&mut wallet.id, amount);
+    // amount is already known and positive, so the returned value is redundant here.
+    _ = wallet.deposit_internal(balance::redeem_funds(w));
+    event::emit(Swept<S, C> { wallet_id: object::id(wallet), amount });
+}
+
 /// Claim a coin that an upstream emitter `public_transfer`'d to this wallet's
-/// object address, then funnel it through the standard deposit path. Used by
-/// emission schedules and payroll robots that don't hold a wallet reference.
+/// object address, then add it to the balance. Used by emission schedules and
+/// payroll robots that don't hold a wallet reference.
+///
+/// A claim of a zero-value coin is a no-op: the (empty) balance is consumed but
+/// nothing changes and no `Received` event is emitted.
+///
+/// #### Parameters
+/// - `wallet`: The wallet to fund.
+/// - `receiving`: The `Coin<C>` transferred to the wallet's object address, to be
+///   claimed and deposited.
 ///
 /// #### Aborts
 /// - `EBalanceOverflow` if claiming the coin would overflow the wallet's
@@ -360,23 +416,25 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     receiving: Receiving<Coin<C>>,
 ) {
     let coin = transfer::public_receive(&mut wallet.id, receiving);
-    wallet.deposit(coin);
+    let amount = wallet.deposit_internal(coin.into_balance());
+    if (amount == 0) return;
+    event::emit(Received<S, C> { wallet_id: object::id(wallet), amount });
 }
 
-/// Pay the not-yet-released portion attested by `vested` to the beneficiary.
-/// Permissionless: anyone holding references to the wallet and a `VestedAmount` can
-/// poke this. The recipient is always read fresh from `wallet.beneficiary` at call
-/// time. `vested` is borrowed, not consumed, so the same attestation can still be
-/// passed to a later call in the PTB.
+/// Pay the not-yet-released portion attested by `vested` into the beneficiary's
+/// address balance (via `balance::send_funds`) - no `Coin<C>` object is minted or
+/// transferred. Permissionless: anyone holding references to the wallet and a
+/// `VestedAmount` can poke this. The recipient is always read fresh from
+/// `wallet.beneficiary` at call time. `vested` is borrowed, not consumed, so the
+/// same attestation can still be passed to a later call in the PTB.
 ///
 /// If nothing new is vested since the last release (the wallet is already drained
-/// at this clock), the call is a no-op: no coin is transferred and no event is
+/// at this clock), the call is a no-op: nothing is paid out and no event is
 /// emitted.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to release from.
 /// - `vested`: A `VestedAmount<S>` minted for this wallet by its curve module.
-/// - `ctx`: Transaction context, used to mint the payout coin.
 ///
 /// #### Aborts
 /// - `EWalletMismatch` if `vested` was not minted for this wallet.
@@ -386,20 +444,17 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 public fun release<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     vested: &VestedAmount<S>,
-    ctx: &mut TxContext,
 ) {
-    let VestedAmount { wallet_id, amount: vested_amount } = vested;
-    assert!(wallet_id == object::id(wallet), EWalletMismatch);
-    assert!(*vested_amount >= wallet.released, EVestedBelowReleased);
-
-    let releasable = *vested_amount - wallet.released;
+    let releasable = wallet.releasable(vested);
     if (releasable == 0) return;
     assert!(releasable <= wallet.balance.value(), EInsufficientBalance);
 
-    wallet.released = wallet.released + releasable;
-    let coin = coin::from_balance(wallet.balance.split(releasable), ctx);
     let beneficiary = wallet.beneficiary;
-    transfer::public_transfer(coin, beneficiary);
+
+    wallet.released = wallet.released + releasable;
+
+    let payout = wallet.balance.split(releasable);
+    balance::send_funds(payout, beneficiary);
 
     event::emit(Released<S, C> {
         wallet_id: object::id(wallet),
@@ -418,12 +473,16 @@ public fun release<S: drop, P: copy + drop + store, C>(
 /// split as `VestedAmount`: one half stays callable without the witness, the curve gates
 /// the other.
 ///
-/// Coins `public_transfer`'d to a destroyed wallet's address after this call have no
-/// path back - pair destruction with halting any upstream emissions that target this
-/// wallet.
+/// Funds sent to a destroyed wallet's address after this call have no path back: a coin
+/// `public_transfer`'d there is unaddressable, and a balance `send_funds`'d there settles
+/// against an object whose `UID` is gone, so no `withdraw_funds_from_object` path can ever
+/// reclaim it. Pair destruction with halting any upstream emissions that target this wallet.
 ///
 /// #### Parameters
-/// - `wallet`: The wallet to destroy. Must hold a zero balance.
+/// - `wallet`: The wallet to destroy. Must hold a zero balance and have no pending
+///   settled funds at its object address (`sweep_settled` first if it does).
+/// - `root`: The shared `AccumulatorRoot`, read to confirm the wallet's object
+///   address holds no unswept settled funds.
 ///
 /// #### Returns
 /// - A `DestroyReceipt<S, P>` carrying the wallet's beneficiary and schedule
@@ -431,22 +490,16 @@ public fun release<S: drop, P: copy + drop + store, C>(
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the wallet still holds a balance.
+/// - `EUnsweptFunds` if the wallet has any pending settled funds.
 public fun destroy_empty<S: drop, P: copy + drop + store, C>(
     wallet: VestingWallet<S, P, C>,
+    root: &AccumulatorRoot,
 ): DestroyReceipt<S, P> {
     assert!(wallet.balance.value() == 0, ENotEmpty);
+    let settled = balance::settled_funds_value<C>(root, wallet.id.to_address());
+    assert!(settled == 0, EUnsweptFunds);
 
-    let wallet_id = object::id(&wallet);
-    let beneficiary = wallet.beneficiary;
-    let total_released = wallet.released;
-
-    let VestingWallet { id, balance, schedule_params, .. } = wallet;
-    balance.destroy_zero();
-    id.delete();
-
-    event::emit(Destroyed<S, C> { wallet_id, beneficiary, total_released });
-
-    DestroyReceipt { beneficiary, params: schedule_params }
+    wallet.finish_destroy()
 }
 
 /// Unwrap a `DestroyReceipt<S, P>` to recover the destroyed wallet's beneficiary and
@@ -499,35 +552,17 @@ public fun releasable<S: drop, P: copy + drop + store, C>(
 
 /// Read the cumulative vested total recorded in a `VestedAmount<S>` without
 /// consuming it.
-///
-/// #### Parameters
-/// - `vested`: The `VestedAmount<S>` to read.
-///
-/// #### Returns
-/// - The cumulative vested total recorded in `vested`.
 public fun amount<S>(vested: &VestedAmount<S>): u64 {
     vested.amount
 }
 
 /// Read the wallet's schedule parameters. Ungated - curve parameters are public
 /// information.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The wallet's stored schedule parameters.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params
 }
 
 /// Address that receives every `release`.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The address that receives every `release`.
 public fun beneficiary<S: drop, P: copy + drop + store, C>(
     wallet: &VestingWallet<S, P, C>,
 ): address {
@@ -535,28 +570,75 @@ public fun beneficiary<S: drop, P: copy + drop + store, C>(
 }
 
 /// Cumulative amount released so far.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The cumulative amount released so far.
 public fun released<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.released
 }
 
 /// Funds currently held by the wallet and not yet released.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The funds currently held by the wallet and not yet released.
 public fun balance<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): u64 {
     wallet.balance.value()
 }
 
+// === Private Functions ===
+
+/// Join `balance` into the wallet's balance and return the amount added, leaving
+/// event emission to the caller. Shared by `deposit`, `sweep_settled`, and
+/// `receive_and_deposit`.
+///
+/// #### Aborts
+/// - `EBalanceOverflow` if the deposit would push the wallet's lifetime total
+///   `balance + released` (== `Σ(deposits)`) past `u64::MAX`.
+fun deposit_internal<S: drop, P: copy + drop + store, C>(
+    wallet: &mut VestingWallet<S, P, C>,
+    balance: Balance<C>,
+): u64 {
+    let amount = balance.value();
+
+    assert!(
+        std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
+        EBalanceOverflow,
+    );
+
+    wallet.balance.join(balance);
+    amount
+}
+
+/// Shared teardown for `destroy_empty`: consume the drained wallet, emit `Destroyed`, and
+/// return the receipt. Assumes the empty-balance and settled-funds gates have already
+/// passed.
+fun finish_destroy<S: drop, P: copy + drop + store, C>(
+    wallet: VestingWallet<S, P, C>,
+): DestroyReceipt<S, P> {
+    let wallet_id = object::id(&wallet);
+    let beneficiary = wallet.beneficiary;
+    let total_released = wallet.released;
+
+    let VestingWallet { id, balance, schedule_params, .. } = wallet;
+    balance.destroy_zero();
+    id.delete();
+
+    event::emit(Destroyed<S, C> { wallet_id, beneficiary, total_released });
+
+    DestroyReceipt { beneficiary, params: schedule_params }
+}
+
 // === Test-Only Helpers ===
+
+/// Tear down a drained wallet without the `AccumulatorRoot` settled-funds gate, so unit
+/// tests can exercise teardown without constructing an `AccumulatorRoot` - which has no
+/// test constructor in the pinned Sui release. The empty-balance gate is kept, so the
+/// `ENotEmpty` path stays covered through this entry too.
+///
+/// TODO: remove this and route the teardown tests through `destroy_empty` with a real
+/// `AccumulatorRoot` (via `accumulator::create_for_testing`) once that test helper ships
+/// in the published Sui mainnet framework.
+#[test_only]
+public fun destroy_empty_for_testing<S: drop, P: copy + drop + store, C>(
+    wallet: VestingWallet<S, P, C>,
+): DestroyReceipt<S, P> {
+    assert!(wallet.balance.value() == 0, ENotEmpty);
+    wallet.finish_destroy()
+}
 
 /// Build a `Created` event value for asserting against `event::events_by_type`.
 #[test_only]
@@ -572,6 +654,18 @@ public fun test_new_created<S, P, C>(
 #[test_only]
 public fun test_new_deposited<S, C>(wallet_id: ID, amount: u64): Deposited<S, C> {
     Deposited { wallet_id, amount }
+}
+
+/// Build a `Swept` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_swept<S, C>(wallet_id: ID, amount: u64): Swept<S, C> {
+    Swept { wallet_id, amount }
+}
+
+/// Build a `Received` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_received<S, C>(wallet_id: ID, amount: u64): Received<S, C> {
+    Received { wallet_id, amount }
 }
 
 /// Build a `Released` event value for asserting against `event::events_by_type`.

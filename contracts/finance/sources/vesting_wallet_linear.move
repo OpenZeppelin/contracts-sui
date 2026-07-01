@@ -318,14 +318,9 @@ public fun vested_amount<C>(
 /// #### Parameters
 /// - `wallet`: The wallet to release from.
 /// - `clock`: Sui `Clock`, read for the current timestamp.
-/// - `ctx`: Transaction context, used to mint the payout coin.
-public fun release<C>(
-    wallet: &mut VestingWallet<Linear, Params, C>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
+public fun release<C>(wallet: &mut VestingWallet<Linear, Params, C>, clock: &Clock) {
     let v = vested_amount(wallet, clock);
-    wallet.release(&v, ctx);
+    wallet.release(&v);
 }
 
 /// How much `release` would pay out right now, without the caller minting a
@@ -383,68 +378,32 @@ public fun destroy(receipt: DestroyReceipt<Linear, Params>, clock: &Clock, ctx: 
 // === View helpers ===
 
 /// Timestamp (ms) at which vesting begins.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The timestamp (ms) at which vesting begins.
 public fun start_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().start_ms
 }
 
 /// Length of each tranche period (ms).
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The length of each tranche period (ms).
 public fun period_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().period_ms
 }
 
 /// Number of equal tranches.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The number of equal tranches.
 public fun steps<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().steps
 }
 
 /// Length of the vesting period (ms): `period_ms * steps`.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The length of the vesting period (ms): `period_ms * steps`.
 public fun duration_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     let params = wallet.schedule_params();
     params.period_ms * params.steps
 }
 
 /// Timestamp (ms) at which the schedule ends (`start_ms + period_ms * steps`).
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The timestamp (ms) at which the schedule ends (`start_ms + period_ms * steps`).
 public fun end_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().calculate_end()
 }
 
 /// Read the configured cliff length (ms from `start_ms`). `0` means no cliff.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The configured cliff length (ms from `start_ms`); `0` means no cliff.
 public fun cliff_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().cliff_ms
 }
@@ -469,7 +428,7 @@ fun vested_amount_raw<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
     } else {
         // SAFETY: depositing has a check ensuring no balance overflow can occur.
         let total = wallet.balance() + wallet.released();
-        // SAFETY: construction guarantees `period_ms * steps` and`start_ms + period_ms * steps`
+        // SAFETY: construction guarantees `period_ms * steps` and `start_ms + period_ms * steps`
         // fit in u64, so neither arithmetic here overflows.
         if (now >= start_ms + period_ms * steps) {
             total
