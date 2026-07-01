@@ -77,6 +77,7 @@ public use fun openzeppelin_fp_math::ud30x9_convert::try_to_u64_trunc as UD30x9.
 // Gaussian functions
 public use fun openzeppelin_fp_math::ud30x9_base::cdf as UD30x9.cdf;
 public use fun openzeppelin_fp_math::ud30x9_base::pdf as UD30x9.pdf;
+public use fun openzeppelin_fp_math::ud30x9_base::inverse_cdf as UD30x9.inverse_cdf;
 
 // === Public Functions ===
 
