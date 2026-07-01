@@ -29,6 +29,11 @@ def test_raw_scales_are_internally_consistent():
     assert constants.MAX_Z_RAW_WAD == constants.MAX_Z_RAW * (constants.WAD // constants.SCALE_DECIMAL)
 
 
+def test_pdf_domain_bound():
+    assert constants.PDF_MAX_Z == "6.5"
+    assert constants.PDF_MAX_Z_RAW == 6_500_000_000
+
+
 # --- fmt_u128 / grouping ----------------------------------------------------
 
 

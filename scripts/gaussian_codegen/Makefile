@@ -15,13 +15,19 @@ regen: ## Re-derive coefficients and emit every generated Move file (prettier-fo
 	$(PYTHON) -m gaussian_codegen.cdf.derive
 	$(PYTHON) -m gaussian_codegen.cdf.emit_coefficients
 	$(PYTHON) -m gaussian_codegen.cdf.emit_test_vectors
+	$(PYTHON) -m gaussian_codegen.pdf.derive
+	$(PYTHON) -m gaussian_codegen.pdf.emit_coefficients
+	$(PYTHON) -m gaussian_codegen.pdf.emit_test_vectors
 
 validate: ## Re-check the committed coefficients against scipy (the CI gate)
 	$(PYTHON) -m gaussian_codegen.cdf.validate
+	$(PYTHON) -m gaussian_codegen.pdf.validate
 
 check: ## Drift-check generated files vs the emitters (both exact; needs prettier)
 	$(PYTHON) -m gaussian_codegen.cdf.emit_coefficients --check
 	$(PYTHON) -m gaussian_codegen.cdf.emit_test_vectors --check
+	$(PYTHON) -m gaussian_codegen.pdf.emit_coefficients --check
+	$(PYTHON) -m gaussian_codegen.pdf.emit_test_vectors --check
 
 test: ## Run the Python unit tests
 	$(PYTHON) -m pytest tests -q
@@ -29,3 +35,5 @@ test: ## Run the Python unit tests
 ci: validate test ## Exactly what CI runs
 	$(PYTHON) -m gaussian_codegen.cdf.emit_coefficients --check
 	$(PYTHON) -m gaussian_codegen.cdf.emit_test_vectors --check
+	$(PYTHON) -m gaussian_codegen.pdf.emit_coefficients --check
+	$(PYTHON) -m gaussian_codegen.pdf.emit_test_vectors --check

@@ -1,8 +1,9 @@
 # `openzeppelin_fp_math` Codegen
 
 This directory is an **offline Python toolkit**. It computes the numeric
-constants that the `cdf` (standard-normal CDF) function in `openzeppelin_fp_math`
-needs, and writes them into the Move source as generated tables.
+constants that the `cdf` (standard-normal CDF) and `pdf` (standard-normal PDF)
+functions in `openzeppelin_fp_math` need, and writes them into the Move source as
+generated tables.
 
 Nothing here runs on-chain, and nothing here is needed to *use* the library -
 the Move package is fully self-contained at runtime. You only touch this
@@ -137,9 +138,18 @@ python -m gaussian_codegen.cdf.emit_test_vectors # → tests/{sd29x9_tests,ud30x
 python -m gaussian_codegen.cdf.validate          # re-checks the committed coefficient module against scipy
 ```
 
-Or via the Makefile (`make -C scripts/gaussian_codegen <target>`): `regen` (the first
-three; the emitters format their own output), `validate`, `check` (drift guard),
-`test` (pytest), `ci` (what CI runs).
+## Generate (PDF)
+
+```sh
+python -m gaussian_codegen.pdf.derive            # AAA fit + degree sweep → .derive_output.json
+python -m gaussian_codegen.pdf.emit_coefficients # → math/fixed_point/sources/internal/pdf_coefficients.move
+python -m gaussian_codegen.pdf.emit_test_vectors # → tests/{sd29x9_tests,ud30x9_tests}/pdf_test_vectors.move
+python -m gaussian_codegen.pdf.validate          # re-checks the committed coefficient module against scipy
+```
+
+Or via the Makefile (`make -C scripts/gaussian_codegen <target>`): `regen` (derive
++ both emitters for each family; the emitters format their own output),
+`validate`, `check` (drift guard), `test` (pytest), `ci` (what CI runs).
 
 Both emitters format their output with the repo's Move formatter
 (`@mysten/prettier-plugin-move`) as their final step, so what they write is
@@ -147,8 +157,9 @@ exactly what lands in the committed files - no separate `prettier --write` pass
 is needed. This requires `npm ci` at the repo root (for the prettier plugin);
 the emitters abort with a clear message if prettier is missing.
 
-`derive.py` writes a JSON intermediate (`scripts/gaussian_codegen/cdf/.derive_output.json`)
-that the `emit_*.py` scripts consume. It is committed, so the coefficient drift
+Each family's `derive.py` writes a JSON intermediate
+(`scripts/gaussian_codegen/<family>/.derive_output.json`, e.g. `cdf/` and `pdf/`)
+that its `emit_*.py` scripts consume. It is committed, so the coefficient drift
 guard can run in CI without re-deriving (see below).
 
 ### Drift guard
@@ -227,3 +238,6 @@ hand-edited; regenerate via the steps above.
 | `math/fixed_point/sources/internal/cdf_coefficients.move` | `scripts/gaussian_codegen/cdf/derive.py` + `scripts/gaussian_codegen/cdf/emit_coefficients.py` |
 | `math/fixed_point/tests/sd29x9_tests/cdf_test_vectors.move` | `scripts/gaussian_codegen/cdf/emit_test_vectors.py` |
 | `math/fixed_point/tests/ud30x9_tests/cdf_test_vectors.move` | `scripts/gaussian_codegen/cdf/emit_test_vectors.py` |
+| `math/fixed_point/sources/internal/pdf_coefficients.move` | `scripts/gaussian_codegen/pdf/derive.py` + `scripts/gaussian_codegen/pdf/emit_coefficients.py` |
+| `math/fixed_point/tests/sd29x9_tests/pdf_test_vectors.move` | `scripts/gaussian_codegen/pdf/emit_test_vectors.py` |
+| `math/fixed_point/tests/ud30x9_tests/pdf_test_vectors.move` | `scripts/gaussian_codegen/pdf/emit_test_vectors.py` |

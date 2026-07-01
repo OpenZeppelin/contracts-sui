@@ -5,6 +5,7 @@ module openzeppelin_fp_math::sd29x9_base;
 
 use openzeppelin_fp_math::cdf::{cdf_nonneg_raw, half_raw};
 use openzeppelin_fp_math::common;
+use openzeppelin_fp_math::pdf::pdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
 use openzeppelin_math::rounding;
@@ -202,6 +203,55 @@ public fun cdf(z: SD29x9): SD29x9 {
         phi
     };
     wrap(raw, false)
+}
+
+/// Standard-normal probability density function `φ(z)`.
+///
+/// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` as a
+/// non-negative `SD29x9`, where the peak is `φ(0) = 0.398942280`. `φ` is even,
+/// so the magnitude `|z|` is taken first and the unsigned evaluator
+/// `pdf_nonneg_raw` is applied to it - there is no reflection or sign-flip. The
+/// evaluator computes an AAA-rational approximation `N(|z|) / D(|z|)` at WAD
+/// scale via Horner's method on a sign-magnitude `u256` accumulator, rounding
+/// the ratio back to `SD29x9` (`10^9`) in a single nearest-rounding step.
+///
+/// #### Parameters
+/// - `z`: Input value.
+///
+/// #### Returns
+/// - The density `φ(z)` as a non-negative `SD29x9` in `[0, 0.398942280]`.
+///
+/// #### Behavior
+/// - Even: `pdf(z) == pdf(z.negate())` for every input except `sd29x9::min()`,
+///   whose negation is not representable.
+/// - Monotone non-increasing in `|z|` across the dense offline validation grid
+///   (enforced by the codegen CI gate); the peak `φ(0) = 0.398942280` is
+///   returned exactly. A 1-ULP local inversion between neighboring raw inputs is
+///   not formally excluded in the far tail (`|z| ≳ 5.3`), where the true `φ`
+///   decrement drops below the `10⁻⁹` output resolution.
+/// - Saturates exactly to `0` for `|z| ≥ 6.5`. At that bound `φ` is already
+///   `~2.7 × 10⁻¹⁰`, below the output's `10⁻⁹` resolution.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Empirical
+///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
+/// - Pure, deterministic, and object-free: identical inputs always produce
+///   identical outputs; touches no storage or Sui objects.
+///
+/// #### Aborts
+/// - Does not abort for any `SD29x9` input under the committed, validated
+///   coefficients. The evaluator carries internal integrity asserts
+///   (`pdf::EInternalNumNegative` / `pdf::EInternalDenNonPositive`) as
+///   defense-in-depth against a corrupted regenerated coefficient table; these
+///   cannot fire for the shipped coefficients.
+///
+/// #### Examples
+///
+/// ```move
+/// let z = sd29x9::wrap(1_000_000_000, true); // -1.0
+/// let d = z.pdf(); // 0.241970725
+/// ```
+public fun pdf(z: SD29x9): SD29x9 {
+    let Components { mag, .. } = decompose(z.unwrap());
+    wrap(pdf_nonneg_raw(mag as u128), false)
 }
 
 /// Checks whether two `SD29x9` values are bitwise equal.
