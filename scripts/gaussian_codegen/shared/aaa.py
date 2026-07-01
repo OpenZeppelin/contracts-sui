@@ -1,9 +1,12 @@
 """AAA barycentric → explicit polynomial conversion and high-precision evaluation.
 
 Function-agnostic primitives shared by every gaussian function family (`cdf`,
-`pdf`, `inverse_cdf`): each family's `derive.py` fits with `scipy.interpolate.AAA`,
-converts the barycentric form to explicit `N(z) / D(z)` polynomials here, and
-measures error with `evaluate_rational`.
+`pdf`, `inverse_cdf`): each family's `derive.py` uses `scipy.interpolate.AAA` as a
+starting *seed*, converts the barycentric form to explicit `N(z) / D(z)`
+polynomials here (`aaa_to_rational_polys`), and evaluates polynomials with
+`horner_eval_mpf`. The seed is then refined and scored against the exact integer
+pipeline in `shared/refit.py` / `shared/accuracy.py` - AAA is no longer the fit
+objective, only its starting point and an independent cross-check.
 """
 from __future__ import annotations
 
@@ -65,7 +68,3 @@ def horner_eval_mpf(coeffs: Sequence[mpf], z) -> mpf:
     for c in reversed(list(coeffs)):
         acc = acc * z_mpf + c
     return acc
-
-
-def evaluate_rational(num: Sequence[mpf], den: Sequence[mpf], z) -> mpf:
-    return horner_eval_mpf(num, z) / horner_eval_mpf(den, z)

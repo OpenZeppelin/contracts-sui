@@ -31,9 +31,11 @@ import sys
 from typing import Sequence
 
 import numpy as np
+from mpmath import mp, mpf, npdf
 from scipy.stats import norm
 
 from gaussian_codegen.shared import constants, gates
+from gaussian_codegen.shared.accuracy import exhaustive_stats
 from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_nearest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -112,6 +114,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate quantized PDF coefficients.")
     parser.add_argument("--n", type=int, default=10000, help="validation grid size")
     parser.add_argument("--coeffs", type=pathlib.Path, default=COEFF_PATH)
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Also measure the exact-pipeline correctly-rounded / within-1-ULP "
+        "rates over every representable input (slow; the authoritative accuracy "
+        "figure, not a CI gate).",
+    )
     args = parser.parse_args(argv)
 
     if args.n < 2:
@@ -151,8 +160,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             worst_err = err
             worst_z = zf
 
-    # Exhaustive tail gates the coarse error grid above cannot see: 1-ULP neighbor
-    # inversions and the peak u256 Horner intermediate.
+    # Monotonicity guarantee (full domain): the shipped rational is provably
+    # non-increasing as a real function (phi is even, so R'(0) = 0 at the peak),
+    # and at 10^36 the Horner truncation is far below the smallest per-step
+    # increment, so the quantized output is non-increasing across every adjacent
+    # input. The neighbor scan re-checks the tail exactly; the overflow gate
+    # bounds the peak u256 intermediate.
+    worst_slope = gates.check_continuous_monotonicity(
+        num, den, WAD, SCALE, max_z_raw, increasing=False
+    )
     pairs, rechecks = gates.check_neighbor_monotonicity(
         num, den, WAD, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=False
     )
@@ -161,11 +177,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
     print(
-        f"Monotonicity: non-increasing across all {pairs:,} neighbor pairs in "
-        f"[{MONO_ONSET_RAW / SCALE:.1f}, {max_z_raw / SCALE:.9f}] "
-        f"({rechecks} exact re-checks) ✓"
+        f"Monotonicity: continuous R'(z) ≤ 0 on [0, {max_z_raw / SCALE:.9f}] "
+        f"(worst wrong-direction slope {mp.nstr(worst_slope, 3)}); quantized output "
+        f"non-increasing across all {pairs:,} tail pairs in "
+        f"[{MONO_ONSET_RAW / SCALE:.1f}, {max_z_raw / SCALE:.9f}] ({rechecks} re-checks) ✓"
     )
     print(f"Overflow: peak Horner product {peak_bits} bits, {headroom} bits under 2^256 ✓")
+
+    if args.report:
+        mp.dps = constants.DPS
+        stats = exhaustive_stats(
+            num, den, WAD, SCALE, max_z_raw,
+            oracle_float=norm.pdf,
+            oracle_round=lambda zr: int(mp.floor(npdf(mpf(zr) / SCALE) * SCALE + mpf("0.5"))),
+        )
+        print(
+            f"Correctly rounded: {stats.correct:,}/{stats.total:,} = {stats.correct_rate * 100:.4f}%; "
+            f"within 1 ULP: {stats.within_one_rate * 100:.4f}%; max {stats.max_ulp} ULP "
+            f"at z={stats.worst_z_raw / SCALE:.6f} ({stats.rechecks:,} exact re-checks)"
+        )
     print(f"Worst error: {worst_err:.3e} = {err_ulp} ULP at z=±{worst_z:.5f}")
     print(f"Target:      {target_abs:.3e} = {TARGET_ERROR_ULP} ULP")
     if worst_err <= target_abs:
