@@ -134,8 +134,9 @@ and sampling. Both fixed-point types expose it:
 
 Properties:
 
-- **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
-  empirical worst case `~7 × 10⁻¹⁰`.
+- **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale). The
+  committed coefficients are far tighter: every output is within 1 ULP of `Φ` and
+  ~99.1% are correctly rounded (empirical worst case `~5 × 10⁻¹⁰`).
 - **Domain**: effective input range `|z| ≤ 6.109410205`; beyond that the result
   saturates.
 - **Saturation**: exactly `0` for `z ≤ -6.109410205` (SD29x9) and exactly `1` for
@@ -143,8 +144,9 @@ Properties:
   `10⁻⁹` resolution.
 - **Φ(0)**: exactly `0.5`.
 - **Monotonicity**: non-decreasing between every pair of adjacent representable
-  inputs (no 1-ULP tail inversions); the codegen gate confirms this exhaustively
-  over the at-risk tail (`z ≥ 4`, where the per-step increment is smallest).
+  inputs (no 1-ULP inversions). The codegen gate proves the shipped rational is
+  monotone across the whole domain - which at the `10³⁶` accumulation scale
+  guarantees the quantized output is too - and re-checks the far tail exhaustively.
 - **Symmetry**: `cdf(z) + cdf(z.negate())` is exactly `1` for every `SD29x9`
   input except `min()`, whose negation is not representable.
 - **Execution**: pure, deterministic, and object-free integer math - no storage,
@@ -177,14 +179,17 @@ objectives, and density estimation. Both fixed-point types expose it:
 
 Properties:
 
-- **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
-  empirical worst case `~6 × 10⁻¹⁰`.
+- **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale). The
+  committed coefficients are far tighter: every output is within 1 ULP of `φ` and
+  ~98.7% are correctly rounded (empirical worst case `~5 × 10⁻¹⁰`).
 - **Domain**: effective input range `|z| ≤ 6.402729806`; beyond that the result
   saturates to `0`.
 - **Peak**: `φ(0) = 0.398942280` (`1/sqrt(2*pi)`), returned exactly.
 - **Monotonicity**: non-increasing in `|z|` between every pair of adjacent
-  representable inputs (no 1-ULP tail inversions); the codegen gate confirms this
-  exhaustively over the at-risk tail (`|z| ≥ 4`).
+  representable inputs (no 1-ULP inversions). The codegen gate proves the shipped
+  rational is monotone across the whole domain - which at the `10³⁶` accumulation
+  scale guarantees the quantized output is too - and re-checks the far tail
+  exhaustively.
 - **Symmetry**: even - `pdf(z)` equals `pdf(z.negate())` for every `SD29x9`
   input except `min()`, whose negation is not representable.
 - **Execution**: pure, deterministic, and object-free integer math - no storage,
@@ -234,7 +239,7 @@ Complete, compilable integration examples live in [`examples/`](examples):
 
 ## Generated code
 
-The standard-normal CDF (`cdf`) and PDF (`pdf`) are backed by AAA-rational
+The standard-normal CDF (`cdf`) and PDF (`pdf`) are backed by rational `N(z)/D(z)`
 approximations whose coefficients and test vectors are generated offline and must
 **not** be hand-edited (each carries an `AUTO-GENERATED` banner):
 

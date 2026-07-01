@@ -1,6 +1,6 @@
 /// Standard-normal PDF φ central-domain evaluator.
 ///
-/// Consumes the AAA-rational coefficients from `pdf_coefficients` and the
+/// Consumes the rational coefficients from `pdf_coefficients` and the
 /// generic sign-magnitude / Horner primitives from `horner`. The public typed
 /// APIs live in `sd29x9_base::pdf` and `ud30x9_base::pdf`, which call
 /// `pdf_nonneg_raw` here.
@@ -55,7 +55,7 @@ const WAD_PER_RAW: u256 = 1_000_000_000_000_000_000_000_000_000; // 10^27
 /// - Saturates to `0` for `z_raw ≥ pdf_coefficients::max_z_raw()`
 ///   (`|z| ≥ 6.402729806`), where `φ` has already decayed below the `10^-9`
 ///   output resolution.
-/// - Otherwise evaluates the AAA rational `N(z) / D(z)` from `pdf_coefficients`
+/// - Otherwise evaluates the rational `N(z) / D(z)` from `pdf_coefficients`
 ///   via Horner at WAD scale and rounds the ratio back to `UD30x9` scale in a
 ///   single half-up step.
 ///
@@ -93,7 +93,7 @@ fun eval_rational(
     let n = horner::horner_eval!(z_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), WAD);
     let d = horner::horner_eval!(z_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), WAD);
 
-    // Integrity guards on the AAA fit. A corrupted coefficient table would
+    // Integrity guards on the coefficient fit. A corrupted coefficient table would
     // surface here rather than silently producing a garbled output.
     assert!(!n.is_neg(), EInternalNumNegative);
     assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
