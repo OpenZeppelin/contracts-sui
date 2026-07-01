@@ -4,6 +4,3 @@ edition = "2024"
 
 [dependencies]
 openzeppelin_access = { local = "../access" }
-
-[addresses]
-openzeppelin_timelock = "0x0"
