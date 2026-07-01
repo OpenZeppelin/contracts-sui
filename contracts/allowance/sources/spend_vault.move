@@ -85,8 +85,9 @@
 ///   downstream embedding survive any number of owner updates. This is the
 ///   load-bearing composition property of the cap-keyed design.
 /// - **Suspension idiom.** `set_allowance<T>(..., 0, ...)` zeroes the budget but
-///   keeps the entry and cap alive, so the next `spend<T>` aborts
-///   `EAllowanceExceeded` rather than `ENoAllowance`. Removal is lazy too: entries
+///   keeps the entry and cap alive, so the next positive `spend<T>` aborts
+///   `EAllowanceExceeded` rather than `ENoAllowance` (a zero-amount spend aborts
+///   `EZeroAmount` first). Removal is lazy too: entries
 ///   go away only on `revoke`, `revoke_all`, `renounce`, or `destroy`, never by
 ///   spending to zero.
 /// - **Opt-in CAS on `set_allowance`.** Pass `expected = Some(e)` on any
@@ -554,8 +555,9 @@ public fun deposit<T>(v: &Vault, c: Coin<T>, ctx: &mut TxContext) {
 
 /// `Balance<T>`-native deposit: the symmetric ingress to the `Balance<T>`
 /// egress of `spend`/`withdraw`/`withdraw_all`. The natural sink for a
-/// `spend` output routed back into escrow, or for funding from any address
-/// balance the caller controls (`redeem_funds(...)` then `deposit_balance`).
+/// `spend` output routed back into escrow, or for funding from an object balance
+/// the caller controls (`withdraw_funds_from_object(...)` then `redeem_funds(...)`
+/// then `deposit_balance`).
 /// Same permissionless, rights-free, `&Vault` semantics as `deposit`.
 ///
 /// #### Parameters
@@ -644,8 +646,9 @@ public fun mint_cap(v: &Vault, cap: &OwnerCap, ctx: &mut TxContext): SpenderCap 
 ///   Present: overwrite. Re-setting a key OVERWRITES, it never adds. Two summing
 ///   budgets for one person require two caps.
 /// - **Suspension.** `new_amount == 0` zeroes the budget but keeps the
-///   entry and cap alive; the next `spend<T>` aborts `EAllowanceExceeded`. There
-///   is deliberately no `EZeroAmount` here.
+///   entry and cap alive; the next positive `spend<T>` aborts `EAllowanceExceeded`
+///   (a zero-amount spend aborts `EZeroAmount` first). `set_allowance` itself
+///   never aborts `EZeroAmount`.
 /// - **Revival.** A future `new_expires_at_ms` revives an expired entry
 ///   in place. Suspending an already-expired entry necessarily restates a valid
 ///   future expiry (or `u64::MAX`), time-reviving it while zeroing the budget.
@@ -1335,8 +1338,9 @@ public fun spendable_now<T>(v: &Vault, root: &AccumulatorRoot, cap_id: ID, clock
 }
 
 /// Raw `expires_at_ms` for `(cap, T)`; `0` if absent. A present entry's value is
-/// a future timestamp or the `u64::MAX` no-expiry sentinel, never `0`, so use
-/// `contains` to distinguish absent from present.
+/// non-zero: a timestamp (possibly already in the past, since expired entries are
+/// not pruned) or the `u64::MAX` no-expiry sentinel. Use `contains` for
+/// absent-vs-present, and compare against the clock for live-vs-expired.
 public fun expiry<T>(v: &Vault, cap_id: ID): u64 {
     let key = budget_key<T>(cap_id);
     if (v.allowances.contains(key)) {
