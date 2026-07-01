@@ -1,5 +1,5 @@
 /// The abort surface: all SEVEN `big_sorted_map` library aborts (codes 0-6), each asserted FIRST
-/// at THIS module's location, PLUS the one cross-module exception - `sorted_map::EBadSplit`,
+/// at THIS module's location, PLUS the one cross-module exception surfaced in THIS module - `sorted_map::EBadSplit`,
 /// which deliberately reports `location = sorted_map`. Also pins the affirmative total
 /// API: the non-aborting ops return none/false/empty and chain through a PTB-shaped sequence without
 /// unwinding, and the `pop_*_n` STOP-at-empty contract (NOT an abort).
@@ -266,7 +266,7 @@ fun wrong_node_kind_leaf_accessor_on_inner_aborts() {
     u::drain_destroy(map); // unreachable; present so the function type-checks
 }
 
-// === EBadSplit (sorted_map code 3) - the SOLE cross-module abort (location = sorted_map) ===
+// === EBadSplit (sorted_map code 3) - the sole cross-module abort in this module (location = sorted_map) ===
 
 #[test]
 #[

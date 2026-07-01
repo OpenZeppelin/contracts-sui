@@ -8,7 +8,7 @@ const ALICE: address = @0x0A;
 const BOB: address = @0x0B;
 const CAROL: address = @0x0C;
 
-// === Scenario 4 - ordered drain: peek the extremes, pop earliest-first ===
+// === Scenario 3 - ordered drain: peek the extremes, pop earliest-first ===
 //
 // The set doubles as a min/max priority queue. A shared `UnlockQueue` is seeded from deadlines
 // containing a DUPLICATE (de-duplicated), inspected via O(1) `head`/`tail` peeks, then drained
@@ -56,7 +56,7 @@ fun drain_earliest_first() {
     ts::end(scenario);
 }
 
-// === Scenario 5 - the library's ONE abort: pop on an empty set ===
+// === Scenario 4 - the library's ONE abort: pop on an empty set ===
 //
 // `pop_front`/`pop_back` are the only operations in the whole library that abort, and only on an
 // EMPTY set (`EEmpty`). The set asserts its OWN `EEmpty` (code 0) BEFORE delegating to the wrapped

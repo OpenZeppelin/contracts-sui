@@ -13,7 +13,7 @@ const VAL_A: address = @0xA1;
 const VAL_B: address = @0xB2;
 const VAL_C: address = @0xC3;
 
-// === Scenario 6 - struct-key registry ordered by a custom `_by` comparator ===
+// === Scenario 5 - struct-key registry ordered by a custom `_by` comparator ===
 //
 // A `Validator` struct has no built-in `<`, so every op MUST thread the `outranks` comparator via
 // the `_by` macros. Validators are ranked by descending stake; `head` is therefore the top
@@ -83,7 +83,7 @@ fun struct_key_ranking() {
     ts::end(scenario);
 }
 
-// === Scenario 7 - RED test: a coarse comparator silently collapses distinct keys ===
+// === Scenario 6 - RED test: a coarse comparator silently collapses distinct keys ===
 //
 // INTENTIONAL MISUSE - do NOT copy this comparator. It demonstrates the central footgun: the set
 // stores no comparator and cannot check the one you pass. A COARSE (non-injective) comparator that

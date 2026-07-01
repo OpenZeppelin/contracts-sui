@@ -3,7 +3,7 @@
 /// the large tier is a real (but mechanical) refactor, not a rewrite.
 ///
 /// # Why the big tier
-/// A `SortedMap` book lives in one Sui object (~250 KB / ~16k `u64` levels). A venue
+/// A `SortedMap` book lives in one Sui object (~256 KB / ~16k `u64` levels). A venue
 /// that outgrows that needs `BigSortedMap`: a real object whose nodes are dynamic
 /// fields, so it scales past the single-object ceiling. The query-side API is identical
 /// to `SortedMap` - `head`, `keys_from!`, `borrow!` - so read sites port verbatim. What

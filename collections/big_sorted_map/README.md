@@ -1,6 +1,6 @@
 # `openzeppelin_big_sorted_map`
 
-A generic, ordered key->value B+Tree for Sui Move - the large tier of the sorted-map family, for data that outgrows a single object. Non-root nodes live in dynamic fields, so a `BigSortedMap<K, V>` scales past `SortedMap`'s ~250 KB single-object ceiling while keeping a query API that is 1:1 with [`SortedMap`](../sorted_map).
+A generic, ordered key->value B+Tree for Sui Move - the large tier of the sorted-map family, for data that outgrows a single object. Non-root nodes live in dynamic fields, so a `BigSortedMap<K, V>` scales past `SortedMap`'s ~256 KB single-object ceiling while keeping a query API that is 1:1 with [`SortedMap`](../sorted_map).
 
 Under the hood it is a B+Tree whose every node's payload is an ordinary `SortedMap` (a leaf stores `key -> V`, an inner node stores `subtreeMax -> childId`, max-key routing). The container is a real Sui object: the root node lives inline and every other node is a `dynamic_field` keyed by a `u64` id off the object's `UID`. Because it is df-backed it is `has key, store` with `copy`/`drop` forced off, so a populated tree can never be silently dropped (which would orphan its dynamic-field children); the only terminal is `destroy_empty` after the tree is drained.
 
@@ -38,13 +38,13 @@ The sibling `openzeppelin_sorted_map` package is pulled in transitively (a node'
 
 | Use it when |
 | --- |
-| Your ordered state has outgrown one ~250 KB `SortedMap` object (≈16k `u64`/`u64` entries). |
+| Your ordered state has outgrown one ~256 KB `SortedMap` object (≈16k `u64`/`u64` entries). |
 | You run a CLOB order book, a global registry, a CLMM tick map, or an unbounded leaderboard. |
 | You can budget a one-time refactor up from `SortedMap` (it is not a drop-in rename - see below). |
 
 ### Lifecycle
 
-1. **Construct** - `new(ctx)` or `new_with_config(leaf, inner, ctx)`; it is an object, so a `&mut TxContext` is required. Embed it in your `has key` object.
+1. **Construct** - `new(ctx)` or `new_with_config(inner, leaf, ctx)`; it is an object, so a `&mut TxContext` is required. Embed it in your `has key` object.
 2. **Read / write** - bare macros for integer keys, `_by` macros with a consistently threaded comparator otherwise. **At most one comparator macro per function body** (two overflow Move's 256-locals ceiling); compose multi-op flows from one-line wrapper functions.
 3. **Page** - `keys_from!`'s `limit` is a mandatory safety bound (a long scan loads many dynamic fields); page large reads, never scan unbounded.
 4. **Teardown** - drain with `pop_front`/`pop_back`/`pop_*_n` (multi-transaction for a large tree), then `destroy_empty`. There is no one-shot bulk drop, even for a droppable `V`.

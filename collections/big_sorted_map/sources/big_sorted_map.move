@@ -1,5 +1,5 @@
 /// A generic, ordered key->value B+Tree for workloads past `SortedMap`'s single-object
-/// (~250 KB, ~16k `u64/u64`) ceiling - the **large tier** of the sorted-map family.
+/// (~256 KB, ~16k `u64/u64`) ceiling - the **large tier** of the sorted-map family.
 ///
 /// `BigSortedMap` is a real Sui **object** (`has key, store`, own `id: UID`): the root node
 /// lives inline, every other node is a raw `dynamic_field` keyed by a `u64` id off that UID.
@@ -9,7 +9,7 @@
 /// `key->V`, an inner node stores `subtreeMax->childId` (max-key 1:1 routing).
 ///
 /// # Tier choice (vs `SortedMap`)
-/// Use `SortedMap` until your data outgrows one object (~250 KB). Use `BigSortedMap` when it
+/// Use `SortedMap` until your data outgrows one object (~256 KB). Use `BigSortedMap` when it
 /// will not - a CLOB order book, a global registry, a tick map. The query-side API is 1:1
 /// with `SortedMap` so call sites port verbatim, but MIGRATION IS A REAL REFACTOR, not a
 /// rename: `new` takes `&mut TxContext`, the enclosing struct owns/transfers an object (not a
@@ -18,7 +18,7 @@
 ///
 /// # Liveness divergence (READ THIS)
 /// Unlike `SortedMap` (every op touches exactly one object), a `BigSortedMap` op touches
-/// MULTIPLE df nodes. A point op loads at most `depth - 1` nodes (O(log N), two-to-three
+/// MULTIPLE df nodes. A point op loads at most `depth` df nodes (O(log N), two-to-three
 /// orders under Sui's ~1000-df-access cap), but an unbounded scan, a long mutating walk, or
 /// a teardown can load hundreds. Hence: `keys_from` is count-bounded by `limit` (a safety
 /// parameter - a k-key scan loads ~k/ceil(leaf/2) leaves), teardown is paged via
@@ -81,8 +81,8 @@ const EMapNotEmpty: vector<u8> = "Map is not empty";
 #[error(code = 1)]
 const EKeyNotFound: vector<u8> = "Key not found";
 
-/// `pop_front`/`pop_back`/`pop_*_n` was called on an empty tree. The empty-check is
-/// the first statement, before any min/max-leaf df load.
+/// `pop_front` or `pop_back` was called on an empty tree (the paged `pop_*_n` variants stop at
+/// empty without aborting). The empty-check is the first statement, before any min/max-leaf df load.
 #[error(code = 2)]
 const EEmpty: vector<u8> = "Map is empty";
 
@@ -119,8 +119,8 @@ const NULL_INDEX: u64 = 0;
 /// `alloc_id` never returns it.
 const ROOT_INDEX: u64 = 1;
 
-/// First id `alloc_id` hands out - the counter pre-increments from here, so live ids are
-/// always `>= 2`, never colliding with `NULL_INDEX`/`ROOT_INDEX`.
+/// First id `alloc_id` hands out - the counter post-increments (returns the current value, then
+/// advances), so live ids are always `>= 2`, never colliding with `NULL_INDEX`/`ROOT_INDEX`.
 const FIRST_ALLOC_INDEX: u64 = 2;
 
 /// Hard floor for `leaf_max_degree`. `ceil(3/2) = 2`, so a half-full leaf holds
@@ -176,7 +176,7 @@ public struct BigSortedMap<K: copy + drop + store, V: store> has key, store {
     min_leaf_index: u64,
     /// Id of the globally-rightmost leaf -> O(1) `tail`/`pop_back`.
     max_leaf_index: u64,
-    /// Monotone, never-reused id counter; pre-increments on alloc (no free list).
+    /// Monotone, never-reused id counter; post-increments on alloc (no free list).
     next_node_index: u64,
     /// Max children per inner node, set at construction and frozen (>= `INNER_MIN_DEGREE`).
     inner_max_degree: u64,
@@ -334,7 +334,7 @@ public fun child_id_at<K: copy + drop + store, V: store>(n: &Node<K, V>, idx: u6
 /// unless the tree is empty, where callers short-circuit on `length`).
 ///
 /// #### Aborts
-/// - Natively (arithmetic underflow on `length - 1`, then out of bounds) if `n` is empty.
+/// - Natively, via arithmetic underflow on `length - 1`, if `n` is empty.
 public fun max_key<K: copy + drop + store, V: store>(n: &Node<K, V>): K {
     if (n.is_leaf) {
         let m = node_leaf(n);
@@ -368,7 +368,9 @@ public fun new<K: copy + drop + store, V: store>(ctx: &mut TxContext): BigSorted
 /// `inner >= INNER_MIN_DEGREE`) is asserted FIRST - it is THE load-bearing guard:
 /// `ceil(m/2) >= 2` is the half-full-floor DoS-safety guarantee blocking the 1-entry-per-leaf
 /// scan attack. Size `leaf_max_degree` DOWN for a fat `V` (the node must stay under the object
-/// byte cap; the count-based degree carries no per-insert byte check).
+/// byte cap; the count-based degree carries no per-insert byte check). Degrees have a lower
+/// floor but no upper cap; a pathological degree near `u64::MAX` is unsupported - a bulk build
+/// overflows and aborts cleanly (self-inflicted, full rollback).
 ///
 /// #### Aborts
 /// - `EInvalidDegree` if `leaf_max_degree < LEAF_MIN_DEGREE` or
@@ -1078,8 +1080,11 @@ public fun build_from_sorted_default<K: copy + drop + store, V: store>(
 /// Positional bulk build. The source MUST already be strictly increasing under
 /// the comparator (the macro re-validates first). Distributes entries EVENLY across leaves, then
 /// builds inner levels bottom-up the same way, so every node - including each level's rightmost
-/// - holds >= ceil(m/2) entries. ~1 df add per node, so a tier-1-sized source fits the
-/// df cap. Values are MOVED (the source's `SortedMap`s become node payloads) - no copy/drop.
+/// - holds >= ceil(m/2) entries. ~1 df add per node (`ceil(n / leaf_max_degree)` leaves plus
+/// inner nodes), so a tier-1-sized source fits the df cap AT GENEROUS DEGREES; a near-minimum
+/// `leaf_max_degree` explodes the leaf count (e.g. leaf=3, n~16k -> ~5334 df adds) and breaches
+/// the ~1000-df cap - size degrees up for bulk builds. Values are MOVED (the source's
+/// `SortedMap`s become node payloads) - no copy/drop.
 ///
 /// #### Aborts
 ///
@@ -1188,7 +1193,9 @@ public fun build_from_sorted<K: copy + drop + store, V: store>(
 ///
 /// #### Aborts
 /// - `EWouldExceedTier1EntryHeuristic` if the drained map would exceed the tier-1 entry
-///   heuristic (`MAX_TIER1_ENTRY_COUNT`).
+///   heuristic (`MAX_TIER1_ENTRY_COUNT`). NOTE: a pure ENTRY-COUNT heuristic - for a fat `V` a
+///   passing check can still yield a `SortedMap` over the object byte cap (abort on re-embed);
+///   safe only for small bounded `V`.
 public fun into_sorted_map<K: copy + drop + store, V: store>(
     map: &mut BigSortedMap<K, V>,
 ): SortedMap<K, V> {
@@ -1429,11 +1436,12 @@ fun node_overflows<K: copy + drop + store, V: store>(map: &BigSortedMap<K, V>, i
     node_len(node) > max_degree
 }
 
-/// Walk the path from the leaf's parent upward, refreshing each ancestor routing key to `new_key`
-/// while the touched child is that ancestor's LAST child (so its subtree max equals `new_key`).
-/// Stop at the first ancestor where it is not the last child (its max is unchanged). Unifies the
-/// new-global-max right-spine bump, the interior-leaf-max update, and the coarse-comparator byte
-/// refresh. Positional: each rewrite is a same-index remove+reinsert.
+/// Walk the path from the leaf's parent upward. At each ancestor, UNCONDITIONALLY rewrite the
+/// touched child's routing key to `new_key` (its subtree max became `new_key`) - including an
+/// INTERIOR (non-last) child. Then ascend only while that child was the ancestor's LAST child
+/// (so the ancestor's OWN max also became `new_key`); stop at the first non-last child (its max
+/// is unchanged). Unifies the new-global-max right-spine bump, the interior-leaf-max update, and
+/// the coarse-comparator byte refresh. Positional: each rewrite is a same-index remove+reinsert.
 fun refresh_max_along_path<K: copy + drop + store, V: store>(
     map: &mut BigSortedMap<K, V>,
     path: &vector<u64>,
@@ -1673,8 +1681,8 @@ fun rebalance_child<K: copy + drop + store, V: store>(
 
 /// Move the left sibling's MAX entry to the front of the underfull child. The child's
 /// max is unchanged (it gained a new min); the left sibling's max shrank, so its parent routing
-/// key (at `ci-1`) is rewritten to its new max. The child is not the parent's last (a left
-/// sibling exists), so the parent's own max is unaffected.
+/// key (at `ci-1`) is rewritten to its new max. The child gained a new MIN (not a new max), so
+/// its max - and hence the parent's own routing/max - is unaffected regardless of the child's position.
 fun borrow_from_left<K: copy + drop + store, V: store>(
     map: &mut BigSortedMap<K, V>,
     parent_id: u64,
@@ -1839,8 +1847,8 @@ fun descend_rightmost<K: copy + drop + store, V: store>(
 
 // === Ordered navigation ===
 
-/// First key in the prev leaf's tail / next leaf's head, used when the answer spills past a leaf
-/// boundary. `none` at the chain ends.
+/// First key of the NEXT leaf (its head), used when the answer spills past a leaf boundary.
+/// `none` at the chain tail.
 fun first_key_of_next_leaf<K: copy + drop + store, V: store>(
     map: &BigSortedMap<K, V>,
     leaf_id: u64,
@@ -1853,6 +1861,8 @@ fun first_key_of_next_leaf<K: copy + drop + store, V: store>(
     }
 }
 
+/// Last key of the PREV leaf (its tail), used when the answer spills past a leaf boundary.
+/// `none` at the chain head.
 fun last_key_of_prev_leaf<K: copy + drop + store, V: store>(
     map: &BigSortedMap<K, V>,
     leaf_id: u64,

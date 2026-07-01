@@ -41,12 +41,14 @@
 ///
 /// # Aborts
 ///
-/// Four operations abort; everything else is total (returns `Option`/`bool`/`vector`):
-/// `borrow`/`borrow_mut` (`EKeyNotFound`), `destroy_empty` (`ENotEmpty`), `pop_front`/
-/// `pop_back` (`EEmpty`), and the forced-public `split_off` (`EBadSplit`, an out-of-range
-/// bounds guard - not part of the supported total API). All aborts originate in this
-/// module, so consumer `#[expected_failure]` tests must pin
-/// `location = openzeppelin_sorted_map::sorted_map`.
+/// Four operations in the supported (macro) API abort; everything else in that API is total
+/// (returns `Option`/`bool`/`vector`): `borrow`/`borrow_mut` (`EKeyNotFound`), `destroy_empty`
+/// (`ENotEmpty`), `pop_front`/`pop_back` (`EEmpty`), and the forced-public `split_off`
+/// (`EBadSplit`, an out-of-range bounds guard - not part of the supported total API). These
+/// originate in this module, so consumer `#[expected_failure]` tests pin
+/// `location = openzeppelin_sorted_map::sorted_map`. The other forced-public index accessors
+/// (`insert_at`/`remove_at`/`value_at`/`value_at_mut`/`key_at`) instead abort with NATIVE
+/// `std::vector` out-of-bounds codes (`location = std::vector`) on a bad index.
 ///
 /// # Library internals are forced-public
 ///
@@ -110,8 +112,10 @@ public struct Entry<K: copy + drop + store, V: store> has copy, drop, store {
 /// `K` and `V` allow them: `SortedMap<u64, u64>` is `copy + drop + store`;
 /// `SortedMap<u64, Coin<T>>` is store-only and must be drained then `destroy_empty`'d.
 ///
-/// Across every public operation, `entries` is strictly increasing under the
-/// (consistently supplied) comparator: sorted, with no duplicate keys.
+/// Across the supported (macro) API, `entries` is strictly increasing under the (consistently
+/// supplied) comparator: sorted, with no duplicate keys. The forced-public position-based writers
+/// (`insert_at`/`remove_at`/`append`/`split_off`) can break this if misused - see the
+/// forced-public internals note in the module header.
 public struct SortedMap<K: copy + drop + store, V: store> has copy, drop, store {
     entries: vector<Entry<K, V>>,
 }
@@ -349,8 +353,9 @@ public fun split_off<K: copy + drop + store, V: store>(
 
 /// Move-concatenate `other` onto the end of `self`, consuming `other` entirely. Every
 /// entry (hence every `V`) is moved, nothing copied or dropped, so it is correct for a
-/// non-`drop` `V`. The `V: store` bound deliberately omits `V: drop` (a `drop` bound
-/// would let an overwrite silently burn a value). Caller precondition (unchecked):
+/// non-`drop` `V`. It requires only `V: store` (no `V: drop`) so it stays usable for values
+/// like `Coin`; `append` itself never overwrites - the overwrite hazard a `drop` bound would
+/// enable lives in `insert_by`, not here. Caller precondition (unchecked):
 /// `other` is disjoint from and strictly after `self` (`self.tail < other.head`), so the
 /// result stays sorted. The adjacent-sibling merge in `big_sorted_map` guarantees this by
 /// construction; there is no defensive re-check (it would require a comparator).
@@ -740,7 +745,8 @@ public macro fun keys_from<$K: copy + drop + store, $V: store>(
 
 // === Pop extremes (regular funs; abort EEmpty) ===
 
-/// Remove and return the smallest entry `(key, value)`. Length - 1.
+/// Remove and return the smallest entry `(key, value)`. Length - 1. O(N): `remove(0)` shifts
+/// every remaining entry left one slot (`pop_back` is O(1)); a front-heavy drain loop is quadratic.
 ///
 /// Returns `(K, V)`, not `Option<(K, V)>`: a tuple cannot be a generic type argument in
 /// Move, so emptiness is signalled by a runtime abort rather than an `Option`. The empty
@@ -758,7 +764,7 @@ public fun pop_front<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>
     (key, value)
 }
 
-/// Remove and return the largest entry `(key, value)`. Length - 1.
+/// Remove and return the largest entry `(key, value)`. Length - 1. O(1) (no shift).
 ///
 /// The empty check is first so `n - 1` cannot underflow at `n == 0`.
 ///

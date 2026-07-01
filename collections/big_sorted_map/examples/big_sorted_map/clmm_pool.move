@@ -6,7 +6,9 @@
 /// A CLMM swap crosses a *run* of ticks in order, mutating each. The obvious way - call
 /// `borrow_mut!` once per tick - re-descends the whole tree on every tick (a fresh
 /// root-to-leaf walk), so a deep swap loads thousands of dynamic fields and breaches the
-/// ~1000-df per-transaction cap at ~167-250 ticks. The library deliberately does NOT ship
+/// ~1000-df per-transaction cap after roughly a few hundred ticks (order-of-magnitude; it scales
+/// with tree depth, and this low-degree example runs deeper than the README's default depth-2
+/// regime). The library deliberately does NOT ship
 /// a blessed iterator; instead it PUBLISHES the leaf-walk primitives so an integrator can
 /// own the walk:
 ///

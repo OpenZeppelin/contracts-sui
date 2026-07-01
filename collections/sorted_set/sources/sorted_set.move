@@ -228,7 +228,8 @@ public fun tail<K: copy + drop + store>(set: &SortedSet<K>): Option<K> {
 
 // === Pop extremes (regular funs; abort EEmpty) ===
 
-/// Remove and return the smallest key. Length - 1.
+/// Remove and return the smallest key. Length - 1. O(N): delegates to the map's `pop_front`,
+/// which shifts every remaining entry (`pop_back` is O(1)); a front-heavy drain loop is quadratic.
 ///
 /// The set's own `EEmpty` is asserted FIRST, before delegating, so an empty-set pop aborts
 /// at THIS module's location - the wrapped map's `EEmpty` is never reached through here.
@@ -245,7 +246,7 @@ public fun pop_front<K: copy + drop + store>(set: &mut SortedSet<K>): K {
     key
 }
 
-/// Remove and return the largest key. Length - 1. Set-owned `EEmpty` asserted first;
+/// Remove and return the largest key. Length - 1. O(1). Set-owned `EEmpty` asserted first;
 /// marker dropped.
 ///
 /// #### Returns
