@@ -339,14 +339,9 @@ public fun vested_amount<C>(
 /// #### Parameters
 /// - `wallet`: The wallet to release from.
 /// - `clock`: Sui `Clock`, read for the current timestamp.
-/// - `ctx`: Transaction context, used to mint the payout coin.
-public fun release<C>(
-    wallet: &mut VestingWallet<Linear, Params, C>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
+public fun release<C>(wallet: &mut VestingWallet<Linear, Params, C>, clock: &Clock) {
     let v = vested_amount(wallet, clock);
-    wallet.release(&v, ctx);
+    wallet.release(&v);
 }
 
 /// How much `release` would pay out right now, without the caller minting a
@@ -375,14 +370,15 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// `DestroyCap` may tear it down. This is what lets a wallet whose `beneficiary` is an
 /// object address be torn down at all - an object address is never a `ctx.sender()`, so
 /// the previous "only the beneficiary may destroy" gate could never be satisfied for it.
-/// The cap holder bears the strand risk the old beneficiary gate guarded: a coin
+/// The cap holder bears the strand risk the old beneficiary gate guarded. A coin
 /// `public_transfer`'d to the wallet's address but not yet `receive_and_deposit`'d is
-/// invisible to `destroy_empty`'s empty check, so finalizing teardown forfeits it. Route
-/// the cap to the party that should own that decision (commonly the beneficiary or its
-/// controller). Destruction is an operational step rather than a guaranteed one-shot:
-/// halt upstream emissions first, claim any transferred coins that already target the
-/// wallet, and allow at least one checkpoint for in-flight emissions to settle before
-/// retrying teardown.
+/// invisible to the held-balance check, and settled address-balance funds must be swept
+/// before `destroy_empty` accepts the teardown. Route the cap to the party that should
+/// own that decision (commonly the beneficiary or its controller). Destruction is an
+/// operational step rather than a guaranteed one-shot: halt upstream emissions first,
+/// claim any transferred coins that already target the wallet, sweep settled funds,
+/// and allow at least one checkpoint for in-flight emissions to settle before retrying
+/// teardown.
 ///
 /// The ended gate is retained: it stops a wallet being torn down ahead of a scheduled
 /// future deposit, front-running funding intended to arrive later. It cannot detect
@@ -406,68 +402,32 @@ public fun destroy(receipt: DestroyReceipt<Linear, Params>, cap: DestroyCap, clo
 // === View helpers ===
 
 /// Timestamp (ms) at which vesting begins.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The timestamp (ms) at which vesting begins.
 public fun start_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().start_ms
 }
 
 /// Length of each tranche period (ms).
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The length of each tranche period (ms).
 public fun period_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().period_ms
 }
 
 /// Number of equal tranches.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The number of equal tranches.
 public fun steps<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().steps
 }
 
 /// Length of the vesting period (ms): `period_ms * steps`.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The length of the vesting period (ms): `period_ms * steps`.
 public fun duration_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     let params = wallet.schedule_params();
     params.period_ms * params.steps
 }
 
 /// Timestamp (ms) at which the schedule ends (`start_ms + period_ms * steps`).
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The timestamp (ms) at which the schedule ends (`start_ms + period_ms * steps`).
 public fun end_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().calculate_end()
 }
 
 /// Read the configured cliff length (ms from `start_ms`). `0` means no cliff.
-///
-/// #### Parameters
-/// - `wallet`: The wallet to query.
-///
-/// #### Returns
-/// - The configured cliff length (ms from `start_ms`); `0` means no cliff.
 public fun cliff_ms<C>(wallet: &VestingWallet<Linear, Params, C>): u64 {
     wallet.schedule_params().cliff_ms
 }

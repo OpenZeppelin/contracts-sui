@@ -52,23 +52,23 @@ is not required up front.
    choose a topology in the same PTB. `create_and_share`/`create_and_share_continuous`
    are sugar that builds the wallet, shares it, and returns its `ID` and `DestroyCap` in
    one call.
-2. **Fund** - `deposit` a `Coin<C>`. Permissionless: anyone may fund, and funds added
-   after the schedule starts participate retroactively.
+2. **Fund** - `deposit` a `Balance<C>`, claim an addressed `Coin<C>` with
+   `receive_and_deposit`, or pull settled address-balance funds in with `sweep_settled`.
+   Permissionless: anyone may fund, and funds added after the schedule starts
+   participate retroactively.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
-   not-yet-released portion to the beneficiary. Permissionless and idempotent: if
-   nothing new has vested it is a no-op. Each call pays the newly vested amount as a
-   fresh `Coin<C>`, so a third party (not only the beneficiary) can call it repeatedly
-   as the schedule progresses and split the payout into many small coins - bounded
-   (one coin per distinct clock value over the window), costly to force (gas per tx),
-   and with totals always preserved.
+   not-yet-released portion into the beneficiary's address balance. Permissionless
+   and idempotent: if nothing new has vested it is a no-op. No payout `Coin<C>` object
+   is minted.
 4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`,
    `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
-5. **Tear down** - once drained, `vesting_wallet::destroy_empty` reclaims the storage
-   rebate and returns a `DestroyReceipt`; hand that, together with the wallet's
-   `DestroyCap`, to `vesting_wallet_linear::destroy`, which requires the schedule to have
-   ended before accepting the teardown. Authority is the cap, not the caller's address,
-   so a wallet whose `beneficiary` is an object (never a transaction sender) can still be
-   torn down by whoever holds its cap.
+5. **Tear down** - once drained and any settled funds have been swept,
+   `vesting_wallet::destroy_empty` reclaims the storage rebate and returns a
+   `DestroyReceipt`; hand that, together with the wallet's `DestroyCap`, to
+   `vesting_wallet_linear::destroy`, which requires the schedule to have ended before
+   accepting the teardown. Authority is the cap, not the caller's address, so a wallet
+   whose `beneficiary` is an object (never a transaction sender) can still be torn down
+   by whoever holds its cap.
 
 ### Usage
 
@@ -94,7 +94,7 @@ public fun grant<C>(beneficiary: address, start_ms: u64, funds: Coin<C>, ctx: &m
         4,            // steps
         ctx,
     );
-    wallet.deposit(funds);
+    wallet.deposit(funds.into_balance());
     transfer::public_share_object(wallet);
     transfer::public_transfer(cap, beneficiary);
 }
@@ -112,8 +112,8 @@ public fun stream<C>(beneficiary: address, start_ms: u64, ctx: &mut TxContext) {
 }
 
 // Anyone can release; the beneficiary is read fresh from the wallet at call time.
-public fun claim<C>(wallet: &mut VestingWallet<Linear, Params, C>, clock: &Clock, ctx: &mut TxContext) {
-    vesting_wallet_linear::release(wallet, clock, ctx);
+public fun claim<C>(wallet: &mut VestingWallet<Linear, Params, C>, clock: &Clock) {
+    vesting_wallet_linear::release(wallet, clock);
 }
 
 // A read-only "what can I claim?" query for clients.
@@ -130,21 +130,19 @@ and you pick the topology:
 - **Shared** (recommended) - `transfer::public_share_object(wallet)`, or use
   `create_and_share`/`create_and_share_continuous`. Anyone can poke `release`,
   and the beneficiary always receives the funds regardless of who triggered it.
-  Because `release` is permissionless and pays each newly vested tranche as a fresh
-  `Coin<C>`, a third party can call it repeatedly as the schedule progresses and split
-  the payout into many small coins - bounded (one coin per distinct clock value over
-  the window) and costly to force, with totals always preserved. An integrator pointing
-  a wallet at an object beneficiary should plan for possibly many `Receiving`s to
-  process rather than a few large payouts.
+  `release` pays into the beneficiary's address balance with `balance::send_funds`,
+  so no payout `Coin<C>` object is minted.
 - **Owned** (fast path) - `transfer::public_transfer(wallet, holder)`. Only the
   holder can pass the wallet by `&mut`, so release is reachable from the holder's
   transactions only. Outside parties fund an owned wallet by `public_transfer`-ing a
   `Coin<C>` to the wallet's object address; the holder then claims each with
-  `receive_and_deposit`. Liveness risk: `release`, `deposit`, `receive_and_deposit`,
-  and `destroy_empty` all require `&mut` or by-value access only the holder can
-  produce, so a holder who is not the beneficiary and turns uncooperative can withhold
-  every payout with no on-chain path for the beneficiary to force one. The recommended
-  Shared topology avoids this because its `release` is permissionless.
+  `receive_and_deposit`. They can also settle a `Balance<C>` into the address for the
+  holder to pull in with `sweep_settled`. Liveness risk: `release`, `deposit`,
+  `receive_and_deposit`, `sweep_settled`, and `destroy_empty` all require `&mut` or
+  by-value access only the holder can produce, so a holder who is not the beneficiary
+  and turns uncooperative can withhold every payout with no on-chain path for the
+  beneficiary to force one. The recommended Shared topology avoids this because its
+  `release` is permissionless.
 
 The `beneficiary` is fixed at construction. To rotate the recipient, point
 `beneficiary` at a consumer-owned object and rotate ownership of that object instead.
@@ -207,10 +205,9 @@ public fun inner<S: drop, P: copy + drop + store, C>(
 public fun release<S: drop, P: copy + drop + store, C>(
     self: &mut GatedVault<S, P, C>,
     vested: &VestedAmount<S>,
-    ctx: &mut TxContext,
 ) {
     // ... enforce protocol invariants (not paused, caller approved, ...) ...
-    self.inner.release(vested, ctx);
+    self.inner.release(vested);
 }
 
 /// Re-expose `receive_and_deposit` so address-targeted funding can still be claimed
@@ -228,7 +225,7 @@ The caller picks the curve module at the call site; the vault never knows which 
 
 ```move
 let v = vesting_wallet_linear::vested_amount(vault.inner(), clock);
-vault.release(&v, ctx);
+vault.release(&v);
 ```
 
 If `release` instead required the witness `S`, this would be impossible: a wrapper
@@ -265,14 +262,14 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    through `new`.
 3. A `vested_amount(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
    that evaluates the curve and ends in `wallet.mint_vested_amount(MyCurve {}, amount)`.
-4. A teardown that calls `wallet.destroy_empty()` for a `DestroyReceipt<MyCurve,
+4. A teardown that calls `wallet.destroy_empty(root)` for a `DestroyReceipt<MyCurve,
    MyParams>`, then `vesting_wallet::consume_receipt(receipt, cap, MyCurve {})` - passing
-   the wallet's `DestroyCap` - to recover the schedule parameters and destructure
-   them. `destroy_empty` is permissionless; `consume_receipt` is gated on both the
-   witness (so the curve can run teardown logic or veto) and the cap (the teardown
-   authority). **Gate teardown on the cap, never on `ctx.sender() == beneficiary`:** an
-   object beneficiary is never a transaction sender, so that check could never be
-   satisfied and would brick teardown for object-beneficiary wallets.
+   the wallet's `DestroyCap` - to recover the schedule parameters and destructure them.
+   `destroy_empty` is permissionless; `consume_receipt` is gated on both the witness
+   (so the curve can run teardown logic or veto) and the cap (the teardown authority).
+   **Gate teardown on the cap, never on `ctx.sender() == beneficiary`:** an object
+   beneficiary is never a transaction sender, so that check could never be satisfied
+   and would brick teardown for object-beneficiary wallets.
 
 The curve **must be monotonically non-decreasing in time and bounded above by
 `balance + released`.** `release` enforces only the failure modes that threaten funds:
@@ -315,8 +312,9 @@ one per integration boundary described above:
   teardown. Works with any present or future curve.
 - [`splitter`](examples/vesting_wallet/splitter.move) - the **beneficiary-as-object**
   pattern: point a wallet's `beneficiary` at a shared `Beneficiary` object so each
-  release lands as a `Receiving<Coin<C>>` that anyone can `disperse` to many receivers
-  by fixed weights. Composes with any curve and topology.
+  release settles into the object's accumulator, which anyone can `disperse` to many
+  receivers by fixed weights (crediting each via `balance::send_funds`). Composes with
+  any curve and topology.
 
 ## Security Notes
 

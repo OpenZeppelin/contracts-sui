@@ -1,10 +1,11 @@
 module openzeppelin_finance::example_pausable_grant_tests;
 
 use openzeppelin_finance::example_pausable_grant::{Self, PausableGrant, GrantAdminCap};
-use openzeppelin_finance::vesting_wallet::{Self, DestroyCap};
+use openzeppelin_finance::vesting_wallet::{Self, DestroyCap, Released};
 use openzeppelin_finance::vesting_wallet_linear::{Self as linear, Linear, Params};
 use std::unit_test::{assert_eq, destroy};
-use sui::coin::{Self, Coin};
+use sui::balance;
+use sui::event;
 use sui::test_scenario as ts;
 
 /// Phantom coin marker for the vested asset.
@@ -26,7 +27,7 @@ fun create_grant(scenario: &mut ts::Scenario) {
         BENEFICIARY,
         scenario.ctx(),
     );
-    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()));
+    wallet.deposit(balance::create_for_testing<USDC>(TOTAL));
     let admin_cap = example_pausable_grant::new(wallet, scenario.ctx());
     transfer::public_transfer(admin_cap, EMPLOYER);
     // The wrapper never sees the teardown cap; the admin keeps it for later teardown.
@@ -35,13 +36,9 @@ fun create_grant(scenario: &mut ts::Scenario) {
 
 // Evaluate the curve through the grant's immutable `inner()` view, then release
 // through the grant's own `release`. The caller never touches `&mut inner`.
-fun release(
-    grant: &mut PausableGrant<Linear, Params, USDC>,
-    clock: &sui::clock::Clock,
-    ctx: &mut TxContext,
-) {
+fun release(grant: &mut PausableGrant<Linear, Params, USDC>, clock: &sui::clock::Clock) {
     let vested = linear::vested_amount(grant.inner(), clock);
-    grant.release(&vested, ctx);
+    grant.release(&vested);
 }
 
 // Happy path: a curve-agnostic release flows through the wrapper to the beneficiary.
@@ -58,13 +55,17 @@ fun release_flows_through_wrapper_to_beneficiary() {
 
     // Halfway through the linear schedule: half is releasable.
     clock.set_for_testing(START_MS + DURATION_MS / 2);
-    release(&mut grant, &clock, scenario.ctx());
+    release(&mut grant, &clock);
 
-    scenario.next_tx(BENEFICIARY);
-    let paid = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
-    assert_eq!(paid.value(), TOTAL / 2);
+    // The half-vested payout was directed to the beneficiary.
+    let wallet_id = object::id(grant.inner());
+    let released = event::events_by_type<Released<Linear, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<Linear, USDC>(wallet_id, BENEFICIARY, TOTAL / 2),
+    );
 
-    destroy(paid);
     ts::return_shared(grant);
     destroy(clock);
     scenario.end();
@@ -86,7 +87,7 @@ fun release_aborts_while_paused() {
     assert!(grant.is_paused());
 
     clock.set_for_testing(START_MS + DURATION_MS / 2);
-    release(&mut grant, &clock, scenario.ctx());
+    release(&mut grant, &clock);
 
     abort
 }
@@ -110,13 +111,17 @@ fun resume_restores_releases() {
     grant.resume(&cap);
 
     // The full total is now releasable in one go.
-    release(&mut grant, &clock, scenario.ctx());
+    release(&mut grant, &clock);
 
-    scenario.next_tx(BENEFICIARY);
-    let paid = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
-    assert_eq!(paid.value(), TOTAL);
+    // What accrued during the pause is paid to the beneficiary in full.
+    let wallet_id = object::id(grant.inner());
+    let released = event::events_by_type<Released<Linear, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<Linear, USDC>(wallet_id, BENEFICIARY, TOTAL),
+    );
 
-    destroy(paid);
     destroy(cap);
     ts::return_shared(grant);
     destroy(clock);
@@ -139,7 +144,7 @@ fun unwrap_then_curve_teardown() {
     // Drain the grant at the end of the schedule.
     let mut grant = scenario.take_shared<PausableGrant<Linear, Params, USDC>>();
     clock.set_for_testing(START_MS + DURATION_MS);
-    release(&mut grant, &clock, scenario.ctx());
+    release(&mut grant, &clock);
 
     // Admin dissolves the wrapper, recovering the bare wallet, and finalizes teardown
     // with the teardown cap it has held since creation: permissionless `destroy_empty`
@@ -148,7 +153,9 @@ fun unwrap_then_curve_teardown() {
     let admin_cap = scenario.take_from_sender<GrantAdminCap>();
     let destroy_cap = scenario.take_from_sender<DestroyCap>();
     let wallet = grant.unwrap(admin_cap);
-    let receipt = wallet.destroy_empty();
+    // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
+    // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
+    let receipt = wallet.destroy_empty_for_testing();
     linear::destroy(receipt, destroy_cap, &clock);
 
     destroy(clock);
@@ -168,7 +175,7 @@ fun foreign_cap_cannot_unwrap() {
     create_grant(&mut scenario);
     scenario.next_tx(EMPLOYER);
 
-    let grant_a = ts::take_shared_by_id<PausableGrant<Linear, Params, USDC>>(&scenario, id_a);
+    let grant_a = scenario.take_shared_by_id<PausableGrant<Linear, Params, USDC>>(id_a);
     // The sender holds two caps; the most recent one belongs to grant B.
     let cap_b = scenario.take_from_sender<GrantAdminCap>();
 
@@ -191,7 +198,7 @@ fun foreign_cap_cannot_pause() {
     create_grant(&mut scenario);
     scenario.next_tx(EMPLOYER);
 
-    let mut grant_a = ts::take_shared_by_id<PausableGrant<Linear, Params, USDC>>(&scenario, id_a);
+    let mut grant_a = scenario.take_shared_by_id<PausableGrant<Linear, Params, USDC>>(id_a);
     // The sender holds two caps; the most recent one belongs to grant B.
     let cap_b = scenario.take_from_sender<GrantAdminCap>();
 
@@ -213,7 +220,7 @@ fun foreign_cap_cannot_resume() {
     create_grant(&mut scenario);
     scenario.next_tx(EMPLOYER);
 
-    let mut grant_a = ts::take_shared_by_id<PausableGrant<Linear, Params, USDC>>(&scenario, id_a);
+    let mut grant_a = scenario.take_shared_by_id<PausableGrant<Linear, Params, USDC>>(id_a);
     // The sender holds two caps; the most recent one belongs to grant B.
     let cap_b = scenario.take_from_sender<GrantAdminCap>();
 
