@@ -21,6 +21,7 @@ adds, both of which run in CI (`make validate`):
 from __future__ import annotations
 
 import numpy as np
+from mpmath import mp, mpf
 
 from gaussian_codegen.shared.arithmetic import (
     SignedInt,
@@ -28,6 +29,7 @@ from gaussian_codegen.shared.arithmetic import (
     horner_peak_product,
     mul_div_nearest,
 )
+from gaussian_codegen.shared.constants import DPS
 
 # Float64 evaluation of the rational is accurate to a few x10^-6 ULP after
 # scaling to 10^9, so a pair whose proxy value sits farther than this from a
@@ -38,6 +40,12 @@ _BOUNDARY_MARGIN = 1e-4
 # Required clearance below 2^256 for the peak Horner product. The 10^36 scale
 # leaves ~8 (PDF) - 10 (CDF) bits today; this guards against silently eroding it.
 MIN_HEADROOM_BITS = 4
+
+# Largest wrong-direction slope tolerated by the continuous-monotonicity gate.
+# Comfortably admits the PDF even-peak R'(0) ~ 0 (phi'(0) = 0) while catching a
+# real sub-ULP bump (~10^-9). A slope this small integrates to a < 10^-5 ULP
+# excursion over the whole domain - far too little to move any quantized output.
+MONO_SLOPE_TOL = 1e-12
 
 
 def _float_coeffs(coeffs: list[SignedInt], wad: int) -> np.ndarray:
@@ -142,3 +150,68 @@ def check_overflow_margin(
             f"(headroom {headroom} bits < required {min_headroom_bits})"
         )
     return bits, headroom
+
+
+def _real_coeffs(coeffs, wad: int) -> list[mpf]:
+    """Reconstruct the shipped rational's real coefficients from the quantized
+    sign-magnitude pairs (magnitude / wad) as mpf."""
+    return [(-mpf(m) if neg else mpf(m)) / mpf(wad) for m, neg in coeffs]
+
+
+def _horner(coeffs, x: mpf) -> mpf:
+    acc = mpf(0)
+    for c in reversed(coeffs):
+        acc = acc * x + c
+    return acc
+
+
+def check_continuous_monotonicity(
+    num,
+    den,
+    wad: int,
+    scale: int,
+    max_z_raw: int,
+    increasing: bool,
+    n: int = 200_000,
+    tol: float = MONO_SLOPE_TOL,
+) -> mpf:
+    """Prove the shipped rational `R(z) = N(z)/D(z)` (reconstructed from the
+    committed quantized coefficients) is monotone in the required direction on
+    the whole central domain `[0, max_z]`.
+
+    This is the load-bearing monotonicity guarantee. At `wad = 10^36` the Horner
+    floor-truncation perturbs an output by ~`10^-26` ULP - far below the smallest
+    true per-step increment anywhere in the domain (~`10^-9` ULP even at the PDF
+    peak) - so a continuously-monotone `R` yields a quantized output that is
+    monotone across *every* adjacent representable pair, including the near-zero
+    region the tail `check_neighbor_monotonicity` scan does not reach. `R'` is
+    sampled on a dense grid - a verification, not an interval-arithmetic proof,
+    but `R'` varies smoothly and its curvature is small wherever the slope itself
+    is small (the far tail), so a between-sample sign change is not a realistic
+    risk; the exact tail neighbor scan corroborates.
+
+    Returns the worst wrong-direction slope (>= 0 means the tolerance is spent);
+    raises if it exceeds `tol`. `tol` admits the even target's `R'(0) ~ 0`."""
+    mp.dps = DPS
+    num_r = _real_coeffs(num, wad)
+    den_r = _real_coeffs(den, wad)
+    dnum = [mpf(k) * num_r[k] for k in range(1, len(num_r))] or [mpf(0)]
+    dden = [mpf(k) * den_r[k] for k in range(1, len(den_r))] or [mpf(0)]
+    max_z = mpf(max_z_raw) / scale
+    worst = mpf("-inf")  # worst wrong-direction slope
+    worst_z = mpf(0)
+    for i in range(n + 1):
+        z = max_z * mpf(i) / n
+        d = _horner(den_r, z)
+        rp = (_horner(dnum, z) * d - _horner(num_r, z) * _horner(dden, z)) / (d * d)
+        wrong = -rp if increasing else rp  # positive => monotonicity violated
+        if wrong > worst:
+            worst = wrong
+            worst_z = z
+    if worst > tol:
+        direction = "non-decreasing" if increasing else "non-increasing"
+        raise RuntimeError(
+            f"continuous rational not {direction}: worst wrong-direction slope "
+            f"{mp.nstr(worst, 4)} at z={mp.nstr(worst_z, 6)} exceeds tol {tol:.1e}"
+        )
+    return worst

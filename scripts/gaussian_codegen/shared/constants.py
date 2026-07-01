@@ -52,7 +52,7 @@ MAX_Z = "6.109410205"
 smallest `z` whose Φ rounds to `1.000000000` at the `10^9` scale (Φ(z) ≥
 1 − 0.5e-9, i.e. `1 − Φ ≤ half a ULP`). Verified against a 100-dps mpmath oracle:
 Φ(6.109410205) rounds to `1_000_000_000` and Φ(6.109410204) rounds to
-`999_999_999`. Serves as both the AAA fit domain and the on-chain saturation
+`999_999_999`. Serves as both the fit domain and the on-chain saturation
 bound - inputs with `|z| >= MAX_Z` saturate to the endpoint (`0` for negative z,
 `10^9` for positive z) instead of consulting the rational - so the fit spends no
 approximation budget on the dead tail beyond here (where the correctly-rounded
@@ -76,7 +76,7 @@ PDF_MAX_Z = "6.402729806"
 """Upper bound of the PDF central domain, as an exact decimal string - the
 smallest `z` whose φ rounds to `0` at the `10^9` scale (φ(z) < 0.5e-9). Verified
 against a 100-dps mpmath oracle: φ(6.402729806) rounds to `0` and φ(6.402729805)
-rounds to `1`. Serves as both the AAA fit domain and the on-chain saturation-to-0
+rounds to `1`. Serves as both the fit domain and the on-chain saturation-to-0
 bound. Wider than the CDF bound because φ's tail reaches the round-to-zero point
 later than Φ reaches saturation."""
 
