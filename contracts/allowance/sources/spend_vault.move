@@ -28,7 +28,7 @@
 /// never in the cap. `spend`, `withdraw`, and `withdraw_all` all return
 /// `Balance<T>`.
 ///
-/// #### When to use which
+/// # When to use which
 ///
 /// You want to...                                Call
 /// ------------------------------------------   -----------------------------
@@ -43,7 +43,7 @@
 /// emergency stop                                revoke_all (tx1), then withdraw_all<T> (tx2, retry-safe)
 /// tear down the vault                           withdraw_all<T> every coin, THEN destroy
 ///
-/// #### Core semantics
+/// # Core semantics
 ///
 /// - **Untyped, multi-coin.** There is no phantom type; cross-coin safety is a
 ///   runtime gate. The ledger is keyed by `BudgetKey{cap_id, coin_type}`, and
@@ -995,17 +995,14 @@ public fun revoke_all(v: &mut Vault, cap: &OwnerCap, cap_id: ID, ctx: &mut TxCon
     // ledger with no outstanding immutable borrow of the vault. O(k) in the
     // owner-granted distinct coin types (owner-bounded, un-griefable).
     let types = *v.granted_coin_types.keys();
-    let n = types.length();
-    let mut i = 0;
-    while (i < n) {
-        let coin_type = *types.borrow(i);
+    types.do_ref!(|coin_type| {
+        let coin_type = *coin_type;
         let key = BudgetKey { cap_id, coin_type };
         if (v.allowances.contains(key)) {
             v.allowances.remove(key);
             event::emit(Revoked { vault_id, cap_id, coin_type, was_present: true, by });
         };
-        i = i + 1;
-    };
+    });
 }
 
 /// Spender self-revoke against a LIVE vault, whole-cap. Consumes the cap by
@@ -1040,15 +1037,12 @@ public fun renounce(v: &mut Vault, cap: SpenderCap, ctx: &mut TxContext) {
     // Remove every (cap, T) entry the cap holds. Snapshot the type set (copy)
     // so the loop can mutate the ledger; absent coins are harmless no-op probes.
     let types = *v.granted_coin_types.keys();
-    let n = types.length();
-    let mut i = 0;
-    while (i < n) {
-        let key = BudgetKey { cap_id, coin_type: *types.borrow(i) };
+    types.do_ref!(|coin_type| {
+        let key = BudgetKey { cap_id, coin_type: *coin_type };
         if (v.allowances.contains(key)) {
             v.allowances.remove(key);
         };
-        i = i + 1;
-    };
+    });
 
     id.delete();
 
