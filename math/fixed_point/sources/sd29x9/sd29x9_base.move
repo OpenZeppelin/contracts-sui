@@ -148,9 +148,9 @@ public fun ceil(x: SD29x9): SD29x9 {
 ///
 /// Returns the probability `Φ(z) ∈ [0, 1]` represented as a non-negative
 /// `SD29x9`. The implementation evaluates an AAA-rational approximation
-/// `N(|z|) / D(|z|)` at WAD scale via Horner's method on a sign-magnitude
-/// `u256` accumulator; the final ratio is cast back to `SD29x9` (`10^9`)
-/// in a single nearest-rounding step. Negative inputs reflect via
+/// `N(|z|) / D(|z|)` at WAD scale (`10^36`) via Horner's method on a
+/// sign-magnitude `u256` accumulator; the final ratio is cast back to `SD29x9`
+/// (`10^9`) in a single nearest-rounding step. Negative inputs reflect via
 /// `Φ(-z) = 1 - Φ(z)`.
 ///
 /// #### Parameters
@@ -160,20 +160,20 @@ public fun ceil(x: SD29x9): SD29x9 {
 /// - The probability `Φ(z)` as a non-negative `SD29x9` in `[0, 1]`.
 ///
 /// #### Behavior
-/// - Saturates exactly to `0` for `z ≤ -6.3` and to `1` for `z ≥ 6.3`. At
-///   those bounds `Φ` is already within `~10⁻¹⁰` of the saturated value,
-///   well below the output's `10⁻⁹` resolution.
+/// - Saturates exactly to `0` for `z ≤ -6.109410205` and to `1` for
+///   `z ≥ 6.109410205` - the analytical points at which `Φ` rounds to the
+///   endpoint at the `10⁻⁹` output resolution, so the cut-off is lossless.
 /// - `Φ(0)` is exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale).
 ///   Empirical worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
 /// - `cdf(z) + cdf(z.negate())` is exactly `1` for every input: both
 ///   evaluations share the same `Φ(|z|)` value, which the negative branch
 ///   reflects as `1 - Φ(|z|)`.
-/// - Monotone non-decreasing across the dense offline validation grid
-///   (enforced by the codegen CI gate). A 1-ULP local inversion between
-///   neighboring raw inputs is not formally excluded in the far tail
-///   (`|z| ≳ 5.7`), where the true `Φ` increment drops below the `10⁻⁹`
-///   output resolution.
+/// - Monotone non-decreasing between every pair of adjacent representable
+///   inputs. The `10^36` accumulation scale holds floor-truncation noise far
+///   below the true per-step increment, and the codegen CI gate confirms this
+///   exhaustively over the at-risk tail (`z ≥ 4`, where the increment is
+///   smallest), so no 1-ULP inversion occurs.
 /// - Pure, deterministic, and object-free: identical inputs always produce
 ///   identical outputs; touches no storage or Sui objects.
 ///
@@ -212,8 +212,8 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// so the magnitude `|z|` is taken first and the unsigned evaluator
 /// `pdf_nonneg_raw` is applied to it - there is no reflection or sign-flip. The
 /// evaluator computes an AAA-rational approximation `N(|z|) / D(|z|)` at WAD
-/// scale via Horner's method on a sign-magnitude `u256` accumulator, rounding
-/// the ratio back to `SD29x9` (`10^9`) in a single nearest-rounding step.
+/// scale (`10^36`) via Horner's method on a sign-magnitude `u256` accumulator,
+/// rounding the ratio back to `SD29x9` (`10^9`) in a single nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Input value.
@@ -224,13 +224,14 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// #### Behavior
 /// - Even: `pdf(z) == pdf(z.negate())` for every input except `sd29x9::min()`,
 ///   whose negation is not representable.
-/// - Monotone non-increasing in `|z|` across the dense offline validation grid
-///   (enforced by the codegen CI gate); the peak `φ(0) = 0.398942280` is
-///   returned exactly. A 1-ULP local inversion between neighboring raw inputs is
-///   not formally excluded in the far tail (`|z| ≳ 5.3`), where the true `φ`
-///   decrement drops below the `10⁻⁹` output resolution.
-/// - Saturates exactly to `0` for `|z| ≥ 6.5`. At that bound `φ` is already
-///   `~2.7 × 10⁻¹⁰`, below the output's `10⁻⁹` resolution.
+/// - Monotone non-increasing in `|z|` between every pair of adjacent
+///   representable inputs; the peak `φ(0) = 0.398942280` is returned exactly. The
+///   `10^36` accumulation scale holds floor-truncation noise far below the true
+///   per-step decrement, and the codegen CI gate confirms this exhaustively over
+///   the at-risk tail (`|z| ≥ 4`), so no 1-ULP inversion occurs.
+/// - Saturates exactly to `0` for `|z| ≥ 6.402729806` - the analytical point at
+///   which `φ` rounds to `0` at the `10⁻⁹` output resolution (`φ ≈ 5 × 10⁻¹⁰`
+///   there), so the cut-off is lossless.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Empirical
 ///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
 /// - Pure, deterministic, and object-free: identical inputs always produce

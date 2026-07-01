@@ -63,7 +63,8 @@ high-precision reference math uses `mpmath`. Neither could run on-chain - they
 need floats and arbitrary precision and are far too expensive - which is exactly
 why this half lives here, offline, and only the cheap half ships in Move.
 
-Even symmetry makes it cheaper still: we fit only the right half `[0, 6.3]` and
+Even symmetry makes it cheaper still: we fit only the right half
+`[0, 6.109410205]` (the point at which Φ rounds to 1 at `10⁻⁹` resolution) and
 the Move code reflects negatives via Φ(−z) = 1 − Φ(z).
 
 ## How the pipeline fits together
@@ -78,17 +79,21 @@ derive.py ──► .derive_output.json ──┬─► emit_coefficients.py ─
 validate.py ──► parses the committed cdf_coefficients.move, re-runs it, checks vs scipy
 ```
 
-- **`derive.py`** - runs the AAA fit, sweeps the polynomial degree, picks the
-  smallest one that meets the `5×10⁻⁹` error target, and writes the chosen
-  coefficients to a JSON intermediate.
+- **`derive.py`** - runs the AAA fit at the pinned polynomial degree (held fixed
+  across regenerations so a precision/domain change never silently moves it),
+  checks it meets the `5×10⁻⁹` error target, and writes the coefficients to a JSON
+  intermediate. `--report` prints the full per-degree error sweep.
 - **`emit_coefficients.py`** - reads that JSON, quantizes the coefficients to
   fixed-point integers, and writes `cdf_coefficients.move`.
 - **`emit_test_vectors.py`** - emits the Move test vectors (expected Φ at chosen
   `z`, taken straight from the high-precision `mpmath` oracle).
 - **`validate.py`** - the independent check, and the CI gate. It does **not**
   re-derive: it parses the committed `cdf_coefficients.move` and re-runs the
-  exact on-chain integer arithmetic in Python, asserting the quantized error
-  stays within budget (≤ 5 ULP at `10⁻⁹`) against `scipy`.
+  exact on-chain integer arithmetic (at the `10^36` accumulation scale) in Python.
+  It asserts the quantized error stays within budget (≤ 5 ULP at `10⁻⁹`) against
+  `scipy`, plus two exhaustive tail gates (`shared/gates.py`): neighbor-resolution
+  monotonicity (no 1-ULP inversion between adjacent raw inputs) and u256 overflow
+  margin (the peak Horner product clears `2^256`).
 
 The split is deliberate. Deriving needs the heavy `scipy`/`mpmath` machinery;
 validating only needs to confirm the *committed* numbers are still correct,
@@ -111,10 +116,10 @@ byte-for-byte:
 
 | Package | Version |
 |---------|---------|
-| Python  | 3.14.2  |
+| Python  | 3.13.5  |
 | mpmath  | 1.4.1   |
-| scipy   | 1.17.1  |
-| numpy   | 2.4.4   |
+| scipy   | 1.18.0  |
+| numpy   | 2.5.0   |
 
 ## Install
 
@@ -203,8 +208,11 @@ strings (serialized from mpmath at 100 dps); everything else is informational.
 gaussian_codegen/
 ├── Makefile             # install / regen / validate / check / ci / test
 ├── shared/
-│   ├── constants.py     # single source of truth: WAD, scales, domain bound
-│   ├── reference.py     # mpmath oracle for Φ at 100 dps
+│   ├── constants.py     # single source of truth: WAD scales, domain bounds
+│   ├── aaa.py           # AAA barycentric → explicit-polynomial conversion
+│   ├── arithmetic.py    # sign-magnitude u256 mirror of the Move horner primitives
+│   ├── gates.py         # exhaustive neighbor-monotonicity + u256 overflow gates
+│   ├── reference.py     # mpmath oracle for Φ / φ at 100 dps
 │   └── move_emit.py     # Move literal / banner / drift-check helpers
 ├── cdf/
 │   ├── derive.py
