@@ -30,6 +30,18 @@ const EInternalDenNonPositive: vector<u8> =
 
 // === Constants ===
 
+/// Internal Horner-accumulation scale (`10^36`). An order of magnitude finer than
+/// the user-facing `10^9`: it keeps per-step floor-truncation noise far below the
+/// tail's true per-step increment, so the quantized `Φ` is strictly monotone (a
+/// coarser scale leaves 1-ULP inversions in the far tail). Free at runtime - the
+/// arithmetic already runs in `u256` - and the rescaled coefficients still fit
+/// `u128`.
+const WAD: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
+
+/// Multiplier that promotes a raw `UD30x9` input (`10^9`) to `WAD` (`10^36`):
+/// `WAD / 10^9 = 10^27`.
+const WAD_PER_RAW: u256 = 1_000_000_000_000_000_000_000_000_000; // 10^27
+
 /// `Φ(0)` at the `UD30x9` raw scale (`10^9`).
 const HALF_RAW: u128 = 500_000_000;
 
@@ -51,7 +63,7 @@ public(package) fun half_raw(): u128 { HALF_RAW }
 ///
 /// Behavior:
 /// - Saturates to `ONE_RAW` (`10^9`) for `z_raw ≥ cdf_coefficients::max_z_raw()`
-///   (`|z| ≥ 6.3`).
+///   (`|z| ≥ 6.109410205`).
 /// - Returns `HALF_RAW` (`5 × 10^8`) exactly for `z_raw == 0` (`Φ(0)`).
 /// - Otherwise evaluates the AAA rational `N(z) / D(z)` from
 ///   `cdf_coefficients` via Horner at WAD scale and rounds the ratio back to
@@ -85,12 +97,12 @@ fun eval_rational(
     den_mags: vector<u128>,
     den_negs: vector<bool>,
 ): u128 {
-    // Promote |z| from UD30x9 (10^9) to WAD (10^18).
-    let z_wad = (z_raw as u256) * (common::scale_u256!());
+    // Promote |z| from UD30x9 (10^9) to WAD (10^36) via WAD_PER_RAW (10^27).
+    let z_wad = (z_raw as u256) * WAD_PER_RAW;
     let z_signed = horner::from_unsigned(z_wad);
 
-    let n = horner::horner_eval!(z_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]));
-    let d = horner::horner_eval!(z_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]));
+    let n = horner::horner_eval!(z_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), WAD);
+    let d = horner::horner_eval!(z_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), WAD);
 
     // Integrity guards on the AAA fit. A corrupted coefficient table would
     // surface here rather than silently producing a garbled output.
@@ -98,8 +110,8 @@ fun eval_rational(
     assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
 
     // Final ratio: N(z) / D(z) at WAD, cast to UD30x9 (10^9) with a single
-    // nearest-rounding step. The result is bounded by ~10^29 on the central
-    // domain - well under u256 capacity, so `destroy_some` cannot abort.
+    // nearest-rounding step. N.mag is ≤ ~10^36, so the `N · 10^9` intermediate is
+    // ~10^45 - far under u256 capacity, so `destroy_some` cannot abort.
     let phi_raw_u256 = u256::mul_div(
         n.mag(),
         common::scale_u256!(),

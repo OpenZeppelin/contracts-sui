@@ -29,6 +29,21 @@ const EInternalNumNegative: vector<u8> =
 const EInternalDenNonPositive: vector<u8> =
     "PDF denominator polynomial returned a non-positive value on the central domain";
 
+// === Constants ===
+
+/// Internal Horner-accumulation scale (`10^36`). An order of magnitude finer than
+/// the user-facing `10^9`: it keeps per-step floor-truncation noise far below the
+/// tail's true per-step decrement, so the quantized `φ` is strictly monotone
+/// non-increasing in `|z|` (a coarser scale leaves 1-ULP inversions in the far
+/// tail). Free at runtime - the arithmetic already runs in `u256` - and the
+/// rescaled coefficients still fit `u128`. Headroom under `2^256` is tighter than
+/// the CDF (degree 10, ~8 bits), guarded by the codegen overflow gate.
+const WAD: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
+
+/// Multiplier that promotes a raw `UD30x9` input (`10^9`) to `WAD` (`10^36`):
+/// `WAD / 10^9 = 10^27`.
+const WAD_PER_RAW: u256 = 1_000_000_000_000_000_000_000_000_000; // 10^27
+
 // === Package Functions ===
 
 // === PDF Central-Domain Helper ===
@@ -36,8 +51,9 @@ const EInternalDenNonPositive: vector<u8> =
 /// Self-contained φ evaluator on `|z|_raw` at the `UD30x9` scale (`10^9`).
 ///
 /// Behavior:
-/// - Saturates to `0` for `z_raw ≥ pdf_coefficients::max_z_raw()` (`|z| ≥ 6.5`),
-///   where `φ` has already decayed below the `10^-9` output resolution.
+/// - Saturates to `0` for `z_raw ≥ pdf_coefficients::max_z_raw()`
+///   (`|z| ≥ 6.402729806`), where `φ` has already decayed below the `10^-9`
+///   output resolution.
 /// - Otherwise evaluates the AAA rational `N(z) / D(z)` from `pdf_coefficients`
 ///   via Horner at WAD scale and rounds the ratio back to `UD30x9` scale in a
 ///   single half-up step.
@@ -69,12 +85,12 @@ fun eval_rational(
     den_mags: vector<u128>,
     den_negs: vector<bool>,
 ): u128 {
-    // Promote |z| from UD30x9 (10^9) to WAD (10^18).
-    let z_wad = (z_raw as u256) * (common::scale_u256!());
+    // Promote |z| from UD30x9 (10^9) to WAD (10^36) via WAD_PER_RAW (10^27).
+    let z_wad = (z_raw as u256) * WAD_PER_RAW;
     let z_signed = horner::from_unsigned(z_wad);
 
-    let n = horner::horner_eval!(z_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]));
-    let d = horner::horner_eval!(z_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]));
+    let n = horner::horner_eval!(z_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), WAD);
+    let d = horner::horner_eval!(z_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), WAD);
 
     // Integrity guards on the AAA fit. A corrupted coefficient table would
     // surface here rather than silently producing a garbled output.
@@ -83,9 +99,9 @@ fun eval_rational(
 
     // Final ratio: N(z) / D(z) at WAD, cast to UD30x9 (10^9) with a single
     // nearest-rounding step. On the central domain (degree-10 Horner at
-    // |z| ≤ 6.5) the peak intermediate is ~3 × 10^38, far below u256 capacity
-    // (~1.16 × 10^77), so `destroy_some` cannot abort. The peak `φ(0)` is well
-    // under `1.0`, so no overshoot clamp is needed.
+    // |z| ≤ 6.402729806) the peak `acc.mag × z.mag` intermediate is ~2.6 × 10^74
+    // (248 bits, ~8 under u256's 2^256), so `destroy_some` cannot abort. The peak
+    // `φ(0)` is well under `1.0`, so no overshoot clamp is needed.
     let pdf_raw_u256 = u256::mul_div(
         n.mag(),
         common::scale_u256!(),

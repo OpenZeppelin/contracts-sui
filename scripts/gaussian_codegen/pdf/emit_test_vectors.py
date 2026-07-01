@@ -2,8 +2,8 @@
 
 Mirrors `cdf/emit_test_vectors.py`. Picks a deterministic, hand-curated set of
 test inputs:
-- Well-known critical points (0, ±0.25, ±0.5, ±1, ±2, ±3, ±4, ±5, ±6, ±6.499,
-  ±6.5, ±6.501, ±7) - exercises evenness, the saturation boundary on both
+- Well-known critical points (0, ±0.25, ±0.5, ±1, ±2, ±3, ±4, ±5, ±6, ±6.4027,
+  ±6.402729806, ±6.41, ±7) - exercises evenness, the saturation boundary on both
   sides, and the φ(0) peak.
 - 16 evenly spaced points across [0, PDF_MAX_Z] for breadth.
 
@@ -61,7 +61,7 @@ UD30X9_OUTPUT_PATH = (
     / "pdf_test_vectors.move"
 )
 
-MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.5 at UD30x9 scale - saturation threshold
+MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.402729806 at UD30x9 scale - saturation threshold
 MAX_Z_FLOAT = float(constants.PDF_MAX_Z)
 
 CRITICAL_Z = [
@@ -75,9 +75,9 @@ CRITICAL_Z = [
     "4",
     "5",
     "6",
-    "6.499",
-    "6.5",
-    "6.501",
+    "6.4027",
+    "6.402729806",
+    "6.41",
     "7",
 ]
 

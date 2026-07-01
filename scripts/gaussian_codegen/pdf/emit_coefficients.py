@@ -53,8 +53,8 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 
     return f"""{banner}
 /// Numerator and denominator coefficients for the AAA-rational standard-normal
-/// PDF approximation on the central domain `[0, 6.5]`. All values are
-/// sign-magnitude pairs at WAD (`10^18`) scale, indexed in ascending power
+/// PDF approximation on the central domain `[0, {constants.PDF_MAX_Z}]`. All values are
+/// sign-magnitude pairs at PDF WAD (`10^36`) scale, indexed in ascending power
 /// order (index 0 is the constant term).
 ///
 /// Accessors return the underlying `vector<u128>` / `vector<bool>` constants so
@@ -95,7 +95,7 @@ public(package) fun pdf_den_mags(): vector<u128> {{ DEN_MAGS }}
 /// Denominator sign flags (ascending power order); index `i` paired with `pdf_den_mags()[i]`.
 public(package) fun pdf_den_negs(): vector<bool> {{ DEN_NEGS }}
 
-/// Saturation threshold |z| at the raw `10^9` scale (`6_500_000_000`).
+/// Saturation threshold |z| at the raw `10^9` scale (`{fmt_u128(MAX_Z_RAW)}`).
 public(package) fun max_z_raw(): u128 {{ MAX_Z_RAW }}
 """
 
@@ -118,8 +118,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     raw = json.loads(args.input.read_text(encoding="utf-8"))
 
-    num = [quantize(s) for s in raw["num_coeffs_str"]]
-    den = [quantize(s) for s in raw["den_coeffs_str"]]
+    num = [quantize(s, constants.PDF_WAD) for s in raw["num_coeffs_str"]]
+    den = [quantize(s, constants.PDF_WAD) for s in raw["den_coeffs_str"]]
     text = emit_module(num, den)
     text = format_move(text, args.output, REPO_ROOT)
 
@@ -130,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("FAIL: run `python -m gaussian_codegen.pdf.emit_coefficients` to regenerate", file=sys.stderr)
         return 1
 
-    print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at WAD")
+    print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at PDF_WAD")
     write_move(args.output, text)
     print(f"Wrote {rel_or_abs(args.output, REPO_ROOT)}")
     return 0
