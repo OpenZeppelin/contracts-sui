@@ -18,7 +18,7 @@ openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
 
 - Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`, `sqrt`
 - Logarithms: `log2`, `ln`, `log10`
-- Distributions: `cdf` (standard-normal CDF `Φ`), `pdf` (standard-normal PDF `φ`)
+- Distributions: `cdf` (standard-normal CDF `Φ`), `pdf` (standard-normal PDF `φ`), `inverse_cdf` (standard-normal quantile `Φ⁻¹`)
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
 - `UD30x9` also exposes bitwise helpers: `and`, `and2`, `or`, `xor`, `not`, `lshift`, `rshift`, `unchecked_lshift`, `unchecked_rshift`
 
@@ -197,6 +197,53 @@ let e = neg.pdf(); // 0.241970725  (φ is even)
 Limitations: the approximation is defined on `|z| ≤ 6.5` and saturates to `0`
 outside that range; `10⁻⁹` is the finest distinction the output can represent.
 
+## Standard-normal quantile (inverse CDF)
+
+`Φ⁻¹(p)` is the standard-normal quantile function (a.k.a. probit): the value `z`
+such that `Φ(z) = p`. It inverts `cdf`, turning a probability into a z-score -
+confidence-interval bounds, Value-at-Risk thresholds, and inverse-transform
+sampling. Both fixed-point types expose it:
+
+- `UD30x9::inverse_cdf` takes `p ∈ [0.5, 1]` and returns `z ∈ [0, 6.3]` (the
+  non-negative half; an unsigned type cannot represent a negative quantile).
+- `SD29x9::inverse_cdf` takes `p ∈ (0, 1)` and returns the signed `z ∈ [-6.3, 6.3]`.
+
+Properties:
+
+- **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
+  empirical worst case `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam.
+- **Φ⁻¹(0.5)**: exactly `0`.
+- **Symmetry**: odd about `0.5` - `inverse_cdf(p) = inverse_cdf(1 - p).negate()`.
+- **Saturation**: `p = 1` returns `+6.3` and `p = 0` returns `-6.3` (`Φ⁻¹` is
+  `±∞` there and unrepresentable); `6.3` matches the CDF domain bound.
+- **Aborts**: unlike `cdf`/`pdf`, the quantile has invalid inputs. `inverse_cdf`
+  aborts if `p ∉ [0, 1]`; the `UD30x9` variant additionally aborts if `p < 0.5`,
+  whose quantile would be negative.
+- **Round-trip**: `cdf(inverse_cdf(p))` recovers `p` to within a few ULP.
+- **Conditioning**: near `p = 1` the quantile is intrinsically steep - the two
+  largest representable inputs differ by `≈ 0.11` in `z` - so a 1-ULP change in
+  `p` maps to a large change in `z`. This is a property of `Φ⁻¹`, not the
+  approximation.
+- **Execution**: pure, deterministic, and object-free integer math - no storage,
+  no Sui objects; identical inputs always yield identical outputs.
+
+```move
+use openzeppelin_fp_math::sd29x9;
+use openzeppelin_fp_math::ud30x9;
+
+let p = ud30x9::wrap(975_000_000); // 0.975
+let z = p.inverse_cdf(); // 1.959963985  (the 1.96 of a 95% confidence interval)
+
+let lower = sd29x9::wrap(25_000_000, false); // 0.025
+let zl = lower.inverse_cdf(); // -1.959963985
+```
+
+Limitations: `p` must be a valid probability (see Aborts); the output range is
+`|z| ≤ 6.3` and `10⁻⁹` is the finest distinction it can represent. In the deep
+tail the achievable `z`-resolution is bounded by the `10⁻⁹` resolution of the
+input `p`, not by the approximation. Internally the tail uses `ln` and `sqrt`, so
+`inverse_cdf` is slightly heavier than `cdf`/`pdf`.
+
 ## Usage Example
 
 ```move
@@ -227,14 +274,17 @@ Complete, compilable integration examples live in [`examples/`](examples):
 
 ## Generated code
 
-The standard-normal CDF (`cdf`) and PDF (`pdf`) are backed by AAA-rational
-approximations whose coefficients and test vectors are generated offline and must
-**not** be hand-edited (each carries an `AUTO-GENERATED` banner):
+The standard-normal CDF (`cdf`), PDF (`pdf`), and quantile (`inverse_cdf`) are
+backed by AAA-rational approximations whose coefficients and test vectors are
+generated offline and must **not** be hand-edited (each carries an
+`AUTO-GENERATED` banner):
 
 - `sources/internal/cdf_coefficients.move`
 - `sources/internal/pdf_coefficients.move`
+- `sources/internal/inverse_cdf_coefficients.move`
 - `tests/{sd29x9_tests,ud30x9_tests}/cdf_test_vectors.move`
 - `tests/{sd29x9_tests,ud30x9_tests}/pdf_test_vectors.move`
+- `tests/{sd29x9_tests,ud30x9_tests}/inverse_cdf_test_vectors.move`
 
 To regenerate them - or to re-validate the committed coefficients against
 `scipy` - see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
