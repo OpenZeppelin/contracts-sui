@@ -202,6 +202,16 @@ If `release` instead required the witness `S`, this would be impossible: a wrapp
 that doesn't own `S` could not call it, so it would have to expose `&mut inner` and
 lose all control over deposits and releases.
 
+**Funding a wrapped wallet.** `release` is the only *outflow*, so it is the only entry
+point a wrapper must gate. The inflow entry points - `deposit`, `receive_and_deposit`,
+and `sweep_settled` - are permissionless, witness-free, and can only add funds for the
+beneficiary, so a wrapper can safely re-expose them ungated, each just delegating to the
+private `&mut inner`. Do so whenever the wrapper can be funded after wrapping, and
+especially by address: anyone can `public_transfer` a `Coin<C>` or settle a `Balance<C>`
+to the inner wallet's object address without the wrapper's cooperation, yet only
+`&mut inner` can draw it in (`receive_and_deposit` / `sweep_settled`). A wrapper that omits
+those passthroughs leaves such funds unclaimable until the wallet is unwrapped.
+
 **Constructing the wallet.** The wrapper either accepts an already-built
 `VestingWallet<S, P, C>` from the caller, or builds one itself. To build it without
 depending on a curve's `new`, take a validated `P` from the curve module's `params`
@@ -293,6 +303,14 @@ one per integration boundary described above:
   coin would push the lifetime total (`balance + released`) past `u64::MAX` the call
   aborts, leaving the already-transferred coin parked at the wallet address. High
   volume emitters should track headroom before transferring.
+- **A wrapper must pass through inflow to accept address-targeted funding.** A
+  curve-agnostic wrapper that nests a wallet and keeps `&mut inner` private can only claim
+  funds sent to the inner wallet's address - `receive_and_deposit` for a `Coin<C>`,
+  `sweep_settled` for a settled `Balance<C>` - if it re-exposes those entry points.
+  Without them, funds a third party sends to the address stay unclaimable until the wallet
+  is unwrapped (claim before teardown; funds left at a destroyed wallet's address are
+  lost). The inflow passthroughs are safe to expose - they only add funds - so a wrapper
+  that can be funded by address should include them.
 
 ## Learn More
 

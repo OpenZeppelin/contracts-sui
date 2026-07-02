@@ -371,6 +371,10 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 /// A wallet with no settled funds at its address is a no-op: nothing is swept and
 /// no `Swept` event is emitted.
 ///
+/// Requires `&mut wallet`: a wrapper that nests the wallet and keeps `&mut inner` private
+/// must re-expose this entry point, or settled funds parked at the address stay unswept
+/// until the wallet is unwrapped.
+///
 /// #### Parameters
 /// - `wallet`: The wallet to sweep into.
 /// - `root`: The shared `AccumulatorRoot`, read to find the wallet's settled funds.
@@ -395,6 +399,10 @@ public fun sweep_settled<S: drop, P: copy + drop + store, C>(
 /// Claim a coin that an upstream emitter `public_transfer`'d to this wallet's
 /// object address, then add it to the balance. Used by emission schedules and
 /// payroll robots that don't hold a wallet reference.
+///
+/// Requires `&mut wallet`: a wrapper that nests the wallet and keeps `&mut inner` private
+/// must re-expose this entry point, or coins parked at the address stay unclaimable until
+/// the wallet is unwrapped.
 ///
 /// A claim of a zero-value coin is a no-op: the (empty) balance is consumed but
 /// nothing changes and no `Received` event is emitted.

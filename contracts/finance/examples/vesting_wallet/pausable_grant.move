@@ -36,9 +36,21 @@
 /// witness-gated `destroy`) against it. See the tests for the end-to-end flow.
 ///
 /// The wallet must be funded *before* it is wrapped, since `new` consumes it and the
-/// wrapper never re-exposes `&mut inner`. Re-enabling top-ups would mean adding a
-/// `deposit` passthrough (safe, as deposit is permissionless); it is left out here to
-/// keep the surface minimal.
+/// wrapper never re-exposes `&mut inner`. Re-enabling funding would mean adding
+/// passthroughs for the wallet's inflow entry points (`deposit`, `receive_and_deposit`,
+/// `sweep_settled`); all three are safe to expose ungated - permissionless, witness-free,
+/// and inflow-only, so they can only add funds for the beneficiary. They are left out
+/// here to keep the surface minimal, which is safe only because this grant is funded once
+/// up front and is not meant to be funded by address.
+///
+/// Note the asymmetry: omitting `deposit` merely blocks top-ups (a would-be funder just
+/// keeps their coin), but omitting `receive_and_deposit`/`sweep_settled` is a liveness
+/// hazard. Anyone can `public_transfer` a `Coin<C>` (or settle a `Balance<C>`) to the
+/// inner wallet's object address without the wrapper's cooperation, and only `&mut inner`
+/// can claim it - so with no passthrough those funds are unclaimable until `unwrap`
+/// restores `&mut` (claim them *before* any teardown; a coin left at a destroyed wallet's
+/// address is stranded for good). A wrapper that expects address-targeted funding should
+/// expose these passthroughs.
 ///
 /// # Disclaimer
 ///
