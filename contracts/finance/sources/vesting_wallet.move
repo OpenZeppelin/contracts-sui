@@ -80,7 +80,12 @@
 ///   from the holder's transactions only. Outside parties fund it by
 ///   `public_transfer`ing a `Coin<C>` to the wallet's object address (the holder
 ///   claims each with `receive_and_deposit`) or by settling a `Balance<C>` into the
-///   address (the holder pulls it in with `sweep_settled`).
+///   address (the holder pulls it in with `sweep_settled`). Because release also
+///   needs the holder's `&mut`, a holder who is not the beneficiary can withhold
+///   every payout, and the beneficiary has no on-chain path to force one - the
+///   liveness cost of the fast path. Shared removes this: release is permissionless,
+///   so anyone (the beneficiary included) can poke it - which is why it is the
+///   default recommendation.
 ///
 /// The `beneficiary` is fixed at construction. To rotate the recipient, point
 /// `beneficiary` at a consumer-owned object and rotate ownership of that object
@@ -405,6 +410,13 @@ public fun sweep_settled<S: drop, P: copy + drop + store, C>(
 ///   claimed and deposited.
 ///
 /// #### Aborts
+/// - `sui::transfer::EUnableToReceiveObject` (from `public_receive`, abort code 3)
+///   if the `Receiving<Coin<C>>` ticket is no longer receivable through this wallet:
+///   the coin was already claimed (a stale-version double-receive race), or was
+///   wrapped, transferred away, or is absent at that version. The ticket is a
+///   declared transaction input, not attacker-forgeable, so this signals a stale or
+///   racing claim, not bad input; it aborts before any state change, leaving the coin
+///   claimable by a later, valid call.
 /// - `EBalanceOverflow` if claiming the coin would overflow the wallet's
 ///   lifetime total. Unlike a direct `deposit`, the coin was already transferred to
 ///   the wallet's address by an earlier transaction, so an abort here leaves it
