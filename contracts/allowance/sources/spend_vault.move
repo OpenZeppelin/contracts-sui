@@ -804,10 +804,9 @@ public fun set_allowance<T>(
 /// - `EZeroAmount` if `amount == 0`.
 /// - `EAllowanceExceeded` if `remaining` is finite and `amount > remaining`;
 ///   includes suspended-at-zero.
-/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
-///   `enable_object_funds_withdraw` protocol feature is off. Propagated from
-///   `withdraw_funds_from_object`, total (not per-amount) and not a matchable
-///   Move `#[error]` code.
+/// - `EObjectFundsWithdrawNotEnabled` if the `enable_object_funds_withdraw`
+///   protocol feature is off. A framework Move `#[error]` abort (code 3 in
+///   `sui::funds_accumulator`) propagated from `withdraw_funds_from_object`.
 /// - `InsufficientFundsForWithdraw` (execution status) if the object's live
 ///   balance at execution is below `amount`. A funds-accumulator execution status raised at
 ///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
@@ -1147,8 +1146,9 @@ public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) 
 /// #### Aborts
 /// - `EWrongOwnerCap` if cap is bound to a different Vault.
 /// - `EZeroAmount` if `amount == 0`.
-/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
-///   `enable_object_funds_withdraw` protocol feature is off.
+/// - `EObjectFundsWithdrawNotEnabled` if the `enable_object_funds_withdraw`
+///   protocol feature is off: a framework Move `#[error]` abort (code 3 in
+///   `sui::funds_accumulator`).
 /// - `InsufficientFundsForWithdraw` (execution status) if the object's live
 ///   balance at execution is below `amount`. A funds-accumulator execution status raised at
 ///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
@@ -1223,10 +1223,10 @@ public fun withdraw<T>(
 ///
 /// #### Aborts
 /// - `EWrongOwnerCap` if cap is bound to a different Vault.
-/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
-///   `enable_object_funds_withdraw` protocol feature is off; only reachable on a
-///   non-empty settled pool (the empty-pool path returns `balance::zero` without
-///   touching the primitive).
+/// - `EObjectFundsWithdrawNotEnabled` if the `enable_object_funds_withdraw`
+///   protocol feature is off: a framework Move `#[error]` abort (code 3 in
+///   `sui::funds_accumulator`); only reachable on a non-empty settled pool (the
+///   empty-pool path returns `balance::zero` without touching the primitive).
 /// - `InsufficientFundsForWithdraw` (execution status) if the live pool fell
 ///   below the settled snapshot earlier in this checkpoint (the settled-vs-live
 ///   skew; retry-safe). A funds-accumulator execution status raised at
