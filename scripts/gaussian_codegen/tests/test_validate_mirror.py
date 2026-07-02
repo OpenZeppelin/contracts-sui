@@ -161,7 +161,8 @@ def test_check_neighbor_monotonicity_committed_cdf_window(coeffs):
     num, den = coeffs
     # A small in-domain tail window: the gate runs and confirms no inversion
     # (it raises RuntimeError on any confirmed inversion).
-    pairs, _ = gates.check_neighbor_monotonicity(
+    pairs, _, max_dev = gates.check_neighbor_monotonicity(
         num, den, v.WAD, v.SCALE, 5_000_000_000, 5_000_200_000, increasing=True
     )
     assert pairs > 0
+    assert max_dev < gates._BOUNDARY_MARGIN  # proxy stayed faithful over the window
