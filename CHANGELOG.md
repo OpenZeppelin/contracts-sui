@@ -33,6 +33,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - `cdf`: the standard-normal cumulative distribution function `Φ(z)` for `UD30x9` and `SD29x9` fixed-point inputs. (#345)
 
+#### Changed
+
+- `cdf` / `pdf`: raised the internal evaluation precision to `10^36`, making both functions monotone between every pair of adjacent representable inputs, and clamped their domains to the analytic saturation points (`6.109410205` / `6.402729806`). Gas, storage, and the public API are unchanged. (#431)
+
 ## 1.3.0 (15-06-2026)
 
 ### `openzeppelin_math`
