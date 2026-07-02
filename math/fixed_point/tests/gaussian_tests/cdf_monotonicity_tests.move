@@ -44,8 +44,9 @@ fun monotone_in_mid_tail() {
 
 #[test]
 fun monotone_just_below_saturation() {
-    // Ends at 6.108999999, still inside the central domain (< 6.109410205).
-    assert_neighbor_monotone(6_108_000_000, WINDOW);
+    // Ends at 6.109410204 = max_z_raw - 1, the last representable input inside
+    // the central domain: the window abuts the saturation boundary.
+    assert_neighbor_monotone(6_109_409_205, WINDOW);
 }
 
 #[test]
