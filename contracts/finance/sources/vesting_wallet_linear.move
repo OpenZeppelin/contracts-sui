@@ -43,7 +43,7 @@
 ///   catch-up, then resumes its regular cadence.
 /// - Mid-schedule: a staircase. With `k` full periods elapsed
 ///   (`k = (now - start_ms) / period_ms`, `0 <= k < steps`), the cumulative vested
-///   total is `total * k / steps`, computed with a u128 intermediate. The value is
+///   total is `total * k / steps`, computed with a u256 intermediate. The value is
 ///   flat across a period and steps up at each boundary.
 /// - Post-end: clamped to the wallet's total (`balance + released`).
 ///

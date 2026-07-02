@@ -376,10 +376,10 @@ fun vested_amount_is_nondecreasing_in_time() {
     test.end();
 }
 
-// The curve math uses a u128 intermediate, so the worst case
+// The curve math uses a u256 intermediate, so the worst case
 // (total = u64::MAX, last step before the end) does not overflow and fits in u64.
 #[test]
-fun vested_amount_uses_u128_intermediate_at_max() {
+fun vested_amount_uses_u256_intermediate_at_max() {
     let (mut test, mut clk) = setup(0);
     let max = std::u64::max_value!();
 
@@ -828,10 +828,10 @@ fun vested_amount_continuous_is_linear_mid_schedule() {
     test.end();
 }
 
-// The curve math uses a u128 intermediate, so the worst case
+// The curve math uses a u256 intermediate, so the worst case
 // (total = duration = u64::MAX) does not overflow and the final value fits in u64.
 #[test]
-fun vested_amount_continuous_uses_u128_intermediate_at_max() {
+fun vested_amount_continuous_uses_u256_intermediate_at_max() {
     let (mut test, mut clk) = setup(0);
     let max = std::u64::max_value!();
 
