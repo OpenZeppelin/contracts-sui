@@ -113,8 +113,9 @@ public fun change_budget<T>(
 }
 
 /// Suspend a grant without removing it: zero the budget but keep the entry + cap
-/// alive. The next `spend<T>` aborts `EAllowanceExceeded` (NOT `ENoAllowance`), so
-/// the spender knows to ask the owner to raise rather than to ask for a new grant.
+/// alive. The next positive `spend<T>` aborts `EAllowanceExceeded` (NOT
+/// `ENoAllowance`), so the spender knows to ask the owner to raise rather than to
+/// ask for a new grant.
 public fun suspend<T>(
     vault: &mut Vault,
     owner_cap: &OwnerCap,
