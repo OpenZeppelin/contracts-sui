@@ -370,7 +370,7 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// - `ENotEnded` if called before the schedule's end (`start_ms + period_ms * steps`).
 /// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
 public fun destroy(receipt: DestroyReceipt<Linear, Params>, clock: &Clock, ctx: &mut TxContext) {
-    let (beneficiary, params) = vesting_wallet::consume_receipt(receipt, Linear {});
+    let (beneficiary, params) = receipt.consume_receipt(Linear {});
     assert!(clock.timestamp_ms() >= params.calculate_end(), ENotEnded);
     assert!(ctx.sender() == beneficiary, ENotBeneficiary);
 }
