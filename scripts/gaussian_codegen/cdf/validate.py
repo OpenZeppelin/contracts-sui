@@ -14,10 +14,11 @@ mirrors the Move implementation exactly**:
 
 Asserts, over a 10,000-point grid, that the worst-case absolute error vs
 `scipy.stats.norm.cdf` stays within `TARGET_ERROR_ULP` × 10^-9 and that the
-reflection identity holds. Two exhaustive tail gates (`shared.gates`) then prove
-neighbor-resolution monotonicity (no 1-ULP inversion between adjacent raw inputs -
-what the 10^36 scale exists to guarantee) and u256 overflow margin. Returns
-non-zero exit on failure, suitable for CI.
+reflection identity holds. Gates (`shared.gates`) then prove monotonicity - a
+full-domain continuous R'-sign check, which at the 10^36 scale implies the
+quantized output is non-decreasing across every adjacent pair, plus an exact
+neighbor re-scan of the tail - and the u256 overflow margin. Returns non-zero
+exit on failure, suitable for CI.
 """
 from __future__ import annotations
 
@@ -159,7 +160,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     worst_err = 0.0
     worst_z = 0.0
     worst_neg = False
-    prev_phi_pos = 0
     for z in grid:
         # Quantize first and measure against Φ at the quantized input, so the
         # gate scores the on-chain function at its own representable inputs
@@ -195,7 +195,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     worst_slope = gates.check_continuous_monotonicity(
         num, den, WAD, SCALE, max_z_raw, increasing=True
     )
-    pairs, rechecks = gates.check_neighbor_monotonicity(
+    pairs, rechecks, max_dev = gates.check_neighbor_monotonicity(
         num, den, WAD, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=True
     )
     peak_bits, headroom = gates.check_overflow_margin(num, den, WAD, SCALE, max_z_raw)
@@ -207,7 +207,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"Monotonicity: continuous R'(z) ≥ 0 on [0, {max_z_raw / SCALE:.9f}] "
         f"(worst wrong-direction slope {mp.nstr(worst_slope, 3)}); quantized output "
         f"non-decreasing across all {pairs:,} tail pairs in "
-        f"[{MONO_ONSET_RAW / SCALE:.1f}, {max_z_raw / SCALE:.9f}] ({rechecks} re-checks) ✓"
+        f"[{MONO_ONSET_RAW / SCALE:.1f}, {max_z_raw / SCALE:.9f}] "
+        f"({rechecks:,} re-checks; proxy drift ≤ {max_dev:.1e} ULP) ✓"
     )
     print(f"Overflow: peak Horner product {peak_bits} bits, {headroom} bits under 2^256 ✓")
 
