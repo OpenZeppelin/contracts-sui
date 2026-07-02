@@ -139,7 +139,7 @@ const TOLERANCE: u128 = 5; // ≤ 5 ULP at SD29x9 scale (10^-9)
 
 #[error(code = 0)]
 const ETestCaseFailed: vector<u8> =
-    "inverse_cdf test vector mismatch: |actual - expected| exceeded TOLERANCE";
+    "inverse_cdf test vector mismatch: actual value deviates from expected by more than the allowed tolerance";
 
 public struct TestCase has copy, drop {{
     p_raw: u128,
@@ -187,7 +187,7 @@ const TOLERANCE: u128 = 5; // ≤ 5 ULP at UD30x9 scale (10^-9)
 
 #[error(code = 0)]
 const ETestCaseFailed: vector<u8> =
-    "inverse_cdf test vector mismatch: |actual - expected| exceeded TOLERANCE";
+    "inverse_cdf test vector mismatch: actual value deviates from expected by more than the allowed tolerance";
 
 public struct TestCase has copy, drop {{
     p_raw: u128,
