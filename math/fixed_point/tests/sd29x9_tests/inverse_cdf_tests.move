@@ -26,7 +26,7 @@ const ROUND_TRIP_TOL: u128 = 10;
 // The well-known-value tests read like statistics-table entries.
 const Z_90_RAW: u128 = 1_281_551_566; // Φ⁻¹(0.90)
 const Z_95_RAW: u128 = 1_644_853_627; // Φ⁻¹(0.95)
-const Z_975_RAW: u128 = 1_959_963_985; // Φ⁻¹(0.975) — the 1.96 of a 95% CI
+const Z_975_RAW: u128 = 1_959_963_985; // Φ⁻¹(0.975) - the 1.96 of a 95% CI
 const Z_99_RAW: u128 = 2_326_347_874; // Φ⁻¹(0.99)
 const Z_TAIL_RAW: u128 = 5_997_807_015; // Φ⁻¹(1 − 1e-9)
 
