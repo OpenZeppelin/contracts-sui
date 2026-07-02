@@ -3,6 +3,7 @@ module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::cdf::cdf_nonneg_raw;
 use openzeppelin_fp_math::common;
+use openzeppelin_fp_math::inverse_cdf::inverse_cdf_upper_raw;
 use openzeppelin_fp_math::pdf::pdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
@@ -40,6 +41,15 @@ const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be non-zer
 #[error(code = 6)]
 const ELogResultUnrepresentable: vector<u8> =
     "Logarithm result would be negative and is unrepresentable in UD30x9";
+
+/// Probability exceeds `1`, so it is not a valid CDF value
+#[error(code = 7)]
+const EProbabilityOutOfRange: vector<u8> = "Probability must not exceed one";
+
+/// Probability is below `0.5`, so the quantile would be negative and is unrepresentable in `UD30x9`
+#[error(code = 8)]
+const EProbabilityBelowHalf: vector<u8> =
+    "Probability below one half yields a negative quantile, unrepresentable in UD30x9";
 
 // === Public Functions ===
 
@@ -216,6 +226,61 @@ public fun cdf(z: UD30x9): UD30x9 {
 /// ```
 public fun pdf(z: UD30x9): UD30x9 {
     wrap(pdf_nonneg_raw(z.unwrap()))
+}
+
+/// Inverse standard-normal CDF (quantile / probit) `Φ⁻¹(p)` on `p ∈ [0.5, 1]`.
+///
+/// Returns the value `z ≥ 0` with `Φ(z) = p`, represented as `UD30x9`. Because
+/// `UD30x9` is unsigned, only the upper half of the distribution is representable:
+/// `p` must be at least `0.5` (`Φ(0)`). For the full range including negative `z`,
+/// use `SD29x9::inverse_cdf`. The implementation evaluates a two-region
+/// AAA-rational approximation (a rational in `u = p - 0.5` near the center, and
+/// one in `r = sqrt(-2 * ln(1 - p))` in the tail) at WAD scale via Horner's method
+/// on a sign-magnitude `u256` accumulator, rounded back to `UD30x9` (`10^9`) in a
+/// single nearest-rounding step.
+///
+/// #### Parameters
+/// - `p`: Probability in `[0.5, 1]`.
+///
+/// #### Returns
+/// - `Φ⁻¹(p) ∈ [0, 6.3]` at `UD30x9` scale.
+///
+/// #### Behavior
+/// - `Φ⁻¹(0.5)` is exactly `0`.
+/// - Saturates to `6.3` at `p = 1`, since `Φ⁻¹(1) = +∞` is unrepresentable. `6.3`
+///   matches the CDF domain bound, so `cdf`/`inverse_cdf` agree at the corner.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
+///   worst-case from the committed coefficients and on-chain kernels is
+///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`
+///   change of variable is most sensitive.
+/// - Near `p = 1` the quantile is intrinsically steep - the two largest
+///   representable inputs differ by `≈ 0.11` in `z` - so a 1-ULP change in `p`
+///   maps to a large change in `z`; this is a property of `Φ⁻¹`, not the
+///   approximation. Equivalently, `cdf(inverse_cdf(p))` recovers `p` to a few ULP.
+/// - Monotone non-decreasing across the dense offline validation grid (enforced
+///   by the codegen CI gate).
+/// - Pure, deterministic, and object-free.
+///
+/// #### Aborts
+/// - `EProbabilityBelowHalf` if `p < 0.5` (the quantile would be negative).
+/// - `EProbabilityOutOfRange` if `p > 1`.
+/// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
+///   (defense-in-depth against a corrupted regenerated coefficient table; these
+///   cannot fire for the shipped coefficients).
+/// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`
+///   saturation guard runs first, so `1 - p` is never zero; unreachable).
+///
+/// #### Examples
+///
+/// ```move
+/// let p = ud30x9::wrap(975_000_000); // 0.975
+/// let z = p.inverse_cdf(); // ≈ 1.959963985
+/// ```
+public fun inverse_cdf(p: UD30x9): UD30x9 {
+    let p_raw = p.unwrap();
+    assert!(p_raw <= common::scale!(), EProbabilityOutOfRange); // p ≤ 1
+    assert!(p_raw >= common::scale!() / 2, EProbabilityBelowHalf); // p ≥ 0.5
+    wrap(inverse_cdf_upper_raw(p_raw))
 }
 
 /// Rounds toward positive infinity to the next integer (if fractional), otherwise unchanged.

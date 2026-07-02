@@ -66,6 +66,7 @@ public use fun openzeppelin_fp_math::sd29x9_base::neq as SD29x9.neq;
 // Gaussian functions
 public use fun openzeppelin_fp_math::sd29x9_base::cdf as SD29x9.cdf;
 public use fun openzeppelin_fp_math::sd29x9_base::pdf as SD29x9.pdf;
+public use fun openzeppelin_fp_math::sd29x9_base::inverse_cdf as SD29x9.inverse_cdf;
 
 // Cross-Type Casting
 public use fun openzeppelin_fp_math::sd29x9_base::into_UD30x9 as SD29x9.into_UD30x9;
