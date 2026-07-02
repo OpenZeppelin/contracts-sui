@@ -1,12 +1,15 @@
-"""High-precision standard-normal CDF and PDF oracle.
+"""High-precision standard-normal CDF, PDF, and quantile oracle.
 
 The mpmath oracle (100 dps) is used where we need values exact far beyond the
 target scales: emitting bit-exact test vectors and quantizing the derived
-coefficients. Coefficient *derivation* (`<family>/derive.py`) and *validation*
-(`<family>/validate.py`) instead measure error against `scipy.stats.norm.cdf` /
-`scipy.stats.norm.pdf` (float64, accurate to ~1e-16 - three orders of magnitude
-tighter than the 5e-9 error budget), so scipy is the reference there. The two
-agree to float64 precision; `sanity_check_against_scipy()` asserts it.
+coefficients. The `cdf`/`pdf` *derivation* and *validation* scripts instead
+measure error against `scipy.stats.norm.cdf` / `scipy.stats.norm.pdf` (float64,
+accurate to ~1e-16 - three orders of magnitude tighter than the 5e-9 error
+budget), so scipy is the reference there. The quantile is the exception:
+`scipy.stats.norm.ppf` is off by up to ~5e-9 in the deep tail, so
+`inverse_cdf`'s derive and validate use the mpmath `erfinv`-based `ppf` below.
+Where both are exact the two agree to float64 precision;
+`sanity_check_against_scipy()` asserts it.
 """
 from __future__ import annotations
 

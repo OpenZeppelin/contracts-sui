@@ -80,7 +80,7 @@ def mul_div_nearest(a: int, b: int, d: int) -> int:
 # (`math/fixed_point/sources/internal/common.move`) and `u256::sqrt(..., Down)`
 # (`math/core`) so `inverse_cdf/validate.py` can re-run the tail change of
 # variable `r = sqrt(-2 * ln(1 - p))` in Python integer arithmetic, exactly as
-# the Move `inverse_cdf::tail_transform` does.
+# the Move `inverse_cdf::tail_variable_raw` does.
 
 SCALE = constants.SCALE_DECIMAL  # 10^9
 INTERNAL_LOG_SCALE = 10**18

@@ -14,11 +14,15 @@ arithmetic that mirrors the Move implementation exactly**:
     the final `mul_div(N, 10^9, D, Nearest)` half-up ratio, clamped to MAX_Z.
   - Signed reflection (`sd29x9_base::inverse_cdf`): `p < 0.5 → -Φ⁻¹(1 - p)`.
 
-Asserts, over a dense grid plus the deep-tail integer points, that the worst-case
-absolute error in `z` vs the mpmath `erfinv` oracle stays within
+Asserts, over a ~41k-point grid - a uniform interior sweep plus exhaustive
+consecutive-input windows where the rounding is most delicate (just above
+`p = 0.5`, across the central/tail seam, and the deepest tail), log-spaced
+coverage of the tail complement `1 - p`, and the deep-tail anchor points - that
+the worst-case absolute error in `z` vs the mpmath `erfinv` oracle stays within
 `TARGET_ERROR_ULP × 10^-9`, that the signed output is monotone non-decreasing in
-`p`, and that the reflection identity holds bit-exactly. Non-zero exit on failure,
-suitable for CI.
+`p` (true adjacent-input monotonicity inside the exhaustive windows), and that
+the reflection identity holds bit-exactly. Non-zero exit on failure, suitable
+for CI.
 
 Oracle note: `scipy.stats.norm.ppf` is float64 and wrong by up to ~5e-9 in the
 deep tail, so the reference is the mpmath `erfinv`-based `shared.reference.ppf`.
@@ -130,7 +134,10 @@ def inverse_cdf_signed(p_raw: int, c: Coeffs) -> int:
 
 def build_grid(n: int, threshold: int) -> list[int]:
     """A dense interior grid plus the region boundaries and deep-tail points on
-    both sides, as integer p_raw in [1, ONE_RAW - 1]."""
+    both sides, exhaustive consecutive-input windows where quantization error
+    concentrates (just above p = 0.5, across the central/tail seam, and the
+    deepest tail), and log-spaced coverage of the tail complement 1 - p, as
+    integer p_raw in [1, ONE_RAW - 1]."""
     pts: set[int] = {int(round(x)) for x in np.linspace(1, ONE_RAW - 1, n)}
     pts.add(HALF_RAW)
     for k in (1, 2, 3, 5, 10, 50, 100, 500, 1000, 10**4, 10**5, 10**6, 10**7, 25 * 10**6):
@@ -139,6 +146,12 @@ def build_grid(n: int, threshold: int) -> list[int]:
     for d in (-3, -2, -1, 0, 1, 2, 3):
         pts.add(threshold + d)  # central/tail seam
         pts.add(ONE_RAW - threshold + d)  # reflected seam (p ≈ 0.025)
+    pts.update(range(HALF_RAW + 1, HALF_RAW + 1_001))  # first central inputs
+    pts.update(range(threshold - 10_000, threshold + 10_001))  # across the seam
+    pts.update(range(ONE_RAW - 10_000, ONE_RAW))  # deepest tail
+    # Log-spaced complement j: p = 1 - j / 10^9 across the whole tail region.
+    for e in np.linspace(0.0, np.log10(25 * 10**6), 2_000):
+        pts.add(ONE_RAW - int(round(10.0**e)))
     return sorted(p for p in pts if 1 <= p <= ONE_RAW - 1)
 
 

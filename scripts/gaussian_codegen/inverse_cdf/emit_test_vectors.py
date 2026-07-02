@@ -36,7 +36,7 @@ from gaussian_codegen.shared.move_emit import (
     rel_or_abs,
     write_move,
 )
-from gaussian_codegen.shared.reference import DPS, ppf
+from gaussian_codegen.shared.reference import DPS, z_raw_at_decimal
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
@@ -92,10 +92,7 @@ def expected_z(p_raw: int) -> tuple[int, bool]:
         return MAX_Z_RAW, False
     if p_raw == 0:
         return MAX_Z_RAW, True
-    z = ppf(mpf(p_raw) / mpf(SCALE))
-    neg = z < 0
-    mag = int((-z if neg else z) * mpf(SCALE) + mpf("0.5"))
-    return mag, bool(neg)
+    return z_raw_at_decimal(mpf(p_raw) / mpf(SCALE))
 
 
 def upper_raws() -> list[int]:
