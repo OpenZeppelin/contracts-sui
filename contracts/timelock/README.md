@@ -15,7 +15,7 @@ openzeppelin_timelock = { r.mvr = "@openzeppelin-move/timelock" }
 
 | Module | Summary |
 |--------|---------|
-| `timelock` | Hash-keyed operation timelock: a shared `Timelock` with typed on-chain params, `OperationCap`-bound entries (structural canonical-timelock binding), typed `ExecutionTicket<Action, Params>` execution, a configurable delay + expiry window, and self-administered configuration. |
+| `timelock` | Hash-keyed operation timelock: a shared `Timelock` with typed on-chain params, `OperationCap`-bound entries (structural canonical-timelock binding), typed `ExecutionTicket<Action, Params>` execution, predecessor-based operation chaining, optional permissionless (open-executor) execution, a configurable delay + expiry window, and self-administered configuration. |
 
 ---
 

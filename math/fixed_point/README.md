@@ -17,6 +17,8 @@ openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
 ## Operations
 
 - Arithmetic: `add`, `sub`, `mul`, `mul_trunc`, `mul_away`, `div`, `div_trunc`, `div_away`, `pow`, `unchecked_add`, `unchecked_sub`, `mod`, `sqrt`
+- Rounding: `ceil`, `floor` (round to whole units)
+- `SD29x9` also exposes sign and truncated-remainder helpers: `abs`, `negate`, `rem`
 - Logarithms: `log2`, `ln`, `log10`
 - Distributions: `cdf` (standard-normal CDF `Φ`), `pdf` (standard-normal PDF `φ`)
 - Comparison: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `is_zero`
