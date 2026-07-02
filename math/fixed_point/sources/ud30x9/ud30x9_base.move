@@ -267,12 +267,14 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
 ///   (defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients).
+/// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`
+///   saturation guard runs first, so `1 - p` is never zero; unreachable).
 ///
 /// #### Examples
 ///
 /// ```move
 /// let p = ud30x9::wrap(975_000_000); // 0.975
-/// let z = p.inverse_cdf(); // 1.959963985
+/// let z = p.inverse_cdf(); // ≈ 1.959963985
 /// ```
 public fun inverse_cdf(p: UD30x9): UD30x9 {
     let p_raw = p.unwrap();

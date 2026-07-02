@@ -206,7 +206,7 @@ sampling. Both fixed-point types expose it:
 
 - `UD30x9::inverse_cdf` takes `p ∈ [0.5, 1]` and returns `z ∈ [0, 6.3]` (the
   non-negative half; an unsigned type cannot represent a negative quantile).
-- `SD29x9::inverse_cdf` takes `p ∈ (0, 1)` and returns the signed `z ∈ [-6.3, 6.3]`.
+- `SD29x9::inverse_cdf` takes `p ∈ [0, 1]` and returns the signed `z ∈ [-6.3, 6.3]`.
 
 Properties:
 
@@ -232,10 +232,10 @@ use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::ud30x9;
 
 let p = ud30x9::wrap(975_000_000); // 0.975
-let z = p.inverse_cdf(); // 1.959963985  (the 1.96 of a 95% confidence interval)
+let z = p.inverse_cdf(); // ≈ 1.959963985  (the 1.96 of a 95% confidence interval)
 
 let lower = sd29x9::wrap(25_000_000, false); // 0.025
-let zl = lower.inverse_cdf(); // -1.959963985
+let zl = lower.inverse_cdf(); // ≈ -1.959963985
 ```
 
 Limitations: `p` must be a valid probability (see Aborts); the output range is
@@ -286,8 +286,8 @@ generated offline and must **not** be hand-edited (each carries an
 - `tests/{sd29x9_tests,ud30x9_tests}/pdf_test_vectors.move`
 - `tests/{sd29x9_tests,ud30x9_tests}/inverse_cdf_test_vectors.move`
 
-To regenerate them - or to re-validate the committed coefficients against
-`scipy` - see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
+To regenerate them - or to re-validate the committed coefficients against their
+reference oracles - see [`scripts/gaussian_codegen/`](../../scripts/gaussian_codegen/README.md).
 
 ## Learn More
 

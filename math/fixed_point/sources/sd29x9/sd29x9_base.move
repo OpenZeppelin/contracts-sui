@@ -259,7 +259,7 @@ public fun pdf(z: SD29x9): SD29x9 {
     wrap(pdf_nonneg_raw(mag as u128), false)
 }
 
-/// Inverse standard-normal CDF (quantile / probit) `Φ⁻¹(p)` on `p ∈ (0, 1)`.
+/// Inverse standard-normal CDF (quantile / probit) `Φ⁻¹(p)` on `p ∈ [0, 1]`.
 ///
 /// Returns the signed value `z` with `Φ(z) = p`, represented as `SD29x9`. For
 /// `p ≥ 0.5` the result is non-negative; for `p < 0.5` the reflection identity
@@ -302,12 +302,14 @@ public fun pdf(z: SD29x9): SD29x9 {
 /// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
 ///   (defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients).
+/// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`
+///   saturation guard runs first, so `1 - p` is never zero; unreachable).
 ///
 /// #### Examples
 ///
 /// ```move
 /// let p = sd29x9::wrap(25_000_000, false); // 0.025
-/// let z = p.inverse_cdf(); // -1.959963985
+/// let z = p.inverse_cdf(); // ≈ -1.959963985
 /// ```
 public fun inverse_cdf(p: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(p.unwrap());
