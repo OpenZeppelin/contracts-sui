@@ -53,7 +53,7 @@
 /// - **Mixed error model.** This module's own aborts are dense codes 0..7. The
 ///   pool-short case is not one of them: it surfaces as the Sui execution status
 ///   `InsufficientFundsForWithdraw` (a funds-accumulator `ExecutionFailureStatus`)
-///   raised at `redeem_funds` when the object's settled balance is below the
+///   raised at `redeem_funds` when the object's live balance at execution is below the
 ///   amount. You see it as a status in transaction effects or a dry run, not as a
 ///   matchable Move `#[error]` code, so integrator preflight must handle it on top
 ///   of this module's codes.
@@ -125,8 +125,8 @@ use sui::vec_set::{Self, VecSet};
 // Dense, first-publication ABI: codes 0..7, no reserved gaps. There is
 // deliberately NO `EInsufficientVault`: the pool-short case is covered by the
 // Sui execution status `InsufficientFundsForWithdraw` (a funds-accumulator
-// `ExecutionFailureStatus`), raised at `redeem_funds` when the object's settled
-// balance is below the amount, the last failure on the `spend`/`withdraw` hot
+// `ExecutionFailureStatus`), raised at `redeem_funds` when the object's live
+// balance at execution is below the amount, the last failure on the `spend`/`withdraw` hot
 // path. It is recognized by status in transaction effects / a dry run, not a
 // matchable Move `#[error]` code.
 
@@ -777,8 +777,8 @@ public fun set_allowance<T>(
 /// ceiling on the pool, not a reservation: a live, unexpired, within-budget
 /// spend can still fail when the pool is short, and that failure is the Sui
 /// execution status `InsufficientFundsForWithdraw` (a funds-accumulator
-/// `ExecutionFailureStatus`), raised at `redeem_funds` when the object's settled
-/// balance is below the amount, NOT one of this module's codes. It is not a
+/// `ExecutionFailureStatus`), raised at `redeem_funds` when the object's live
+/// balance at execution is below the amount, NOT one of this module's codes. It is not a
 /// matchable Move `#[error]` code, so detect it with a dry run (it is surfaced
 /// in transaction effects / the SDK) rather than by matching an abort code.
 /// Integrator preflight must handle the framework conditions too. The status is
@@ -808,8 +808,8 @@ public fun set_allowance<T>(
 ///   `enable_object_funds_withdraw` protocol feature is off. Propagated from
 ///   `withdraw_funds_from_object`, total (not per-amount) and not a matchable
 ///   Move `#[error]` code.
-/// - `InsufficientFundsForWithdraw` (execution status) if the object's settled
-///   balance is below `amount`. A funds-accumulator execution status raised at
+/// - `InsufficientFundsForWithdraw` (execution status) if the object's live
+///   balance at execution is below `amount`. A funds-accumulator execution status raised at
 ///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
 ///   code you can match with `expected_failure(abort_code = ...)`, and not one
 ///   of this module's codes.
@@ -859,7 +859,7 @@ public fun spend<T>(
     // Order is load-bearing: decrement the budget, THEN draw from the
     // pool. The pool is deliberately NOT pre-checked against the root;
     // if it is short, `redeem_funds` fails with the `InsufficientFundsForWithdraw`
-    // execution status (when the object's settled balance is below the amount)
+    // execution status (when the object's live balance at execution is below the amount)
     // and Move's atomic revert rolls the decrement back. No external call runs
     // between the decrement and the withdraw, so there is no observable window
     // where the budget shrank but no funds moved.
@@ -1132,7 +1132,7 @@ public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) 
 /// Consults only the OwnerCap binding and the pool, never the ledger,
 /// so no spender state can block it. Pool-short is the Sui execution status
 /// `InsufficientFundsForWithdraw` (a funds-accumulator `ExecutionFailureStatus`),
-/// raised at `redeem_funds` when the object's settled balance is below the
+/// raised at `redeem_funds` when the object's live balance at execution is below the
 /// amount, consistent with `spend` (no root, no pre-check).
 ///
 /// #### Parameters
@@ -1149,8 +1149,8 @@ public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) 
 /// - `EZeroAmount` if `amount == 0`.
 /// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
 ///   `enable_object_funds_withdraw` protocol feature is off.
-/// - `InsufficientFundsForWithdraw` (execution status) if the object's settled
-///   balance is below `amount`. A funds-accumulator execution status raised at
+/// - `InsufficientFundsForWithdraw` (execution status) if the object's live
+///   balance at execution is below `amount`. A funds-accumulator execution status raised at
 ///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
 ///   code you can match with `expected_failure(abort_code = ...)`, and not one
 ///   of this module's codes.
@@ -1192,7 +1192,7 @@ public fun withdraw<T>(
 /// - over-ask -> abort: a prior same-checkpoint `spend` lowers the live pool below
 ///   the settled snapshot, so the withdraw fails with the `InsufficientFundsForWithdraw`
 ///   execution status (a funds-accumulator `ExecutionFailureStatus` at
-///   `redeem_funds`, when the object's settled balance is below the amount) (e.g.
+///   `redeem_funds`, when the object's live balance at execution is below the amount) (e.g.
 ///   settled 1000, a prior `spend(600)`
 ///   leaves live 400, draining 1000 against 400 aborts; even `spend(1)` trips it);
 /// - under-drain: a same-checkpoint `deposit` is not yet in the snapshot, so the
