@@ -1093,7 +1093,9 @@ public fun delete_orphaned_cap(cap: SpenderCap) {
 ///
 /// Recovers only strays sent to THIS vault: a generic cross-address squash is
 /// unbuildable (you cannot consume a coin you do not control). It needs
-/// `&mut v.id` only for `public_receive`.
+/// `&mut v.id` only for `public_receive`. It is the vault's only object-receive
+/// path and is `Coin`-typed, so any non-`Coin` object sent to the vault address
+/// cannot be recovered.
 ///
 /// #### Parameters
 /// - `v`: The vault whose pool receives the recovered stray.
