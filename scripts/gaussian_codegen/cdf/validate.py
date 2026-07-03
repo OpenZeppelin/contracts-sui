@@ -198,7 +198,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pairs, rechecks, max_dev = gates.check_neighbor_monotonicity(
         num, den, WAD, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=True
     )
-    peak_bits, headroom = gates.check_overflow_margin(num, den, WAD, SCALE, max_z_raw)
+    peak_bits, headroom, proof_bits = gates.check_overflow_margin(num, den, WAD, SCALE, max_z_raw)
 
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
@@ -210,7 +210,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"[{MONO_ONSET_RAW / SCALE:.1f}, {max_z_raw / SCALE:.9f}] "
         f"({rechecks:,} re-checks; proxy drift ≤ {max_dev:.1e} ULP) ✓"
     )
-    print(f"Overflow: peak Horner product {peak_bits} bits, {headroom} bits under 2^256 ✓")
+    print(
+        f"Overflow: peak Horner product {peak_bits} bits, {headroom} bits under 2^256 "
+        f"(provable bound {proof_bits} bits) ✓"
+    )
 
     if args.report:
         mp.dps = constants.DPS

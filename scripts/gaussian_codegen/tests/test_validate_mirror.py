@@ -152,9 +152,11 @@ def test_horner_peak_product_matches_manual():
 
 def test_check_overflow_margin_committed_cdf(coeffs):
     num, den = coeffs
-    bits, headroom = gates.check_overflow_margin(num, den, v.WAD, v.SCALE, v.MAX_Z_RAW)
+    bits, headroom, proof_bits = gates.check_overflow_margin(num, den, v.WAD, v.SCALE, v.MAX_Z_RAW)
     assert bits <= 256
     assert headroom >= gates.MIN_HEADROOM_BITS
+    # The envelope is a strict upper bound on the sampled peak and itself clears 2^256.
+    assert bits <= proof_bits <= 256 - gates.MIN_PROOF_HEADROOM_BITS
 
 
 def test_check_neighbor_monotonicity_committed_cdf_window(coeffs):

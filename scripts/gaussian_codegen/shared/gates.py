@@ -29,7 +29,9 @@ adds, all of which runs in CI (`make validate`):
 - `check_overflow_margin` proves the peak full-width `acc.mag * z.mag` product the
   Horner loop forms stays clear of `2^256` at the family's WAD, with a required
   safety headroom (the `10^36` scale leaves only ~8-10 bits, so this is
-  load-bearing - a future degree bump or domain widening trips it here).
+  load-bearing - a future degree bump or domain widening trips it here). The
+  no-overflow claim is *proved* by a triangle-inequality envelope that bounds
+  every input at once; a sampled scan additionally reports the actual peak.
 """
 from __future__ import annotations
 
@@ -48,6 +50,12 @@ _BOUNDARY_MARGIN = 1e-4
 # Required clearance below 2^256 for the peak Horner product. The 10^36 scale
 # leaves ~8 (PDF) - 10 (CDF) bits today; this guards against silently eroding it.
 MIN_HEADROOM_BITS = 4
+
+# Required clearance below 2^256 for the *provable* peak bound (the triangle-
+# inequality envelope in `check_overflow_margin`). The envelope ignores sign
+# cancellation, so it sits a few bits above the sampled actual peak (248/252 vs
+# 246/248 today) and gets its own, smaller margin.
+MIN_PROOF_HEADROOM_BITS = 2
 
 # Largest wrong-direction slope tolerated by the continuous-monotonicity gate.
 # Comfortably admits the PDF even-peak R'(0) ~ 0 (phi'(0) = 0) while catching a
@@ -163,6 +171,25 @@ def check_neighbor_monotonicity(
     return pairs, rechecks, max_dev
 
 
+def _envelope_peak_bound(coeffs, wad: int, zmax_wad: int) -> int:
+    """Provable upper bound on the full-width `acc.mag * z.mag` product any input
+    in `[0, zmax]` can form with this coefficient table: run Horner on the
+    triangle-inequality envelope `env_j >= |acc_j(z)|`, dropping signs and taking
+    every magnitude at `z = zmax`. Induction: `env_0 = |c_d| >= |acc_0|`; floor
+    division is monotone, so `|mul_wad(acc, z)| = (|acc| * z.mag) // wad <=
+    (env * zmax) // wad`; and sign-magnitude add gives `|acc'| <= that + |c|`.
+    Every quantity is monotone in `z`, so one evaluation at `zmax` bounds the
+    whole domain - no sampling gap."""
+    env = coeffs[-1][0]
+    peak = 0
+    for m, _ in reversed(coeffs[:-1]):
+        prod = env * zmax_wad
+        if prod > peak:
+            peak = prod
+        env = prod // wad + m
+    return peak
+
+
 def check_overflow_margin(
     num,
     den,
@@ -171,15 +198,27 @@ def check_overflow_margin(
     max_z_raw: int,
     n: int = 100_000,
     min_headroom_bits: int = MIN_HEADROOM_BITS,
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     """Prove the peak full-width `acc.mag * z.mag` Horner product over `[0, max_z_raw]`
-    clears `2^256` with at least `min_headroom_bits` to spare. The product grows
-    smoothly with z (peak near `max_z_raw`), so a coarse grid plus the top input
-    captures it. Returns `(peak_bits, headroom_bits)`; raises on insufficient
-    headroom."""
+    clears `2^256`, two ways: the triangle-inequality envelope (`_envelope_peak_bound`)
+    upper-bounds *every* input and must clear by `MIN_PROOF_HEADROOM_BITS` - that is
+    the proof; a sampled scan (coarse grid plus the top input, where the product
+    empirically peaks) reports the actual margin and must clear by
+    `min_headroom_bits`. Returns `(peak_bits, headroom_bits, proof_bits)`; raises
+    if either clearance is missed."""
+    zmax_wad = max_z_raw * (wad // scale)
+    proof = max(
+        _envelope_peak_bound(num, wad, zmax_wad), _envelope_peak_bound(den, wad, zmax_wad)
+    )
+    proof_bits = proof.bit_length()
+    if 256 - proof_bits < MIN_PROOF_HEADROOM_BITS:
+        raise RuntimeError(
+            f"u256 overflow not provably excluded: envelope bound is {proof_bits} bits "
+            f"(needs >= {MIN_PROOF_HEADROOM_BITS} bits under 2^256)"
+        )
     step = max(1, max_z_raw // n)
     peak = 0
-    for z_raw in list(range(0, max_z_raw, step)) + [max_z_raw - 1]:
+    for z_raw in [*range(0, max_z_raw, step), max_z_raw - 1]:
         z_wad: SignedInt = (z_raw * (wad // scale), False)
         p = max(horner_peak_product(z_wad, num, wad), horner_peak_product(z_wad, den, wad))
         if p > peak:
@@ -191,7 +230,7 @@ def check_overflow_margin(
             f"u256 overflow margin too small: peak product is {bits} bits "
             f"(headroom {headroom} bits < required {min_headroom_bits})"
         )
-    return bits, headroom
+    return bits, headroom, proof_bits
 
 
 def _real_coeffs(coeffs, wad: int) -> list[mpf]:
