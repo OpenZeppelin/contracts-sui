@@ -22,5 +22,5 @@ build-backend = "setuptools.build_meta"
 # it. Map the `gaussian_codegen` package explicitly onto this directory; the `.cdf`,
 # `.pdf`, and `.shared` subpackages inherit the mapping (-> ./cdf, ./pdf, ./shared).
 [tool.setuptools]
-packages = ["gaussian_codegen", "gaussian_codegen.cdf", "gaussian_codegen.pdf", "gaussian_codegen.shared"]
+packages = ["gaussian_codegen", "gaussian_codegen.cdf", "gaussian_codegen.pdf", "gaussian_codegen.inverse_cdf", "gaussian_codegen.shared"]
 package-dir = { "gaussian_codegen" = "." }
