@@ -50,6 +50,7 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
     num_neg_items = ["true" if n else "false" for _, n in num]
     den_mag_items = [fmt_u128(m) for m, _ in den]
     den_neg_items = ["true" if n else "false" for _, n in den]
+    wad_exp = len(str(constants.CDF_WAD)) - 1  # power-of-ten exponent; tracks the constant
 
     return f"""{banner}
 /// Numerator and denominator coefficients for the rational `N(z) / D(z)`
@@ -57,7 +58,7 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 /// The coefficients are chosen to minimize the number of incorrectly-rounded
 /// outputs of the exact on-chain integer evaluation (not the continuous
 /// approximation error); see `scripts/gaussian_codegen/`. All values are
-/// sign-magnitude pairs at CDF WAD (`10^36`) scale, indexed in ascending power
+/// sign-magnitude pairs at CDF WAD (`10^{wad_exp}`) scale, indexed in ascending power
 /// order (index 0 is the constant term).
 ///
 /// Accessors return the underlying `vector<u128>` / `vector<bool>` constants so
