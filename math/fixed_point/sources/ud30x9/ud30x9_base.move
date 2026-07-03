@@ -143,9 +143,9 @@ public fun abs(x: UD30x9): UD30x9 {
 /// Returns the probability `Φ(z) ∈ [0.5, 1]` represented as `UD30x9`. Since
 /// `UD30x9` inputs are inherently non-negative, the output is always at least
 /// `0.5`. The implementation evaluates an AAA-rational approximation
-/// `N(z) / D(z)` at WAD scale via Horner's method on a sign-magnitude `u256`
-/// accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a single
-/// nearest-rounding step.
+/// `N(z) / D(z)` at WAD scale (`10^36`) via Horner's method on a sign-magnitude
+/// `u256` accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a
+/// single nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Non-negative input.
@@ -154,16 +154,17 @@ public fun abs(x: UD30x9): UD30x9 {
 /// - `Φ(z) ∈ [0.5, 1]` at `UD30x9` scale.
 ///
 /// #### Behavior
-/// - Saturates exactly to `1.0` for `z ≥ 6.3`. At that bound `Φ` is already
-///   within `~10⁻¹⁰` of `1`, well below the output's `10⁻⁹` resolution.
+/// - Saturates exactly to `1.0` for `z ≥ 6.109410205` - the analytical point at
+///   which `Φ` rounds to `1` at the `10⁻⁹` output resolution, so the cut-off is
+///   lossless.
 /// - `Φ(0)` is exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
 ///   worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
-/// - Monotone non-decreasing across the dense offline validation grid
-///   (enforced by the codegen CI gate). A 1-ULP local inversion between
-///   neighboring raw inputs is not formally excluded in the far tail
-///   (`z ≳ 5.7`), where the true `Φ` increment drops below the `10⁻⁹`
-///   output resolution.
+/// - Monotone non-decreasing between every pair of adjacent representable
+///   inputs. The `10^36` accumulation scale holds floor-truncation noise far
+///   below the true per-step increment, and the codegen CI gate confirms this
+///   exhaustively over the at-risk tail (`z ≥ 4`, where the increment is
+///   smallest), so no 1-ULP inversion occurs.
 /// - Pure, deterministic, and object-free: identical inputs always produce
 ///   identical outputs; touches no storage or Sui objects.
 ///
@@ -188,8 +189,8 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///
 /// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` represented
 /// as `UD30x9`, where the peak is `φ(0) = 0.398942280`. The implementation
-/// evaluates an AAA-rational approximation `N(z) / D(z)` at WAD scale via
-/// Horner's method on a sign-magnitude `u256` accumulator; the final ratio is
+/// evaluates an AAA-rational approximation `N(z) / D(z)` at WAD scale (`10^36`)
+/// via Horner's method on a sign-magnitude `u256` accumulator; the final ratio is
 /// cast back to `UD30x9` (`10^9`) in a single nearest-rounding step.
 ///
 /// #### Parameters
@@ -199,13 +200,14 @@ public fun cdf(z: UD30x9): UD30x9 {
 /// - `φ(z) ∈ [0, 0.398942280]` at `UD30x9` scale.
 ///
 /// #### Behavior
-/// - Monotone non-increasing in `z` across the dense offline validation grid
-///   (enforced by the codegen CI gate); the peak `φ(0) = 0.398942280` is
-///   returned exactly. A 1-ULP local inversion between neighboring raw inputs is
-///   not formally excluded in the far tail (`z ≳ 5.3`), where the true `φ`
-///   decrement drops below the `10⁻⁹` output resolution.
-/// - Saturates exactly to `0` for `z ≥ 6.5`. At that bound `φ` is already
-///   `~2.7 × 10⁻¹⁰`, below the output's `10⁻⁹` resolution.
+/// - Monotone non-increasing in `z` between every pair of adjacent representable
+///   inputs; the peak `φ(0) = 0.398942280` is returned exactly. The `10^36`
+///   accumulation scale holds floor-truncation noise far below the true per-step
+///   decrement, and the codegen CI gate confirms this exhaustively over the
+///   at-risk tail (`z ≥ 4`), so no 1-ULP inversion occurs.
+/// - Saturates exactly to `0` for `z ≥ 6.402729806` - the analytical point at
+///   which `φ` rounds to `0` at the `10⁻⁹` output resolution (`φ ≈ 5 × 10⁻¹⁰`
+///   there), so the cut-off is lossless.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
 ///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
 /// - Pure, deterministic, and object-free: identical inputs always produce
@@ -248,7 +250,8 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// #### Behavior
 /// - `Φ⁻¹(0.5)` is exactly `0`.
 /// - Saturates to `6.3` at `p = 1`, since `Φ⁻¹(1) = +∞` is unrepresentable. `6.3`
-///   matches the CDF domain bound, so `cdf`/`inverse_cdf` agree at the corner.
+///   lies beyond the CDF saturation bound (`6.109410205`), so `cdf` maps it back
+///   to exactly `1` - `cdf`/`inverse_cdf` agree at the corner.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
 ///   worst-case from the committed coefficients and on-chain kernels is
 ///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`

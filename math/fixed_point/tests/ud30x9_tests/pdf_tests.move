@@ -9,7 +9,7 @@ use std::unit_test::assert_eq;
 // === Constants ===
 
 const SCALE: u128 = 1_000_000_000; // UD30x9 raw scale (10^9)
-const MAX_Z_RAW: u128 = 6_500_000_000; // 6.5 at UD30x9 scale
+const MAX_Z_RAW: u128 = 6_402_729_806; // 6.402729806 at UD30x9 scale
 
 // 5 ULP at the UD30x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
 const TOLERANCE: u128 = 5;
@@ -47,9 +47,10 @@ fun pdf_three_well_known() {
 // === Saturation ===
 
 #[test]
-fun max_z_raw_is_six_point_five() {
-    // Pin the saturation bound to the generated coefficient table so the
-    // saturation cases below fail if a regenerated bound drifts downward.
+fun max_z_raw_is_analytical_saturation_point() {
+    // Pin the saturation bound (6.402729806, the smallest z whose φ rounds to 0)
+    // to the generated coefficient table so the saturation cases below fail if a
+    // regenerated bound drifts.
     assert_eq!(pdf_coefficients::max_z_raw(), MAX_Z_RAW);
 }
 
@@ -92,7 +93,7 @@ fun pdf_bounded_by_peak(raw: u128) {
 
 #[test]
 fun monotonic_decreasing_on_grid() {
-    // 64-point grid across [0, 6.5]. φ is non-increasing on the non-negative
+    // 64-point grid across [0, 6.402729806]. φ is non-increasing on the non-negative
     // half; strict decrease degenerates to equality across the saturated tail.
     let n: u64 = 64;
     let step = MAX_Z_RAW / ((n - 1) as u128);

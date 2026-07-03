@@ -10,7 +10,7 @@ use std::unit_test::assert_eq;
 const SCALE: u128 = 1_000_000_000; // UD30x9 raw scale (10^9)
 const HALF_RAW: u128 = 500_000_000;
 const ONE_RAW: u128 = 1_000_000_000;
-const MAX_Z_RAW: u128 = 6_300_000_000; // 6.3 at UD30x9 scale
+const MAX_Z_RAW: u128 = 6_109_410_205; // 6.109410205 at UD30x9 scale
 
 // 5 ULP at the UD30x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
 const TOLERANCE: u128 = 5;
@@ -84,8 +84,8 @@ fun no_overshoot_at_high_z() {
     // output a valid probability.
     let probes: vector<u128> = vector[
         MAX_Z_RAW - 1,
-        6_299_999_000,
-        6_290_000_000,
+        6_109_000_000,
+        6_100_000_000,
         6_000_000_000,
         5_500_000_000,
     ];
@@ -96,7 +96,7 @@ fun no_overshoot_at_high_z() {
 
 #[test]
 fun monotonic_on_grid() {
-    // 64-point grid across [0, 6.3]. Strict monotonicity across the saturated
+    // 64-point grid across [0, 6.109410205]. Strict monotonicity across the saturated
     // region degenerates to equality; both are accepted.
     let n: u64 = 64;
     let step = MAX_Z_RAW / ((n - 1) as u128);

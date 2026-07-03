@@ -1,12 +1,14 @@
-"""Derive AAA-rational coefficients for the standard-normal PDF on [0, PDF_MAX_Z].
+"""Derive AAA-rational coefficients for the standard-normal PDF on [0, MAX_Z].
 
-Mirrors `cdf/derive.py`: sweeps the AAA `max_terms` parameter from MIN_DEG+1
-upward, picking the smallest setting whose worst-case absolute error vs scipy on
-a N_VALIDATE_GRID-point grid stays at or below TARGET_ERROR. Saves the chosen
-fit's coefficients (mpmath at 100 dps, decimal-string serialized) to a JSON
-intermediate consumed by `emit_coefficients.py` and `emit_test_vectors.py`.
+Mirrors `cdf/derive.py`: fits the AAA rational at a pinned degree (TARGET_DEGREE -
+the shipped degree, held fixed across regenerations so precision/domain changes
+never silently move it), then checks its worst-case absolute error vs scipy on a
+N_VALIDATE_GRID-point grid stays at or below TARGET_ERROR. Saves the fit's
+coefficients (mpmath at 100 dps, decimal-string serialized) to a JSON intermediate
+consumed by `emit_coefficients.py` and `emit_test_vectors.py`. Pass `--report` to
+print the full per-degree error sweep (informational only).
 
-The density φ(z) = e^(−z²/2) / √(2π) spans ~9 orders of magnitude on [0, 6.5];
+The density φ(z) = e^(−z²/2) / √(2π) spans ~9 orders of magnitude on [0, MAX_Z];
 a single rational reaches the 5×10⁻⁹ budget at degree 10 (vs degree 9 for the
 gentler CDF), with no spurious in-domain poles. Polynomial form is N(z)/D(z)
 with coefficients in ascending power order (constant term first), normalized so
@@ -44,6 +46,7 @@ MAX_Z = mpf(constants.PDF_MAX_Z)
 MAX_Z_FLOAT = float(constants.PDF_MAX_Z)
 MIN_DEG = 4
 MAX_DEG = 13
+TARGET_DEGREE = 10  # shipped PDF degree; pinned (not swept) so it stays fixed across regenerations
 TARGET_ERROR = 5e-9
 N_FIT_GRID = 5000
 N_VALIDATE_GRID = 10000
@@ -115,35 +118,46 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     print(f"Target error: {TARGET_ERROR:.2e} on [0, {MAX_Z_FLOAT}]")
-    print(f"Sweeping max_terms from {MIN_DEG + 1} to {MAX_DEG + 1}")
+    print(f"Pinned degree: {TARGET_DEGREE} (n_coeffs = {TARGET_DEGREE + 1})")
     print()
 
     val_grid = validate_grid()
 
-    chosen: tuple[int, AAA, list[mpf], list[mpf], float, float] | None = None
-    for max_terms in range(MIN_DEG + 1, MAX_DEG + 2):
-        aaa = fit_at(max_terms)
-        actual_terms = len(aaa.support_points)
-        actual_degree = actual_terms - 1
-        num, den = aaa_to_rational_polys(aaa)
-        err, worst_z = measure_error(num, den, val_grid)
-        print(
-            f"  max_terms={max_terms:2d}: support={actual_terms:2d} (deg {actual_degree:2d}), "
-            f"err={err:.3e} at z={worst_z:.4f}"
-        )
-        if err <= TARGET_ERROR and chosen is None:
-            chosen = (actual_degree, aaa, num, den, err, worst_z)
-            if not args.report:
-                break
+    if args.report:
+        # Informational only: the full per-degree error sweep. The shipped degree
+        # is pinned below, not chosen from this sweep, so precision/domain changes
+        # never silently move it.
+        for max_terms in range(MIN_DEG + 1, MAX_DEG + 2):
+            aaa_r = fit_at(max_terms)
+            num_r, den_r = aaa_to_rational_polys(aaa_r)
+            err_r, worst_z_r = measure_error(num_r, den_r, val_grid)
+            print(
+                f"  max_terms={max_terms:2d}: support={len(aaa_r.support_points):2d} "
+                f"(deg {len(aaa_r.support_points) - 1:2d}), err={err_r:.3e} at z={worst_z_r:.4f}"
+            )
+        print()
 
-    if chosen is None:
+    # Fit at the pinned degree. rtol is far below what this degree can reach and
+    # clean_up_tol=0, so AAA keeps all TARGET_DEGREE + 1 support points and the
+    # explicit-polynomial degree is exactly TARGET_DEGREE.
+    aaa = fit_at(TARGET_DEGREE + 1)
+    degree = len(aaa.support_points) - 1
+    if degree != TARGET_DEGREE:
         print(
-            f"\nFAIL: no setting ≤ max_terms={MAX_DEG + 1} met target error ≤ {TARGET_ERROR:.2e}",
+            f"\nFAIL: AAA produced degree {degree}, expected pinned {TARGET_DEGREE} "
+            "(support points were cleaned up below the pin)",
             file=sys.stderr,
         )
         return 1
-
-    degree, aaa, num, den, err, worst_z = chosen
+    num, den = aaa_to_rational_polys(aaa)
+    err, worst_z = measure_error(num, den, val_grid)
+    if err > TARGET_ERROR:
+        print(
+            f"\nFAIL: degree {degree} error {err:.3e} exceeds target {TARGET_ERROR:.2e} "
+            f"at z={worst_z:.4f}",
+            file=sys.stderr,
+        )
+        return 1
 
     # Pre-flight: N ≥ 0 and D > 0 on the central domain.
     assert_signs_central(num, den, val_grid)
@@ -151,16 +165,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     print()
     print(f"Chosen: degree {degree} (n_coeffs = {degree + 1}), max error {err:.3e} at z={worst_z:.4f}")
 
-    # Coefficient magnitude check at WAD scale before serialization.
-    wad = mpf(constants.WAD)
+    # Coefficient magnitude check at the PDF accumulation scale before serialization.
+    wad = mpf(constants.PDF_WAD)
     max_mag = mpf(0)
     for c in num + den:
         m = abs(c) * wad
         if m > max_mag:
             max_mag = m
-    print(f"Max |coeff| × WAD = {float(max_mag):.3e} (must be < 2^128 ≈ 3.4e38)")
+    print(f"Max |coeff| × PDF_WAD = {float(max_mag):.3e} (must be < 2^128 ≈ 3.4e38)")
     if max_mag >= mpf(2) ** 128:
-        print("FAIL: at least one coefficient does not fit u128 at WAD scale", file=sys.stderr)
+        print("FAIL: at least one coefficient does not fit u128 at PDF_WAD scale", file=sys.stderr)
         return 1
 
     output = {
@@ -170,7 +184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "worst_z": worst_z,
         "target_error": TARGET_ERROR,
         "max_z": constants.PDF_MAX_Z,
-        "wad": str(constants.WAD),
+        "wad": str(constants.PDF_WAD),
         "scale_decimal": str(constants.SCALE_DECIMAL),
         "num_coeffs_str": [mp.nstr(c, 30) for c in num],
         "den_coeffs_str": [mp.nstr(c, 30) for c in den],
