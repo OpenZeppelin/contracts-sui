@@ -91,7 +91,7 @@ def expected_phi_raw(z_str: str, neg: bool) -> int:
 
     Saturation mirrors the on-chain boundary exactly: it triggers when the
     *quantized* input `z_raw` meets or exceeds `MAX_Z_RAW` (the `>=` test in
-    `cdf.move::cdf_nonneg_raw`), not on a real-valued `> 6.3` comparison."""
+    `cdf.move::cdf_nonneg_raw`), not on a real-valued `> 6.109410205` comparison."""
     mp.dps = DPS
     if quantize_z(z_str) >= MAX_Z_RAW:
         return 0 if neg else SCALE_DECIMAL

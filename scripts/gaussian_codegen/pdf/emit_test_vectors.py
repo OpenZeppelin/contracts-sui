@@ -99,7 +99,7 @@ def expected_pdf_raw(z_str: str) -> int:
 
     Saturation mirrors the on-chain boundary exactly: it triggers when the
     *quantized* input `z_raw` meets or exceeds `MAX_Z_RAW` (the `>=` test in
-    `pdf.move::pdf_nonneg_raw`), not on a real-valued `> 6.5` comparison."""
+    `pdf.move::pdf_nonneg_raw`), not on a real-valued `> 6.402729806` comparison."""
     mp.dps = DPS
     if quantize_z(z_str) >= MAX_Z_RAW:
         return 0

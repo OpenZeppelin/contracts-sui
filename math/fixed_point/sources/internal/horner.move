@@ -1,6 +1,6 @@
 /// Generic sign-magnitude `u256` arithmetic at a caller-supplied fixed-point
 /// scale, plus a Horner polynomial evaluator. Shared by the gaussian function
-/// family (`cdf`, `pdf`, future `inverse_cdf`).
+/// family (`cdf`, `pdf`, and `inverse_cdf`).
 ///
 /// This module is deliberately free of any function-specific coefficient
 /// dependency: it provides only the reusable numeric primitives, so each
@@ -112,9 +112,9 @@ public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): Signe
 /// Scaled multiplication: `(a × b) / wad` with truncation toward zero on the
 /// magnitude (equivalent to `mul_div(..., Down)` rounding) and XOR signs. `wad`
 /// is the caller's fixed-point accumulation scale, passed per call so each
-/// gaussian family runs at its own precision (`cdf` and `pdf` use `10^36`; the
-/// generic scale is `10^18`). Zero canonicalization ensures any product whose
-/// magnitude floors to zero returns canonical zero.
+/// gaussian family runs at its own precision (`cdf` and `pdf` use `10^36`).
+/// Zero canonicalization ensures any product whose magnitude floors to zero
+/// returns canonical zero.
 ///
 /// #### Precondition
 /// The caller must keep magnitudes bounded so that the full-width product
