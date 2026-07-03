@@ -156,42 +156,42 @@ fun add_coeff_exact_cancellation() {
 #[test]
 fun mul_wad_identity_positive() {
     // 1.0 × x = x  (positive x)
-    let r = pos(WAD).mul_wad(pos(THREE_WAD));
+    let r = pos(WAD).mul_wad(pos(THREE_WAD), WAD);
     assert_eq!(r, pos(THREE_WAD));
 }
 
 #[test]
 fun mul_wad_identity_negative() {
     // 1.0 × (-x) = (-x)
-    let r = pos(WAD).mul_wad(signed(THREE_WAD, true));
+    let r = pos(WAD).mul_wad(signed(THREE_WAD, true), WAD);
     assert_eq!(r, signed(THREE_WAD, true));
 }
 
 #[test]
 fun mul_wad_negate() {
     // (-1.0) × x = -x
-    let r = signed(WAD, true).mul_wad(pos(THREE_WAD));
+    let r = signed(WAD, true).mul_wad(pos(THREE_WAD), WAD);
     assert_eq!(r, signed(THREE_WAD, true));
 }
 
 #[test]
 fun mul_wad_half_squared() {
     // 0.5 × 0.5 = 0.25
-    let r = pos(HALF_WAD).mul_wad(pos(HALF_WAD));
+    let r = pos(HALF_WAD).mul_wad(pos(HALF_WAD), WAD);
     assert_eq!(r, pos(QUARTER_WAD));
 }
 
 #[test]
 fun mul_wad_neg_times_neg_is_pos() {
     // (-0.5) × (-0.5) = 0.25 (XOR signs)
-    let r = signed(HALF_WAD, true).mul_wad(signed(HALF_WAD, true));
+    let r = signed(HALF_WAD, true).mul_wad(signed(HALF_WAD, true), WAD);
     assert_eq!(r, pos(QUARTER_WAD));
 }
 
 #[test]
 fun mul_wad_with_zero_canonicalizes() {
     // 0 × x = canonical zero (regardless of x's sign)
-    let r = zero().mul_wad(signed(THREE_WAD, true));
+    let r = zero().mul_wad(signed(THREE_WAD, true), WAD);
     assert_eq!(r, zero());
     assert_eq!(r.is_neg(), false);
 }
@@ -200,7 +200,7 @@ fun mul_wad_with_zero_canonicalizes() {
 fun mul_wad_truncates_subwad_to_zero() {
     // (1, -) × (1, -) at WAD floors to 0 because 1 × 1 / 10^18 = 0.
     // Magnitude → 0 must canonicalize sign to false.
-    let r = signed(1, true).mul_wad(signed(1, true));
+    let r = signed(1, true).mul_wad(signed(1, true), WAD);
     assert_eq!(r.mag(), 0);
     assert_eq!(r.is_neg(), false);
 }
@@ -209,9 +209,19 @@ fun mul_wad_truncates_subwad_to_zero() {
 fun mul_wad_truncates_remainder_toward_zero() {
     // 3 × (0.5 WAD + 1 wei) = 1.5e18 + 3 → floors to 1 wei; round-nearest would give 2.
     let b = signed(500_000_000_000_000_001, false);
-    assert_eq!(signed(3, false).mul_wad(b), pos(1));
+    assert_eq!(signed(3, false).mul_wad(b, WAD), pos(1));
     // Same on the negative side: truncation is toward zero, not toward -infinity.
-    assert_eq!(signed(3, true).mul_wad(b), signed(1, true));
+    assert_eq!(signed(3, true).mul_wad(b, WAD), signed(1, true));
+}
+
+#[test]
+fun mul_wad_respects_scale_argument() {
+    // The divisor scale is a per-call argument. Same operands, finer scale ->
+    // smaller magnitude: (1e18 · 1e18) / 1e18 = 1e18, but / 1e36 = 1.
+    let one = pos(WAD);
+    let wad36: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
+    assert_eq!(one.mul_wad(one, WAD), pos(WAD));
+    assert_eq!(one.mul_wad(one, wad36).mag(), 1);
 }
 
 // === horner_eval! ===
@@ -222,7 +232,7 @@ fun horner_eval_quadratic_positive() {
     let mags = vector[WAD, TWO_WAD, THREE_WAD];
     let negs = vector[false, false, false];
     let z = pos(TWO_WAD);
-    let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]));
+    let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]), WAD);
     assert_eq!(r, pos(SEVENTEEN_WAD));
 }
 
@@ -232,7 +242,7 @@ fun horner_eval_linear_negative_result() {
     let mags = vector[WAD, WAD];
     let negs = vector[false, true];
     let z = pos(TWO_WAD);
-    let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]));
+    let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]), WAD);
     assert_eq!(r, signed(WAD, true));
 }
 
@@ -242,7 +252,7 @@ fun horner_eval_constant_polynomial() {
     let mags = vector[5 * WAD];
     let negs = vector[false];
     let z = pos(TWO_WAD); // arbitrary z
-    let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]));
+    let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]), WAD);
     assert_eq!(r, pos(5 * WAD));
 }
 
@@ -252,7 +262,7 @@ fun horner_eval_zero_polynomial_canonicalizes() {
     let mags = vector[0u256];
     let negs = vector[false];
     let z = pos(TWO_WAD);
-    let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]));
+    let r = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]), WAD);
     assert_eq!(r, zero());
     assert_eq!(r.is_neg(), false);
 }
@@ -266,7 +276,7 @@ fun horner_eval_invokes_accessor_once_per_coefficient() {
     let r = horner_eval!(pos(TWO_WAD), mags.length(), |i| {
         calls = calls + 1;
         (mags[i] as u128, negs[i])
-    });
+    }, WAD);
     assert_eq!(r, pos(SEVENTEEN_WAD));
     assert_eq!(calls, 3);
 }
@@ -277,5 +287,5 @@ fun horner_eval_aborts_on_empty_polynomial() {
     let mags = vector<u256>[];
     let negs = vector<bool>[];
     let z = pos(TWO_WAD);
-    let _ = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]));
+    let _ = horner_eval!(z, mags.length(), |i| (mags[i] as u128, negs[i]), WAD);
 }

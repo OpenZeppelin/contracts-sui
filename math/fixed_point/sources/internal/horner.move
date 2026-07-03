@@ -1,13 +1,14 @@
-/// Generic sign-magnitude `u256` arithmetic at WAD scale, plus a Horner
-/// polynomial evaluator. Shared by the gaussian function family (`cdf`, future
-/// `pdf`, `inverse_cdf`).
+/// Generic sign-magnitude `u256` arithmetic at a caller-supplied fixed-point
+/// scale, plus a Horner polynomial evaluator. Shared by the gaussian function
+/// family (`cdf`, `pdf`, and `inverse_cdf`).
 ///
 /// This module is deliberately free of any function-specific coefficient
 /// dependency: it provides only the reusable numeric primitives, so each
-/// consumer supplies its own coefficient table. Concretely it offers a
-/// `SignedScaled256` value, sign-aware add/multiply, and the `horner_eval!`
-/// macro that evaluates a polynomial via Horner's method given a `(u128, bool)`
-/// coefficient accessor.
+/// consumer supplies its own coefficient table and accumulation scale (`cdf` and
+/// `pdf` run at `10^36`). Concretely it offers a `SignedScaled256` value,
+/// sign-aware add and a per-call-scaled multiply (`mul_wad`), and the
+/// `horner_eval!` macro that evaluates a polynomial via Horner's method given a
+/// `(u128, bool)` coefficient accessor and that scale.
 module openzeppelin_fp_math::horner;
 
 // === Errors ===
@@ -16,16 +17,10 @@ module openzeppelin_fp_math::horner;
 #[error(code = 0)]
 const EEmptyPolynomial: vector<u8> = "Polynomial must have at least one coefficient";
 
-// === Constants ===
-
-/// WAD is the `10^18` fixed-point scale that all arithmetic in this module runs
-/// at. Running finer than the user-facing `10^9` scale keeps intermediate rounding
-/// well below the final result's precision.
-const WAD_U256: u256 = 1_000_000_000_000_000_000; // 10^18
-
 // === Structs ===
 
-/// Sign-magnitude representation used during Horner accumulation at WAD scale.
+/// Sign-magnitude representation used during Horner accumulation at the caller's
+/// fixed-point scale.
 ///
 /// The magnitude is `u256` so that the WAD-scale product `a × b` cannot
 /// overflow as long as callers keep magnitudes bounded (see the precondition on
@@ -114,25 +109,29 @@ public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): Signe
     }
 }
 
-/// WAD-scaled multiplication: `(a × b) / WAD` with truncation toward zero on
-/// the magnitude (equivalent to `mul_div(..., Down)` rounding) and XOR signs.
+/// Scaled multiplication: `(a × b) / wad` with truncation toward zero on the
+/// magnitude (equivalent to `mul_div(..., Down)` rounding) and XOR signs. `wad`
+/// is the caller's fixed-point accumulation scale, passed per call so each
+/// gaussian family runs at its own precision (`cdf` and `pdf` use `10^36`;
+/// `inverse_cdf` uses `10^18`).
 /// Zero canonicalization ensures any product whose magnitude floors to zero
 /// returns canonical zero.
 ///
 /// #### Precondition
 /// The caller must keep magnitudes bounded so that the full-width product
 /// `a.mag × b.mag` fits in `u256` (`< 2^256`); this is **not** checked here, for
-/// efficiency. For the CDF on `|z| ≤ 6.3` the peak intermediate is ~`1.4 × 10^38`,
-/// ~39 orders of magnitude below `u256::max ≈ 1.16 × 10^77`. A new consumer
-/// (e.g. `pdf`, `inverse_cdf`) with different coefficients or a wider input
-/// domain must re-establish this bound before reusing the evaluator.
+/// efficiency. At `wad = 10^36` the peak intermediate is ~`1.1 × 10^74` for the
+/// CDF (`|z| ≤ 6.109410205`; 246 bits, ~10 under `2^256`) and ~`2.6 × 10^74` for
+/// the PDF (`|z| ≤ 6.402729806`; 248 bits, ~8 under `2^256`). A new consumer, a
+/// higher degree, or a wider domain must re-establish this bound - the codegen's
+/// `check_overflow_margin` gate does so for the committed tables.
 ///
 /// #### Aborts
 /// - Arithmetic overflow if the full-width product `a.mag * b.mag` exceeds `u256`.
 ///   The caller guarantees this cannot happen (see Precondition); it is not
 ///   checked here.
-public(package) fun mul_wad(a: SignedScaled256, b: SignedScaled256): SignedScaled256 {
-    let mag = (a.mag * b.mag) / WAD_U256;
+public(package) fun mul_wad(a: SignedScaled256, b: SignedScaled256, wad: u256): SignedScaled256 {
+    let mag = (a.mag * b.mag) / wad;
     let neg = mag != 0 && a.neg != b.neg;
     SignedScaled256 { mag, neg }
 }
@@ -153,12 +152,13 @@ public(package) fun assert_polynomial_nonempty(len: u64) {
 /// `$coeff_at`, which returns `(u128 magnitude, bool is_negative)` at WAD
 /// scale. The accessor is invoked exactly once per coefficient.
 ///
-/// All arithmetic is sign-magnitude `u256` at WAD; `$z` must already be WAD-scaled.
+/// All arithmetic is sign-magnitude `u256` at scale `$wad`; `$z` must already be
+/// scaled to `$wad`.
 ///
 /// #### Precondition
-/// Inherits `mul_wad`'s bound: the caller must keep `$z` and the
-/// coefficients small enough that no intermediate `acc.mag × z.mag` exceeds
-/// `u256`. Satisfied for the CDF by the `|z| ≤ 6.3` saturation guard.
+/// Inherits `mul_wad`'s bound: the caller must keep `$z` and the coefficients
+/// small enough that no intermediate `acc.mag × z.mag` exceeds `u256`. Satisfied
+/// for the CDF and PDF by their saturation guards at `$wad = 10^36` (see `mul_wad`).
 ///
 /// #### Aborts
 /// - Aborts with `EEmptyPolynomial` if `$len == 0`.
@@ -166,9 +166,11 @@ public(package) macro fun horner_eval(
     $z: SignedScaled256,
     $len: u64,
     $coeff_at: |u64| -> (u128, bool),
+    $wad: u256,
 ): SignedScaled256 {
     let z = $z;
     let len = $len;
+    let wad = $wad;
     assert_polynomial_nonempty(len);
 
     let last = len - 1;
@@ -178,7 +180,7 @@ public(package) macro fun horner_eval(
     let mut i = last;
     while (i > 0) {
         i = i - 1;
-        acc = mul_wad(acc, z);
+        acc = mul_wad(acc, z, wad);
         let (m_i, n_i) = $coeff_at(i);
         acc = add_coeff(acc, m_i, n_i);
     };

@@ -40,6 +40,11 @@ const EInternalDenNonPositive: vector<u8> =
 
 // === Constants ===
 
+/// Internal Horner-accumulation scale (`10^18`) for the quantile rationals - the
+/// precision the committed tables were fitted and validated at. Passed per call
+/// to the shared `horner` primitives (`cdf` and `pdf` run finer, at `10^36`).
+const WAD: u256 = 1_000_000_000_000_000_000; // 10^18
+
 /// `Φ⁻¹(0.5) = 0`: the input probability at the `UD30x9` raw scale (`10^9`) whose
 /// quantile is exactly zero, and the lower bound of the representable upper half.
 const HALF_RAW: u128 = 500_000_000;
@@ -123,8 +128,8 @@ fun eval_rational(
     let x_wad = (x_raw as u256) * (common::scale_u256!());
     let x_signed = horner::from_unsigned(x_wad);
 
-    let n = horner::horner_eval!(x_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]));
-    let d = horner::horner_eval!(x_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]));
+    let n = horner::horner_eval!(x_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), WAD);
+    let d = horner::horner_eval!(x_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), WAD);
 
     // Integrity guards on the AAA fit. On the upper half `z ≥ 0`, so `N ≥ 0` and
     // `D > 0`; a corrupted coefficient table would surface here rather than

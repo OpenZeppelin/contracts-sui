@@ -5,16 +5,18 @@ committed Move source and re-runs the on-chain PDF computation in Python using
 the shared sign-magnitude integer arithmetic (the exact mirror of the Move
 `horner` module):
 
-  - z_raw at 10^9 → z_wad at 10^18 (multiply by 10^9).
+  - z_raw at 10^9 → z_wad at 10^36 (multiply by 10^27 = PDF_WAD / 10^9).
   - Horner inner step via `shared.arithmetic` (floor-division mul_wad, sign-
     magnitude add).
   - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up nearest
     rounding.
 
 Asserts, over a 10,000-point grid, that the worst-case absolute error vs
-`scipy.stats.norm.pdf` stays within `TARGET_ERROR_ULP` × 10^-9 and that the
-outputs are monotone non-increasing on [0, PDF_MAX_Z]. Returns non-zero exit on
-failure, suitable for CI.
+`scipy.stats.norm.pdf` stays within `TARGET_ERROR_ULP` × 10^-9. Two exhaustive
+tail gates (`shared.gates`) then prove neighbor-resolution monotonicity (no 1-ULP
+inversion between adjacent raw inputs - φ non-increasing - which the 10^36 scale
+guarantees) and u256 overflow margin. Returns non-zero exit on failure, suitable
+for CI.
 
 φ is even, so the signed `sd29x9_base::pdf` path just evaluates `pdf_nonneg_raw`
 on |z| (no reflection, no z=0 special case); there is no extra signed branch to
@@ -31,13 +33,15 @@ from typing import Sequence
 import numpy as np
 from scipy.stats import norm
 
-from gaussian_codegen.shared import constants
+from gaussian_codegen.shared import constants, gates
 from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_nearest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 SCALE = constants.SCALE_DECIMAL
-MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.5 at 10^9 - default; the gate parses the committed value
+WAD = constants.PDF_WAD  # PDF Horner-accumulation scale (10^36)
+MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.402729806 at 10^9 - default; the gate parses the committed value
+MONO_ONSET_RAW = 4_000_000_000  # z=4.0: below the z≈4.42 point where even the old 10^18 noise floor (~1.9e-5 ULP) first reached the per-step φ increment; nothing inverts lower
 
 COEFF_PATH = (
     REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "pdf_coefficients.move"
@@ -92,9 +96,9 @@ def pdf_simulate(
     if z_raw >= max_z_raw:
         return 0  # tail saturates to 0
 
-    z_wad: SignedInt = (z_raw * SCALE, False)  # 10^9 → 10^18
-    n_acc = horner_eval(z_wad, num)
-    d_acc = horner_eval(z_wad, den)
+    z_wad: SignedInt = (z_raw * (WAD // SCALE), False)  # 10^9 → 10^36
+    n_acc = horner_eval(z_wad, num, WAD)
+    d_acc = horner_eval(z_wad, den, WAD)
     if n_acc[1]:
         raise RuntimeError(f"N negative at z_raw={z_raw} - pdf::EInternalNumNegative")
     if d_acc[1] or d_acc[0] == 0:
@@ -133,25 +137,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     grid = np.linspace(0.0, max_z_raw / SCALE, args.n)
     worst_err = 0.0
     worst_z = 0.0
-    prev_phi: int | None = None
     for z in grid:
         # Quantize first and measure against φ at the quantized input, so the
         # gate scores the on-chain function at its own representable inputs.
         z_raw = int(round(float(z) * SCALE))
         zf = z_raw / SCALE
         phi = pdf_simulate(z_raw, num, den, max_z_raw)
-        # Monotonicity: φ is non-increasing, and in the far tail its true
-        # decrement falls below the 10^-9 output resolution, so the fit's
-        # error wiggle could in principle invert neighboring outputs. Gate
-        # against any inversion at grid resolution.
-        if prev_phi is not None and phi > prev_phi:
-            print(
-                f"FAIL: monotonicity broken at z_raw={z_raw}: "
-                f"φ(z)={phi} > previous {prev_phi}",
-                file=sys.stderr,
-            )
-            return 1
-        prev_phi = phi
         # φ is even, so the signed path returns this same value for ±z; one
         # measurement per |z| suffices (norm.pdf(-zf) == norm.pdf(zf)).
         ref = float(norm.pdf(zf))
@@ -160,9 +151,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             worst_err = err
             worst_z = zf
 
+    # Exhaustive tail gates the coarse error grid above cannot see: 1-ULP neighbor
+    # inversions and the peak u256 Horner intermediate.
+    pairs, rechecks = gates.check_neighbor_monotonicity(
+        num, den, WAD, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=False
+    )
+    peak_bits, headroom = gates.check_overflow_margin(num, den, WAD, SCALE, max_z_raw)
+
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
-    print(f"Monotonicity: non-increasing across all {args.n} grid points ✓")
+    print(
+        f"Monotonicity: non-increasing across all {pairs:,} neighbor pairs in "
+        f"[{MONO_ONSET_RAW / SCALE:.1f}, {max_z_raw / SCALE:.9f}] "
+        f"({rechecks} exact re-checks) ✓"
+    )
+    print(f"Overflow: peak Horner product {peak_bits} bits, {headroom} bits under 2^256 ✓")
     print(f"Worst error: {worst_err:.3e} = {err_ulp} ULP at z=±{worst_z:.5f}")
     print(f"Target:      {target_abs:.3e} = {TARGET_ERROR_ULP} ULP")
     if worst_err <= target_abs:

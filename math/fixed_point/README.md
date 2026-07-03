@@ -136,11 +136,15 @@ Properties:
 
 - **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
   empirical worst case `~7 × 10⁻¹⁰`.
-- **Domain**: effective input range `|z| ≤ 6.3`; beyond that the result
+- **Domain**: effective input range `|z| ≤ 6.109410205`; beyond that the result
   saturates.
-- **Saturation**: exactly `0` for `z ≤ -6.3` (SD29x9) and exactly `1` for
-  `z ≥ 6.3`.
+- **Saturation**: exactly `0` for `z ≤ -6.109410205` (SD29x9) and exactly `1` for
+  `z ≥ 6.109410205` - the analytical points where `Φ` rounds to the endpoint at
+  `10⁻⁹` resolution.
 - **Φ(0)**: exactly `0.5`.
+- **Monotonicity**: non-decreasing between every pair of adjacent representable
+  inputs (no 1-ULP tail inversions); the codegen gate confirms this exhaustively
+  over the at-risk tail (`z ≥ 4`, where the per-step increment is smallest).
 - **Symmetry**: `cdf(z) + cdf(z.negate())` is exactly `1` for every `SD29x9`
   input except `min()`, whose negation is not representable.
 - **Execution**: pure, deterministic, and object-free integer math - no storage,
@@ -157,9 +161,9 @@ let neg = sd29x9::wrap(1_000_000_000, true); // -1.0
 let q = neg.cdf(); // 0.158655254  (P(Z ≤ -1))
 ```
 
-Limitations: the approximation is defined on `|z| ≤ 6.3` and saturates outside
-that range; `10⁻⁹` is the finest distinction the output can represent. There is
-no floating point - results are exact fixed-point integer arithmetic.
+Limitations: the approximation is defined on `|z| ≤ 6.109410205` and saturates
+outside that range; `10⁻⁹` is the finest distinction the output can represent.
+There is no floating point - results are exact fixed-point integer arithmetic.
 
 ## Standard-normal PDF
 
@@ -175,9 +179,12 @@ Properties:
 
 - **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
   empirical worst case `~6 × 10⁻¹⁰`.
-- **Domain**: effective input range `|z| ≤ 6.5`; beyond that the result
+- **Domain**: effective input range `|z| ≤ 6.402729806`; beyond that the result
   saturates to `0`.
 - **Peak**: `φ(0) = 0.398942280` (`1/sqrt(2*pi)`), returned exactly.
+- **Monotonicity**: non-increasing in `|z|` between every pair of adjacent
+  representable inputs (no 1-ULP tail inversions); the codegen gate confirms this
+  exhaustively over the at-risk tail (`|z| ≥ 4`).
 - **Symmetry**: even - `pdf(z)` equals `pdf(z.negate())` for every `SD29x9`
   input except `min()`, whose negation is not representable.
 - **Execution**: pure, deterministic, and object-free integer math - no storage,
@@ -194,8 +201,8 @@ let neg = sd29x9::wrap(1_000_000_000, true); // -1.0
 let e = neg.pdf(); // 0.241970725  (φ is even)
 ```
 
-Limitations: the approximation is defined on `|z| ≤ 6.5` and saturates to `0`
-outside that range; `10⁻⁹` is the finest distinction the output can represent.
+Limitations: the approximation is defined on `|z| ≤ 6.402729806` and saturates to
+`0` outside that range; `10⁻⁹` is the finest distinction the output can represent.
 
 ## Standard-normal quantile (inverse CDF)
 
@@ -215,7 +222,8 @@ Properties:
 - **Φ⁻¹(0.5)**: exactly `0`.
 - **Symmetry**: odd about `0.5` - `inverse_cdf(p) = inverse_cdf(1 - p).negate()`.
 - **Saturation**: `p = 1` returns `+6.3` and `p = 0` returns `-6.3` (`Φ⁻¹` is
-  `±∞` there and unrepresentable); `6.3` matches the CDF domain bound.
+  `±∞` there and unrepresentable); `6.3` lies beyond the CDF saturation bound
+  (`6.109410205`), so `cdf` maps the clamped values back to exactly `1` and `0`.
 - **Aborts**: unlike `cdf`/`pdf`, the quantile has invalid inputs. `inverse_cdf`
   aborts if `p ∉ [0, 1]`; the `UD30x9` variant additionally aborts if `p < 0.5`,
   whose quantile would be negative.
