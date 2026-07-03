@@ -1,9 +1,9 @@
 # `openzeppelin_fp_math` Codegen
 
 This directory is an **offline Python toolkit**. It computes the numeric
-constants that the `cdf` (standard-normal CDF) and `pdf` (standard-normal PDF)
-functions in `openzeppelin_fp_math` need, and writes them into the Move source as
-generated tables.
+constants that the `cdf` (standard-normal CDF), `pdf` (standard-normal PDF), and
+`inverse_cdf` (standard-normal quantile) functions in `openzeppelin_fp_math` need,
+and writes them into the Move source as generated tables.
 
 Nothing here runs on-chain, and nothing here is needed to *use* the library -
 the Move package is fully self-contained at runtime. You only touch this
@@ -152,6 +152,24 @@ python -m gaussian_codegen.pdf.emit_test_vectors # → tests/{sd29x9_tests,ud30x
 python -m gaussian_codegen.pdf.validate          # re-checks the committed coefficient module against scipy
 ```
 
+## Generate (Inverse CDF)
+
+```sh
+python -m gaussian_codegen.inverse_cdf.derive            # two-region AAA fit → .derive_output.json
+python -m gaussian_codegen.inverse_cdf.emit_coefficients # → math/fixed_point/sources/internal/inverse_cdf_coefficients.move
+python -m gaussian_codegen.inverse_cdf.emit_test_vectors # → tests/{sd29x9_tests,ud30x9_tests}/inverse_cdf_test_vectors.move
+python -m gaussian_codegen.inverse_cdf.validate          # re-checks the committed coefficients against the erfinv oracle
+```
+
+Unlike `cdf`/`pdf`, the quantile `Φ⁻¹(p)` is fit as **two** rationals - a central
+one in `u = p - 0.5` and a tail one in `r = sqrt(-2·ln(1-p))` - because a single
+rational in `p` underflows the fixed-point evaluator near `p = 1`. The change of
+variable is the classic Acklam/AS241 split, and the on-chain tail reuses the
+library's `ln`/`sqrt` kernels. Its oracle is mpmath `erfinv` (scipy's float64
+`ppf` is off by ~5e-9 in the deep tail, so it is not usable here). Accordingly
+`inverse_cdf/.derive_output.json` nests a `central` and a `tail` fit object rather
+than the single coefficient set the `cdf`/`pdf` schema uses.
+
 Or via the Makefile (`make -C scripts/gaussian_codegen <target>`): `regen` (derive
 + both emitters for each family; the emitters format their own output),
 `validate`, `check` (drift guard), `test` (pytest), `ci` (what CI runs).
@@ -209,17 +227,15 @@ gaussian_codegen/
 ├── Makefile             # install / regen / validate / check / ci / test
 ├── shared/
 │   ├── constants.py     # single source of truth: WAD scales, domain bounds
-│   ├── aaa.py           # AAA barycentric → explicit-polynomial conversion
-│   ├── arithmetic.py    # sign-magnitude u256 mirror of the Move horner primitives
+│   ├── reference.py     # mpmath oracle: Φ, φ, and Φ⁻¹ (erfinv) at 100 dps
+│   ├── aaa.py           # AAA barycentric → N(z)/D(z) polynomial conversion
+│   ├── arithmetic.py    # integer mirror of the on-chain Horner / ln / sqrt kernels
 │   ├── gates.py         # exhaustive neighbor-monotonicity + u256 overflow gates
-│   ├── reference.py     # mpmath oracle for Φ / φ at 100 dps
 │   └── move_emit.py     # Move literal / banner / drift-check helpers
-├── cdf/
-│   ├── derive.py
-│   ├── emit_coefficients.py
-│   ├── emit_test_vectors.py
-│   └── validate.py
-└── tests/               # pytest: quantizer, emitter boundary, arithmetic mirror
+├── cdf/                 # derive.py, emit_coefficients.py, emit_test_vectors.py, validate.py
+├── pdf/                 # (same shape)
+├── inverse_cdf/         # (same shape; two-region central + tail fit)
+└── tests/               # pytest: quantizer, emitter boundary, arithmetic mirror, per-family
 ```
 
 ## Adding a new function family
@@ -249,3 +265,6 @@ hand-edited; regenerate via the steps above.
 | `math/fixed_point/sources/internal/pdf_coefficients.move` | `scripts/gaussian_codegen/pdf/derive.py` + `scripts/gaussian_codegen/pdf/emit_coefficients.py` |
 | `math/fixed_point/tests/sd29x9_tests/pdf_test_vectors.move` | `scripts/gaussian_codegen/pdf/emit_test_vectors.py` |
 | `math/fixed_point/tests/ud30x9_tests/pdf_test_vectors.move` | `scripts/gaussian_codegen/pdf/emit_test_vectors.py` |
+| `math/fixed_point/sources/internal/inverse_cdf_coefficients.move` | `scripts/gaussian_codegen/inverse_cdf/derive.py` + `scripts/gaussian_codegen/inverse_cdf/emit_coefficients.py` |
+| `math/fixed_point/tests/sd29x9_tests/inverse_cdf_test_vectors.move` | `scripts/gaussian_codegen/inverse_cdf/emit_test_vectors.py` |
+| `math/fixed_point/tests/ud30x9_tests/inverse_cdf_test_vectors.move` | `scripts/gaussian_codegen/inverse_cdf/emit_test_vectors.py` |

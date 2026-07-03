@@ -5,6 +5,7 @@ module openzeppelin_fp_math::sd29x9_base;
 
 use openzeppelin_fp_math::cdf::{cdf_nonneg_raw, half_raw};
 use openzeppelin_fp_math::common;
+use openzeppelin_fp_math::inverse_cdf::inverse_cdf_upper_raw;
 use openzeppelin_fp_math::pdf::pdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{SD29x9, from_bits, zero, min, one, two_complement, wrap};
 use openzeppelin_fp_math::ud30x9::{Self, UD30x9};
@@ -39,6 +40,10 @@ const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictl
 #[error(code = 5)]
 const EInternalNegSubUnderflow: vector<u8> =
     "CDF sign-flip subtraction underflowed: internal evaluation returned a value below 0.5";
+
+/// Probability is outside the unit interval `[0, 1]` where the quantile is defined.
+#[error(code = 6)]
+const EProbabilityOutOfRange: vector<u8> = "Probability must lie within the unit interval";
 
 // === Structs ===
 
@@ -253,6 +258,73 @@ public fun cdf(z: SD29x9): SD29x9 {
 public fun pdf(z: SD29x9): SD29x9 {
     let Components { mag, .. } = decompose(z.unwrap());
     wrap(pdf_nonneg_raw(mag as u128), false)
+}
+
+/// Inverse standard-normal CDF (quantile / probit) `Φ⁻¹(p)` on `p ∈ [0, 1]`.
+///
+/// Returns the signed value `z` with `Φ(z) = p`, represented as `SD29x9`. For
+/// `p ≥ 0.5` the result is non-negative; for `p < 0.5` the reflection identity
+/// `Φ⁻¹(p) = -Φ⁻¹(1 - p)` produces a negative `z`. The upper half is evaluated by
+/// a two-region AAA-rational approximation (a rational in `u = p - 0.5` near the
+/// center, and one in `r = sqrt(-2 * ln(1 - p))` in the tail) at WAD scale via
+/// Horner's method on a sign-magnitude `u256` accumulator, rounded back to
+/// `SD29x9` (`10^9`) in a single nearest-rounding step.
+///
+/// #### Parameters
+/// - `p`: Probability in `[0, 1]`, as a non-negative `SD29x9`.
+///
+/// #### Returns
+/// - `Φ⁻¹(p) ∈ [-6.3, 6.3]` at `SD29x9` scale.
+///
+/// #### Behavior
+/// - `Φ⁻¹(0.5)` is exactly `0`.
+/// - Odd about `p = 0.5`: `inverse_cdf(p) == inverse_cdf(one - p).negate()`; both
+///   share the same upper-half evaluation.
+/// - Saturates to `+6.3` at `p = 1` and `-6.3` at `p = 0`, since `Φ⁻¹` is `±∞`
+///   there and unrepresentable. `|z| = 6.3` lies beyond the CDF saturation bound
+///   (`6.109410205`), so `cdf` maps both clamps back to exactly `1` and `0` - the
+///   two functions agree at the corners.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Empirical
+///   worst-case from the committed coefficients and on-chain kernels is
+///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`
+///   change of variable is most sensitive.
+/// - Near `p = 1` the quantile is intrinsically steep - the two largest
+///   representable inputs differ by `≈ 0.11` in `z` - so a 1-ULP change in `p`
+///   maps to a large change in `z`. This is a property of `Φ⁻¹`, not the
+///   approximation: for each exact representable input the returned `z` is within
+///   the stated `z`-tolerance of `Φ⁻¹` at that same input. Equivalently,
+///   `cdf(inverse_cdf(p))` recovers `p` to within a few ULP.
+/// - Monotone non-decreasing across the dense offline validation grid (enforced
+///   by the codegen CI gate).
+/// - Pure, deterministic, and object-free: identical inputs always produce
+///   identical outputs; touches no storage or Sui objects.
+///
+/// #### Aborts
+/// - `EProbabilityOutOfRange` if `p` is negative or exceeds `1`.
+/// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
+///   (defense-in-depth against a corrupted regenerated coefficient table; these
+///   cannot fire for the shipped coefficients).
+/// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`
+///   saturation guard runs first, so `1 - p` is never zero; unreachable).
+///
+/// #### Examples
+///
+/// ```move
+/// let p = sd29x9::wrap(25_000_000, false); // 0.025
+/// let z = p.inverse_cdf(); // ≈ -1.959963985
+/// ```
+public fun inverse_cdf(p: SD29x9): SD29x9 {
+    let Components { neg, mag } = decompose(p.unwrap());
+    assert!(!neg, EProbabilityOutOfRange); // p ≥ 0 (p = 0 reflects to -6.3)
+    let p_raw = mag as u128;
+    assert!(p_raw <= common::scale!(), EProbabilityOutOfRange); // p ≤ 1
+    if (p_raw >= common::scale!() / 2) {
+        wrap(inverse_cdf_upper_raw(p_raw), false) // upper half, z ≥ 0
+    } else {
+        // Reflection: Φ⁻¹(p) = -Φ⁻¹(1 - p); `1 - p ∈ (0.5, 1]` is a valid
+        // upper-half input, and its quantile negated gives the lower half.
+        wrap(inverse_cdf_upper_raw(common::scale!() - p_raw), true)
+    }
 }
 
 /// Checks whether two `SD29x9` values are bitwise equal.

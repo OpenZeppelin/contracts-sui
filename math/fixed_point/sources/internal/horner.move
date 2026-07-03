@@ -112,7 +112,8 @@ public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): Signe
 /// Scaled multiplication: `(a × b) / wad` with truncation toward zero on the
 /// magnitude (equivalent to `mul_div(..., Down)` rounding) and XOR signs. `wad`
 /// is the caller's fixed-point accumulation scale, passed per call so each
-/// gaussian family runs at its own precision (`cdf` and `pdf` use `10^36`).
+/// gaussian family runs at its own precision (`cdf` and `pdf` use `10^36`;
+/// `inverse_cdf` uses `10^18`).
 /// Zero canonicalization ensures any product whose magnitude floors to zero
 /// returns canonical zero.
 ///
