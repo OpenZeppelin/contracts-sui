@@ -6,7 +6,7 @@
 /// spend. The service is untyped and `execute_topup<T>` is generic, so one custodied
 /// cap can be driven for every coin the owner budgeted it for.
 ///
-/// #### The flow an integrator must get right
+/// # The flow an integrator must get right
 ///
 /// 1. Create a `Service` pinned to exactly ONE vault id and share it. Pinning up
 ///    front is what makes the step-2 binding check meaningful.

@@ -16,7 +16,7 @@ permissions:
   pull-requests: write
 
 env:
-  SUI_VERSION: "1.73.2"
+  SUI_VERSION: "1.74.1"
 
 jobs:
   setup:
@@ -214,6 +214,15 @@ jobs:
 
       - name: Check PDF test vectors are in sync with the generator
         run: python -m gaussian_codegen.pdf.emit_test_vectors --check
+
+      - name: Validate committed Inverse-CDF coefficients
+        run: python -m gaussian_codegen.inverse_cdf.validate
+
+      - name: Check Inverse-CDF coefficients are in sync with the generator
+        run: python -m gaussian_codegen.inverse_cdf.emit_coefficients --check
+
+      - name: Check Inverse-CDF test vectors are in sync with the generator
+        run: python -m gaussian_codegen.inverse_cdf.emit_test_vectors --check
 
       - name: Run codegen unit tests
         run: pytest scripts/gaussian_codegen/tests -q
