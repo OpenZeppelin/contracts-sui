@@ -99,7 +99,9 @@ const EPredecessorNotDone: vector<u8> = "Predecessor operation is not yet execut
 #[error(code = 9)]
 const EPredecessorUnset: vector<u8> = "Predecessor operation is not in the timelock";
 
-/// An operation cannot be its own predecessor.
+/// An operation cannot be its own predecessor. Defense in depth: the id is the keccak256 of
+/// a preimage that includes `predecessor`, so a match would require a hash fixed point -
+/// unreachable in practice.
 #[error(code = 10)]
 const EPredecessorIsSelf: vector<u8> = "Operation cannot be its own predecessor";
 
@@ -396,7 +398,8 @@ public fun hash_operation<Action>(
 /// - `EDelayTooShort` if `delay_ms < min_delay_ms`.
 /// - `EScheduleOverflow` if `now + delay_ms` (or that sum `+ grace_period_ms`) overflows u64.
 /// - `EInvalidPredecessor` if `predecessor` is non-empty and not a 32-byte id.
-/// - `EPredecessorIsSelf` if `predecessor` equals the computed id.
+/// - `EPredecessorIsSelf` if `predecessor` equals the computed id (defense in depth;
+///   unreachable in practice - the id hashes over `predecessor`).
 /// - `EOperationAlreadyExists` if the id is already scheduled.
 public fun schedule<Role, Action, Params: store + drop>(
     self: &mut Timelock,
@@ -618,7 +621,8 @@ public fun cancel_with<Role, Action, Params: store + drop>(
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - `EInvalidConfig` if `new_min_delay_ms > MAX_DELAY_MS`.
 /// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+///   `EInvalidPredecessor`, `EPredecessorIsSelf` (unreachable in practice),
+///   `EOperationAlreadyExists`).
 public fun schedule_update_min_delay<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -682,7 +686,8 @@ public fun execute_update_min_delay<Role>(
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - `EInvalidConfig` if `new_grace_period_ms` is zero or `> MAX_DELAY_MS`.
 /// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+///   `EInvalidPredecessor`, `EPredecessorIsSelf` (unreachable in practice),
+///   `EOperationAlreadyExists`).
 public fun schedule_update_grace_period<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -743,7 +748,8 @@ public fun execute_update_grace_period<Role>(
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+///   `EInvalidPredecessor`, `EPredecessorIsSelf` (unreachable in practice),
+///   `EOperationAlreadyExists`).
 public fun schedule_set_open_executor<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
