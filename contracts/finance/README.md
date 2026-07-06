@@ -235,9 +235,12 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
 
 The curve **must be monotonically non-decreasing in time and bounded above by
-`balance + released`.** A curve that violates either makes `release` abort before any
-state changes - funds stay safe, but the release path is bricked until the curve is
-fixed.
+`balance + released`.** `release` enforces only the failure modes that threaten funds:
+a regression *below* `released` aborts with `EVestedBelowReleased`, and exceeding
+`balance + released` aborts with `EInsufficientBalance` - in both cases before any state
+changes, so funds stay safe. An in-range regression (the attested cumulative dips but
+stays `>= released`) does **not** abort: `release` silently pays the smaller increment
+`vested - released`. Keep the curve monotone so releases only ever move forward.
 
 ### The `VestedAmount` attestation
 
