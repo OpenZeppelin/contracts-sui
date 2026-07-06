@@ -54,7 +54,11 @@ is not required up front.
    after the schedule starts participate retroactively.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
    not-yet-released portion to the beneficiary. Permissionless and idempotent: if
-   nothing new has vested it is a no-op.
+   nothing new has vested it is a no-op. Each call pays the newly vested amount as a
+   fresh `Coin<C>`, so a third party (not only the beneficiary) can call it repeatedly
+   as the schedule progresses and split the payout into many small coins - bounded
+   (one coin per distinct clock value over the window), costly to force (gas per tx),
+   and with totals always preserved.
 4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`,
    `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
 5. **Tear down** - once drained, `vesting_wallet::destroy_empty` reclaims the storage
@@ -119,6 +123,12 @@ and you pick the topology:
 - **Shared** (recommended) - `transfer::public_share_object(wallet)`, or use
   `create_and_share`/`create_and_share_continuous`. Anyone can poke `release`,
   and the beneficiary always receives the funds regardless of who triggered it.
+  Because `release` is permissionless and pays each newly vested tranche as a fresh
+  `Coin<C>`, a third party can call it repeatedly as the schedule progresses and split
+  the payout into many small coins - bounded (one coin per distinct clock value over
+  the window) and costly to force, with totals always preserved. An integrator pointing
+  a wallet at an object beneficiary should plan for possibly many `Receiving`s to
+  process rather than a few large payouts.
 - **Owned** (fast path) - `transfer::public_transfer(wallet, holder)`. Only the
   holder can pass the wallet by `&mut`, so release is reachable from the holder's
   transactions only. Outside parties fund an owned wallet by `public_transfer`-ing a
