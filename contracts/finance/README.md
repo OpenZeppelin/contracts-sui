@@ -48,8 +48,10 @@ is not required up front.
 ### Lifecycle
 
 1. **Create** - call `new` (stepped) or `new_continuous`, both returning the wallet
-   by value so you can fund and choose a topology in the same PTB. `create_and_share`/
-   `create_and_share_continuous` are sugar that builds the wallet and shares it in one call.
+   by value (plus a `DestroyCap` that authorizes its later teardown) so you can fund and
+   choose a topology in the same PTB. `create_and_share`/`create_and_share_continuous`
+   are sugar that builds the wallet, shares it, and returns its `ID` and `DestroyCap` in
+   one call.
 2. **Fund** - `deposit` a `Coin<C>`. Permissionless: anyone may fund, and funds added
    after the schedule starts participate retroactively.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
@@ -62,9 +64,11 @@ is not required up front.
 4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`,
    `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
 5. **Tear down** - once drained, `vesting_wallet::destroy_empty` reclaims the storage
-   rebate and returns a `DestroyReceipt`; hand that to `vesting_wallet_linear::destroy`,
-   which requires the schedule to have ended and the caller to be the beneficiary
-   before accepting the teardown.
+   rebate and returns a `DestroyReceipt`; hand that, together with the wallet's
+   `DestroyCap`, to `vesting_wallet_linear::destroy`, which requires the schedule to have
+   ended before accepting the teardown. Authority is the cap, not the caller's address,
+   so a wallet whose `beneficiary` is an object (never a transaction sender) can still be
+   torn down by whoever holds its cap.
 
 ### Usage
 
@@ -79,9 +83,10 @@ use sui::coin::Coin;
 const DAY_MS: u64 = 86_400_000;
 
 // Four monthly tranches (~30 days each), no cliff, funded up front and shared so
-// anyone can poke `release` on the beneficiary's behalf.
+// anyone can poke `release` on the beneficiary's behalf. The teardown cap is handed to
+// the beneficiary so they can reclaim the storage rebate once the wallet is drained.
 public fun grant<C>(beneficiary: address, start_ms: u64, funds: Coin<C>, ctx: &mut TxContext) {
-    let mut wallet = vesting_wallet_linear::new<C>(
+    let (mut wallet, cap) = vesting_wallet_linear::new<C>(
         beneficiary,
         start_ms,
         0,            // cliff_ms: no cliff
@@ -91,17 +96,19 @@ public fun grant<C>(beneficiary: address, start_ms: u64, funds: Coin<C>, ctx: &m
     );
     wallet.deposit(funds);
     transfer::public_share_object(wallet);
+    transfer::public_transfer(cap, beneficiary);
 }
 
 // Continuous one-year linear vest with a 90-day cliff.
 public fun stream<C>(beneficiary: address, start_ms: u64, ctx: &mut TxContext) {
-    vesting_wallet_linear::create_and_share_continuous<C>(
+    let (_wallet_id, cap) = vesting_wallet_linear::create_and_share_continuous<C>(
         beneficiary,
         start_ms,
         90 * DAY_MS,   // cliff_ms
         365 * DAY_MS,  // duration_ms
         ctx,
     );
+    transfer::public_transfer(cap, beneficiary);
 }
 
 // Anyone can release; the beneficiary is read fresh from the wallet at call time.
@@ -236,8 +243,10 @@ while the curve module still owns validation. For the linear curve:
 
 ```move
 let params = vesting_wallet_linear::params(start_ms, cliff_ms, period_ms, steps);
-let inner = vesting_wallet::new<Linear, Params, C>(params, beneficiary, ctx);
+let (inner, cap) = vesting_wallet::new<Linear, Params, C>(params, beneficiary, ctx);
 let vault = GatedVault { id: object::new(ctx), inner, /* ... */ };
+// Keep `cap` (store it in the vault, or transfer it) - it is required to tear the
+// wallet down later.
 ```
 
 Every curve following the pattern exposes an analogous `params` constructor, so the
@@ -251,14 +260,19 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    `public struct MyParams has copy, drop, store { /* ... */ }`.
 2. A public `params` constructor that validates and returns a `MyParams`, plus a
    `new` that is sugar over `vesting_wallet::new<MyCurve, MyParams, C>(params(..),
-   beneficiary, ctx)`. Exposing `params` separately lets a curve-agnostic protocol
-   build the wallet itself without routing through `new`.
+   beneficiary, ctx)` (returning the wallet and its `DestroyCap`). Exposing `params`
+   separately lets a curve-agnostic protocol build the wallet itself without routing
+   through `new`.
 3. A `vested_amount(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
    that evaluates the curve and ends in `wallet.mint_vested_amount(MyCurve {}, amount)`.
 4. A teardown that calls `wallet.destroy_empty()` for a `DestroyReceipt<MyCurve,
-   MyParams>`, then `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover
-   the beneficiary and parameters and destructure them. `destroy_empty` is permissionless;
-   the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
+   MyParams>`, then `vesting_wallet::consume_receipt(receipt, cap, MyCurve {})` - passing
+   the wallet's `DestroyCap` - to recover the schedule parameters and destructure
+   them. `destroy_empty` is permissionless; `consume_receipt` is gated on both the
+   witness (so the curve can run teardown logic or veto) and the cap (the teardown
+   authority). **Gate teardown on the cap, never on `ctx.sender() == beneficiary`:** an
+   object beneficiary is never a transaction sender, so that check could never be
+   satisfied and would brick teardown for object-beneficiary wallets.
 
 The curve **must be monotonically non-decreasing in time and bounded above by
 `balance + released`.** `release` enforces only the failure modes that threaten funds:
@@ -316,7 +330,9 @@ one per integration boundary described above:
 - **Coins sent to a destroyed wallet are stranded.** After `destroy`/`destroy_empty`
   the object address has no claim path. `vesting_wallet_linear::destroy` requires the
   schedule to have ended, which blocks front-running a pending deposit; pair teardown
-  with halting any upstream emissions that target the wallet.
+  with halting any upstream emissions that target the wallet. Teardown is gated by the
+  wallet's `DestroyCap`, so the cap holder bears this strand risk - route the cap to the
+  party that should own the teardown decision (commonly the beneficiary or its controller).
 - **`receive_and_deposit` can strand a coin on overflow.** If claiming a received
   coin would push the lifetime total (`balance + released`) past `u64::MAX` the call
   aborts, leaving the already-transferred coin parked at the wallet address. High
