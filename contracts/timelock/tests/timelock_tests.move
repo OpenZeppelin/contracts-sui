@@ -1158,6 +1158,32 @@ fun share_makes_timelock_shared() {
 }
 
 #[test]
+fun domain_tag_getter_pins_published_value() {
+    // Changing the tag re-keys every operation id, so pin the published value.
+    assert_eq!(timelock::domain_tag(), b"OZ_Timelock_1_Sui");
+}
+
+// Golden vector for the byte-exact preimage encoding documented on `hash_operation`.
+// Every input is pinned, so the expected id was recomputed independently off-chain:
+//   preimage = "OZ_Timelock_1_Sui"                       raw 17 bytes, no length prefix
+//           || 0x4a || "0000..0002::sui::SUI"            action: ULEB128 len (74) + ascii
+//           || 0x20 || 0x11 * 32                         payload_digest: len + bytes
+//           || 0x00                                      predecessor: empty vector
+//           || 0x04 || "salt"                            salt: len + bytes
+//           || 0x00 * 31 || 0xaa                         timelock_id: raw 32 bytes
+//   id = keccak256(preimage)
+#[test]
+fun hash_operation_matches_documented_encoding() {
+    let id = timelock::hash_operation<sui::sui::SUI>(
+        object::id_from_address(@0xAA),
+        x"1111111111111111111111111111111111111111111111111111111111111111",
+        vector[],
+        b"salt",
+    );
+    assert_eq!(id, x"e18d98c162999a5d9644720daa1771b0cebc3569064fa498adf55d5035bc60e5");
+}
+
+#[test]
 fun hash_operation_deterministic() {
     let mut scenario = test_scenario::begin(DEPLOYER);
     let tl_id = timelock::new_shared<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
