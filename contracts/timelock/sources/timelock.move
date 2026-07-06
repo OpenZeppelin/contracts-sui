@@ -256,9 +256,11 @@ public struct OperationExecuted has copy, drop {
     executor: address,
 }
 
-/// Emitted by `cancel` when a pending (Waiting / Ready / Expired) operation is cancelled.
+/// Emitted by `cancel` / `cancel_with` when a pending (Waiting / Ready / Expired) operation
+/// is cancelled. `action` is the scheduled `Action` type of the cancelled operation.
 public struct OperationCancelled has copy, drop {
     id: vector<u8>,
+    action: TypeName,
     canceller: address,
 }
 
@@ -978,12 +980,11 @@ fun execute_internal<Action, Params: store + drop>(
 fun cancel_internal<Params: store + drop>(self: &mut Timelock, id: vector<u8>, ctx: &TxContext) {
     // Operation must exist.
     assert!(self.timestamps.contains(id), EOperationUnset);
-    // Cannot cancel a Done operation.
-    let is_done = match (self.timestamps.borrow(id)) {
-        OpTimestamp::Done => true,
-        OpTimestamp::Pending { .. } => false,
+    // Cannot cancel a Done operation. Read the scheduled action for the event.
+    let action = match (self.timestamps.borrow(id)) {
+        OpTimestamp::Done => abort EOperationAlreadyDone,
+        OpTimestamp::Pending { action, .. } => *action,
     };
-    assert!(!is_done, EOperationAlreadyDone);
     // Named error if `Params` doesn't match the type the op was scheduled with. On the
     // `*_with` (cap) path the type args are pinned by the `OperationCap`, so this only fires
     // if a cap for a different `(Action, Params)` is supplied.
@@ -993,7 +994,7 @@ fun cancel_internal<Params: store + drop>(self: &mut Timelock, id: vector<u8>, c
     let _ = self.timestamps.remove(id);
     let _params = df::remove<vector<u8>, Params>(&mut self.id, id);
 
-    event::emit(OperationCancelled { id, canceller: ctx.sender() });
+    event::emit(OperationCancelled { id, action, canceller: ctx.sender() });
 }
 
 /// Compute the observable state of an operation at time `now`.
@@ -1071,8 +1072,12 @@ public fun test_new_operation_executed(
 }
 
 #[test_only]
-public fun test_new_operation_cancelled(id: vector<u8>, canceller: address): OperationCancelled {
-    OperationCancelled { id, canceller }
+public fun test_new_operation_cancelled(
+    id: vector<u8>,
+    action: TypeName,
+    canceller: address,
+): OperationCancelled {
+    OperationCancelled { id, action, canceller }
 }
 
 #[test_only]
