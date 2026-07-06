@@ -789,26 +789,43 @@ public fun execute_set_open_executor<Role>(
 
 // === View helpers ===
 
+/// The configured floor on every operation's delay.
 public fun min_delay_ms(self: &Timelock): u64 { self.min_delay_ms }
 
+/// The configured window, after an op becomes ready, during which it stays executable.
 public fun grace_period_ms(self: &Timelock): u64 { self.grace_period_ms }
 
+/// Whether open-executor mode is enabled (anyone may call `execute_open`).
 public fun is_open_executor(self: &Timelock): bool { self.open_executor }
 
+/// Upper bound on the configured `min_delay_ms` and `grace_period_ms`.
 public fun max_delay_ms(): u64 { MAX_DELAY_MS }
 
+/// The role type bound for scheduling.
 public fun proposer_role(self: &Timelock): TypeName { self.proposer_role }
 
+/// The role type bound for executing.
 public fun executor_role(self: &Timelock): TypeName { self.executor_role }
 
+/// The role type bound for cancelling.
 public fun canceller_role(self: &Timelock): TypeName { self.canceller_role }
 
+/// The role type bound for the self-administered configuration pipeline.
 public fun admin_role(self: &Timelock): TypeName { self.admin_role }
 
+/// Whether an operation with this id exists in the timelock (any state but `Unset`).
 public fun is_operation(self: &Timelock, id: vector<u8>): bool {
     self.timestamps.contains(id)
 }
 
+/// Whether the operation is on the execution track: `Waiting` or `Ready`. `Expired`,
+/// `Done`, and `Unset` operations return false.
+///
+/// Narrower than `isOperationPending` in OpenZeppelin's Solidity `TimelockController`,
+/// where operations never expire and pending doubles as the cancellability check. Here
+/// an `Expired` operation is no longer pending but is still cancellable - to gate
+/// cancellation or cleanup, use `is_operation(id) && !is_operation_done(id)` (or match
+/// on `operation_state`).
 public fun is_operation_pending(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Waiting { .. } => true,
@@ -817,6 +834,8 @@ public fun is_operation_pending(self: &Timelock, id: vector<u8>, clock: &Clock):
     }
 }
 
+/// Whether the operation is `Ready`: its delay has elapsed and its grace window is
+/// still open, so it can be executed now (predecessor permitting).
 public fun is_operation_ready(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Ready { .. } => true,
@@ -824,6 +843,8 @@ public fun is_operation_ready(self: &Timelock, id: vector<u8>, clock: &Clock): b
     }
 }
 
+/// Whether the operation is `Expired`: its grace window has closed, so it can no
+/// longer be executed - only cancelled.
 public fun is_operation_expired(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Expired { .. } => true,
@@ -831,6 +852,7 @@ public fun is_operation_expired(self: &Timelock, id: vector<u8>, clock: &Clock):
     }
 }
 
+/// Whether the operation has been executed (`Done`).
 public fun is_operation_done(self: &Timelock, id: vector<u8>): bool {
     if (!self.timestamps.contains(id)) return false;
     match (self.timestamps.borrow(id)) {
@@ -839,11 +861,13 @@ public fun is_operation_done(self: &Timelock, id: vector<u8>): bool {
     }
 }
 
+/// The observable `OperationState` of an operation at the current clock time.
 public fun operation_state(self: &Timelock, id: vector<u8>, clock: &Clock): OperationState {
     self.op_state(id, clock.timestamp_ms())
 }
 
-/// Borrow the typed params of a pending operation (for off-chain inspection / UIs).
+/// Borrow the typed params of a scheduled, not-yet-executed operation - `Waiting`,
+/// `Ready`, or `Expired` (for off-chain inspection / UIs).
 ///
 /// #### Aborts
 /// - A `sui::dynamic_field` abort if the id has no stored `Params` (Unset or already Done).

@@ -260,6 +260,39 @@ fun cancel_happy() {
     scenario.end();
 }
 
+#[test]
+fun cancel_succeeds_after_expiry() {
+    let mut scenario = setup(0, 100);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    let p_auth = ac.new_auth<_, ProposerRole>(scenario.ctx());
+    let id = tl.schedule<ProposerRole, TestAction, u64>(
+        &p_auth,
+        42,
+        vector[],
+        b"salt",
+        50,
+        &clk,
+        scenario.ctx(),
+    );
+    // Past the grace window: no longer pending, but still resident and cancellable.
+    clk.set_for_testing(150);
+    assert!(tl.is_operation_expired(id, &clk));
+    assert!(!tl.is_operation_pending(id, &clk));
+
+    let c_auth = ac.new_auth<_, CancellerRole>(scenario.ctx());
+    tl.cancel<CancellerRole, u64>(&c_auth, id, scenario.ctx());
+    assert!(!tl.is_operation(id));
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(tl);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
 // === Role gating ===
 
 #[test, expected_failure(abort_code = timelock::EWrongRole)]
