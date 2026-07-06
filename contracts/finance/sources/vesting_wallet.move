@@ -246,6 +246,11 @@ public struct Released<phantom S, phantom C> has copy, drop {
     /// Amount paid to the beneficiary by this release (the incremental portion,
     /// not the cumulative `released` total).
     amount: u64,
+    /// Object id of the payout `Coin<C>` transferred to `beneficiary`. When the
+    /// beneficiary is an object address, this is the id to hand to
+    /// `transfer::public_receive`, letting off-chain consumers correlate this
+    /// event with the specific pending `Receiving<Coin<C>>` it produced.
+    coin_id: ID,
 }
 
 /// Emitted by `destroy_empty` when a drained wallet is torn down.
@@ -440,12 +445,14 @@ public fun release<S: drop, P: copy + drop + store, C>(
     wallet.released = wallet.released + releasable;
     let coin = coin::from_balance(wallet.balance.split(releasable), ctx);
     let beneficiary = wallet.beneficiary;
+    let coin_id = object::id(&coin);
     transfer::public_transfer(coin, beneficiary);
 
     event::emit(Released<S, C> {
         wallet_id: *wallet_id,
         beneficiary,
         amount: releasable,
+        coin_id,
     });
 }
 
@@ -621,8 +628,9 @@ public fun test_new_released<S, C>(
     wallet_id: ID,
     beneficiary: address,
     amount: u64,
+    coin_id: ID,
 ): Released<S, C> {
-    Released { wallet_id, beneficiary, amount }
+    Released { wallet_id, beneficiary, amount, coin_id }
 }
 
 /// Build a `Destroyed` event value for asserting against `event::events_by_type`.
@@ -633,6 +641,13 @@ public fun test_new_destroyed<S, C>(
     total_released: u64,
 ): Destroyed<S, C> {
     Destroyed { wallet_id, beneficiary, total_released }
+}
+
+/// Read a `Released` event's `coin_id` for test assertions; the event's fields are
+/// otherwise private.
+#[test_only]
+public fun test_released_coin_id<S, C>(released: &Released<S, C>): ID {
+    released.coin_id
 }
 
 /// Read a `DestroyReceipt`'s `beneficiary` for test assertions; the receipt is
