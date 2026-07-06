@@ -140,7 +140,11 @@ and you pick the topology:
   holder can pass the wallet by `&mut`, so release is reachable from the holder's
   transactions only. Outside parties fund an owned wallet by `public_transfer`-ing a
   `Coin<C>` to the wallet's object address; the holder then claims each with
-  `receive_and_deposit`.
+  `receive_and_deposit`. Liveness risk: `release`, `deposit`, `receive_and_deposit`,
+  and `destroy_empty` all require `&mut` or by-value access only the holder can
+  produce, so a holder who is not the beneficiary and turns uncooperative can withhold
+  every payout with no on-chain path for the beneficiary to force one. The recommended
+  Shared topology avoids this because its `release` is permissionless.
 
 The `beneficiary` is fixed at construction. To rotate the recipient, point
 `beneficiary` at a consumer-owned object and rotate ownership of that object instead.
@@ -332,7 +336,10 @@ one per integration boundary described above:
 - **`receive_and_deposit` can strand a coin on overflow.** If claiming a received
   coin would push the lifetime total (`balance + released`) past `u64::MAX` the call
   aborts, leaving the already-transferred coin parked at the wallet address. High
-  volume emitters should track headroom before transferring.
+  volume emitters should track headroom before transferring. The inner
+  `transfer::public_receive` can also abort with `EUnableToReceiveObject` when the
+  ticket is no longer receivable (the coin was already claimed, e.g. a stale-version
+  double-receive race, or it was wrapped/transferred away/absent at that version).
 - **A wrapped wallet strands address-targeted funding until unwrapped.**
   `receive_and_deposit` needs `&mut wallet`. A wrapper that keeps `&mut inner` private
   (the recommended pattern above) must re-expose `receive_and_deposit` alongside

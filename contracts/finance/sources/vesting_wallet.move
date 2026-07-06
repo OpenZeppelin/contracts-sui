@@ -101,7 +101,12 @@
 ///   holder can pass the wallet by `&mut`, so funding and release are reachable
 ///   from the holder's transactions only. Outside parties fund it by
 ///   `public_transfer`ing a `Coin<C>` to the wallet's object address; the holder
-///   then claims each with `receive_and_deposit`.
+///   then claims each with `receive_and_deposit`. Liveness risk: `release`,
+///   `deposit`, `receive_and_deposit`, and `destroy_empty` all need `&mut` or
+///   by-value access only the holder can produce, so a holder who is not the
+///   beneficiary and turns uncooperative can withhold every payout with no on-chain
+///   path for the beneficiary to force one. The recommended Shared topology avoids
+///   this because its `release` is permissionless.
 ///
 /// The `beneficiary` is fixed at construction. To rotate the recipient, point
 /// `beneficiary` at a consumer-owned object and rotate ownership of that object
@@ -419,6 +424,13 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 ///   parked at that address with no claim path - it is stranded (the same class as
 ///   a coin sent after `destroy_empty`). High-volume emitters should track the
 ///   wallet's `balance + released` headroom before transferring.
+/// - `sui::transfer::EUnableToReceiveObject` (code 3), raised by the inner
+///   `transfer::public_receive`, if `receiving` is no longer receivable through this
+///   wallet: the coin was already claimed by an earlier or concurrent transaction (a
+///   stale-version double-receive race), it was wrapped, transferred away, or is
+///   absent at that version, or `wallet` is not its owner. (The sibling
+///   `EReceivingObjectTypeMismatch`, code 2, is unreachable here because `receiving`
+///   is typed `Receiving<Coin<C>>` at the Move boundary.)
 public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     receiving: Receiving<Coin<C>>,
