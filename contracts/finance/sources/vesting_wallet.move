@@ -64,9 +64,13 @@
 ///    beneficiary and parameters for the curve module to destructure.
 ///
 /// The curve must be monotonically non-decreasing in time and bounded above by
-/// `balance + released`; violating either makes `release` abort before any state
-/// mutation (funds stay safe, but the release path is bricked until the curve is
-/// fixed).
+/// `balance + released`. `release` enforces only the failure modes that threaten
+/// funds: a regression *below* `released` aborts with `EVestedBelowReleased`, and
+/// exceeding `balance + released` aborts with `EInsufficientBalance` - in both cases
+/// before any state mutation, so funds stay safe. An in-range regression (the
+/// attested cumulative dips but stays `>= released`) does *not* abort: `release`
+/// silently pays the smaller increment `vested - released`. A well-behaved curve
+/// therefore stays monotone so releases only ever move forward.
 ///
 /// # Topologies
 ///
