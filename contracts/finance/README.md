@@ -165,6 +165,8 @@ checks:
 module my_protocol::gated_vault;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
+use sui::transfer::Receiving;
+use sui::coin::Coin;
 
 /// Adds protocol gating around any vesting curve - note it stays generic over `S`, `P`.
 public struct GatedVault<phantom S: drop, P: copy + drop + store, phantom C> has key {
@@ -188,6 +190,16 @@ public fun release<S: drop, P: copy + drop + store, C>(
 ) {
     // ... enforce protocol invariants (not paused, caller approved, ...) ...
     self.inner.release(vested, ctx);
+}
+
+/// Re-expose `receive_and_deposit` so address-targeted funding can still be claimed
+/// while wrapped - it needs the same private `&mut inner`. Omit this and any `Coin<C>`
+/// `public_transfer`'d to the inner wallet's address stays stranded until unwrapped.
+public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
+    self: &mut GatedVault<S, P, C>,
+    receiving: Receiving<Coin<C>>,
+) {
+    self.inner.receive_and_deposit(receiving);
 }
 ```
 
@@ -292,6 +304,12 @@ one per integration boundary described above:
   coin would push the lifetime total (`balance + released`) past `u64::MAX` the call
   aborts, leaving the already-transferred coin parked at the wallet address. High
   volume emitters should track headroom before transferring.
+- **A wrapped wallet strands address-targeted funding until unwrapped.**
+  `receive_and_deposit` needs `&mut wallet`. A wrapper that keeps `&mut inner` private
+  (the recommended pattern above) must re-expose `receive_and_deposit` alongside
+  `release` to support address-targeted funding; otherwise a `Coin<C>`
+  `public_transfer`'d to the inner wallet's address cannot be claimed until the
+  wallet is unwrapped and `&mut` is restored. The funds are recoverable, not lost.
 
 ## Learn More
 
