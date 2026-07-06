@@ -79,6 +79,11 @@
 ///
 /// - **Shared** (recommended): `transfer::public_share_object(wallet)` - anyone
 ///   can poke `release`. `vesting_wallet_linear` exposes `create_and_share` sugar.
+///   Because `release` is permissionless and pays each newly vested tranche as a
+///   fresh `Coin<C>`, a third party can call it repeatedly as the schedule progresses
+///   and split the payout into many small coins - bounded (one coin per distinct clock
+///   value over the window) and costly to force, with totals always preserved. Plan
+///   for possibly many small payouts, especially when the beneficiary is an object.
 /// - **Owned** (fast path): `transfer::public_transfer(wallet, addr)` - only the
 ///   holder can pass the wallet by `&mut`, so funding and release are reachable
 ///   from the holder's transactions only. Outside parties fund it by
@@ -387,6 +392,15 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 /// If nothing new is vested since the last release (the wallet is already drained
 /// at this clock), the call is a no-op: no coin is transferred and no event is
 /// emitted.
+///
+/// Each call pays the portion vested since the last release as one fresh `Coin<C>`.
+/// Because it is permissionless, a third party - not only the beneficiary - can call
+/// it repeatedly as the schedule progresses, splitting the payout into many small
+/// coins rather than a few large ones. The fragmentation is bounded (at most one coin
+/// per distinct clock value over the vesting window) and costly to force (gas per
+/// transaction), and totals are always preserved. Still, an integrator pointing a
+/// wallet at an object beneficiary should plan for possibly many `Receiving`s to
+/// process rather than a few large payouts.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to release from.
