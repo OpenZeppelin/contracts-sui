@@ -54,7 +54,11 @@ is not required up front.
    after the schedule starts participate retroactively.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
    not-yet-released portion to the beneficiary. Permissionless and idempotent: if
-   nothing new has vested it is a no-op.
+   nothing new has vested it is a no-op. Each call pays the newly vested amount as a
+   fresh `Coin<C>`, so a third party (not only the beneficiary) can call it repeatedly
+   as the schedule progresses and split the payout into many small coins - bounded
+   (one coin per distinct clock value over the window), costly to force (gas per tx),
+   and with totals always preserved.
 4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`,
    `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
 5. **Tear down** - once drained, `vesting_wallet::destroy_empty` reclaims the storage
@@ -119,6 +123,12 @@ and you pick the topology:
 - **Shared** (recommended) - `transfer::public_share_object(wallet)`, or use
   `create_and_share`/`create_and_share_continuous`. Anyone can poke `release`,
   and the beneficiary always receives the funds regardless of who triggered it.
+  Because `release` is permissionless and pays each newly vested tranche as a fresh
+  `Coin<C>`, a third party can call it repeatedly as the schedule progresses and split
+  the payout into many small coins - bounded (one coin per distinct clock value over
+  the window) and costly to force, with totals always preserved. An integrator pointing
+  a wallet at an object beneficiary should plan for possibly many `Receiving`s to
+  process rather than a few large payouts.
 - **Owned** (fast path) - `transfer::public_transfer(wallet, holder)`. Only the
   holder can pass the wallet by `&mut`, so release is reachable from the holder's
   transactions only. Outside parties fund an owned wallet by `public_transfer`-ing a
@@ -169,6 +179,8 @@ checks:
 module my_protocol::gated_vault;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestedAmount};
+use sui::transfer::Receiving;
+use sui::coin::Coin;
 
 /// Adds protocol gating around any vesting curve - note it stays generic over `S`, `P`.
 public struct GatedVault<phantom S: drop, P: copy + drop + store, phantom C> has key {
@@ -192,6 +204,16 @@ public fun release<S: drop, P: copy + drop + store, C>(
 ) {
     // ... enforce protocol invariants (not paused, caller approved, ...) ...
     self.inner.release(vested, ctx);
+}
+
+/// Re-expose `receive_and_deposit` so address-targeted funding can still be claimed
+/// while wrapped - it needs the same private `&mut inner`. Omit this and any `Coin<C>`
+/// `public_transfer`'d to the inner wallet's address stays stranded until unwrapped.
+public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
+    self: &mut GatedVault<S, P, C>,
+    receiving: Receiving<Coin<C>>,
+) {
+    self.inner.receive_and_deposit(receiving);
 }
 ```
 
@@ -239,9 +261,12 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
 
 The curve **must be monotonically non-decreasing in time and bounded above by
-`balance + released`.** A curve that violates either makes `release` abort before any
-state changes - funds stay safe, but the release path is bricked until the curve is
-fixed.
+`balance + released`.** `release` enforces only the failure modes that threaten funds:
+a regression *below* `released` aborts with `EVestedBelowReleased`, and exceeding
+`balance + released` aborts with `EInsufficientBalance` - in both cases before any state
+changes, so funds stay safe. An in-range regression (the attested cumulative dips but
+stays `>= released`) does **not** abort: `release` silently pays the smaller increment
+`vested - released`. Keep the curve monotone so releases only ever move forward.
 
 ### The `VestedAmount` attestation
 
@@ -299,6 +324,12 @@ one per integration boundary described above:
   `transfer::public_receive` can also abort with `EUnableToReceiveObject` when the
   ticket is no longer receivable (the coin was already claimed, e.g. a stale-version
   double-receive race, or it was wrapped/transferred away/absent at that version).
+- **A wrapped wallet strands address-targeted funding until unwrapped.**
+  `receive_and_deposit` needs `&mut wallet`. A wrapper that keeps `&mut inner` private
+  (the recommended pattern above) must re-expose `receive_and_deposit` alongside
+  `release` to support address-targeted funding; otherwise a `Coin<C>`
+  `public_transfer`'d to the inner wallet's address cannot be claimed until the
+  wallet is unwrapped and `&mut` is restored. The funds are recoverable, not lost.
 
 ## Learn More
 

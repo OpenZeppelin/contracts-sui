@@ -64,9 +64,13 @@
 ///    beneficiary and parameters for the curve module to destructure.
 ///
 /// The curve must be monotonically non-decreasing in time and bounded above by
-/// `balance + released`; violating either makes `release` abort before any state
-/// mutation (funds stay safe, but the release path is bricked until the curve is
-/// fixed).
+/// `balance + released`. `release` enforces only the failure modes that threaten
+/// funds: a regression *below* `released` aborts with `EVestedBelowReleased`, and
+/// exceeding `balance + released` aborts with `EInsufficientBalance` - in both cases
+/// before any state mutation, so funds stay safe. An in-range regression (the
+/// attested cumulative dips but stays `>= released`) does *not* abort: `release`
+/// silently pays the smaller increment `vested - released`. A well-behaved curve
+/// therefore stays monotone so releases only ever move forward.
 ///
 /// # Topologies
 ///
@@ -75,6 +79,11 @@
 ///
 /// - **Shared** (recommended): `transfer::public_share_object(wallet)` - anyone
 ///   can poke `release`. `vesting_wallet_linear` exposes `create_and_share` sugar.
+///   Because `release` is permissionless and pays each newly vested tranche as a
+///   fresh `Coin<C>`, a third party can call it repeatedly as the schedule progresses
+///   and split the payout into many small coins - bounded (one coin per distinct clock
+///   value over the window) and costly to force, with totals always preserved. Plan
+///   for possibly many small payouts, especially when the beneficiary is an object.
 /// - **Owned** (fast path): `transfer::public_transfer(wallet, addr)` - only the
 ///   holder can pass the wallet by `&mut`, so funding and release are reachable
 ///   from the holder's transactions only. Outside parties fund it by
@@ -188,6 +197,13 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 /// exposes. If `release` instead required `S`, this would be impossible - a
 /// curve-agnostic wrapper cannot construct `S`, so it would have to expose
 /// `&mut inner` and lose all control over deposits and releases.
+///
+/// A wrapper that supports address-targeted funding should also re-expose
+/// `receive_and_deposit` alongside `release`, since claiming a `Coin<C>`
+/// `public_transfer`'d to the inner wallet's object address needs the same private
+/// `&mut inner`. If it does not, such a coin cannot be claimed while the wallet is
+/// wrapped - anyone can still send one to the address, but it stays stranded until
+/// the wallet is unwrapped and `&mut` is restored.
 public struct VestedAmount<phantom S> has drop {
     /// Id of the wallet this attestation was minted for.
     wallet_id: ID,
@@ -353,6 +369,10 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 /// object address, then funnel it through the standard deposit path. Used by
 /// emission schedules and payroll robots that don't hold a wallet reference.
 ///
+/// Requires `&mut wallet`. If the wallet is nested in a wrapper that keeps
+/// `&mut inner` private and does not re-expose this function, a coin sent to the
+/// inner wallet's address stays stranded until the wallet is unwrapped.
+///
 /// #### Aborts
 /// - `EBalanceOverflow` if claiming the coin would overflow the wallet's
 ///   lifetime total. Unlike a direct `deposit`, the coin was already transferred to
@@ -385,6 +405,15 @@ public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
 /// at this clock), the call is a no-op: no coin is transferred and no event is
 /// emitted.
 ///
+/// Each call pays the portion vested since the last release as one fresh `Coin<C>`.
+/// Because it is permissionless, a third party - not only the beneficiary - can call
+/// it repeatedly as the schedule progresses, splitting the payout into many small
+/// coins rather than a few large ones. The fragmentation is bounded (at most one coin
+/// per distinct clock value over the vesting window) and costly to force (gas per
+/// transaction), and totals are always preserved. Still, an integrator pointing a
+/// wallet at an object beneficiary should plan for possibly many `Receiving`s to
+/// process rather than a few large payouts.
+///
 /// #### Parameters
 /// - `wallet`: The wallet to release from.
 /// - `vested`: A `VestedAmount<S>` minted for this wallet by its curve module.
@@ -414,7 +443,7 @@ public fun release<S: drop, P: copy + drop + store, C>(
     transfer::public_transfer(coin, beneficiary);
 
     event::emit(Released<S, C> {
-        wallet_id: object::id(wallet),
+        wallet_id: *wallet_id,
         beneficiary,
         amount: releasable,
     });
