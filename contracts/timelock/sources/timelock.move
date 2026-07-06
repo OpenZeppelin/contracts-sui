@@ -176,8 +176,8 @@ public enum OpTimestamp has drop, store {
 
 /// Deferred authorization for one typed operation, carrying the scheduled params.
 /// Hot potato - NO abilities, so it must be consumed in the same transaction it is
-/// minted. Minted only by `execute` / `execute_open`; destroyed only by
-/// `consume` (or in-module for self-admin ops).
+/// minted. Minted by `execute` / `execute_open` (or in-module for self-admin ops);
+/// destroyed only by `consume` (or in-module for self-admin ops).
 public struct ExecutionTicket<phantom Action, Params> {
     timelock_id: ID,
     id: vector<u8>,
@@ -235,8 +235,10 @@ public struct TimelockCreated has copy, drop {
     admin_role: TypeName,
 }
 
-/// Emitted by `schedule` when an operation is committed. `payload_digest` is
-/// `keccak256(bcs(params))`; the params themselves are not emitted.
+/// Emitted when an operation is committed - by `schedule` and by the self-administered
+/// `schedule_update_min_delay` / `schedule_update_grace_period` /
+/// `schedule_set_open_executor` (whose `proposer` is an admin-role holder).
+/// `payload_digest` is `keccak256(bcs(params))`; the params themselves are not emitted.
 public struct OperationScheduled has copy, drop {
     id: vector<u8>,
     action: TypeName,
@@ -248,8 +250,10 @@ public struct OperationScheduled has copy, drop {
     proposer: address,
 }
 
-/// Emitted by `execute` / `execute_open` when an operation is executed and its ticket
-/// minted.
+/// Emitted when an operation is executed and its ticket minted - by `execute` /
+/// `execute_open` and by the self-administered `execute_update_min_delay` /
+/// `execute_update_grace_period` / `execute_set_open_executor`, which emit it alongside
+/// the corresponding `*Changed` event in the same call.
 public struct OperationExecuted has copy, drop {
     id: vector<u8>,
     action: TypeName,
