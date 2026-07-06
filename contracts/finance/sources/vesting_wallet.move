@@ -447,8 +447,8 @@ public fun release<S: drop, P: copy + drop + store, C>(
     });
 }
 
-/// Consume a drained wallet to reclaim its storage rebate, emit `Destroyed`, and hand
-/// its beneficiary and schedule parameters back as a `DestroyReceipt<S, P>`.
+/// Consume a drained wallet to reclaim its storage rebate, emit `Destroyed`, and return
+/// a `DestroyReceipt<S, P>` carrying the destroyed wallet's id and schedule parameters.
 ///
 /// This call is permissionless - it takes no witness and no cap - so a curve-agnostic
 /// holder of the wallet can drain its rebate without access to `S`. The receipt is a hot
