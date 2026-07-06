@@ -262,19 +262,23 @@ public struct OperationCancelled has copy, drop {
     canceller: address,
 }
 
-/// Emitted by `execute_update_min_delay` when the configured `min_delay_ms` changes.
+/// Emitted by `execute_update_min_delay` when the configured `min_delay_ms` actually
+/// changes; a no-op update (applying the already-configured value) emits no event.
 public struct MinDelayChanged has copy, drop {
     previous_ms: u64,
     new_ms: u64,
 }
 
-/// Emitted by `execute_update_grace_period` when the configured `grace_period_ms` changes.
+/// Emitted by `execute_update_grace_period` when the configured `grace_period_ms`
+/// actually changes; a no-op update (applying the already-configured value) emits no
+/// event.
 public struct GracePeriodChanged has copy, drop {
     previous_ms: u64,
     new_ms: u64,
 }
 
-/// Emitted by `execute_set_open_executor` when open-executor mode is toggled.
+/// Emitted by `execute_set_open_executor` when open-executor mode actually toggles;
+/// re-applying the current setting emits no event.
 public struct OpenExecutorChanged has copy, drop {
     previous: bool,
     new: bool,
@@ -667,7 +671,9 @@ public fun execute_update_min_delay<Role>(
 
     let previous_ms = self.min_delay_ms;
     self.min_delay_ms = new_min_delay_ms;
-    event::emit(MinDelayChanged { previous_ms, new_ms: new_min_delay_ms });
+    if (previous_ms != new_min_delay_ms) {
+        event::emit(MinDelayChanged { previous_ms, new_ms: new_min_delay_ms });
+    }
 }
 
 /// Schedule a `grace_period_ms` change. Admin-gated.
@@ -729,7 +735,9 @@ public fun execute_update_grace_period<Role>(
 
     let previous_ms = self.grace_period_ms;
     self.grace_period_ms = new_grace_period_ms;
-    event::emit(GracePeriodChanged { previous_ms, new_ms: new_grace_period_ms });
+    if (previous_ms != new_grace_period_ms) {
+        event::emit(GracePeriodChanged { previous_ms, new_ms: new_grace_period_ms });
+    }
 }
 
 /// Schedule an `open_executor` toggle. Admin-gated.
@@ -784,7 +792,9 @@ public fun execute_set_open_executor<Role>(
 
     let previous = self.open_executor;
     self.open_executor = value;
-    event::emit(OpenExecutorChanged { previous, new: value });
+    if (previous != value) {
+        event::emit(OpenExecutorChanged { previous, new: value });
+    }
 }
 
 // === View helpers ===

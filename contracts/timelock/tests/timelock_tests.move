@@ -947,6 +947,104 @@ fun set_open_executor_emits_event() {
     scenario.end();
 }
 
+// No-op config updates (the op carries the already-configured value) complete
+// normally - op Done, OperationExecuted emitted - but the config-change event is
+// suppressed: those events record actual changes only.
+#[test]
+fun update_min_delay_noop_emits_no_event() {
+    let mut scenario = setup(1000, 100000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    let a_auth = ac.new_auth<_, AdminRole>(scenario.ctx());
+    let id = tl.schedule_update_min_delay<AdminRole>(
+        &a_auth,
+        1000, // already the configured min_delay_ms
+        vector[],
+        b"s",
+        1000,
+        &clk,
+        scenario.ctx(),
+    );
+    clk.set_for_testing(1000);
+    let a_auth2 = ac.new_auth<_, AdminRole>(scenario.ctx());
+    tl.execute_update_min_delay<AdminRole>(&a_auth2, id, &clk, scenario.ctx());
+
+    assert_eq!(tl.min_delay_ms(), 1000);
+    assert!(tl.is_operation_done(id));
+    assert_eq!(event::events_by_type<timelock::OperationExecuted>().length(), 1);
+    assert_eq!(event::events_by_type<timelock::MinDelayChanged>().length(), 0);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(tl);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun update_grace_period_noop_emits_no_event() {
+    let mut scenario = setup(0, 100000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let clk = clock::create_for_testing(scenario.ctx());
+
+    let a_auth = ac.new_auth<_, AdminRole>(scenario.ctx());
+    let id = tl.schedule_update_grace_period<AdminRole>(
+        &a_auth,
+        100000, // already the configured grace_period_ms
+        vector[],
+        b"g",
+        0,
+        &clk,
+        scenario.ctx(),
+    );
+    let a_auth2 = ac.new_auth<_, AdminRole>(scenario.ctx());
+    tl.execute_update_grace_period<AdminRole>(&a_auth2, id, &clk, scenario.ctx());
+
+    assert_eq!(tl.grace_period_ms(), 100000);
+    assert!(tl.is_operation_done(id));
+    assert_eq!(event::events_by_type<timelock::OperationExecuted>().length(), 1);
+    assert_eq!(event::events_by_type<timelock::GracePeriodChanged>().length(), 0);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(tl);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun set_open_executor_noop_emits_no_event() {
+    let mut scenario = setup(0, 100000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let clk = clock::create_for_testing(scenario.ctx());
+
+    let a_auth = ac.new_auth<_, AdminRole>(scenario.ctx());
+    let id = tl.schedule_set_open_executor<AdminRole>(
+        &a_auth,
+        false, // open_executor already starts false
+        vector[],
+        b"o",
+        0,
+        &clk,
+        scenario.ctx(),
+    );
+    let a_auth2 = ac.new_auth<_, AdminRole>(scenario.ctx());
+    tl.execute_set_open_executor<AdminRole>(&a_auth2, id, &clk, scenario.ctx());
+
+    assert!(!tl.is_open_executor());
+    assert!(tl.is_operation_done(id));
+    assert_eq!(event::events_by_type<timelock::OperationExecuted>().length(), 1);
+    assert_eq!(event::events_by_type<timelock::OpenExecutorChanged>().length(), 0);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(tl);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
 // Changing min_delay does not move an in-flight op's locked timing.
 #[test]
 fun in_flight_op_keeps_timing_after_min_delay_change() {
