@@ -32,8 +32,18 @@ fun release_to_splitter_fans_out_by_weight() {
         vector[50, 30, 20],
         scenario.ctx(),
     );
-    // Vest to the splitter object, not a person.
-    linear::create_and_share<USDC>(splitter_addr, START_MS, 0, 1, DURATION_MS, scenario.ctx());
+    // Vest to the splitter object, not a person. The returned id and teardown cap are
+    // unused here (this test exercises fan-out, not teardown); object-beneficiary
+    // teardown is covered in the linear tests.
+    let (_wallet_id, cap) = linear::create_and_share<USDC>(
+        splitter_addr,
+        START_MS,
+        0,
+        1,
+        DURATION_MS,
+        scenario.ctx(),
+    );
+    destroy(cap);
 
     scenario.next_tx(EMPLOYER);
     let mut wallet = scenario.take_shared<VestingWallet<Linear, Params, USDC>>();

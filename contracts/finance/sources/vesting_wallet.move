@@ -44,6 +44,17 @@
 /// that every `VestingWallet<S, P, C>` carries exactly the `P` its curve needs and
 /// can only be advanced by the curve module that owns `S`.
 ///
+/// # Teardown authority
+///
+/// `new` mints a `DestroyCap` alongside the wallet, bound to it by id. Finalizing a
+/// teardown (`consume_receipt`) requires that cap, so teardown authority is an object
+/// the creator can hold, transfer, or wrap - deliberately decoupled from the wallet's
+/// `beneficiary`. This matters because `beneficiary` can be an object address, which is
+/// never a transaction sender: a `ctx.sender() == beneficiary` gate could never be
+/// satisfied for such a wallet, while a cap can. The cap lives in the core primitive
+/// (not in any one curve), so every curve - including downstream ones copied from the
+/// reference - inherits the same beneficiary-agnostic teardown authority.
+///
 /// # Custom schedules
 ///
 /// Downstream packages ship their own curve in their own module by following the
@@ -60,8 +71,10 @@
 ///    that ends in `vesting_wallet::mint_vested_amount(wallet, MyCurve {}, amount)`.
 /// 4. A teardown that calls `vesting_wallet::destroy_empty(wallet)` to get a
 ///    `DestroyReceipt<MyCurve, MyParams>`, then
-///    `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover the
-///    beneficiary and parameters for the curve module to destructure.
+///    `vesting_wallet::consume_receipt(receipt, cap, MyCurve {})` - passing the wallet's
+///    `DestroyCap` - to recover the schedule parameters for the curve module to
+///    destructure. Gate teardown on the cap, never on `ctx.sender() == beneficiary`: an
+///    object beneficiary is never a sender, so that check could never be satisfied.
 ///
 /// The curve must be monotonically non-decreasing in time and bounded above by
 /// `balance + released`. `release` enforces only the failure modes that threaten
@@ -125,6 +138,11 @@ const EBalanceOverflow: vector<u8> = "Deposit would overflow the wallet's lifeti
 /// so the current balance cannot cover the releasable amount.
 #[error(code = 4)]
 const EInsufficientBalance: vector<u8> = "Releasable amount exceeds the wallet's balance";
+
+/// The `DestroyCap` passed to `consume_receipt` was minted for a different wallet than
+/// the one being torn down.
+#[error(code = 5)]
+const EWrongCap: vector<u8> = "DestroyCap does not match this wallet";
 
 // === Structs ===
 
@@ -206,14 +224,31 @@ public struct VestedAmount<phantom S> has drop {
     amount: u64,
 }
 
-/// Carries a destroyed wallet's beneficiary and schedule params back to its curve. A
-/// HOT POTATO - no abilities - so it cannot be dropped, stored, or copied: it MUST be
-/// consumed before the tx ends, and only `consume_receipt` (witness-gated) can consume
-/// it. This is what drags the curve into the PTB to finalize, and lets it veto by
-/// aborting.
+/// Carries a destroyed wallet's id and schedule params back to its curve. A HOT POTATO
+/// that only `consume_receipt` (witness-gated, and gated on the matching `DestroyCap`)
+/// can consume it. This is what drags the curve into the PTB to finalize, and lets it
+/// veto by aborting. The `wallet_id` is carried so the cap can be matched against the
+/// now-destroyed wallet at consume time.
 public struct DestroyReceipt<phantom S, P> {
-    beneficiary: address,
+    wallet_id: ID,
+    /// The curve's stored configuration. Opaque to the wallet; only the declaring
+    /// curve module interprets it.
     params: P,
+}
+
+/// Authority to finalize the teardown of one specific wallet. Minted by `new` alongside
+/// the wallet and bound to it by `wallet_id`; consumed by `consume_receipt`, which
+/// rejects any cap whose `wallet_id` does not match the wallet being torn down.
+///
+/// Teardown authority travels with the cap, not with the wallet's `beneficiary`.
+/// This is what makes teardown reachable for a wallet whose beneficiary is an object
+/// address (which can never be a `ctx.sender()`); see the module's "Teardown authority"
+/// note. The cap carries no `drop`, so it cannot be silently discarded - it is retired
+/// only by tearing the wallet down.
+public struct DestroyCap has key, store {
+    id: UID,
+    /// Id of the wallet this cap authorizes the teardown of.
+    wallet_id: ID,
 }
 
 // === Events ===
@@ -258,9 +293,11 @@ public struct Destroyed<phantom S, phantom C> has copy, drop {
 
 // === Public Functions ===
 
-/// Build a new wallet around a schedule and return it by value. Returning by value
-/// (rather than sharing internally) lets the caller chain creation, funding, and
-/// topology selection in a single PTB.
+/// Build a new wallet around a schedule and return it by value, together with the
+/// `DestroyCap` that authorizes its eventual teardown. Returning by value (rather than
+/// sharing internally) lets the caller chain creation, funding, and topology selection
+/// in a single PTB; the cap is a separate owned object the caller routes wherever
+/// teardown authority should live (see the module's "Teardown authority" note).
 ///
 /// The type parameters are:
 /// - `S` - the curve's `drop`-only schedule witness
@@ -277,11 +314,12 @@ public struct Destroyed<phantom S, phantom C> has copy, drop {
 /// #### Returns
 /// - A fresh `VestingWallet<S, P, C>` with a zero balance and nothing released,
 ///   owned by the caller (pick a topology before the PTB ends).
+/// - A `DestroyCap` bound to that wallet by id, required later by `consume_receipt`.
 public fun new<S: drop, P: copy + drop + store, C>(
     schedule_params: P,
     beneficiary: address,
     ctx: &mut TxContext,
-): VestingWallet<S, P, C> {
+): (VestingWallet<S, P, C>, DestroyCap) {
     let wallet = VestingWallet<S, P, C> {
         id: object::new(ctx),
         beneficiary,
@@ -289,14 +327,15 @@ public fun new<S: drop, P: copy + drop + store, C>(
         balance: balance::zero<C>(),
         schedule_params,
     };
+    let wallet_id = object::id(&wallet);
 
     event::emit(Created<S, P, C> {
-        wallet_id: object::id(&wallet),
+        wallet_id,
         beneficiary,
         schedule_params,
     });
 
-    wallet
+    (wallet, DestroyCap { id: object::new(ctx), wallet_id })
 }
 
 /// Mint a `VestedAmount<S>` recording `amount` as the cumulative vested total for
@@ -444,15 +483,19 @@ public fun release<S: drop, P: copy + drop + store, C>(
     });
 }
 
-/// Consume a drained wallet to reclaim its storage rebate, emit `Destroyed`, and hand
-/// its beneficiary and schedule parameters back as a `DestroyReceipt<S, P>`.
+/// Consume a drained wallet to reclaim its storage rebate, emit `Destroyed`, and return
+/// a `DestroyReceipt<S, P>` carrying the destroyed wallet's id and schedule parameters.
 ///
-/// This call is permissionless - it takes no witness - so a curve-agnostic holder of
-/// the wallet can tear it down without access to `S`. The receipt is a hot potato that
-/// only the declaring curve can unwrap (via `consume_receipt`), so the curve is still
-/// dragged into the teardown PTB and can veto it by aborting. This is the same authority
-/// split as `VestedAmount`: one half stays callable without the witness, the curve gates
-/// the other.
+/// This call is permissionless - it takes no witness and no cap - so a curve-agnostic
+/// holder of the wallet can drain its rebate without access to `S`. The receipt is a hot
+/// potato that only `consume_receipt` can unwrap, and that call requires both the
+/// declaring curve's witness `S` and the wallet's `DestroyCap`; so the curve is still
+/// dragged into the teardown PTB (and can veto by aborting), and the teardown only
+/// finalizes for the cap holder. A `destroy_empty` whose matching `consume_receipt`
+/// never runs - because the caller lacks the cap or the curve vetoes - reverts with the
+/// whole PTB, since the receipt cannot otherwise be retired. This is the same authority
+/// split as `VestedAmount`: one half stays callable without the witness, the other half
+/// is gated.
 ///
 /// Coins `public_transfer`'d to a destroyed wallet's address after this call have no
 /// path back - pair destruction with halting any upstream emissions that target this
@@ -462,8 +505,8 @@ public fun release<S: drop, P: copy + drop + store, C>(
 /// - `wallet`: The wallet to destroy. Must hold a zero balance.
 ///
 /// #### Returns
-/// - A `DestroyReceipt<S, P>` carrying the wallet's beneficiary and schedule
-///   parameters, to be passed to `consume_receipt`.
+/// - A `DestroyReceipt<S, P>` carrying the wallet's schedule parameters, to be passed to
+///   `consume_receipt`.
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the wallet still holds a balance.
@@ -482,28 +525,41 @@ public fun destroy_empty<S: drop, P: copy + drop + store, C>(
 
     event::emit(Destroyed<S, C> { wallet_id, beneficiary, total_released });
 
-    DestroyReceipt { beneficiary, params: schedule_params }
+    DestroyReceipt { wallet_id, params: schedule_params }
 }
 
-/// Unwrap a `DestroyReceipt<S, P>` to recover the destroyed wallet's beneficiary and
-/// schedule parameters. Witness-gated by `_w: S`: only the declaring curve can call
-/// this, so it - and only it - sees the real `P`, runs any teardown logic, and can
-/// abort (reverting the whole teardown, since the wallet was destroyed in the same
-/// PTB) if destruction should not be accepted.
+/// Unwrap a `DestroyReceipt<S, P>` to recover the destroyed wallet's schedule
+/// parameters, consuming the wallet's `DestroyCap` in the process. Gated two ways:
+///
+/// - **Witness `_w: S`** - only the declaring curve can call this, so it (and only it)
+///   sees the real `P`, runs any teardown logic, and can abort (reverting the whole
+///   teardown, since the wallet was destroyed in the same PTB) if destruction should not
+///   be accepted.
+/// - **`cap: DestroyCap`** - must be the cap `new` minted for this exact wallet. This is
+///   the teardown authority, deliberately decoupled from `beneficiary` so a wallet whose
+///   beneficiary is an object address can still be torn down. The cap is retired here.
 ///
 /// #### Parameters
 /// - `receipt`: The `DestroyReceipt<S, P>` returned by `destroy_empty`.
+/// - `cap`: The `DestroyCap` `new` minted for this wallet. Consumed by the call.
 /// - `_w`: The curve witness `S`.
 ///
 /// #### Returns
-/// - The destroyed wallet's `beneficiary` and its schedule parameters `P`, for the
-///   curve module to use and destructure.
+/// - The destroyed wallet's schedule parameters `P`, for the curve module to use and
+///   destructure.
+///
+/// #### Aborts
+/// - `EWrongCap` if `cap` was minted for a different wallet than this receipt's.
 public fun consume_receipt<S: drop, P: copy + drop + store>(
     receipt: DestroyReceipt<S, P>,
+    cap: DestroyCap,
     _w: S,
-): (address, P) {
-    let DestroyReceipt { beneficiary, params } = receipt;
-    (beneficiary, params)
+): P {
+    let DestroyReceipt { wallet_id, params } = receipt;
+    let DestroyCap { id, wallet_id: cap_wallet_id } = cap;
+    assert!(cap_wallet_id == wallet_id, EWrongCap);
+    id.delete();
+    params
 }
 
 // === View helpers ===
@@ -636,13 +692,6 @@ public fun test_new_destroyed<S, C>(
 #[test_only]
 public fun test_released_coin_id<S, C>(released: &Released<S, C>): ID {
     released.coin_id
-}
-
-/// Read a `DestroyReceipt`'s `beneficiary` for test assertions; the receipt is
-/// otherwise opaque (a hot potato with private fields).
-#[test_only]
-public fun test_receipt_beneficiary<S, P>(receipt: &DestroyReceipt<S, P>): address {
-    receipt.beneficiary
 }
 
 /// Read a `DestroyReceipt`'s `params` for test assertions; the receipt is otherwise
