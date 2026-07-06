@@ -43,8 +43,9 @@
 ///   catch-up, then resumes its regular cadence.
 /// - Mid-schedule: a staircase. With `k` full periods elapsed
 ///   (`k = (now - start_ms) / period_ms`, `0 <= k < steps`), the cumulative vested
-///   total is `total * k / steps`, computed with a u128 intermediate. The value is
-///   flat across a period and steps up at each boundary.
+///   total is `total * k / steps`, with the product evaluated in a wider integer
+///   (u256) before the floor division. The value is flat across a period and steps
+///   up at each boundary.
 /// - Post-end: clamped to the wallet's total (`balance + released`).
 ///
 /// The total is re-derived on every call from `balance + released`, so deposits
@@ -394,6 +395,7 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// - `ENotEnded` if called before the schedule's end (`start_ms + period_ms * steps`).
 public fun destroy(receipt: DestroyReceipt<Linear, Params>, cap: DestroyCap, clock: &Clock) {
     let params = vesting_wallet::consume_receipt(receipt, cap, Linear {});
+
     assert!(clock.timestamp_ms() >= params.calculate_end(), ENotEnded);
 }
 
@@ -486,7 +488,7 @@ fun vested_amount_raw<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
     } else {
         // SAFETY: depositing has a check ensuring no balance overflow can occur.
         let total = wallet.balance() + wallet.released();
-        // SAFETY: construction guarantees `period_ms * steps` and`start_ms + period_ms * steps`
+        // SAFETY: construction guarantees `period_ms * steps` and `start_ms + period_ms * steps`
         // fit in u64, so neither arithmetic here overflows.
         if (now >= start_ms + period_ms * steps) {
             total

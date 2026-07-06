@@ -475,18 +475,31 @@ fun release_pays_step_portion_and_is_permissionless() {
     assert_eq!(wallet.released(), 500);
     assert_eq!(wallet.balance(), 500);
 
+    // The event is emitted with the payout coin's id (read here before `next_tx`
+    // flushes the event buffer).
     let released = event::events_by_type<Released<Linear, USDC>>();
     assert_eq!(released.length(), 1);
+    let coin_id = vesting_wallet::test_released_coin_id(&released[0]);
     assert_eq!(
         released[0],
-        vesting_wallet::test_new_released<Linear, USDC>(wallet_id, BENEFICIARY, 500),
+        vesting_wallet::test_new_released<Linear, USDC>(
+            wallet_id,
+            BENEFICIARY,
+            500,
+            coin_id,
+        ),
     );
 
     destroy(wallet);
 
+    // The beneficiary owns exactly the released coin, and its id matches the one
+    // the event carried - so an off-chain consumer can correlate the event with
+    // the specific payout coin it produced.
     test.next_tx(BENEFICIARY);
     let coin = test.take_from_sender<coin::Coin<USDC>>();
     assert_eq!(coin.value(), 500);
+    assert_eq!(object::id(&coin), coin_id);
+
     destroy(coin);
 
     destroy(clk);
