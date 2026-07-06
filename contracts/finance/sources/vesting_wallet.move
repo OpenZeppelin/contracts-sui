@@ -402,7 +402,7 @@ public fun release<S: drop, P: copy + drop + store, C>(
     transfer::public_transfer(coin, beneficiary);
 
     event::emit(Released<S, C> {
-        wallet_id: object::id(wallet),
+        wallet_id: *wallet_id,
         beneficiary,
         amount: releasable,
     });
