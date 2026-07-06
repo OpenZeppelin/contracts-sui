@@ -187,6 +187,13 @@ public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> 
 /// exposes. If `release` instead required `S`, this would be impossible - a
 /// curve-agnostic wrapper cannot construct `S`, so it would have to expose
 /// `&mut inner` and lose all control over deposits and releases.
+///
+/// A wrapper that supports address-targeted funding should also re-expose
+/// `receive_and_deposit` alongside `release`, since claiming a `Coin<C>`
+/// `public_transfer`'d to the inner wallet's object address needs the same private
+/// `&mut inner`. If it does not, such a coin cannot be claimed while the wallet is
+/// wrapped - anyone can still send one to the address, but it stays stranded until
+/// the wallet is unwrapped and `&mut` is restored.
 public struct VestedAmount<phantom S> has drop {
     /// Id of the wallet this attestation was minted for.
     wallet_id: ID,
@@ -351,6 +358,10 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 /// Claim a coin that an upstream emitter `public_transfer`'d to this wallet's
 /// object address, then funnel it through the standard deposit path. Used by
 /// emission schedules and payroll robots that don't hold a wallet reference.
+///
+/// Requires `&mut wallet`. If the wallet is nested in a wrapper that keeps
+/// `&mut inner` private and does not re-expose this function, a coin sent to the
+/// inner wallet's address stays stranded until the wallet is unwrapped.
 ///
 /// #### Aborts
 /// - `EBalanceOverflow` if claiming the coin would overflow the wallet's
