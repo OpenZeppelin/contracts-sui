@@ -51,6 +51,11 @@ public struct ExecutorRole {}
 public struct CancellerRole {}
 public struct EmergencyRole {}
 
+/// Guards the MAIN timelock's self-administration (`min_delay_ms` / `grace_period_ms` /
+/// `open_executor` changes). Granted to nobody at `init`, so the configuration is locked
+/// until the registry's root admin deliberately grants it.
+public struct AdminRole {}
+
 /// The protected object. Holds one `OperationCap` per op kind (each bound to its own
 /// timelock), plus the timelock ids so off-chain callers / tests can fetch the right
 /// shared instance.
@@ -77,9 +82,13 @@ fun init(otw: EXAMPLE_DUAL_GOVERNANCE, ctx: &mut TxContext) {
     ac.set_role_admin<_, ExecutorRole, EXAMPLE_DUAL_GOVERNANCE>(ctx);
     ac.set_role_admin<_, CancellerRole, EXAMPLE_DUAL_GOVERNANCE>(ctx);
     ac.set_role_admin<_, EmergencyRole, EXAMPLE_DUAL_GOVERNANCE>(ctx);
+    ac.set_role_admin<_, AdminRole, EXAMPLE_DUAL_GOVERNANCE>(ctx);
 
-    // Main: 24h delay, routine roles (admin slot reuses ProposerRole; self-admin unused here).
-    let main_tl = timelock::new<ProposerRole, ExecutorRole, CancellerRole, ProposerRole>(
+    // Main: 24h delay, routine roles. The admin slot gets a dedicated, ungranted
+    // AdminRole: the library's self-administration entry points stay publicly callable on
+    // the shared timelock, so reusing ProposerRole there would let any lone proposer
+    // schedule a min_delay reduction and weaken the very delay this example demonstrates.
+    let main_tl = timelock::new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
         DAY_MS,
         7 * DAY_MS,
         ctx,

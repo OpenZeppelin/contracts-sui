@@ -1,19 +1,25 @@
-/// A treasury whose withdrawal key can only change hands - or be reclaimed - after a
-/// mandatory, on-chain-visible delay, using `delayed_transfer`.
+/// A treasury whose withdrawal key is held under an opt-in custody policy built on
+/// `delayed_transfer`: once the key is wrapped, every custody change - handing it to a
+/// new owner or reclaiming it bare - must be scheduled and survive an on-chain-visible
+/// delay.
 ///
-/// A `Treasury` is a shared pool of `SUI` guarded by a single `TreasuryKey`. Rather than
-/// hold that key bare, the integrator wraps it in a `DelayedTransferWrapper<TreasuryKey>`
-/// with a fixed `min_delay`. From then on every custody change is announced ahead of time:
+/// A `Treasury` is a shared pool of `SUI` guarded by a single `TreasuryKey`. The key is
+/// an ordinary `key + store` object (the wrapper requires `store`), so a *bare* key
+/// transfers freely and `withdraw` accepts it directly - the delay cannot be forced on a
+/// key that was never wrapped. The guarantee comes from adopting the policy: wrap the key
+/// in a `DelayedTransferWrapper<TreasuryKey>` immediately at creation (as the tests do),
+/// and from then on every custody change is announced ahead of time:
 ///  - **Transfer:** `schedule_transfer` records the new owner and a deadline; the move only
 ///    happens once `execute_transfer` is called past the deadline.
 ///  - **Unwrap (self-recovery):** `schedule_unwrap` arms the same delay before the holder
-///    can pull the bare key back out with `unwrap`.
+///    can pull the bare key back out with `unwrap` - so even *exiting* the policy is
+///    announced, but the recovered bare key bypasses the wrapper from then on.
 ///  - **Cancel:** `cancel_schedule` clears a pending action before it executes.
 ///
 /// The delay gives counterparties and monitoring a window to react before a sensitive key
-/// moves. Meanwhile the key stays usable in place: `withdraw` borrows it out of the wrapper
-/// with the library's `borrow`, so day-to-day operation never waits on the timelock - only
-/// custody changes do.
+/// moves. Meanwhile the key stays usable in place: `withdraw_wrapped` borrows it out of
+/// the wrapper with the library's `borrow`, so day-to-day operation never waits on the
+/// timelock - only custody changes do.
 ///
 /// # Disclaimer
 ///
