@@ -46,6 +46,8 @@
 /// - `borrow` / `borrow_mut` - `EKeyNotFound` on an absent key.
 /// - `destroy_empty` - `ENotEmpty` on a non-empty map.
 /// - `pop_front` / `pop_back` - `EEmpty` on an empty map.
+/// - `from_sorted_keys_values` / `_by` - `EUnequalLengths` or `EKeysNotStrictlyIncreasing` on
+///   invalid input.
 ///
 /// These originate in this module, so consumer `#[expected_failure]` tests pin
 /// `location = openzeppelin_collections::sorted_map`.
@@ -83,6 +85,16 @@ const ENotEmpty: vector<u8> = "Map is not empty";
 /// `pop_front`/`pop_back` was called on an empty map.
 #[error(code = 2)]
 const EEmpty: vector<u8> = "Map is empty";
+
+/// A bulk constructor (`from_sorted_keys_values`) received keys that are not strictly increasing
+/// under the comparator (out of order, or a duplicate).
+#[error(code = 3)]
+const EKeysNotStrictlyIncreasing: vector<u8> = "Keys are not strictly increasing";
+
+/// A bulk constructor (`from_sorted_keys_values`) received `keys` and `values` of different
+/// lengths.
+#[error(code = 4)]
+const EUnequalLengths: vector<u8> = "Keys and values differ in length";
 
 // === Structs ===
 
@@ -123,6 +135,12 @@ public struct SortedMap<K: copy + drop + store, V: store> has copy, drop, store 
 /// object.
 public fun new<K: copy + drop + store, V: store>(): SortedMap<K, V> {
     SortedMap { entries: vector[] }
+}
+
+/// A map holding a single `key`/`value` entry. O(1); needs no comparator, since one entry is
+/// trivially sorted. For more than one entry from pre-sorted data, use `from_sorted_keys_values!`.
+public fun singleton<K: copy + drop + store, V: store>(key: K, value: V): SortedMap<K, V> {
+    SortedMap { entries: vector[Entry { key, value }] }
 }
 
 /// Destroy an empty map.
@@ -260,6 +278,24 @@ public fun assert_key_found(found: bool) {
     assert!(found, EKeyNotFound);
 }
 
+/// Abort `EUnequalLengths` if `equal` is false. Routed through this regular fun so the bulk
+/// constructor's abort fires at this module's location, not the consumer's inlined macro body.
+///
+/// #### Aborts
+/// - `EUnequalLengths` if `equal` is false.
+public fun assert_equal_lengths(equal: bool) {
+    assert!(equal, EUnequalLengths);
+}
+
+/// Abort `EKeysNotStrictlyIncreasing` if `increasing` is false. Routed through this regular fun
+/// so the abort fires at this module's location, not the consumer's inlined macro body.
+///
+/// #### Aborts
+/// - `EKeysNotStrictlyIncreasing` if `increasing` is false.
+public fun assert_strictly_increasing(increasing: bool) {
+    assert!(increasing, EKeysNotStrictlyIncreasing);
+}
+
 /// Binary search for `target` under `$lt`.
 ///
 /// #### Parameters
@@ -300,6 +336,76 @@ public macro fun search<$K: copy + drop + store, $V: store>(
         };
     };
     if (found) (true, idx) else (false, lo)
+}
+
+// === Bulk construction (macros: bare + `_by`) ===
+
+/// Build a map from parallel `keys`/`values` that MUST already be strictly increasing under
+/// `$lt` (sorted, no duplicate keys). O(n): one pass validates each adjacent pair, then appends
+/// at the back - no per-element search. Prefer this to a loop of `insert_by!`, which is O(n^2)
+/// for unsorted input.
+///
+/// Unlike `sorted_set::from_keys!` (which de-duplicates), this ABORTS on any out-of-order or
+/// duplicate key: values are conserved (a resource `V` can never be silently displaced), so a
+/// duplicate cannot be collapsed away.
+///
+/// If your keys are not yet ordered, sort them under the same comparator first, then call this.
+/// A sort-internally variant is intentionally omitted: it would add a sorting dependency, run in
+/// O(n log n) at best (O(n^2) worst) instead of O(n), and would still reject duplicate keys.
+///
+/// #### Parameters
+/// - `keys`: Strictly-increasing keys under `lt`.
+/// - `values`: Values positionally paired with `keys`.
+/// - `lt`: Strict less-than comparator.
+///
+/// #### Returns
+/// - A map with `keys[i]` -> `values[i]`, in ascending order.
+///
+/// #### Aborts
+/// - `EUnequalLengths` if `keys` and `values` differ in length.
+/// - `EKeysNotStrictlyIncreasing` if `keys` is not strictly increasing under `lt`.
+public macro fun from_sorted_keys_values_by<$K: copy + drop + store, $V: store>(
+    $keys: vector<$K>,
+    $values: vector<$V>,
+    $lt: |&$K, &$K| -> bool,
+): SortedMap<$K, $V> {
+    let mut keys = $keys;
+    let mut values = $values;
+    assert_equal_lengths(keys.length() == values.length());
+    let n = keys.length();
+    let mut i = 1;
+    while (i < n) {
+        assert_strictly_increasing($lt(keys.borrow(i - 1), keys.borrow(i)));
+        i = i + 1;
+    };
+    // Validated: consume both vectors front-to-back (reverse, then O(1) `pop_back` each),
+    // appending at the back so the result keeps the input's ascending order.
+    keys.reverse();
+    values.reverse();
+    let mut map = new();
+    while (!keys.is_empty()) {
+        let k = keys.pop_back();
+        let v = values.pop_back();
+        let at = length(&map);
+        insert_at(&mut map, at, make_entry(k, v));
+    };
+    keys.destroy_empty();
+    values.destroy_empty();
+    map
+}
+
+/// `from_sorted_keys_values_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - A map with `keys[i]` -> `values[i]`, in ascending order.
+///
+/// #### Aborts
+/// - `EUnequalLengths` / `EKeysNotStrictlyIncreasing` - see `from_sorted_keys_values_by`.
+public macro fun from_sorted_keys_values<$K: copy + drop + store, $V: store>(
+    $keys: vector<$K>,
+    $values: vector<$V>,
+): SortedMap<$K, $V> {
+    from_sorted_keys_values_by!($keys, $values, |a, b| *a < *b)
 }
 
 // === Point access (macros: bare + `_by`) ===

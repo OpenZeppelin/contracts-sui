@@ -170,3 +170,23 @@ fun store_only_map_wrapped_shared() {
     };
     sc.end();
 }
+
+// === Bulk constructor conserves non-droppable values ===
+
+#[test]
+fun from_sorted_conserves_no_drop_values() {
+    // V = NoDrop: the builder must MOVE each value in (never drop it), or this won't compile.
+    let mut m = sm::from_sorted_keys_values!(
+        vector[1u64, 2, 3],
+        vector[u::nd(10), u::nd(20), u::nd(30)],
+    );
+    assert_eq!(u::nd_value_id(&m, 2), 20); // reads conserve
+    // The whole multiset leaves only via a return path (pop_back drains largest-first).
+    let (_, w3) = sm::pop_back(&mut m);
+    let (_, w2) = sm::pop_back(&mut m);
+    let (_, w1) = sm::pop_back(&mut m);
+    sm::destroy_empty(m);
+    assert_eq!(u::nd_unwrap(w1), 10);
+    assert_eq!(u::nd_unwrap(w2), 20);
+    assert_eq!(u::nd_unwrap(w3), 30);
+}

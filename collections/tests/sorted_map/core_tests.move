@@ -343,6 +343,52 @@ fun keys_reflects_stored_order_under_reverse_comparator() {
     assert_eq!(sm::keys(&m), vector[30, 20, 10]);
 }
 
+// === Bulk construction (singleton, from_sorted_keys_values) ===
+
+#[test]
+fun singleton_holds_one_entry() {
+    let m = sm::singleton(5, 50);
+    assert_eq!(sm::length(&m), 1);
+    assert_eq!(sm::keys(&m), vector[5]);
+    assert_eq!(u::get(&m, 5), 50);
+}
+
+#[test]
+fun from_sorted_builds_ascending() {
+    let m = sm::from_sorted_keys_values!(vector[10, 20, 30], vector[1, 2, 3]);
+    assert_eq!(sm::keys(&m), vector[10, 20, 30]);
+    assert_eq!(u::get(&m, 20), 2);
+    assert!(u::wf(&m));
+}
+
+#[test]
+fun from_sorted_empty_is_empty() {
+    let m = sm::from_sorted_keys_values!(vector<u64>[], vector<u64>[]);
+    assert!(sm::is_empty(&m));
+}
+
+#[test]
+fun from_sorted_by_reverse_comparator() {
+    // Descending keys are strictly increasing UNDER the reverse comparator, so this builds a
+    // consistently-reversed map; `keys` returns the stored (descending) order.
+    let m = sm::from_sorted_keys_values_by!(vector[30, 20, 10], vector[3, 2, 1], |a, b| *a > *b);
+    assert_eq!(sm::keys(&m), vector[30, 20, 10]);
+    assert_eq!(u::get_rev(&m, 20), 2);
+    assert!(u::wf_rev(&m));
+}
+
+#[test]
+fun from_sorted_matches_insert_loop() {
+    // Differential: the O(n) builder produces the same map as a loop of `insert!`.
+    let built = sm::from_sorted_keys_values!(vector[1, 5, 9], vector[10, 50, 90]);
+    let mut looped = sm::new<u64, u64>();
+    u::ins(&mut looped, 1, 10);
+    u::ins(&mut looped, 5, 50);
+    u::ins(&mut looped, 9, 90);
+    assert_eq!(sm::keys(&built), sm::keys(&looped));
+    assert_eq!(u::get(&built, 5), u::get(&looped, 5));
+}
+
 // === Length tracks the vector with no cached counter ===
 
 #[test]

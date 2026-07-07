@@ -37,7 +37,7 @@ Abilities materialize jointly over `K` and `V`: `SortedMap<u64, u64>` is `copy +
 
 ### Lifecycle
 
-1. **Construct** - `new()` takes no `TxContext`; embed the result as a field on your object.
+1. **Construct** - `new()` (empty), `singleton(k, v)`, or `from_sorted_keys_values!(keys, values)` (parallel vectors that must be strictly increasing under the comparator - aborts otherwise; unlike `sorted_set`'s de-duplicating `from_keys!`). None take a `TxContext`; embed the result as a field on your object.
 2. **Read / write** - use the bare macros (`insert!`, `borrow!`, `remove!`, ...) for integer keys; use the `_by` macros with a consistently threaded comparator for non-integer keys.
 3. **Drain** - a store-only `V` (e.g. `Coin`) cannot be dropped: remove every value, then `destroy_empty`.
 
@@ -153,7 +153,7 @@ The comparator footgun applies to both modules and is stated once at the top of 
 
 ### SortedMap
 
-- **Aborts, all at the library's location.** Only these abort: `borrow`/`borrow_mut` -> `EKeyNotFound`; `destroy_empty` on a non-empty map -> `ENotEmpty`; `pop_front`/`pop_back` on an empty map -> `EEmpty`. Everything else is total (returns `Option`/`bool`/`vector`). Consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_map`.
+- **Aborts, all at the library's location.** Only these abort: `borrow`/`borrow_mut` -> `EKeyNotFound`; `destroy_empty` on a non-empty map -> `ENotEmpty`; `pop_front`/`pop_back` on an empty map -> `EEmpty`; `from_sorted_keys_values`/`_by` -> `EUnequalLengths` or `EKeysNotStrictlyIncreasing` on invalid input. Everything else is total (returns `Option`/`bool`/`vector`). Consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_map`.
 - **Resource-`V` conservation.** `insert`'s upsert returns the displaced value (`some(old)`) rather than dropping it; `remove`/`pop_*` move values out; `destroy_empty` refuses a non-empty map. A store-only `V` like `Coin<T>` is never silently burned.
 - **Forced-public internals are not an API.** Macro hygiene forces `search!`, `insert_at`, `remove_at`, `make_entry` to be `public`. `insert_at`/`remove_at` write at a caller-given position with no order check - calling them directly can corrupt order. They exist only to serve the macro bodies; use the macro API.
 - **No events.** A UID-less value has no on-chain identity; emit events yourself at your entry functions. Embedding in a shared object serializes writers per object, not per key - shard into multiple maps or use an owned object for hot paths.

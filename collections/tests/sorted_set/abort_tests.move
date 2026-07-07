@@ -1,6 +1,6 @@
 /// The abort surface: exactly ONE library abort (`EEmpty`), asserted FIRST at THIS
 /// module's location/code, plus the affirmative total-API contract for mid-PTB chaining.
-/// The set is "total except ONE" - strictly more total than the map's five carve-outs.
+/// The set is "total except ONE" - strictly more total than the map's abort carve-outs.
 ///
 /// Every set-owned `#[expected_failure]` pins BOTH `abort_code = ...sorted_set::EEmpty` AND
 /// `location = openzeppelin_collections::sorted_set` - code 0 at the SET's location. The bypass

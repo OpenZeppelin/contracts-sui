@@ -1,4 +1,4 @@
-/// The five abort carve-outs and the total-API contract.
+/// The abort carve-outs and the total-API contract.
 ///
 /// Every `#[expected_failure]` pins `location = openzeppelin_collections::sorted_map`: the
 /// abort must originate in the library, never in the consumer's inlined macro body
@@ -177,4 +177,41 @@ fun ptb_chain_no_abort() {
     let _ = u::rm(&mut m, 2);
     let _ = u::ins(&mut m, 2, 22);
     assert_eq!(u::kfrom(&m, 0, true, 5), vector[1, 2, 3]);
+}
+
+// === from_sorted_keys_values -> EUnequalLengths / EKeysNotStrictlyIncreasing ===
+
+#[test]
+#[
+    expected_failure(
+        abort_code = openzeppelin_collections::sorted_map::EUnequalLengths,
+        location = openzeppelin_collections::sorted_map,
+    ),
+]
+fun from_sorted_unequal_lengths() {
+    let _m = sm::from_sorted_keys_values!(vector<u64>[1, 2, 3], vector<u64>[10, 20]);
+}
+
+#[test]
+#[
+    expected_failure(
+        abort_code = openzeppelin_collections::sorted_map::EKeysNotStrictlyIncreasing,
+        location = openzeppelin_collections::sorted_map,
+    ),
+]
+fun from_sorted_out_of_order() {
+    let _m = sm::from_sorted_keys_values!(vector<u64>[1, 3, 2], vector<u64>[10, 30, 20]);
+}
+
+#[test]
+#[
+    expected_failure(
+        abort_code = openzeppelin_collections::sorted_map::EKeysNotStrictlyIncreasing,
+        location = openzeppelin_collections::sorted_map,
+    ),
+]
+fun from_sorted_duplicate_key() {
+    // A duplicate compares equal, so it is NOT strictly increasing - aborts rather than
+    // de-duplicating (a resource `V` cannot be silently displaced).
+    let _m = sm::from_sorted_keys_values!(vector<u64>[1, 2, 2], vector<u64>[10, 20, 21]);
 }
