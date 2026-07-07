@@ -28,9 +28,9 @@ fun tick_navigation_walkthrough() {
     ts::next_tx(&mut scenario, ALICE);
     {
         let mut reg = ts::take_shared<TickRegistry>(&scenario);
-        assert!(!tick_registry::add_tick(&mut reg, 3000, 300, 0));
-        assert!(!tick_registry::add_tick(&mut reg, 1000, 100, 0));
-        assert!(!tick_registry::add_tick(&mut reg, 2000, 200, 0));
+        assert!(!reg.add_tick(3000, 300, 0));
+        assert!(!reg.add_tick(1000, 100, 0));
+        assert!(!reg.add_tick(2000, 200, 0));
         ts::return_shared(reg);
     };
 
@@ -38,7 +38,7 @@ fun tick_navigation_walkthrough() {
     ts::next_tx(&mut scenario, BOB);
     {
         let mut reg = ts::take_shared<TickRegistry>(&scenario);
-        assert!(!tick_registry::add_tick(&mut reg, 4000, 400, 0));
+        assert!(!reg.add_tick(4000, 400, 0));
         ts::return_shared(reg);
     };
 
@@ -47,33 +47,33 @@ fun tick_navigation_walkthrough() {
     {
         let mut reg = ts::take_shared<TickRegistry>(&scenario);
 
-        assert_eq!(tick_registry::min_tick(&reg), option::some(1000));
-        assert_eq!(tick_registry::max_tick(&reg), option::some(4000));
+        assert_eq!(reg.min_tick(), option::some(1000));
+        assert_eq!(reg.max_tick(), option::some(4000));
 
         // Crossing upward / downward: next_key / prev_key. Ends terminate with none.
-        assert_eq!(tick_registry::tick_above(&reg, 1000), option::some(2000));
-        assert_eq!(tick_registry::tick_above(&reg, 2000), option::some(3000));
-        assert!(tick_registry::tick_above(&reg, 4000).is_none());
-        assert_eq!(tick_registry::tick_below(&reg, 4000), option::some(3000));
-        assert!(tick_registry::tick_below(&reg, 1000).is_none());
+        assert_eq!(reg.tick_above(1000), option::some(2000));
+        assert_eq!(reg.tick_above(2000), option::some(3000));
+        assert!(reg.tick_above(4000).is_none());
+        assert_eq!(reg.tick_below(4000), option::some(3000));
+        assert!(reg.tick_below(1000).is_none());
 
         // Ceiling / floor for a target BETWEEN active ticks (1500 is not a tick).
-        assert_eq!(tick_registry::ceiling_tick(&reg, 1500), option::some(2000));
-        assert_eq!(tick_registry::floor_tick(&reg, 1500), option::some(1000));
+        assert_eq!(reg.ceiling_tick(1500), option::some(2000));
+        assert_eq!(reg.floor_tick(1500), option::some(1000));
         // Exact match: inclusive ceiling and floor both return the tick itself.
-        assert_eq!(tick_registry::ceiling_tick(&reg, 2000), option::some(2000));
-        assert_eq!(tick_registry::floor_tick(&reg, 2000), option::some(2000));
+        assert_eq!(reg.ceiling_tick(2000), option::some(2000));
+        assert_eq!(reg.floor_tick(2000), option::some(2000));
         // Past the ends: none.
-        assert!(tick_registry::ceiling_tick(&reg, 4500).is_none());
-        assert!(tick_registry::floor_tick(&reg, 500).is_none());
+        assert!(reg.ceiling_tick(4500).is_none());
+        assert!(reg.floor_tick(500).is_none());
 
         // Mutate fee growth in place, then overwrite a tick's liquidity (replace).
-        tick_registry::accrue_fees(&mut reg, 1000, 50);
-        assert_eq!(tick_registry::fee_growth(tick_registry::borrow_tick(&reg, 1000)), 50);
-        assert!(tick_registry::add_tick(&mut reg, 1000, 999, 999)); // replaces -> true
-        assert_eq!(tick_registry::liquidity_net(tick_registry::borrow_tick(&reg, 1000)), 999);
+        reg.accrue_fees(1000, 50);
+        assert_eq!(reg.borrow_tick(1000).fee_growth(), 50);
+        assert!(reg.add_tick(1000, 999, 999)); // replaces -> true
+        assert_eq!(reg.borrow_tick(1000).liquidity_net(), 999);
 
-        assert!(tick_registry::ticks_well_formed(&reg));
+        assert!(reg.ticks_well_formed());
         ts::return_shared(reg);
     };
 
@@ -81,9 +81,9 @@ fun tick_navigation_walkthrough() {
     ts::next_tx(&mut scenario, BOB);
     {
         let mut reg = ts::take_shared<TickRegistry>(&scenario);
-        assert!(tick_registry::remove_tick(&mut reg, 1000));
-        assert!(!tick_registry::contains_tick(&reg, 1000));
-        assert_eq!(tick_registry::min_tick(&reg), option::some(2000));
+        assert!(reg.remove_tick(1000));
+        assert!(!reg.contains_tick(1000));
+        assert_eq!(reg.min_tick(), option::some(2000));
         ts::return_shared(reg);
     };
 
@@ -110,8 +110,8 @@ fun borrow_inactive_tick_aborts() {
     ts::next_tx(&mut scenario, ALICE);
     {
         let mut reg = ts::take_shared<TickRegistry>(&scenario);
-        let _ = tick_registry::add_tick(&mut reg, 1000, 100, 0);
-        let _ = tick_registry::borrow_tick(&reg, 2000); // 2000 inactive -> aborts
+        let _ = reg.add_tick(1000, 100, 0);
+        let _ = reg.borrow_tick(2000); // 2000 inactive -> aborts
         ts::return_shared(reg); // unreachable
     };
     ts::end(scenario);

@@ -30,6 +30,8 @@ module openzeppelin_collections::sorted_map_order_book;
 
 use openzeppelin_collections::sorted_map::{Self, SortedMap};
 
+// === Structs ===
+
 /// Aggregate resting size at one price.
 public struct Level has copy, drop, store {
     size: u64,
@@ -43,6 +45,8 @@ public struct OrderBook has key {
     /// price -> resting size, descending (best bid = highest price = head).
     bids: SortedMap<u64, Level>,
 }
+
+// === Public Functions ===
 
 /// Create an empty book, share it, and return its `ID`.
 public fun deploy_and_share(ctx: &mut TxContext): ID {
@@ -58,11 +62,11 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
 
 /// Add `size` at `price` on the ask side, merging into an existing level if present.
 public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
-    if (sorted_map::contains!(&book.asks, &price)) {
-        let lvl = sorted_map::borrow_mut!(&mut book.asks, &price);
+    if (book.asks.contains!(&price)) {
+        let lvl = book.asks.borrow_mut!(&price);
         lvl.size = lvl.size + size;
     } else {
-        sorted_map::insert!(&mut book.asks, price, Level { size });
+        book.asks.insert!(price, Level { size });
     }
 }
 
@@ -73,23 +77,23 @@ fun outbids(a: &u64, b: &u64): bool { *a > *b }
 /// Add `size` at `price` on the bid side, merging if present. Bids descend, so every
 /// call threads the same `|a, b| outbids(a, b)`.
 public fun place_bid(book: &mut OrderBook, price: u64, size: u64) {
-    if (sorted_map::contains_by!(&book.bids, &price, |a, b| outbids(a, b))) {
-        let lvl = sorted_map::borrow_mut_by!(&mut book.bids, &price, |a, b| outbids(a, b));
+    if (book.bids.contains_by!(&price, |a, b| outbids(a, b))) {
+        let lvl = book.bids.borrow_mut_by!(&price, |a, b| outbids(a, b));
         lvl.size = lvl.size + size;
     } else {
-        sorted_map::insert_by!(&mut book.bids, price, Level { size }, |a, b| outbids(a, b));
+        book.bids.insert_by!(price, Level { size }, |a, b| outbids(a, b));
     }
 }
 
 /// Best (lowest) ask, or `none` if the ask side is empty.
 public fun best_ask(book: &OrderBook): Option<u64> {
-    sorted_map::head(&book.asks)
+    book.asks.head()
 }
 
 /// Best (highest) bid, or `none` if the bid side is empty. `head` reads index 0, which
 /// the descending order placed the maximum price at.
 public fun best_bid(book: &OrderBook): Option<u64> {
-    sorted_map::head(&book.bids)
+    book.bids.head()
 }
 
 /// Level-2 ask snapshot: up to `limit` ask prices, ascending, starting at the first
@@ -97,25 +101,25 @@ public fun best_bid(book: &OrderBook): Option<u64> {
 /// the first page with `include = true`, then resuming from the last returned price
 /// with `include = false` - the pages tile with no gap or overlap.
 public fun ask_levels(book: &OrderBook, from: u64, include: bool, limit: u64): vector<u64> {
-    sorted_map::keys_from!(&book.asks, &from, include, limit)
+    book.asks.keys_from!(&from, include, limit)
 }
 
 /// Resting size at a specific ask `price`. Aborts `EKeyNotFound` if no level rests
 /// there - gate with `contains!`, or read live prices via `best_ask` / `ask_levels`.
 public fun ask_size_at(book: &OrderBook, price: u64): u64 {
-    let lvl = sorted_map::borrow!(&book.asks, &price);
+    let lvl = book.asks.borrow!(&price);
     lvl.size
 }
 
 /// Remove and return the best (lowest) ask as `(price, size)`. Aborts `EEmpty` on an
 /// empty ask side - guard with `best_ask` first.
 public fun fill_best_ask(book: &mut OrderBook): (u64, u64) {
-    let (price, lvl) = sorted_map::pop_front(&mut book.asks);
+    let (price, lvl) = book.asks.pop_front();
     let Level { size } = lvl;
     (price, size)
 }
 
-// === Test-only order checks ===
+// === Test-Only Helpers ===
 //
 // `sorted_map` ships a test-only helper that verifies a map is correctly ordered.
 // These wrappers let this package's tests call it; the bid wrapper keeps the bid
@@ -124,7 +128,7 @@ public fun fill_best_ask(book: &mut OrderBook): (u64, u64) {
 /// True iff the bid side is correctly ordered under the book's (descending) comparator.
 #[test_only]
 public fun bids_well_formed(book: &OrderBook): bool {
-    sorted_map::is_well_formed_by!(&book.bids, |a, b| outbids(a, b))
+    book.bids.is_well_formed_by!(|a, b| outbids(a, b))
 }
 
 /// Read-only view of the ask map, so a test can order-check it directly.

@@ -18,42 +18,42 @@ fun drain_earliest_first() {
     let mut scenario = ts::begin(ALICE);
 
     // Tx1 - ALICE: deploy a queue seeded from [30, 10, 20, 10]; the duplicate 10 collapses.
-    unlock_queue::deploy_and_share(vector[30, 10, 20, 10], ts::ctx(&mut scenario));
+    unlock_queue::deploy_and_share(vector[30, 10, 20, 10], scenario.ctx());
 
     // Tx2 - BOB: peek the extremes and schedule more (one new, one duplicate).
-    ts::next_tx(&mut scenario, BOB);
+    scenario.next_tx(BOB);
     {
-        let mut q = ts::take_shared<UnlockQueue>(&scenario);
-        assert_eq!(unlock_queue::pending(&q), 3); // {10, 20, 30}
-        assert_eq!(unlock_queue::next_deadline(&q), option::some(10)); // earliest, O(1) peek
-        assert_eq!(unlock_queue::last_deadline(&q), option::some(30)); // latest, O(1) peek
+        let mut q = scenario.take_shared<UnlockQueue>();
+        assert_eq!(q.pending(), 3); // {10, 20, 30}
+        assert_eq!(q.next_deadline(), option::some(10)); // earliest, O(1) peek
+        assert_eq!(q.last_deadline(), option::some(30)); // latest, O(1) peek
 
-        assert!(unlock_queue::schedule(&mut q, 25)); // new -> true
-        assert!(!unlock_queue::schedule(&mut q, 10)); // duplicate -> false, no abort
-        assert_eq!(unlock_queue::pending(&q), 4); // {10, 20, 25, 30}
-        assert!(unlock_queue::deadlines_well_formed(&q)); // order oracle on a POPULATED set (n=4)
+        assert!(q.schedule(25)); // new -> true
+        assert!(!q.schedule(10)); // duplicate -> false, no abort
+        assert_eq!(q.pending(), 4); // {10, 20, 25, 30}
+        assert!(q.deadlines_well_formed()); // order oracle on a POPULATED set (n=4)
         ts::return_shared(q);
     };
 
     // Tx3 - CAROL: drain in order, cancel one, then drain the last via the other extreme.
-    ts::next_tx(&mut scenario, CAROL);
+    scenario.next_tx(CAROL);
     {
-        let mut q = ts::take_shared<UnlockQueue>(&scenario);
-        assert_eq!(unlock_queue::process_earliest(&mut q), 10); // pop_front: smallest
-        assert_eq!(unlock_queue::process_earliest(&mut q), 20);
-        assert_eq!(unlock_queue::pending(&q), 2); // {25, 30}
-        assert_eq!(unlock_queue::next_deadline(&q), option::some(25));
+        let mut q = scenario.take_shared<UnlockQueue>();
+        assert_eq!(q.process_earliest(), 10); // pop_front: smallest
+        assert_eq!(q.process_earliest(), 20);
+        assert_eq!(q.pending(), 2); // {25, 30}
+        assert_eq!(q.next_deadline(), option::some(25));
 
-        assert!(unlock_queue::cancel(&mut q, 30)); // remove the tail
-        assert_eq!(unlock_queue::pending(&q), 1); // {25}
-        assert_eq!(unlock_queue::process_latest(&mut q), 25); // pop_back: largest (now only)
+        assert!(q.cancel(30)); // remove the tail
+        assert_eq!(q.pending(), 1); // {25}
+        assert_eq!(q.process_latest(), 25); // pop_back: largest (now only)
 
-        assert!(unlock_queue::is_empty(&q));
-        assert!(unlock_queue::deadlines_well_formed(&q)); // an empty set is well-formed
+        assert!(q.is_empty());
+        assert!(q.deadlines_well_formed()); // an empty set is well-formed
         ts::return_shared(q);
     };
 
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Scenario 4 - the library's ONE abort: pop on an empty set ===
@@ -74,23 +74,23 @@ fun process_empty_queue_aborts() {
     let mut scenario = ts::begin(ALICE);
 
     // Tx1 - ALICE: deploy a queue holding a single deadline.
-    unlock_queue::deploy_and_share(vector[5], ts::ctx(&mut scenario));
+    unlock_queue::deploy_and_share(vector[5], scenario.ctx());
 
     // Tx2 - ALICE: drain the only deadline, emptying the queue.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut q = ts::take_shared<UnlockQueue>(&scenario);
-        assert_eq!(unlock_queue::process_earliest(&mut q), 5);
+        let mut q = scenario.take_shared<UnlockQueue>();
+        assert_eq!(q.process_earliest(), 5);
         ts::return_shared(q);
     };
 
     // Tx3 - ALICE: pop the now-empty queue - aborts EEmpty at the SET's location.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut q = ts::take_shared<UnlockQueue>(&scenario);
-        unlock_queue::process_earliest(&mut q); // aborts here
+        let mut q = scenario.take_shared<UnlockQueue>();
+        q.process_earliest(); // aborts here
         ts::return_shared(q); // unreachable; satisfies the type checker
     };
 
-    ts::end(scenario);
+    scenario.end();
 }

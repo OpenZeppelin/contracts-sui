@@ -32,8 +32,7 @@ module openzeppelin_collections::sorted_set_validator_set;
 use openzeppelin_collections::sorted_set::{Self, SortedSet};
 use sui::address;
 
-#[test_only]
-use openzeppelin_collections::sorted_map;
+// === Structs ===
 
 /// A validator identity: voting `stake` plus the validator's `addr`. `copy + drop + store` so it
 /// can be a set key. `addr` makes the ordering injective (no two distinct validators tie).
@@ -50,6 +49,8 @@ public struct ValidatorSet has key {
     id: UID,
     validators: SortedSet<Validator>,
 }
+
+// === Public Functions ===
 
 /// THE comparator. Strict-less-than read as "a outranks b": more stake comes first; equal stake
 /// is broken by the lower address. `address` has no built-in `<` (another reason a struct key
@@ -83,23 +84,23 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
 /// Register `v`. Struct key, so `insert_by!` threads the `outranks` comparator. Returns `true`
 /// iff newly registered (a duplicate returns `false`, no abort).
 public fun register(vs: &mut ValidatorSet, v: Validator): bool {
-    sorted_set::insert_by!(&mut vs.validators, v, |a, b| outranks(a, b))
+    vs.validators.insert_by!(v, |a, b| outranks(a, b))
 }
 
 /// Deregister `v`. Returns `true` iff it WAS registered (total). Same comparator as `register`.
 public fun deregister(vs: &mut ValidatorSet, v: &Validator): bool {
-    sorted_set::remove_by!(&mut vs.validators, v, |a, b| outranks(a, b))
+    vs.validators.remove_by!(v, |a, b| outranks(a, b))
 }
 
 /// True iff `v` is currently registered (under the `outranks` comparator).
 public fun is_registered(vs: &ValidatorSet, v: &Validator): bool {
-    sorted_set::contains_by!(&vs.validators, v, |a, b| outranks(a, b))
+    vs.validators.contains_by!(v, |a, b| outranks(a, b))
 }
 
 /// The top-ranked validator (most stake), or `none` if the registry is empty. `head` is the
 /// comparator-minimum, and under `outranks` that is the highest-staked validator.
 public fun top(vs: &ValidatorSet): Option<Validator> {
-    sorted_set::head(&vs.validators)
+    vs.validators.head()
 }
 
 /// Re-rank an EXISTING validator to `new_stake`. Keys are immutable, so this removes the old
@@ -122,19 +123,19 @@ public fun restake(vs: &mut ValidatorSet, old: Validator, new_stake: u64): bool 
 
 /// All validators in rank order (highest stake first), as an owned snapshot.
 public fun ranking(vs: &ValidatorSet): vector<Validator> {
-    sorted_set::keys(&vs.validators)
+    vs.validators.keys()
 }
 
 /// Number of registered validators.
 public fun count(vs: &ValidatorSet): u64 {
-    sorted_set::length(&vs.validators)
+    vs.validators.length()
 }
 
-// === Test-only order check ===
+// === Test-Only Helpers ===
 
 /// True iff the embedded set is correctly ordered UNDER `outranks`. A struct key needs the
 /// `_by` oracle, threading the very same comparator the writes use.
 #[test_only]
 public fun validators_well_formed(vs: &ValidatorSet): bool {
-    sorted_map::is_well_formed_by!(sorted_set::inner_ref(&vs.validators), |a, b| outranks(a, b))
+    vs.validators.inner_ref().is_well_formed_by!(|a, b| outranks(a, b))
 }

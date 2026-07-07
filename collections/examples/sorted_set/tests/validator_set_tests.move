@@ -28,47 +28,47 @@ fun struct_key_ranking() {
     let mut scenario = ts::begin(ALICE);
 
     // Tx1 - ALICE: deploy and share an empty validator registry.
-    validator_set::deploy_and_share(ts::ctx(&mut scenario));
+    validator_set::deploy_and_share(scenario.ctx());
 
     // Tx2 - ALICE: register three validators; a re-register is a no-op (false), not an abort.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut vs = ts::take_shared<ValidatorSet>(&scenario);
-        assert!(validator_set::register(&mut vs, validator_set::validator(100, VAL_A)));
-        assert!(validator_set::register(&mut vs, validator_set::validator(300, VAL_B)));
-        assert!(validator_set::register(&mut vs, validator_set::validator(200, VAL_C)));
-        assert!(!validator_set::register(&mut vs, validator_set::validator(300, VAL_B))); // dup
+        let mut vs = scenario.take_shared<ValidatorSet>();
+        assert!(vs.register(validator_set::validator(100, VAL_A)));
+        assert!(vs.register(validator_set::validator(300, VAL_B)));
+        assert!(vs.register(validator_set::validator(200, VAL_C)));
+        assert!(!vs.register(validator_set::validator(300, VAL_B))); // dup
 
-        assert_eq!(validator_set::count(&vs), 3);
+        assert_eq!(vs.count(), 3);
         // head = highest stake under `outranks`.
-        assert_eq!(validator_set::top(&vs), option::some(validator_set::validator(300, VAL_B)));
+        assert_eq!(vs.top(), option::some(validator_set::validator(300, VAL_B)));
         // ranking is highest-stake-first.
         assert_eq!(
-            validator_set::ranking(&vs),
+            vs.ranking(),
             vector[
                 validator_set::validator(300, VAL_B),
                 validator_set::validator(200, VAL_C),
                 validator_set::validator(100, VAL_A),
             ],
         );
-        assert!(validator_set::validators_well_formed(&vs)); // _by order oracle
+        assert!(vs.validators_well_formed()); // _by order oracle
         ts::return_shared(vs);
     };
 
     // Tx3 - BOB: re-rank VAL_A (immutable key -> remove + reinsert), then deregister the leader.
-    ts::next_tx(&mut scenario, BOB);
+    scenario.next_tx(BOB);
     {
-        let mut vs = ts::take_shared<ValidatorSet>(&scenario);
-        assert!(validator_set::is_registered(&vs, &validator_set::validator(200, VAL_C)));
+        let mut vs = scenario.take_shared<ValidatorSet>();
+        assert!(vs.is_registered(&validator_set::validator(200, VAL_C)));
 
         // Bump VAL_A from 100 to 250: the old (100, VAL_A) entry is gone, (250, VAL_A) exists.
-        assert!(validator_set::restake(&mut vs, validator_set::validator(100, VAL_A), 250));
-        assert!(!validator_set::is_registered(&vs, &validator_set::validator(100, VAL_A)));
-        assert!(validator_set::is_registered(&vs, &validator_set::validator(250, VAL_A)));
-        assert_eq!(validator_set::count(&vs), 3); // cardinality preserved
+        assert!(vs.restake(validator_set::validator(100, VAL_A), 250));
+        assert!(!vs.is_registered(&validator_set::validator(100, VAL_A)));
+        assert!(vs.is_registered(&validator_set::validator(250, VAL_A)));
+        assert_eq!(vs.count(), 3); // cardinality preserved
 
         assert_eq!(
-            validator_set::ranking(&vs),
+            vs.ranking(),
             vector[
                 validator_set::validator(300, VAL_B),
                 validator_set::validator(250, VAL_A),
@@ -77,14 +77,14 @@ fun struct_key_ranking() {
         );
 
         // Deregister the leader; VAL_A is promoted to top.
-        assert!(validator_set::deregister(&mut vs, &validator_set::validator(300, VAL_B)));
-        assert_eq!(validator_set::count(&vs), 2);
-        assert_eq!(validator_set::top(&vs), option::some(validator_set::validator(250, VAL_A)));
-        assert!(validator_set::validators_well_formed(&vs));
+        assert!(vs.deregister(&validator_set::validator(300, VAL_B)));
+        assert_eq!(vs.count(), 2);
+        assert_eq!(vs.top(), option::some(validator_set::validator(250, VAL_A)));
+        assert!(vs.validators_well_formed());
         ts::return_shared(vs);
     };
 
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Scenario 7 - restake onto an already-occupied slot is an atomic no-op ===
@@ -98,29 +98,29 @@ fun restake_onto_occupied_slot_is_atomic() {
     let mut scenario = ts::begin(ALICE);
 
     // Tx1 - ALICE: deploy and share an empty validator registry.
-    validator_set::deploy_and_share(ts::ctx(&mut scenario));
+    validator_set::deploy_and_share(scenario.ctx());
 
     // Tx2 - ALICE: register two entries for the SAME address at different stakes, then re-rank the
     // lower one onto the higher one's occupied slot.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut vs = ts::take_shared<ValidatorSet>(&scenario);
-        assert!(validator_set::register(&mut vs, validator_set::validator(100, VAL_A)));
-        assert!(validator_set::register(&mut vs, validator_set::validator(250, VAL_A)));
-        assert_eq!(validator_set::count(&vs), 2);
+        let mut vs = scenario.take_shared<ValidatorSet>();
+        assert!(vs.register(validator_set::validator(100, VAL_A)));
+        assert!(vs.register(validator_set::validator(250, VAL_A)));
+        assert_eq!(vs.count(), 2);
 
         // Re-rank (100, VAL_A) -> 250: (250, VAL_A) already occupies that slot, so this is a no-op.
-        assert!(!validator_set::restake(&mut vs, validator_set::validator(100, VAL_A), 250));
+        assert!(!vs.restake(validator_set::validator(100, VAL_A), 250));
 
         // Atomic: the removed entry is restored and nothing was dropped.
-        assert_eq!(validator_set::count(&vs), 2);
-        assert!(validator_set::is_registered(&vs, &validator_set::validator(100, VAL_A)));
-        assert!(validator_set::is_registered(&vs, &validator_set::validator(250, VAL_A)));
-        assert!(validator_set::validators_well_formed(&vs));
+        assert_eq!(vs.count(), 2);
+        assert!(vs.is_registered(&validator_set::validator(100, VAL_A)));
+        assert!(vs.is_registered(&validator_set::validator(250, VAL_A)));
+        assert!(vs.validators_well_formed());
         ts::return_shared(vs);
     };
 
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Scenario 6 - RED test: a coarse comparator silently collapses distinct keys ===
@@ -141,20 +141,19 @@ fun coarse_comparator_silently_collapses_distinct_validators() {
 
     // First insert lands.
     assert!(
-        sorted_set::insert_by!(&mut s, a, |x, y| validator_set::stake(x) > validator_set::stake(y)),
+        s.insert_by!(a, |x, y| x.stake() > y.stake()),
     );
     // Second compares EQUAL under stake-only -> "already present" -> false (NO abort).
     assert!(
-        !sorted_set::insert_by!(
-            &mut s,
+        !s.insert_by!(
             b,
-            |x, y| validator_set::stake(x) > validator_set::stake(y),
+            |x, y| x.stake() > y.stake(),
         ),
     );
 
     // Silent collapse: only ONE element, and last-write-wins keeps b's address, dropping a's.
-    assert_eq!(sorted_set::length(&s), 1);
-    let ks = sorted_set::keys(&s);
-    assert_eq!(validator_set::addr(vector::borrow(&ks, 0)), VAL_B);
+    assert_eq!(s.length(), 1);
+    let ks = s.keys();
+    assert_eq!(ks.borrow(0).addr(), VAL_B);
     // Under the injective `outranks` (tie-broken on addr), BOTH would have landed (length 2).
 }

@@ -38,8 +38,7 @@ module openzeppelin_collections::sorted_set_allowlist;
 use openzeppelin_collections::sorted_set::{Self, SortedSet};
 use sui::event;
 
-#[test_only]
-use openzeppelin_collections::sorted_map;
+// === Errors ===
 
 /// `approve_strict` was asked to add an id that is already approved. This is the integrator's
 /// OWN opt-in error - it recovers `vec_set::insert`'s abort-on-duplicate on top of the set's
@@ -47,17 +46,23 @@ use openzeppelin_collections::sorted_map;
 #[error(code = 0)]
 const EAlreadyApproved: vector<u8> = "Id is already approved";
 
+// === Structs ===
+
 /// An allowlist of approved token ids. The embedded `SortedSet<u64>` is the only state.
 public struct Allowlist has key {
     id: UID,
     members: SortedSet<u64>,
 }
 
+// === Events ===
+
 /// Emitted only on a genuine first-time approval (gated on `insert!`'s `true`).
 public struct Approved has copy, drop { id: u64 }
 
 /// Emitted only when an id that WAS present is revoked (gated on `remove!`'s `true`).
 public struct Revoked has copy, drop { id: u64 }
+
+// === Public Functions ===
 
 /// Build an allowlist seeded from `initial` (DE-DUPLICATED) and transfer it to the caller.
 public fun create_and_keep(initial: vector<u64>, ctx: &mut TxContext) {
@@ -79,7 +84,7 @@ public fun transfer_to(list: Allowlist, recipient: address) {
 /// Approve `id`. Returns `true` iff it was NEWLY approved; a re-approval returns `false` and
 /// does NOT abort (idempotent, total). Emits `Approved` only on the `true` (first-seen) case.
 public fun approve(list: &mut Allowlist, id: u64): bool {
-    let added = sorted_set::insert!(&mut list.members, id);
+    let added = list.members.insert!(id);
     if (added) event::emit(Approved { id });
     added
 }
@@ -87,14 +92,14 @@ public fun approve(list: &mut Allowlist, id: u64): bool {
 /// Approve `id`, ABORTING `EAlreadyApproved` if it is already present - the one-line recipe
 /// that recovers `vec_set::insert`'s strict semantics on top of the total `insert!`.
 public fun approve_strict(list: &mut Allowlist, id: u64) {
-    assert!(sorted_set::insert!(&mut list.members, id), EAlreadyApproved);
+    assert!(list.members.insert!(id), EAlreadyApproved);
     event::emit(Approved { id });
 }
 
 /// Revoke `id`. Returns `true` iff it WAS approved; revoking an absent id returns `false` and
 /// does NOT abort (total). Emits `Revoked` only on the `true` case.
 public fun revoke(list: &mut Allowlist, id: u64): bool {
-    let removed = sorted_set::remove!(&mut list.members, &id);
+    let removed = list.members.remove!(&id);
     if (removed) event::emit(Revoked { id });
     removed
 }
@@ -102,24 +107,24 @@ public fun revoke(list: &mut Allowlist, id: u64): bool {
 /// True iff `id` is currently approved. Routes through the same search the writes use, so
 /// `is_approved` can never disagree with `approve`/`revoke`.
 public fun is_approved(list: &Allowlist, id: u64): bool {
-    sorted_set::contains!(&list.members, &id)
+    list.members.contains!(&id)
 }
 
 /// Number of distinct approved ids.
 public fun count(list: &Allowlist): u64 {
-    sorted_set::length(&list.members)
+    list.members.length()
 }
 
 /// All approved ids in ascending order, as an owned snapshot.
 public fun members(list: &Allowlist): vector<u64> {
-    sorted_set::keys(&list.members)
+    list.members.keys()
 }
 
-// === Test-only order check ===
+// === Test-Only Helpers ===
 
 /// True iff the embedded set is correctly ordered. The set delegates ordering to the wrapped
 /// map, so the check reaches the map's `is_well_formed!` oracle through `inner_ref`.
 #[test_only]
 public fun members_well_formed(list: &Allowlist): bool {
-    sorted_map::is_well_formed!(sorted_set::inner_ref(&list.members))
+    list.members.inner_ref().is_well_formed!()
 }

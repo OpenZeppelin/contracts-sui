@@ -26,55 +26,55 @@ fun membership_lifecycle() {
     let mut scenario = ts::begin(ALICE);
 
     // Tx1 - ALICE: create an allowlist seeded from [7, 7, 3]. The duplicate 7 collapses.
-    allowlist::create_and_keep(vector[7, 7, 3], ts::ctx(&mut scenario));
+    allowlist::create_and_keep(vector[7, 7, 3], scenario.ctx());
 
     // Tx2 - ALICE: confirm de-dup, then a FIRST-TIME approval emits exactly one Approved event.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut list = ts::take_from_sender<Allowlist>(&scenario);
-        assert_eq!(allowlist::count(&list), 2); // {3, 7}, not 3 inputs
-        assert_eq!(allowlist::members(&list), vector[3, 7]); // ascending, de-duplicated
+        let mut list = scenario.take_from_sender<Allowlist>();
+        assert_eq!(list.count(), 2); // {3, 7}, not 3 inputs
+        assert_eq!(list.members(), vector[3, 7]); // ascending, de-duplicated
 
-        let added = allowlist::approve(&mut list, 5);
+        let added = list.approve(5);
         assert!(added); // newly added -> true
         assert_eq!(event::events_by_type<Approved>().length(), 1); // emitted once
-        assert_eq!(allowlist::count(&list), 3);
-        ts::return_to_sender(&scenario, list);
+        assert_eq!(list.count(), 3);
+        scenario.return_to_sender(list);
     };
 
     // Tx3 - ALICE: re-approving 5 is a no-op (false) and emits NOTHING; revoking 3 emits once.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut list = ts::take_from_sender<Allowlist>(&scenario);
-        let again = allowlist::approve(&mut list, 5);
+        let mut list = scenario.take_from_sender<Allowlist>();
+        let again = list.approve(5);
         assert!(!again); // already present -> false
         assert_eq!(event::events_by_type<Approved>().length(), 0); // polarity: no emit on re-add
-        assert_eq!(allowlist::count(&list), 3); // unchanged
+        assert_eq!(list.count(), 3); // unchanged
 
-        let revoked = allowlist::revoke(&mut list, 3);
+        let revoked = list.revoke(3);
         assert!(revoked); // was present -> true
         assert_eq!(event::events_by_type<Revoked>().length(), 1);
-        assert!(!allowlist::is_approved(&list, 3));
-        assert!(allowlist::members_well_formed(&list)); // order oracle: still sorted
+        assert!(!list.is_approved(3));
+        assert!(list.members_well_formed()); // order oracle: still sorted
 
-        allowlist::transfer_to(list, BOB); // hand the owned object to BOB
+        list.transfer_to(BOB); // hand the owned object to BOB
     };
 
     // Tx4 - BOB: now owns the list, sees the same membership; revoking an absent id is total.
-    ts::next_tx(&mut scenario, BOB);
+    scenario.next_tx(BOB);
     {
-        let mut list = ts::take_from_sender<Allowlist>(&scenario);
-        assert!(allowlist::is_approved(&list, 5) && allowlist::is_approved(&list, 7));
-        assert!(!allowlist::is_approved(&list, 3));
+        let mut list = scenario.take_from_sender<Allowlist>();
+        assert!(list.is_approved(5) && list.is_approved(7));
+        assert!(!list.is_approved(3));
 
-        let r = allowlist::revoke(&mut list, 99);
+        let r = list.revoke(99);
         assert!(!r); // absent -> false, no abort
         assert_eq!(event::events_by_type<Revoked>().length(), 0);
-        assert_eq!(allowlist::count(&list), 2);
-        ts::return_to_sender(&scenario, list);
+        assert_eq!(list.count(), 2);
+        scenario.return_to_sender(list);
     };
 
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Scenario 2 - opt-in strict insert: recover vec_set's abort-on-duplicate ===
@@ -94,15 +94,15 @@ fun approve_strict_rejects_duplicate() {
     let mut scenario = ts::begin(ALICE);
 
     // Tx1 - ALICE: seed an allowlist with {1, 2}.
-    allowlist::create_and_keep(vector[1, 2], ts::ctx(&mut scenario));
+    allowlist::create_and_keep(vector[1, 2], scenario.ctx());
 
     // Tx2 - ALICE: strict-approve a duplicate id (1 is already present) - aborts EAlreadyApproved.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut list = ts::take_from_sender<Allowlist>(&scenario);
-        allowlist::approve_strict(&mut list, 1); // aborts here: 1 is already approved
-        ts::return_to_sender(&scenario, list); // unreachable; satisfies the type checker
+        let mut list = scenario.take_from_sender<Allowlist>();
+        list.approve_strict(1); // aborts here: 1 is already approved
+        scenario.return_to_sender(list); // unreachable; satisfies the type checker
     };
 
-    ts::end(scenario);
+    scenario.end();
 }

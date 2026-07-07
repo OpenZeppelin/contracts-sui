@@ -34,73 +34,73 @@ fun fund_payout_destroy() {
     };
 
     // Tx2 - ORGANIZER: fund ranks 3, 1, 2 out of order - the map sorts by rank.
-    ts::next_tx(&mut scenario, ORGANIZER);
+    scenario.next_tx(ORGANIZER);
     {
-        let mut vault = ts::take_shared<PrizeVault>(&scenario);
-        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
-        prize_vault::fund(&mut vault, &cap, 3, coin::mint_for_testing<SUI>(25, scenario.ctx()));
-        prize_vault::fund(&mut vault, &cap, 1, coin::mint_for_testing<SUI>(100, scenario.ctx()));
-        prize_vault::fund(&mut vault, &cap, 2, coin::mint_for_testing<SUI>(50, scenario.ctx()));
-        assert_eq!(prize_vault::unclaimed(&vault), 3);
-        ts::return_to_sender(&scenario, cap);
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        vault.fund(&cap, 3, coin::mint_for_testing<SUI>(25, scenario.ctx()));
+        vault.fund(&cap, 1, coin::mint_for_testing<SUI>(100, scenario.ctx()));
+        vault.fund(&cap, 2, coin::mint_for_testing<SUI>(50, scenario.ctx()));
+        assert_eq!(vault.unclaimed(), 3);
+        scenario.return_to_sender(cap);
         ts::return_shared(vault);
     };
 
     // Tx3 - ORGANIZER: pay champion-first; ranks come out strictly 1, 2, 3.
-    ts::next_tx(&mut scenario, ORGANIZER);
+    scenario.next_tx(ORGANIZER);
     {
-        let mut vault = ts::take_shared<PrizeVault>(&scenario);
-        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
 
-        let (r1, c1) = prize_vault::pay_next(&mut vault, &cap);
+        let (r1, c1) = vault.pay_next(&cap);
         assert_eq!(r1, 1);
         assert_eq!(c1.value(), 100);
         transfer::public_transfer(c1, FIRST);
 
-        let (r2, c2) = prize_vault::pay_next(&mut vault, &cap);
+        let (r2, c2) = vault.pay_next(&cap);
         assert_eq!(r2, 2);
         assert_eq!(c2.value(), 50);
         transfer::public_transfer(c2, SECOND);
 
-        let (r3, c3) = prize_vault::pay_next(&mut vault, &cap);
+        let (r3, c3) = vault.pay_next(&cap);
         assert_eq!(r3, 3);
         assert_eq!(c3.value(), 25);
         transfer::public_transfer(c3, THIRD);
 
-        assert_eq!(prize_vault::unclaimed(&vault), 0);
-        ts::return_to_sender(&scenario, cap);
+        assert_eq!(vault.unclaimed(), 0);
+        scenario.return_to_sender(cap);
         ts::return_shared(vault);
     };
 
     // Tx4 - ORGANIZER: close the now-empty vault (and consume the cap).
-    ts::next_tx(&mut scenario, ORGANIZER);
+    scenario.next_tx(ORGANIZER);
     {
-        let vault = ts::take_shared<PrizeVault>(&scenario);
-        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
-        prize_vault::close(vault, cap);
+        let vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        vault.close(cap);
     };
 
     // Tx5 - each winner holds exactly their prize (the other half of conservation).
-    ts::next_tx(&mut scenario, FIRST);
+    scenario.next_tx(FIRST);
     {
-        let c = ts::take_from_sender<Coin<SUI>>(&scenario);
+        let c = scenario.take_from_sender<Coin<SUI>>();
         assert_eq!(c.value(), 100);
-        coin::burn_for_testing(c);
+        c.burn_for_testing();
     };
-    ts::next_tx(&mut scenario, SECOND);
+    scenario.next_tx(SECOND);
     {
-        let c = ts::take_from_sender<Coin<SUI>>(&scenario);
+        let c = scenario.take_from_sender<Coin<SUI>>();
         assert_eq!(c.value(), 50);
-        coin::burn_for_testing(c);
+        c.burn_for_testing();
     };
-    ts::next_tx(&mut scenario, THIRD);
+    scenario.next_tx(THIRD);
     {
-        let c = ts::take_from_sender<Coin<SUI>>(&scenario);
+        let c = scenario.take_from_sender<Coin<SUI>>();
         assert_eq!(c.value(), 25);
-        coin::burn_for_testing(c);
+        c.burn_for_testing();
     };
 
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Scenario 4 - closing a vault with unclaimed prizes aborts ENotEmpty ===
@@ -124,22 +124,22 @@ fun close_nonempty_vault_aborts() {
         transfer::public_transfer(cap, ORGANIZER);
     };
     // Tx2 - ORGANIZER: fund one rank (a prize now rests in the vault).
-    ts::next_tx(&mut scenario, ORGANIZER);
+    scenario.next_tx(ORGANIZER);
     {
-        let mut vault = ts::take_shared<PrizeVault>(&scenario);
-        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
-        prize_vault::fund(&mut vault, &cap, 1, coin::mint_for_testing<SUI>(100, scenario.ctx()));
-        ts::return_to_sender(&scenario, cap);
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        vault.fund(&cap, 1, coin::mint_for_testing<SUI>(100, scenario.ctx()));
+        scenario.return_to_sender(cap);
         ts::return_shared(vault);
     };
     // Tx3 - ORGANIZER: close while a prize remains → ENotEmpty.
-    ts::next_tx(&mut scenario, ORGANIZER);
+    scenario.next_tx(ORGANIZER);
     {
-        let vault = ts::take_shared<PrizeVault>(&scenario);
-        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
-        prize_vault::close(vault, cap); // aborts here
+        let vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        vault.close(cap); // aborts here
     };
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Scenario 6 - paying from an empty vault aborts EEmpty (the other drain-related library abort) ===
@@ -162,17 +162,17 @@ fun pay_next_on_empty_vault_aborts() {
         transfer::public_transfer(cap, ORGANIZER);
     };
     // Tx2 - ORGANIZER: pay from the still-empty vault -> EEmpty (aborts inside pay_next).
-    ts::next_tx(&mut scenario, ORGANIZER);
+    scenario.next_tx(ORGANIZER);
     {
-        let mut vault = ts::take_shared<PrizeVault>(&scenario);
-        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
-        let (_r, c) = prize_vault::pay_next(&mut vault, &cap); // aborts here (empty)
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        let (_r, c) = vault.pay_next(&cap); // aborts here (empty)
         // Unreachable past the abort; kept well-formed for the resource checker.
-        coin::burn_for_testing(c);
-        ts::return_to_sender(&scenario, cap);
+        c.burn_for_testing();
+        scenario.return_to_sender(cap);
         ts::return_shared(vault);
     };
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Scenario 8 - funding rank 0 aborts EInvalidRank (ranks are 1-based) ===
@@ -195,14 +195,14 @@ fun fund_rank_zero_aborts() {
         transfer::public_transfer(cap, ORGANIZER);
     };
     // Tx2 - ORGANIZER: fund rank 0 -> EInvalidRank (aborts inside fund).
-    ts::next_tx(&mut scenario, ORGANIZER);
+    scenario.next_tx(ORGANIZER);
     {
-        let mut vault = ts::take_shared<PrizeVault>(&scenario);
-        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
-        prize_vault::fund(&mut vault, &cap, 0, coin::mint_for_testing<SUI>(100, scenario.ctx()));
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        vault.fund(&cap, 0, coin::mint_for_testing<SUI>(100, scenario.ctx()));
         // Unreachable past the abort; kept well-formed for the resource checker.
-        ts::return_to_sender(&scenario, cap);
+        scenario.return_to_sender(cap);
         ts::return_shared(vault);
     };
-    ts::end(scenario);
+    scenario.end();
 }

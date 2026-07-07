@@ -25,6 +25,8 @@ module openzeppelin_collections::sorted_map_tick_registry;
 
 use openzeppelin_collections::sorted_map::{Self, SortedMap};
 
+// === Structs ===
+
 /// Per-tick liquidity state.
 public struct TickInfo has copy, drop, store {
     liquidity_net: u64,
@@ -41,6 +43,8 @@ public struct TickRegistry has key {
     ticks: SortedMap<u64, TickInfo>,
 }
 
+// === Public Functions ===
+
 /// Create an empty registry, share it, and return its `ID`.
 public fun deploy_and_share(ctx: &mut TxContext): ID {
     let reg = TickRegistry { id: object::new(ctx), ticks: sorted_map::new() };
@@ -51,17 +55,17 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
 
 /// Activate (or overwrite) a tick. Returns true if an existing tick was replaced.
 public fun add_tick(reg: &mut TickRegistry, tick: u64, liquidity_net: u64, fee_growth: u128): bool {
-    let old = sorted_map::insert!(&mut reg.ticks, tick, TickInfo { liquidity_net, fee_growth });
+    let old = reg.ticks.insert!(tick, TickInfo { liquidity_net, fee_growth });
     old.is_some()
 }
 
 /// Deactivate a tick. Returns true if it was active.
 public fun remove_tick(reg: &mut TickRegistry, tick: u64): bool {
-    sorted_map::remove!(&mut reg.ticks, &tick).is_some()
+    reg.ticks.remove!(&tick).is_some()
 }
 
 public fun contains_tick(reg: &TickRegistry, tick: u64): bool {
-    sorted_map::contains!(&reg.ticks, &tick)
+    reg.ticks.contains!(&tick)
 }
 
 /// State at an active `tick`.
@@ -70,7 +74,7 @@ public fun contains_tick(reg: &TickRegistry, tick: u64): bool {
 /// - `EKeyNotFound` if the tick is inactive - gate with `contains_tick`, or discover live
 ///   ticks via the navigation ops.
 public fun borrow_tick(reg: &TickRegistry, tick: u64): &TickInfo {
-    sorted_map::borrow!(&reg.ticks, &tick)
+    reg.ticks.borrow!(&tick)
 }
 
 /// Accumulate fee growth into an active tick in place.
@@ -79,45 +83,47 @@ public fun borrow_tick(reg: &TickRegistry, tick: u64): &TickInfo {
 /// - `EKeyNotFound` (from `borrow_mut!`) if the tick is inactive - gate with `contains_tick`.
 /// - Native `u128` overflow if `fee_growth + delta` exceeds `u128::MAX`.
 public fun accrue_fees(reg: &mut TickRegistry, tick: u64, delta: u128) {
-    let info = sorted_map::borrow_mut!(&mut reg.ticks, &tick);
+    let info = reg.ticks.borrow_mut!(&tick);
     info.fee_growth = info.fee_growth + delta;
 }
 
 /// Lowest / highest active tick (positional - no comparator).
-public fun min_tick(reg: &TickRegistry): Option<u64> { sorted_map::head(&reg.ticks) }
+public fun min_tick(reg: &TickRegistry): Option<u64> { reg.ticks.head() }
 
-public fun max_tick(reg: &TickRegistry): Option<u64> { sorted_map::tail(&reg.ticks) }
+public fun max_tick(reg: &TickRegistry): Option<u64> { reg.ticks.tail() }
 
 /// Next active tick strictly above / below `tick` - price crossing up / down. At the
 /// ends these return `none`, the signal to stop walking.
 public fun tick_above(reg: &TickRegistry, tick: u64): Option<u64> {
-    sorted_map::next_key!(&reg.ticks, &tick)
+    reg.ticks.next_key!(&tick)
 }
 
 public fun tick_below(reg: &TickRegistry, tick: u64): Option<u64> {
-    sorted_map::prev_key!(&reg.ticks, &tick)
+    reg.ticks.prev_key!(&tick)
 }
 
 /// Nearest active tick at-or-above / at-or-below `target` (inclusive). `target` need
 /// not itself be an active tick - this is exactly what a hash map cannot answer.
 public fun ceiling_tick(reg: &TickRegistry, target: u64): Option<u64> {
-    sorted_map::find_next!(&reg.ticks, &target, true)
+    reg.ticks.find_next!(&target, true)
 }
 
 public fun floor_tick(reg: &TickRegistry, target: u64): Option<u64> {
-    sorted_map::find_prev!(&reg.ticks, &target, true)
+    reg.ticks.find_prev!(&target, true)
 }
 
-public fun length(reg: &TickRegistry): u64 { sorted_map::length(&reg.ticks) }
+public fun length(reg: &TickRegistry): u64 { reg.ticks.length() }
 
-public fun is_empty(reg: &TickRegistry): bool { sorted_map::is_empty(&reg.ticks) }
+public fun is_empty(reg: &TickRegistry): bool { reg.ticks.is_empty() }
 
 public fun liquidity_net(info: &TickInfo): u64 { info.liquidity_net }
 
 public fun fee_growth(info: &TickInfo): u128 { info.fee_growth }
 
+// === Test-Only Helpers ===
+
 /// The map's test-only order check (ascending).
 #[test_only]
 public fun ticks_well_formed(reg: &TickRegistry): bool {
-    sorted_map::is_well_formed!(&reg.ticks)
+    reg.ticks.is_well_formed!()
 }

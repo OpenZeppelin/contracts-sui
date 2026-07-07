@@ -35,6 +35,8 @@ use openzeppelin_collections::sorted_map::{Self, SortedMap};
 use sui::coin::Coin;
 use sui::sui::SUI;
 
+// === Errors ===
+
 /// The provided capability does not authorize this vault.
 #[error(code = 0)]
 const EWrongVault: vector<u8> = "Capability does not authorize this vault";
@@ -48,6 +50,8 @@ const ERankAlreadyFunded: vector<u8> = "Rank already funded";
 #[error(code = 3)]
 const EInvalidRank: vector<u8> = "Rank must be >= 1";
 
+// === Structs ===
+
 /// Shared prize pool. `prizes` maps rank -> the coin awarded for that rank.
 public struct PrizeVault has key {
     id: UID,
@@ -59,6 +63,8 @@ public struct OrganizerCap has key, store {
     id: UID,
     vault: ID,
 }
+
+// === Public Functions ===
 
 /// Create an empty shared vault and its bound organizer cap. Returns `(vault_id, cap)`;
 /// the caller routes the cap to the organizer.
@@ -84,29 +90,29 @@ fun assert_cap(vault: &PrizeVault, cap: &OrganizerCap) {
 public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64, coin: Coin<SUI>) {
     assert_cap(vault, cap);
     assert!(rank >= 1, EInvalidRank);
-    assert!(!sorted_map::contains!(&vault.prizes, &rank), ERankAlreadyFunded);
-    sorted_map::insert!(&mut vault.prizes, rank, coin).destroy_none();
+    assert!(!vault.prizes.contains!(&rank), ERankAlreadyFunded);
+    vault.prizes.insert!(rank, coin).destroy_none();
 }
 
 /// Pay the champion: remove and return the lowest-rank `(rank, coin)` via `pop_front`.
 /// Aborts `EEmpty` if the vault is empty.
 public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>) {
     assert_cap(vault, cap);
-    sorted_map::pop_front(&mut vault.prizes)
+    vault.prizes.pop_front()
 }
 
 /// Pay a specific `rank`, returning its coin. `remove!` returns `none` for an absent
 /// rank rather than aborting, so we surface our own `ENoSuchRank`.
 public fun pay_rank(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64): Coin<SUI> {
     assert_cap(vault, cap);
-    let prize = sorted_map::remove!(&mut vault.prizes, &rank);
+    let prize = vault.prizes.remove!(&rank);
     assert!(prize.is_some(), ENoSuchRank);
     prize.destroy_some()
 }
 
 /// Number of unclaimed prizes still resting in the vault.
 public fun unclaimed(vault: &PrizeVault): u64 {
-    sorted_map::length(&vault.prizes)
+    vault.prizes.length()
 }
 
 /// Destroy a fully-paid vault and its cap. Aborts `ENotEmpty` if any prize is unclaimed
@@ -114,14 +120,16 @@ public fun unclaimed(vault: &PrizeVault): u64 {
 public fun close(vault: PrizeVault, cap: OrganizerCap) {
     assert_cap(&vault, &cap);
     let PrizeVault { id, prizes } = vault;
-    sorted_map::destroy_empty(prizes); // ENotEmpty here if prizes remain
+    prizes.destroy_empty(); // ENotEmpty here if prizes remain
     id.delete();
     let OrganizerCap { id: cap_id, vault: _ } = cap;
     cap_id.delete();
 }
 
+// === Test-Only Helpers ===
+
 /// The map's test-only order check. Ranks are plain ascending `u64`, so the bare form.
 #[test_only]
 public fun vault_well_formed(vault: &PrizeVault): bool {
-    sorted_map::is_well_formed!(&vault.prizes)
+    vault.prizes.is_well_formed!()
 }

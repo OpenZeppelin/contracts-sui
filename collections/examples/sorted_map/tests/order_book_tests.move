@@ -2,7 +2,6 @@
 /// reverse-`_by`, pagination, the EKeyNotFound abort).
 module openzeppelin_collections::sorted_map_order_book_tests;
 
-use openzeppelin_collections::sorted_map;
 use openzeppelin_collections::sorted_map_order_book::{Self as order_book, OrderBook};
 use std::unit_test::assert_eq;
 use sui::test_scenario as ts;
@@ -25,60 +24,60 @@ fun order_book_lifecycle() {
     };
 
     // Tx2 - ALICE: post asks (out of price order) and bids.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut book = ts::take_shared<OrderBook>(&scenario);
-        order_book::place_ask(&mut book, 102, 5);
-        order_book::place_ask(&mut book, 100, 10);
-        order_book::place_ask(&mut book, 101, 7);
-        order_book::place_bid(&mut book, 98, 6);
-        order_book::place_bid(&mut book, 99, 4);
+        let mut book = scenario.take_shared<OrderBook>();
+        book.place_ask(102, 5);
+        book.place_ask(100, 10);
+        book.place_ask(101, 7);
+        book.place_bid(98, 6);
+        book.place_bid(99, 4);
         ts::return_shared(book);
     };
 
     // Tx3 - BOB: add size at existing levels - merges, never duplicates.
-    ts::next_tx(&mut scenario, BOB);
+    scenario.next_tx(BOB);
     {
-        let mut book = ts::take_shared<OrderBook>(&scenario);
-        order_book::place_ask(&mut book, 100, 3); // 100 -> 13
-        order_book::place_bid(&mut book, 99, 2); // 99  -> 6
+        let mut book = scenario.take_shared<OrderBook>();
+        book.place_ask(100, 3); // 100 -> 13
+        book.place_bid(99, 2); // 99  -> 6
         ts::return_shared(book);
     };
 
     // Tx4 - ALICE: read best prices, L2 depth (with resume), and the order oracle.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let book = ts::take_shared<OrderBook>(&scenario);
+        let book = scenario.take_shared<OrderBook>();
 
-        assert_eq!(order_book::best_ask(&book), option::some(100)); // lowest ask
-        assert_eq!(order_book::best_bid(&book), option::some(99)); // highest bid (descending head)
-        assert_eq!(order_book::ask_size_at(&book, 100), 13); // merged, not duplicated
+        assert_eq!(book.best_ask(), option::some(100)); // lowest ask
+        assert_eq!(book.best_bid(), option::some(99)); // highest bid (descending head)
+        assert_eq!(book.ask_size_at(100), 13); // merged, not duplicated
 
         // Full ascending depth.
-        assert_eq!(order_book::ask_levels(&book, 0, true, 10), vector[100, 101, 102]);
+        assert_eq!(book.ask_levels(0, true, 10), vector[100, 101, 102]);
         // Paginate: a first page, then resume strictly after its last key - pages tile.
-        assert_eq!(order_book::ask_levels(&book, 0, true, 2), vector[100, 101]);
-        assert_eq!(order_book::ask_levels(&book, 101, false, 2), vector[102]);
+        assert_eq!(book.ask_levels(0, true, 2), vector[100, 101]);
+        assert_eq!(book.ask_levels(101, false, 2), vector[102]);
 
         // A consumer's test reaches the library's #[test_only] order oracle, both ways.
-        assert!(order_book::bids_well_formed(&book)); // encapsulated _by oracle
-        assert!(sorted_map::is_well_formed!(order_book::asks_ref(&book))); // direct bare oracle
+        assert!(book.bids_well_formed()); // encapsulated _by oracle
+        assert!(book.asks_ref().is_well_formed!()); // direct bare oracle
 
         ts::return_shared(book);
     };
 
     // Tx5 - BOB: fill (take) the best ask; the next-best becomes best.
-    ts::next_tx(&mut scenario, BOB);
+    scenario.next_tx(BOB);
     {
-        let mut book = ts::take_shared<OrderBook>(&scenario);
-        let (price, size) = order_book::fill_best_ask(&mut book);
+        let mut book = scenario.take_shared<OrderBook>();
+        let (price, size) = book.fill_best_ask();
         assert_eq!(price, 100);
         assert_eq!(size, 13);
-        assert_eq!(order_book::best_ask(&book), option::some(101));
+        assert_eq!(book.best_ask(), option::some(101));
         ts::return_shared(book);
     };
 
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Scenario 3 - querying an empty level aborts EKeyNotFound, at the library ===
@@ -101,18 +100,18 @@ fun ask_size_at_absent_aborts() {
         order_book::deploy_and_share(scenario.ctx());
     };
     // Tx2 - ALICE: one resting ask at 100.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut book = ts::take_shared<OrderBook>(&scenario);
-        order_book::place_ask(&mut book, 100, 10);
+        let mut book = scenario.take_shared<OrderBook>();
+        book.place_ask(100, 10);
         ts::return_shared(book);
     };
     // Tx3 - BOB: query a price with no resting level → EKeyNotFound.
-    ts::next_tx(&mut scenario, BOB);
+    scenario.next_tx(BOB);
     {
-        let book = ts::take_shared<OrderBook>(&scenario);
-        order_book::ask_size_at(&book, 555); // aborts here
+        let book = scenario.take_shared<OrderBook>();
+        book.ask_size_at(555); // aborts here
         ts::return_shared(book); // unreachable; satisfies the type checker
     };
-    ts::end(scenario);
+    scenario.end();
 }

@@ -29,8 +29,7 @@ module openzeppelin_collections::sorted_set_unlock_queue;
 use openzeppelin_collections::sorted_set::{Self, SortedSet};
 use sui::event;
 
-#[test_only]
-use openzeppelin_collections::sorted_map;
+// === Structs ===
 
 /// A queue of unique unlock timestamps, drained in chronological order.
 ///
@@ -41,8 +40,12 @@ public struct UnlockQueue has key {
     deadlines: SortedSet<u64>,
 }
 
+// === Events ===
+
 /// Emitted when a deadline is processed (popped) off the queue.
 public struct Unlocked has copy, drop { deadline: u64 }
+
+// === Public Functions ===
 
 /// Create a queue seeded from `initial` deadlines (DE-DUPLICATED by `from_keys!`), share it,
 /// and return its `ID`.
@@ -56,33 +59,33 @@ public fun deploy_and_share(initial: vector<u64>, ctx: &mut TxContext): ID {
 /// Schedule `deadline`. Returns `true` iff newly scheduled (a duplicate returns `false`,
 /// no abort).
 public fun schedule(q: &mut UnlockQueue, deadline: u64): bool {
-    sorted_set::insert!(&mut q.deadlines, deadline)
+    q.deadlines.insert!(deadline)
 }
 
 /// Cancel `deadline`. Returns `true` iff it WAS scheduled (cancelling an absent one returns
 /// `false`, no abort).
 public fun cancel(q: &mut UnlockQueue, deadline: u64): bool {
-    sorted_set::remove!(&mut q.deadlines, &deadline)
+    q.deadlines.remove!(&deadline)
 }
 
 /// The EARLIEST scheduled deadline, WITHOUT removing it, or `none` if empty. O(1), never aborts.
 public fun next_deadline(q: &UnlockQueue): Option<u64> {
-    sorted_set::head(&q.deadlines)
+    q.deadlines.head()
 }
 
 /// The LATEST scheduled deadline, or `none` if empty. O(1), never aborts.
 public fun last_deadline(q: &UnlockQueue): Option<u64> {
-    sorted_set::tail(&q.deadlines)
+    q.deadlines.tail()
 }
 
 /// Number of pending deadlines.
 public fun pending(q: &UnlockQueue): u64 {
-    sorted_set::length(&q.deadlines)
+    q.deadlines.length()
 }
 
 /// True iff no deadlines remain - guard `process_earliest` / `process_latest` with this.
 public fun is_empty(q: &UnlockQueue): bool {
-    sorted_set::is_empty(&q.deadlines)
+    q.deadlines.is_empty()
 }
 
 /// Pop and process the EARLIEST deadline, returning it.
@@ -92,7 +95,7 @@ public fun is_empty(q: &UnlockQueue): bool {
 ///   `location = openzeppelin_collections::sorted_set`) - guard with `is_empty` or peek
 ///   `next_deadline` first.
 public fun process_earliest(q: &mut UnlockQueue): u64 {
-    let deadline = sorted_set::pop_front(&mut q.deadlines);
+    let deadline = q.deadlines.pop_front();
     event::emit(Unlocked { deadline });
     deadline
 }
@@ -102,15 +105,15 @@ public fun process_earliest(q: &mut UnlockQueue): u64 {
 /// #### Aborts
 /// - `EEmpty` if the queue is empty (same as `process_earliest`).
 public fun process_latest(q: &mut UnlockQueue): u64 {
-    let deadline = sorted_set::pop_back(&mut q.deadlines);
+    let deadline = q.deadlines.pop_back();
     event::emit(Unlocked { deadline });
     deadline
 }
 
-// === Test-only order check ===
+// === Test-Only Helpers ===
 
 /// True iff the embedded set is correctly ordered (reaches the map oracle via `inner_ref`).
 #[test_only]
 public fun deadlines_well_formed(q: &UnlockQueue): bool {
-    sorted_map::is_well_formed!(sorted_set::inner_ref(&q.deadlines))
+    q.deadlines.inner_ref().is_well_formed!()
 }
