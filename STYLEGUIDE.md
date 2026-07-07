@@ -12,6 +12,8 @@ These conventions target **Move 2024** (module label syntax, receiver syntax,
 `#[error(code = N)]`, macros). Every package in this repo declares
 `edition = "2024"`.
 
+Based on the [Sui dev cheat sheet](https://docs.sui.io/getting-started/dev-cheat-sheet).
+
 ## Naming
 
 - **Error constants**: `EPascalCase`, declared with `#[error(code = N)]`, type
@@ -192,7 +194,7 @@ Examples of required rewrites:
 ## Collections & object size
 
 - Objects max 250 KB - transactions abort if exceeded
-- Use `vector` / `VecSet` / `VecMap` only for bounded collections ≤ 1000 items
+- Use `vector` / `VecSet` / `VecMap` / `PriorityQueue` only for bounded collections ≤ 1000 items
 - Use `Table` / `Bag` / `ObjectBag` / `ObjectTable` / `LinkedTable` for large or
   unbounded collections
 - Never put ever-growing vectors inside objects
