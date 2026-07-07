@@ -3,6 +3,7 @@ build
 .sui/
 sui.keystore
 .trace
+traces/
 .coverage_map.mvcov
 traces/
 

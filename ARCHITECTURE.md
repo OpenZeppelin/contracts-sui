@@ -22,7 +22,7 @@ every package is on **Move 2024** (`edition = "2024"`).
 
 ## Repository layout
 
-Packages are grouped by domain (`contracts/`, `math/`). Each leaf directory with
+Packages are grouped by domain (`contracts/`, `math/`, `collections/`). Each leaf directory with
 a `Move.toml` is an independently buildable, independently publishable package.
 
 **The package catalog is owned by the READMEs, not this file.** What each
@@ -33,6 +33,7 @@ information:
 - [`contracts/README.md`](./contracts/README.md) → per-package READMEs (e.g.
   [`contracts/access/README.md`](./contracts/access/README.md))
 - [`math/README.md`](./math/README.md) → per-package READMEs
+- [`collections/README.md`](./collections/README.md) → the `openzeppelin_collections` package README (modules `sorted_map`, `sorted_set`)
 
 This document covers only the *principles* behind the layout, never the catalog.
 

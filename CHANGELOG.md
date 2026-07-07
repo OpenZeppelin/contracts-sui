@@ -37,6 +37,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - `cdf` / `pdf`: raised the internal evaluation precision to `10^36`, making both functions monotone between every pair of adjacent representable inputs, and clamped their domains to the analytic saturation points (`6.109410205` / `6.402729806`). Gas, storage, and the public API are unchanged. (#431)
 
+### `openzeppelin_collections`
+
+#### Added
+
+- New `openzeppelin_collections` package: an ordered-collections family in a single package, with two modules - `sorted_map` and `sorted_set`. Both provide bare (built-in integer `<`) and `_by` (custom comparator) macro forms. (#261, #118)
+  - `sorted_map`: a generic, ordered key-value map (`SortedMap<K, V>`) backed by a single sorted vector. A UID-less value type you embed in your own object like `sui::vec_map::VecMap`, with ordered reads (head/tail, floor/ceiling, bounded pagination), O(log N) lookup, and exactly one stored-object access per operation. (#261)
+  - `sorted_set`: a generic, ordered set of unique keys (`SortedSet<K>`), a thin wrapper over `sorted_map`. Fills the gap left by the unordered `sui::vec_set` - iterates in comparator order, with nearest-neighbour navigation and bounded pagination. A UID-less value type, unconditionally `copy + drop + store`; `insert`/`remove` are total, returning `bool` rather than aborting on duplicates. (#118)
+
 ## 1.3.0 (15-06-2026)
 
 ### `openzeppelin_math`
