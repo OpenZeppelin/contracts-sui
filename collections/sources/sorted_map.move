@@ -1,75 +1,73 @@
 /// A generic, ordered key->value map backed by a single sorted `vector<Entry<K, V>>`.
 ///
-/// `SortedMap` is a UID-less value type (shaped like `sui::vec_map::VecMap`): it has
-/// no object identity and no dynamic fields - every entry lives inline in one vector.
-/// Embed it directly in your own object:
+/// `SortedMap` is a UID-less value: no identity of its own, no dynamic fields. Every entry
+/// lives inline in one vector, shaped like `sui::vec_map::VecMap`. A bare map is not `key`, so
+/// embed it in your own `has key` object for owned or shared semantics:
 /// ```
 /// public struct AskBook has key { id: UID, asks: SortedMap<u64, Level> }
 /// ```
-/// A bare `SortedMap` cannot be `transfer`/`share`d (it is not `key`); wrap it in your
-/// own `has key` object to get owned or shared semantics.
 ///
-/// # Complexity and liveness
+/// # Essentials
 ///
-/// Lookup is O(log N) binary search over one in-memory vector; insert and remove are
-/// O(N) (a shift in that vector). Every operation - including a full `keys_from` page -
-/// loads exactly ONE stored object regardless of N, so the map can never approach Sui's
-/// per-transaction dynamic-field access cap. The binding limit is byte size: the
-/// enclosing object must stay under Sui's object-size cap (~250 KB).
+/// - **One comparator, threaded to every call.** You supply a strict total order
+///   `|&K, &K| -> bool`; the map stores none. A different or non-strict comparator on a later
+///   call silently corrupts the map (see below).
+/// - **Bare vs `_by`.** Bare ops (`insert!`, `borrow!`) assume the built-in integer `<` and
+///   compile only for integer keys; `_by` ops take your `lt` lambda and are required for
+///   `address`, struct, or any non-integer key.
+/// - **Resource values must be drained.** `SortedMap<K, Coin<T>>` is store-only: it cannot be
+///   dropped, so empty it and then `destroy_empty`.
+/// - **Bounded by object size.** O(log N) lookup, O(N) insert/remove, one object loaded per
+///   call - so the only ceiling is Sui's ~250 KB object cap.
 ///
-/// # Comparator contract (read this)
+/// # The comparator
 ///
-/// The map stores no comparator. Order is defined per call by a strict less-than
-/// `|&K, &K| -> bool` you supply. Equality is derived as `!lt(a, b) && !lt(b, a)`. Each
-/// comparator-needing operation comes in two forms:
-/// - bare (`insert!`, `borrow!`, ...) assumes the built-in integer `<`; valid only for
-///   integer keys (`u8`..`u256`).
-/// - `_by` (`insert_by!`, `borrow_by!`, ...) takes the `lt` lambda; required for
-///   non-integer keys (`address`, structs, ...).
+/// Move has no storable function values, so the comparator can't live in the struct - and a
+/// phantom witness couldn't validate the actual `lt` passed at runtime anyway. Move also has no
+/// standard ordering trait. `std::compare` orders by BCS bytes, not semantic value. So ordering
+/// is a lambda you supply, not a property of `K`.
 ///
-/// The comparator MUST be a strict total order (irreflexive, asymmetric, transitive,
-/// total) and MUST be threaded consistently to every call on a given map. The library
-/// cannot detect a violation; the failure is silent:
-/// - passing `<=` (non-strict) means equal keys are never detected, causing duplicate
-///   inserts and missed removes/contains;
-/// - mixing `<` and `>` across calls corrupts ordering: wrong values, spurious misses,
-///   stranded (unreachable) values.
+/// You pass a strict less-than; equality is derived as `!lt(a, b) && !lt(b, a)`. It MUST be a
+/// strict total order (irreflexive, asymmetric, transitive, total) and MUST be the same on every
+/// call to a given map. The library cannot detect a violation, and the failure is silent:
+/// - a non-strict `<=` never detects equal keys, causing duplicate inserts and missed removes
+///   and lookups;
+/// - mixing `<` and `>` across calls corrupts order: wrong values, spurious misses, values
+///   stranded at unreachable positions.
 ///
-/// A reverse comparator used consistently is legitimate - it simply flips the order
-/// (`head` then returns the largest key). In tests, call `is_well_formed_by!(&map, lt)`
-/// after `_by` sequences to catch comparator mistakes.
+/// A coarse (non-injective) comparator reports two byte-distinct keys as equal, collapsing them
+/// into one entry. On that collision an upsert keeps the last-inserted key's bytes, so first-seen
+/// gating on `insert!` is well-defined only under an injective comparator.
 ///
-/// # Aborts
+/// A reverse comparator used consistently is legitimate: it flips the order, so `head` returns
+/// the largest numeric key. In tests, call `is_well_formed_by!(&map, lt)` after a `_by` sequence
+/// to catch a comparator mistake.
 ///
-/// In the supported API, only these operations abort; everything else is total (returns
-/// `Option`/`bool`/`vector`):
-/// - `borrow` / `borrow_mut` - `EKeyNotFound` on an absent key.
-/// - `destroy_empty` - `ENotEmpty` on a non-empty map.
-/// - `pop_front` / `pop_back` - `EEmpty` on an empty map.
-/// - `from_sorted_keys_values` / `_by` - `EUnequalLengths` or `EKeysNotStrictlyIncreasing` on
-///   invalid input.
+/// # Complexity and limits
 ///
-/// These originate in this module, so consumer `#[expected_failure]` tests pin
-/// `location = openzeppelin_collections::sorted_map`.
+/// Writes are O(N) because of the vector shift. Loading one object per call, not one per entry,
+/// is why the map never approaches Sui's per-transaction dynamic-field access cap - object byte
+/// size is the only limit.
 ///
-/// The forced-public index accessors (`insert_at`/`remove_at`/`value_at`/`value_at_mut`) instead
-/// abort with native `std::vector` out-of-bounds codes (`location = std::vector`) on a bad index.
+/// The `_by` macros expand `search!` inline. A single function with many distinct macro calls can
+/// therefore hit Move's ~256 local-variable limit (compiler error `value (N) cannot exceed
+/// (255)`) - split the function, or drive the calls from one reused loop body.
 ///
-/// # Library internals are forced-public
+/// # Forced-public internals
 ///
-/// Move 2024 macro hygiene requires every symbol a macro body references to be `public`
-/// at the consumer's expansion site, so `search!`, `insert_at`, `remove_at`,
-/// `make_entry`, `entry_key`, etc. are `public`. They are NOT a supported mutation
-/// API. In particular `insert_at`/`remove_at` write at a caller-given position with no
-/// order check - calling them directly can corrupt sorted order. Use the macro API.
+/// Move 2024 macro hygiene requires every symbol a macro body references to be `public` at the
+/// consumer's expansion site, so `search!`, `insert_at`, `remove_at`, `make_entry`, `entry_key`,
+/// and similar are `public`. They are not a supported mutation API: `insert_at` / `remove_at`
+/// write at a caller-given position with no order check, so calling them directly can corrupt
+/// sorted order. Use the macro API.
 ///
-/// # Upgrade policy
+/// # Upgrade compatibility
 ///
-/// The on-chain struct layout is frozen at first publish by Sui's upgrade-compatibility
-/// checker. There is deliberately no `version` field: on a frozen-layout embedded value
-/// it could only ever hold its initial constant. A future layout change ships as a
-/// parallel `SortedMapV2` with consumer-driven migration - never an in-place edit, which
-/// would break BCS deserialization of every downstream object embedding the old layout.
+/// The on-chain struct layout is frozen at first publish by Sui's upgrade checker. There is
+/// deliberately no `version` field: on a frozen-layout embedded value it could only ever hold its
+/// initial constant. A future layout change ships as a parallel `SortedMapV2` with consumer-driven
+/// migration, never an in-place edit - which would break BCS deserialization of every downstream
+/// object embedding the old layout.
 module openzeppelin_collections::sorted_map;
 
 // === Errors ===

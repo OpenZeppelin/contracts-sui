@@ -1,81 +1,76 @@
-/// A generic, ordered set of unique keys - the gap `sui::vec_set` leaves (`vec_set` is
-/// unordered and hash-keyed). Iterates in comparator order.
+/// A generic, ordered set of unique keys - the gap `sui::vec_set` leaves, which is unordered
+/// and hash-keyed. Iterates in comparator order.
 ///
-/// `SortedSet<K>` is a thin wrapper over `SortedMap<K, Unit>` (`Unit` is an empty marker
-/// struct): a set is a map whose values carry no information, exactly as `BTreeSet<K> =
-/// BTreeMap<K, ()>` in Rust. It is a UID-less value type (shaped like `sui::vec_set::
-/// VecSet`): no object identity, no dynamic fields - every key lives inline in one vector
-/// inside the wrapped map. Embed it directly in your own object:
+/// `SortedSet<K>` is a thin wrapper over `SortedMap<K, Unit>`, where `Unit` is an empty marker:
+/// a set is a map whose values carry no information, exactly as `BTreeSet<K> = BTreeMap<K, ()>`
+/// in Rust. Like `sui::vec_set::VecSet` it is a UID-less value - no identity, no dynamic fields,
+/// every key inline in one vector. A bare set is not `key`, so embed it in your own `has key`
+/// object:
 /// ```
 /// public struct Watchlist has key { id: UID, ids: SortedSet<u64> }
 /// ```
-/// A bare `SortedSet` cannot be `transfer`/`share`d (it is not `key`); wrap it in your
-/// own `has key` object to get owned or shared semantics.
 ///
-/// # Abilities
+/// # Essentials
 ///
-/// Unlike `SortedMap` - which is `copy`/`drop` only when its value type allows - a
-/// `SortedSet<K>` is unconditionally `copy + drop + store` (the value is always the
-/// trivial `Unit`). So there is no resource-valued set and no `destroy_empty` terminal: a
-/// set simply falls out of scope. A copy is a deep, independent snapshot - mutating the
-/// copy never touches the original.
+/// - **A set is a `SortedMap<K, Unit>`.** Ordered, unique keys; the comparator rules below are
+///   inherited from the map.
+/// - **One comparator, threaded to every call.** Same rule as the map (see its header for why the
+///   order isn't stored). A different or non-strict comparator silently desorts the set.
+/// - **`insert!` / `remove!` return `bool` and never abort** on a duplicate or absent key, unlike
+///   `sui::vec_set`, whose versions abort.
+/// - **Always `copy + drop + store`.** The value is always `Unit`, so there is no resource set and
+///   no `destroy_empty`; a set just falls out of scope.
+/// - **The library's only abort:** `pop_front` / `pop_back` on an empty set (`EEmpty`).
 ///
-/// # Comparator contract (read this)
+/// # The comparator
 ///
-/// Inherited verbatim from `SortedMap`. The set stores no comparator. Order is defined per
-/// call by a strict less-than `|&K, &K| -> bool` you supply; equality is derived as
-/// `!lt(a, b) && !lt(b, a)`, so membership is under the comparator, not byte-identity.
-/// Each comparator-needing operation comes in two forms:
-/// - bare (`insert!`, `contains!`, ...) assumes the built-in integer `<`; valid only for
-///   integer keys (`u8`..`u256`).
-/// - `_by` (`insert_by!`, `contains_by!`, ...) takes the `lt` lambda; required for
-///   non-integer keys (`address`, structs, ...).
+/// Inherited from `SortedMap` - see that module's header for the full contract and for why the
+/// order is a lambda you pass, not a stored value. You supply a strict total order, the same on
+/// every call; the set stores none and cannot detect a violation. The worst case is milder than
+/// the map's: a desorted set returns wrong membership answers, but no value is ever lost (the
+/// value is `Unit`). A reverse comparator used consistently is fine, and `head` then returns the
+/// largest numeric key.
 ///
-/// The comparator MUST be a strict total order and MUST be threaded consistently to every
-/// call on a given set. The library cannot detect a violation; the failure is silent (a
-/// desorted set returns wrong membership answers). Unlike the map, the worst case is
-/// order-only - no value can ever be lost (the value is `Unit`). A reverse comparator used
-/// consistently is legitimate (`head` then returns the largest key). Under a coarse
-/// (non-injective) `_by` comparator, byte-distinct keys that compare equal collapse to one
-/// element keeping the last inserted key's bytes - so first-seen gating on `insert!`'s bool
-/// is well-defined only under an injective comparator. In tests, call
-/// `sorted_map::is_well_formed_by!(inner_ref(&set), lt)` after `_by` sequences.
+/// A coarse (non-injective) comparator reports two byte-distinct keys as equal, collapsing them
+/// to one element. On that collision the last-inserted key's bytes win, so first-seen gating on
+/// `insert!` is well-defined only under an injective comparator. In tests, call
+/// `sorted_map::is_well_formed_by!(inner_ref(&set), lt)` after a `_by` sequence.
 ///
-/// # `insert`/`remove` return `bool` - they do NOT abort on duplicates
+/// # `insert` / `remove` return `bool`, not an abort
 ///
-/// Deliberate divergence from `sui::vec_set` (whose `insert`/`remove` abort). `insert! ->
-/// true` iff the key was newly added; `remove! -> true` iff it was present. This matches
-/// the wrapped map's total upsert, keeps the API composable mid-PTB, and is strictly more
-/// general: to get vec_set's abort-on-duplicate, write `assert!(insert!(&mut s, k), E)`.
-/// `from_keys` likewise de-duplicates rather than aborting; to reject duplicates, build
-/// then `assert!(length(&s) == n, E)` where `n` is the input length.
+/// A deliberate divergence from `sui::vec_set`, whose `insert` / `remove` abort. `insert! -> true`
+/// iff the key was newly added; `remove! -> true` iff it was present. This matches the wrapped
+/// map's total upsert, stays composable mid-PTB, and is strictly more general: for vec_set's
+/// abort-on-duplicate, write `assert!(insert!(&mut s, k), E)`. `from_keys` likewise de-duplicates;
+/// to reject duplicates instead, build then `assert!(length(&s) == n, E)`.
 ///
-/// # Aborts
+/// # Complexity and limits
 ///
-/// Exactly one abort code, `EEmpty`, raised by `pop_front`/`pop_back` on an empty set;
-/// everything else is total (returns `Option`/`bool`/`vector`/`u64`). The assert fires at THIS module's
-/// location, so consumer `#[expected_failure]` tests must pin `location =
-/// openzeppelin_collections::sorted_set`. (The wrapped map's own `EEmpty` is at the map's
-/// location and is never reached through the set's own `pop_*`.)
+/// Costs mirror `SortedMap`, which the set wraps: O(log N) membership, O(N) insert and remove, one
+/// object loaded per call, and the same ~250 KB object-size ceiling. `pop_front` is O(N) - it
+/// shifts every remaining key - while `pop_back` is O(1).
 ///
-/// # Library internals are forced-public
+/// The set's `_by` macros expand the map's `search!` inline. A single function with many distinct
+/// macro calls can therefore hit Move's ~256 local-variable limit (compiler error `value (N)
+/// cannot exceed (255)`) - split the function, or drive the calls from one reused loop body.
 ///
-/// Move 2024 macro hygiene requires every symbol a macro body references to be `public` at
-/// the consumer's expansion site, so `inner_ref`, `inner_mut`, and `unit` are `public`.
-/// They are NOT a supported API. In particular `inner_mut` hands out
-/// `&mut SortedMap<K, Unit>`: driving `sorted_map` ops on it directly with an inconsistent
-/// comparator (or `insert_at`/`remove_at` at a wrong index) can corrupt this set's order.
-/// Use the macro API. The corruption is order-only and local to that one set - no value is
-/// ever lost.
+/// # Forced-public internals
 ///
-/// # Upgrade policy
+/// Move 2024 macro hygiene requires every symbol a macro body references to be `public` at the
+/// consumer's expansion site, so `inner_ref`, `inner_mut`, and `unit` are `public`. They are not a
+/// supported API. In particular `inner_mut` hands out `&mut SortedMap<K, Unit>`: driving map ops on
+/// it with an inconsistent comparator (or `insert_at` / `remove_at` at a wrong index) can desort
+/// the set. Use the macro API. The corruption is order-only and local to that one set - no value
+/// is ever lost.
 ///
-/// The on-chain struct layout of `SortedSet` and of `Unit` is frozen at first publish by
-/// Sui's upgrade-compatibility checker. There is deliberately no `version` field. `Unit`
-/// must stay a zero-field empty struct (1 BCS byte); adding a field would break BCS
-/// deserialization of every downstream object and shrink the capacity ceiling. A future
-/// layout change ships as a parallel `SortedSetV2` with consumer-driven migration. The set
-/// also depends on the sibling `sorted_map` module's frozen layout.
+/// # Upgrade compatibility
+///
+/// The on-chain layout of `SortedSet` and of `Unit` is frozen at first publish by Sui's upgrade
+/// checker, and there is deliberately no `version` field. `Unit` must stay a zero-field empty
+/// struct (1 BCS byte); adding a field would break BCS deserialization of every downstream object
+/// and shrink the capacity ceiling. A future layout change ships as a parallel `SortedSetV2` with
+/// consumer-driven migration. The set also depends on the sibling `sorted_map` module's frozen
+/// layout.
 module openzeppelin_collections::sorted_set;
 
 use openzeppelin_collections::sorted_map::{Self, SortedMap};
