@@ -41,13 +41,17 @@
 ///
 /// # Aborts
 ///
-/// Three operations in the supported (macro) API abort; everything else in that API is total
-/// (returns `Option`/`bool`/`vector`): `borrow`/`borrow_mut` (`EKeyNotFound`), `destroy_empty`
-/// (`ENotEmpty`), and `pop_front`/`pop_back` (`EEmpty`). These originate in this module, so
-/// consumer `#[expected_failure]` tests pin `location = openzeppelin_collections::sorted_map`.
-/// The forced-public index accessors (`insert_at`/`remove_at`/`value_at`/`value_at_mut`)
-/// instead abort with NATIVE `std::vector` out-of-bounds codes (`location = std::vector`) on
-/// a bad index.
+/// In the supported API, only these operations abort; everything else is total (returns
+/// `Option`/`bool`/`vector`):
+/// - `borrow` / `borrow_mut` - `EKeyNotFound` on an absent key.
+/// - `destroy_empty` - `ENotEmpty` on a non-empty map.
+/// - `pop_front` / `pop_back` - `EEmpty` on an empty map.
+///
+/// These originate in this module, so consumer `#[expected_failure]` tests pin
+/// `location = openzeppelin_collections::sorted_map`.
+///
+/// The forced-public index accessors (`insert_at`/`remove_at`/`value_at`/`value_at_mut`) instead
+/// abort with native `std::vector` out-of-bounds codes (`location = std::vector`) on a bad index.
 ///
 /// # Library internals are forced-public
 ///

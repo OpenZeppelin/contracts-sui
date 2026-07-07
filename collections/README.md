@@ -153,7 +153,7 @@ The comparator footgun applies to both modules and is stated once at the top of 
 
 ### SortedMap
 
-- **Three aborts, all at the library's location.** `borrow`/`borrow_mut` -> `EKeyNotFound`; `destroy_empty` on a non-empty map -> `ENotEmpty`; `pop_front`/`pop_back` on an empty map -> `EEmpty`. Everything else is total (returns `Option`/`bool`/`vector`). Consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_map`.
+- **Aborts, all at the library's location.** Only these abort: `borrow`/`borrow_mut` -> `EKeyNotFound`; `destroy_empty` on a non-empty map -> `ENotEmpty`; `pop_front`/`pop_back` on an empty map -> `EEmpty`. Everything else is total (returns `Option`/`bool`/`vector`). Consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_map`.
 - **Resource-`V` conservation.** `insert`'s upsert returns the displaced value (`some(old)`) rather than dropping it; `remove`/`pop_*` move values out; `destroy_empty` refuses a non-empty map. A store-only `V` like `Coin<T>` is never silently burned.
 - **Forced-public internals are not an API.** Macro hygiene forces `search!`, `insert_at`, `remove_at`, `make_entry` to be `public`. `insert_at`/`remove_at` write at a caller-given position with no order check - calling them directly can corrupt order. They exist only to serve the macro bodies; use the macro API.
 - **No events.** A UID-less value has no on-chain identity; emit events yourself at your entry functions. Embedding in a shared object serializes writers per object, not per key - shard into multiple maps or use an owned object for hot paths.

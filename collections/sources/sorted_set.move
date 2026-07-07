@@ -52,8 +52,8 @@
 ///
 /// # Aborts
 ///
-/// Exactly ONE operation aborts; everything else is total (returns `Option`/`bool`/
-/// `vector`/`u64`): `pop_front`/`pop_back` (`EEmpty`). The assert fires at THIS module's
+/// Exactly one abort code, `EEmpty`, raised by `pop_front`/`pop_back` on an empty set;
+/// everything else is total (returns `Option`/`bool`/`vector`/`u64`). The assert fires at THIS module's
 /// location, so consumer `#[expected_failure]` tests must pin `location =
 /// openzeppelin_collections::sorted_set`. (The wrapped map's own `EEmpty` is at the map's
 /// location and is never reached through the set's own `pop_*`.)
