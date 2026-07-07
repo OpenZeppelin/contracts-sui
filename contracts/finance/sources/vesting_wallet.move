@@ -421,8 +421,8 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
     event::emit(Deposited<S, C> { wallet_id: object::id(wallet), amount });
 }
 
-/// Sweep `amount` from the wallet's own object address balance into its on-book
-/// `balance`.
+/// Sweep all settled funds from the wallet's own object address balance into its
+/// on-book `balance`.
 ///
 /// A wallet with no settled funds at its address is a no-op: nothing is swept and
 /// no `Swept` event is emitted.
