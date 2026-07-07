@@ -100,14 +100,21 @@ public fun top(vs: &ValidatorSet): Option<Validator> {
 }
 
 /// Re-rank an EXISTING validator to `new_stake`. Keys are immutable, so this removes the old
-/// entry and inserts a new one at the correct rank. Returns `false` if `old` was not registered;
-/// otherwise it SURFACES `register`'s own bool - whether the re-insert landed as a new entry -
-/// rather than assuming success, the same bool discipline every other function here follows. (The
-/// set is keyed on the whole `(stake, addr)`, so a re-insert that collides with an existing
-/// `(new_stake, old.addr)` is reported as `false`, not silently swallowed.)
+/// entry and inserts a fresh one at the new rank. Returns `true` on success.
+///
+/// Returns `false`, leaving the set unchanged, in two cases: `old` is not registered, or a
+/// separate `(new_stake, old.addr)` entry already occupies the target slot (the set keys on the
+/// whole `(stake, addr)`, so one address can hold two entries). The re-rank is atomic: on the
+/// collision the just-removed `old` is restored, so a `false` return never means a validator was
+/// dropped.
 public fun restake(vs: &mut ValidatorSet, old: Validator, new_stake: u64): bool {
     if (!deregister(vs, &old)) return false;
-    register(vs, validator(new_stake, old.addr))
+    if (register(vs, validator(new_stake, old.addr))) return true;
+    // Collision: `(new_stake, old.addr)` is already registered as a separate entry, so the
+    // re-insert is a no-op. Restore the just-removed `old` (this re-insert necessarily succeeds)
+    // so `restake` leaves the set exactly as it found it, and report the re-rank did not happen.
+    register(vs, old);
+    false
 }
 
 /// All validators in rank order (highest stake first), as an owned snapshot.

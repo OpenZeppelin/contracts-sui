@@ -87,6 +87,42 @@ fun struct_key_ranking() {
     ts::end(scenario);
 }
 
+// === Scenario 7 - restake onto an already-occupied slot is an atomic no-op ===
+//
+// `restake` removes the old entry then re-inserts at the new rank. Because the set keys on the
+// whole `(stake, addr)`, one address can hold two entries at once - so `(new_stake, addr)` may
+// ALREADY be registered when a re-rank targets it. The re-insert then collides, and `restake`
+// must restore the removed entry and report `false`, never silently drop a validator.
+#[test]
+fun restake_onto_occupied_slot_is_atomic() {
+    let mut scenario = ts::begin(ALICE);
+
+    // Tx1 - ALICE: deploy and share an empty validator registry.
+    validator_set::deploy_and_share(ts::ctx(&mut scenario));
+
+    // Tx2 - ALICE: register two entries for the SAME address at different stakes, then re-rank the
+    // lower one onto the higher one's occupied slot.
+    ts::next_tx(&mut scenario, ALICE);
+    {
+        let mut vs = ts::take_shared<ValidatorSet>(&scenario);
+        assert!(validator_set::register(&mut vs, validator_set::validator(100, VAL_A)));
+        assert!(validator_set::register(&mut vs, validator_set::validator(250, VAL_A)));
+        assert_eq!(validator_set::count(&vs), 2);
+
+        // Re-rank (100, VAL_A) -> 250: (250, VAL_A) already occupies that slot, so this is a no-op.
+        assert!(!validator_set::restake(&mut vs, validator_set::validator(100, VAL_A), 250));
+
+        // Atomic: the removed entry is restored and nothing was dropped.
+        assert_eq!(validator_set::count(&vs), 2);
+        assert!(validator_set::is_registered(&vs, &validator_set::validator(100, VAL_A)));
+        assert!(validator_set::is_registered(&vs, &validator_set::validator(250, VAL_A)));
+        assert!(validator_set::validators_well_formed(&vs));
+        ts::return_shared(vs);
+    };
+
+    ts::end(scenario);
+}
+
 // === Scenario 6 - RED test: a coarse comparator silently collapses distinct keys ===
 //
 // INTENTIONAL MISUSE - do NOT copy this comparator. It demonstrates the central footgun: the set
