@@ -207,7 +207,7 @@ fun spend_over_budget_aborts() {
 // delegate's 150 spend was sequenced, so by write time the entry holds 250 and the
 // guarded update aborts `EUnexpectedAllowance` instead of silently clobbering the
 // spend. (The guard only works because `expected` comes from BEFORE this tx: a
-// read taken in the write's own tx would trivially match — the shared Vault is
+// read taken in the write's own tx would trivially match; the shared Vault is
 // locked for the whole tx, so an in-tx read/write pair needs no guard at all.)
 #[test, expected_failure(abort_code = spend_vault::EUnexpectedAllowance)]
 fun change_budget_stale_expected_aborts() {

@@ -95,7 +95,7 @@
 ///   tx, then write with `Some(that_value)`. If a spend was sequenced after the
 ///   read, `remaining` no longer matches and the write aborts
 ///   `EUnexpectedAllowance` instead of silently clobbering it. A read in the
-///   same tx needs no CAS — the shared Vault is locked for the whole tx, so the
+///   same tx needs no CAS: the shared Vault is locked for the whole tx, so the
 ///   read/write pair is already atomic, and a same-tx read trivially satisfies
 ///   the guard. `Some(e)` on an absent entry aborts, since there is no value to
 ///   match.
@@ -658,8 +658,8 @@ public fun mint_cap(v: &Vault, cap: &OwnerCap, ctx: &mut TxContext): SpenderCap 
 ///   future expiry (or `u64::MAX`), time-reviving it while zeroing the budget.
 /// - **CAS.** `expected = Some(e)` proceeds only if the entry exists
 ///   AND its current `remaining == e`; on an absent entry or a mismatch it
-///   aborts `EUnexpectedAllowance`. Derive `e` from an EARLIER read — off-chain
-///   or a prior tx — so a spend sequenced after that read aborts this write
+///   aborts `EUnexpectedAllowance`. Derive `e` from an EARLIER read (off-chain
+///   or a prior tx) so a spend sequenced after that read aborts this write
 ///   instead of being clobbered. A read in the same tx cannot serve as a guard:
 ///   the shared Vault is locked for the whole tx, so a same-tx `allowance<T>()`
 ///   value trivially matches and the write always proceeds.
