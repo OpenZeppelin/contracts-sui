@@ -7,8 +7,9 @@
 /// # Two sides, two orders
 /// - **Asks** ascend, so the best (lowest) ask sits at index 0. Ascending integer
 ///   keys use the plain macros (`insert!`, `borrow_mut!`, `keys_from!`).
-/// - **Bids** descend, so the best (highest) bid sits at index 0. A custom order needs
-///   a comparator, so bids use the `_by` macros threaded with `|a, b| *a > *b`.
+/// - **Bids** descend, so the best (highest) bid sits at index 0. A custom order needs a
+///   comparator: the strict order lives in one private fn, `outbids`, threaded as
+///   `|a, b| outbids(a, b)` to every bid call.
 ///
 /// The bid comparator lives only in this module and is passed to every bid call. It
 /// must be the same on every call - the map stores no comparator, so a mix silently
@@ -65,14 +66,18 @@ public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
     }
 }
 
+/// The bid comparator: strict "a outbids b" = higher price first. Defined once here and
+/// threaded as `|a, b| outbids(a, b)` to every `_by` call, so the order cannot drift.
+fun outbids(a: &u64, b: &u64): bool { *a > *b }
+
 /// Add `size` at `price` on the bid side, merging if present. Bids descend, so every
-/// call threads the same `|a, b| *a > *b`.
+/// call threads the same `|a, b| outbids(a, b)`.
 public fun place_bid(book: &mut OrderBook, price: u64, size: u64) {
-    if (sorted_map::contains_by!(&book.bids, &price, |a, b| *a > *b)) {
-        let lvl = sorted_map::borrow_mut_by!(&mut book.bids, &price, |a, b| *a > *b);
+    if (sorted_map::contains_by!(&book.bids, &price, |a, b| outbids(a, b))) {
+        let lvl = sorted_map::borrow_mut_by!(&mut book.bids, &price, |a, b| outbids(a, b));
         lvl.size = lvl.size + size;
     } else {
-        sorted_map::insert_by!(&mut book.bids, price, Level { size }, |a, b| *a > *b);
+        sorted_map::insert_by!(&mut book.bids, price, Level { size }, |a, b| outbids(a, b));
     }
 }
 
@@ -119,7 +124,7 @@ public fun fill_best_ask(book: &mut OrderBook): (u64, u64) {
 /// True iff the bid side is correctly ordered under the book's (descending) comparator.
 #[test_only]
 public fun bids_well_formed(book: &OrderBook): bool {
-    sorted_map::is_well_formed_by!(&book.bids, |a, b| *a > *b)
+    sorted_map::is_well_formed_by!(&book.bids, |a, b| outbids(a, b))
 }
 
 /// Read-only view of the ask map, so a test can order-check it directly.

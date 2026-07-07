@@ -44,6 +44,9 @@ const ENoSuchRank: vector<u8> = "No prize at this rank";
 /// `fund` was called for a rank that already holds a prize (one coin per rank).
 #[error(code = 2)]
 const ERankAlreadyFunded: vector<u8> = "Rank already funded";
+/// `fund` was called with rank 0; ranks are 1-based (1 = champion).
+#[error(code = 3)]
+const EInvalidRank: vector<u8> = "Rank must be >= 1";
 
 /// Shared prize pool. `prizes` maps rank -> the coin awarded for that rank.
 public struct PrizeVault has key {
@@ -72,13 +75,15 @@ fun assert_cap(vault: &PrizeVault, cap: &OrganizerCap) {
     assert!(cap.vault == object::id(vault), EWrongVault);
 }
 
-/// Fund the prize at `rank` with `coin` (one coin per rank). Aborts `ERankAlreadyFunded` if the
-/// rank is already funded - a named guard that keeps `fund` clean: without it a re-fund would make
-/// `insert!` return `some(old_coin)`, and the follow-up `destroy_none()` would abort with the
-/// opaque foreign `std::option::EOPTION_IS_SET`. On the guarded fresh slot `insert!` returns
-/// `none`, which `destroy_none()` consumes (a resource map's `insert!` return cannot be ignored).
+/// Fund the prize at `rank` with `coin` (one coin per rank). Ranks are 1-based (1 = champion),
+/// so `fund` aborts `EInvalidRank` on rank 0. Aborts `ERankAlreadyFunded` if the rank is already
+/// funded - a named guard that keeps `fund` clean: without it a re-fund would make `insert!`
+/// return `some(old_coin)`, and the follow-up `destroy_none()` would abort with the opaque
+/// foreign `std::option::EOPTION_IS_SET`. On the guarded fresh slot `insert!` returns `none`,
+/// which `destroy_none()` consumes (a resource map's `insert!` return cannot be ignored).
 public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64, coin: Coin<SUI>) {
     assert_cap(vault, cap);
+    assert!(rank >= 1, EInvalidRank);
     assert!(!sorted_map::contains!(&vault.prizes, &rank), ERankAlreadyFunded);
     sorted_map::insert!(&mut vault.prizes, rank, coin).destroy_none();
 }
@@ -107,7 +112,7 @@ public fun unclaimed(vault: &PrizeVault): u64 {
 /// Destroy a fully-paid vault and its cap. Aborts `ENotEmpty` if any prize is unclaimed
 /// - nothing is lost, the transaction simply reverts and the vault stands.
 public fun close(vault: PrizeVault, cap: OrganizerCap) {
-    assert!(cap.vault == object::id(&vault), EWrongVault);
+    assert_cap(&vault, &cap);
     let PrizeVault { id, prizes } = vault;
     sorted_map::destroy_empty(prizes); // ENotEmpty here if prizes remain
     id.delete();

@@ -174,3 +174,35 @@ fun pay_next_on_empty_vault_aborts() {
     };
     ts::end(scenario);
 }
+
+// === Scenario 8 - funding rank 0 aborts EInvalidRank (ranks are 1-based) ===
+//
+// `pop_front` pays the lowest rank first, so a rank-0 prize would be paid before the
+// champion (rank 1). `fund` guards against it with a named EInvalidRank at this module.
+#[test]
+#[
+    expected_failure(
+        abort_code = openzeppelin_collections::sorted_map_prize_vault::EInvalidRank,
+        location = openzeppelin_collections::sorted_map_prize_vault,
+    ),
+]
+fun fund_rank_zero_aborts() {
+    let mut scenario = ts::begin(ORGANIZER);
+
+    // Tx1 - ORGANIZER: create an empty vault; keep its bound cap.
+    {
+        let (_, cap) = prize_vault::create(scenario.ctx());
+        transfer::public_transfer(cap, ORGANIZER);
+    };
+    // Tx2 - ORGANIZER: fund rank 0 -> EInvalidRank (aborts inside fund).
+    ts::next_tx(&mut scenario, ORGANIZER);
+    {
+        let mut vault = ts::take_shared<PrizeVault>(&scenario);
+        let cap = ts::take_from_sender<OrganizerCap>(&scenario);
+        prize_vault::fund(&mut vault, &cap, 0, coin::mint_for_testing<SUI>(100, scenario.ctx()));
+        // Unreachable past the abort; kept well-formed for the resource checker.
+        ts::return_to_sender(&scenario, cap);
+        ts::return_shared(vault);
+    };
+    ts::end(scenario);
+}

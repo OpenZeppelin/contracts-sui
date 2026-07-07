@@ -33,6 +33,9 @@ use sui::event;
 use openzeppelin_collections::sorted_map;
 
 /// A queue of unique unlock timestamps, drained in chronological order.
+///
+/// This vector-backed set lives inline in the object, so the queue assumes a bounded number of
+/// pending deadlines - see the capacity notes in the package README.
 public struct UnlockQueue has key {
     id: UID,
     deadlines: SortedSet<u64>,
@@ -82,17 +85,22 @@ public fun is_empty(q: &UnlockQueue): bool {
     sorted_set::is_empty(&q.deadlines)
 }
 
-/// Pop and process the EARLIEST deadline, returning it. ABORTS `EEmpty` (the set's own, code 0,
-/// at `location = openzeppelin_collections::sorted_set`) if the queue is empty - guard with
-/// `is_empty` or peek `next_deadline` first.
+/// Pop and process the EARLIEST deadline, returning it.
+///
+/// #### Aborts
+/// - `EEmpty` if the queue is empty (the set's own, code 0, at
+///   `location = openzeppelin_collections::sorted_set`) - guard with `is_empty` or peek
+///   `next_deadline` first.
 public fun process_earliest(q: &mut UnlockQueue): u64 {
     let deadline = sorted_set::pop_front(&mut q.deadlines);
     event::emit(Unlocked { deadline });
     deadline
 }
 
-/// Pop and process the LATEST deadline (the other extreme), returning it. Same `EEmpty` abort
-/// on an empty queue.
+/// Pop and process the LATEST deadline (the other extreme), returning it.
+///
+/// #### Aborts
+/// - `EEmpty` if the queue is empty (same as `process_earliest`).
 public fun process_latest(q: &mut UnlockQueue): u64 {
     let deadline = sorted_set::pop_back(&mut q.deadlines);
     event::emit(Unlocked { deadline });

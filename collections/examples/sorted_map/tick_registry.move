@@ -32,6 +32,9 @@ public struct TickInfo has copy, drop, store {
 }
 
 /// A pool's active ticks, embedded in a shared object.
+///
+/// This vector-backed map lives inline in the object, so the registry assumes a bounded tick
+/// population - see the capacity notes in the package README.
 public struct TickRegistry has key {
     id: UID,
     /// tick index -> liquidity state, ascending.
@@ -61,13 +64,20 @@ public fun contains_tick(reg: &TickRegistry, tick: u64): bool {
     sorted_map::contains!(&reg.ticks, &tick)
 }
 
-/// State at an active `tick`. Aborts `EKeyNotFound` if the tick is inactive - gate
-/// with `contains_tick`, or discover live ticks via the navigation ops.
+/// State at an active `tick`.
+///
+/// #### Aborts
+/// - `EKeyNotFound` if the tick is inactive - gate with `contains_tick`, or discover live
+///   ticks via the navigation ops.
 public fun borrow_tick(reg: &TickRegistry, tick: u64): &TickInfo {
     sorted_map::borrow!(&reg.ticks, &tick)
 }
 
 /// Accumulate fee growth into an active tick in place.
+///
+/// #### Aborts
+/// - `EKeyNotFound` (from `borrow_mut!`) if the tick is inactive - gate with `contains_tick`.
+/// - Native `u128` overflow if `fee_growth + delta` exceeds `u128::MAX`.
 public fun accrue_fees(reg: &mut TickRegistry, tick: u64, delta: u128) {
     let info = sorted_map::borrow_mut!(&mut reg.ticks, &tick);
     info.fee_growth = info.fee_growth + delta;

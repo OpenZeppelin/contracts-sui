@@ -43,6 +43,9 @@ public struct Validator has copy, drop, store {
 }
 
 /// A registry of validators kept ordered by descending stake.
+///
+/// This vector-backed set lives inline in the object, so the registry assumes a bounded
+/// validator population - see the capacity notes in the package README.
 public struct ValidatorSet has key {
     id: UID,
     validators: SortedSet<Validator>,
