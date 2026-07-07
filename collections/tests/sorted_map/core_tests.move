@@ -314,6 +314,35 @@ fun keys_from_overflow_limit() {
     assert_eq!(u::kfrom(&m, 0, true, U64_MAX), vector[10, 20, 30]);
 }
 
+// === Full enumeration (keys) ===
+
+#[test]
+fun keys_empty_is_empty() {
+    let m = sm::new<u64, u64>();
+    assert_eq!(sm::keys(&m), vector[]);
+}
+
+#[test]
+fun keys_returns_all_in_ascending_order() {
+    let mut m = sm::new<u64, u64>();
+    // Insert out of order; the map sorts, so keys come back ascending.
+    u::ins(&mut m, 30, 3);
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    assert_eq!(sm::keys(&m), vector[10, 20, 30]);
+}
+
+#[test]
+fun keys_reflects_stored_order_under_reverse_comparator() {
+    let mut m = sm::new<u64, u64>();
+    // Built consistently with the reverse comparator, so stored order is DESCENDING;
+    // `keys` returns that stored order, not the natural ascending one.
+    u::ins_rev(&mut m, 10, 1);
+    u::ins_rev(&mut m, 30, 3);
+    u::ins_rev(&mut m, 20, 2);
+    assert_eq!(sm::keys(&m), vector[30, 20, 10]);
+}
+
 // === Length tracks the vector with no cached counter ===
 
 #[test]

@@ -697,18 +697,26 @@ public fun pop_front<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>
 
 /// Remove and return the largest entry `(key, value)`. Length - 1. O(1) (no shift).
 ///
-/// The empty check is first so `n - 1` cannot underflow at `n == 0`.
-///
 /// #### Returns
 /// - The largest `(key, value)` pair.
 ///
 /// #### Aborts
 /// - `EEmpty` if the map is empty.
 public fun pop_back<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>): (K, V) {
+    // Check first: `pop_back` on an empty vector would abort with a native code, not `EEmpty`.
     assert!(!is_empty(map), EEmpty);
-    let n = map.entries.length();
-    let Entry { key, value } = map.entries.remove(n - 1);
+    let Entry { key, value } = map.entries.pop_back();
     (key, value)
+}
+
+// === Full enumeration (regular fun; no comparator) ===
+
+/// All keys in ascending comparator order as an owned `vector<K>`. O(N) in output size with no
+/// `limit`; for large or near-ceiling maps prefer the paged `keys_from!`. Loads exactly one
+/// stored object regardless of N.
+public fun keys<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): vector<K> {
+    let es = &map.entries;
+    vector::tabulate!(es.length(), |i| es.borrow(i).key)
 }
 
 // === Test-Only Helpers ===

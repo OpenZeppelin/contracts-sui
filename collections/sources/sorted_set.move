@@ -272,8 +272,7 @@ public fun pop_back<K: copy + drop + store>(set: &mut SortedSet<K>): K {
 /// #### Returns
 /// - Every key, in ascending comparator order.
 public fun keys<K: copy + drop + store>(set: &SortedSet<K>): vector<K> {
-    let entries = set.inner.entries_ref();
-    vector::tabulate!(entries.length(), |i| *entries.borrow(i).entry_key())
+    sorted_map::keys(&set.inner)
 }
 
 // === Membership (macros: bare + `_by`) ===
