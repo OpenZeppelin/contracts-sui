@@ -33,7 +33,7 @@ Abilities materialize jointly over `K` and `V`: `SortedMap<u64, u64>` is `copy +
 
 - You need bounded ordered state inside an object you own - order books, tick registries, leaderboards, prize vaults.
 - You ask ordered questions (head/tail, floor/ceiling, next key, a sorted page), not just "is this key present?".
-- Your data fits one ~256 KB object (≈16k `u64`/`u64` entries).
+- Your data fits one ~250 KB object (≈16k `u64`/`u64` entries).
 
 ### Lifecycle
 
@@ -157,7 +157,7 @@ The comparator footgun applies to both modules and is stated once at the top of 
 - **Resource-`V` conservation.** `insert`'s upsert returns the displaced value (`some(old)`) rather than dropping it; `remove`/`pop_*` move values out; `destroy_empty` refuses a non-empty map. A store-only `V` like `Coin<T>` is never silently burned.
 - **Forced-public internals are not an API.** Macro hygiene forces `search!`, `insert_at`, `remove_at`, `make_entry` to be `public`. `insert_at`/`remove_at` write at a caller-given position with no order check - calling them directly can corrupt order. They exist only to serve the macro bodies; use the macro API.
 - **No events.** A UID-less value has no on-chain identity; emit events yourself at your entry functions. Embedding in a shared object serializes writers per object, not per key - shard into multiple maps or use an owned object for hot paths.
-- **Capacity.** Every operation loads exactly one stored object, so the map is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. On localnet (sui 1.73.1) a `SortedMap<u64, u64>` holds ≈15,997 entries before `insert` aborts at the Sui runtime with `MoveObjectTooBig`; `remove` always survives at the ceiling, so a full map is never soft-bricked (hence no `ECapacityExceeded` guard). The ceiling scales inversely with entry size.
+- **Capacity.** Every operation loads exactly one stored object, so the map is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. Illustratively, measured on localnet (Sui 1.74.1), a `SortedMap<u64, u64>` holds 15,997 entries before `insert` aborts at the Sui runtime with `MoveObjectTooBig` - treat this as a guide, not a guarantee (the protocol size cap is config-governed and can change). `remove` always survives at the ceiling, so a full map is never soft-bricked (hence no `ECapacityExceeded` guard). The ceiling scales inversely with entry size.
 - **Deliberate omissions.** No non-aborting `Option<&V>` borrow (Move cannot put a reference in `Option`) - use `if (contains!(..)) borrow!(..)`. No descending pagination - use a reverse comparator. No `version` field - the layout is frozen at publish, and a layout change ships as a parallel `SortedMapV2`.
 
 ### SortedSet
@@ -167,7 +167,7 @@ The comparator footgun applies to both modules and is stated once at the top of 
 - **Exactly one abort.** `pop_front`/`pop_back` on an empty set abort `EEmpty` at this module's location; consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_set`. Every other operation is total.
 - **Forced-public internals are not an API.** `inner_ref`, `inner_mut`, and `unit` are `public` only for macro hygiene. Driving the wrapped map through `inner_mut` with an inconsistent comparator can desort the set (order-only, local to that set). Use the macro API.
 - **No capabilities, `Clock`, `Random`, global state, or events.** The library never checks the caller; gate your own entry functions and emit your own events.
-- **Capacity.** Every operation loads exactly one stored object, so the set is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. On localnet (sui 1.73.1) the ceiling is ≈28,440 `u64` keys (≈1.78× the map's 15,997 `u64`/`u64` entries - each set entry is 9 bytes: an 8-byte key plus the 1-byte `Unit`). Past it, `insert` self-limits via `MoveObjectTooBig` (no capacity guard); the set is never soft-bricked.
+- **Capacity.** Every operation loads exactly one stored object, so the set is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. Illustratively, measured on localnet (Sui 1.74.1), the ceiling is 28,440 `u64` keys (≈1.78× the map's 15,997 `u64`/`u64` entries - each set entry is 9 bytes: an 8-byte key plus the 1-byte `Unit`); treat it as a guide, not a guarantee. Past it, `insert` self-limits via `MoveObjectTooBig` (no capacity guard); the set is never soft-bricked.
 
 ## Learn More
 

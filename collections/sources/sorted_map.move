@@ -15,7 +15,7 @@
 /// O(N) (a shift in that vector). Every operation - including a full `keys_from` page -
 /// loads exactly ONE stored object regardless of N, so the map can never approach Sui's
 /// per-transaction dynamic-field access cap. The binding limit is byte size: the
-/// enclosing object must stay under Sui's object-size cap (~256 KB).
+/// enclosing object must stay under Sui's object-size cap (~250 KB).
 ///
 /// # Comparator contract (read this)
 ///
@@ -162,11 +162,11 @@ public fun tail<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): Option
 
 // === Macro-internal accessors and search (forced-public; NOT a supported API) ===
 //
-// Everything in this section is `public` ONLY because Move 2024 macro hygiene requires
-// every symbol a macro body references to be public at the consumer's expansion site.
-// In particular `insert_at`/`remove_at` write at a caller-given index with no ordering
-// check, so calling them directly can corrupt sorted order. Use the macro API
-// (`insert!`, `remove!`, ...) instead.
+// Everything in this section is `public` because Move 2024 macro hygiene requires every
+// symbol a macro body references to be public at the consumer's expansion site (plus
+// `entry_value`, which completes the `entries_ref` read surface). In particular
+// `insert_at`/`remove_at` write at a caller-given index with no ordering check, so calling
+// them directly can corrupt sorted order. Use the macro API (`insert!`, `remove!`, ...) instead.
 
 /// Immutable view of the backing vector. There is deliberately no `&mut`/owning
 /// counterpart, so bulk reordering or bulk value-destruction is unrepresentable through
@@ -183,7 +183,9 @@ public fun entry_key<K: copy + drop + store, V: store>(e: &Entry<K, V>): &K {
     &e.key
 }
 
-/// Borrow an entry's value.
+/// Borrow an entry's value. Unlike its neighbors in this section, no macro body references
+/// it - it is public as the value-reading complement to `entry_key`, completing the read
+/// surface of `entries_ref` (the `Entry` fields are private).
 public fun entry_value<K: copy + drop + store, V: store>(e: &Entry<K, V>): &V {
     &e.value
 }
@@ -262,7 +264,9 @@ public fun assert_key_found(found: bool) {
 ///
 /// #### Returns
 /// - `(true, idx)` when `entries[idx].key` equals `target` (derived: neither
-///   `lt(k, t)` nor `lt(t, k)`); the match is unique under strict ordering.
+///   `lt(k, t)` nor `lt(t, k)`). The supported API keeps entries strictly sorted - at most
+///   one entry per key - so the match is unique; on a map corrupted via the index writers the
+///   library gives no guarantee which entry is returned (the sorted/unique invariant is broken).
 /// - `(false, idx)` when absent, where `idx` is the lower-bound insertion point - the
 ///   number of keys strictly less than `target`, in `[0, n]`.
 public macro fun search<$K: copy + drop + store, $V: store>(
@@ -393,12 +397,12 @@ public macro fun borrow_mut<$K: copy + drop + store, $V: store>(
 }
 
 /// Upsert: insert `key`/`value`, or replace the value if `key` is already present, under
-/// `$lt`.
+/// `$lt`. On replace the stored key bytes are refreshed to `key` and the displaced value is
+/// returned - never dropped, so resource values (e.g. `Coin<T>`) are safe.
 ///
-/// On replace it extracts the old value via `remove_at` and reinserts a fresh entry at
-/// the same index - storing the new key bytes and returning the displaced value rather
-/// than dropping it. This is deliberately NOT `*value_at_mut(..) = value`, which would
-/// drop the old value (requires `V: drop`) and silently destroy a `Coin`.
+/// Deliberate divergence from `sui::vec_map::insert`, which aborts on a duplicate key: this
+/// is a total upsert, matching `sorted_set`'s divergence from `vec_set`. To recover the
+/// abort-on-duplicate behavior, write `assert!(insert!(&mut m, k, v).is_none(), E)`.
 ///
 /// #### Parameters
 /// - `key`: Key to insert or update.
@@ -418,6 +422,8 @@ public macro fun insert_by<$K: copy + drop + store, $V: store>(
     let value = $value;
     let (found, idx) = search!(map, &key, $lt);
     if (found) {
+        // Extract-then-reinsert, deliberately NOT `*value_at_mut(..) = value`: overwriting
+        // in place would drop the old value (requiring `V: drop`) and silently destroy a `Coin`.
         let old = remove_at(map, idx);
         insert_at(map, idx, make_entry(key, value));
         option::some(old)
@@ -672,13 +678,10 @@ public macro fun keys_from<$K: copy + drop + store, $V: store>(
 
 // === Pop extremes (regular funs; abort EEmpty) ===
 
-/// Remove and return the smallest entry `(key, value)`. Length - 1. O(N): `remove(0)` shifts
-/// every remaining entry left one slot (`pop_back` is O(1)); a front-heavy drain loop is quadratic.
-///
-/// Returns `(K, V)`, not `Option<(K, V)>`: a tuple cannot be a generic type argument in
-/// Move, so emptiness is signalled by a runtime abort rather than an `Option`. The empty
-/// check is the first statement - otherwise `remove(0)` on an empty vector would abort
-/// with a foreign out-of-bounds code instead of the named `EEmpty`.
+/// Remove and return the smallest entry `(key, value)`; length - 1. O(N): shifts every
+/// remaining entry (`pop_back` is O(1) - prefer it for bulk drains). Returns a bare tuple
+/// rather than `Option<(K, V)>` (a tuple cannot be a generic type argument in Move), so
+/// emptiness is a runtime abort.
 ///
 /// #### Returns
 /// - The smallest `(key, value)` pair.
@@ -686,6 +689,7 @@ public macro fun keys_from<$K: copy + drop + store, $V: store>(
 /// #### Aborts
 /// - `EEmpty` if the map is empty.
 public fun pop_front<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>): (K, V) {
+    // Check first: `remove(0)` on an empty vector would abort with a native code, not `EEmpty`.
     assert!(!is_empty(map), EEmpty);
     let Entry { key, value } = map.entries.remove(0);
     (key, value)
