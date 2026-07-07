@@ -379,10 +379,14 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// `public_transfer`'d to the wallet's address but not yet `receive_and_deposit`'d is
 /// invisible to `destroy_empty`'s empty check, so finalizing teardown forfeits it. Route
 /// the cap to the party that should own that decision (commonly the beneficiary or its
-/// controller).
+/// controller). Destruction is an operational step rather than a guaranteed one-shot:
+/// halt upstream emissions first, claim any transferred coins that already target the
+/// wallet, and allow at least one checkpoint for in-flight emissions to settle before
+/// retrying teardown.
 ///
-/// The ended gate is retained: it stops a wallet being torn down ahead of a pending
-/// deposit, front-running funding intended to arrive later.
+/// The ended gate is retained: it stops a wallet being torn down ahead of a scheduled
+/// future deposit, front-running funding intended to arrive later. It cannot detect
+/// coins already sent to the wallet's address but still unclaimed by the wallet.
 ///
 /// #### Parameters
 /// - `receipt`: The `DestroyReceipt<Linear, Params>` returned by

@@ -509,9 +509,12 @@ public fun release<S: drop, P: copy + drop + store, C>(
 /// split as `VestedAmount`: one half stays callable without the witness, the other half
 /// is gated.
 ///
-/// Coins `public_transfer`'d to a destroyed wallet's address after this call have no
-/// path back - pair destruction with halting any upstream emissions that target this
-/// wallet.
+/// Coins `public_transfer`'d to this wallet's address but not claimed before this call
+/// are invisible to the empty-balance check and have no path back once the wallet's
+/// `UID` is deleted. The same applies to coins sent after this call, or to any
+/// upstream emission that can still settle at this address while teardown is being
+/// attempted. Pair destruction with halting upstream emissions, claiming outstanding
+/// transferred coins, and letting the halt settle before tearing the wallet down.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to destroy. Must hold a zero balance.
