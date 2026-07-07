@@ -272,7 +272,7 @@ public fun pop_back<K: copy + drop + store>(set: &mut SortedSet<K>): K {
 /// #### Returns
 /// - Every key, in ascending comparator order.
 public fun keys<K: copy + drop + store>(set: &SortedSet<K>): vector<K> {
-    sorted_map::keys(&set.inner)
+    set.inner.keys()
 }
 
 // === Membership (macros: bare + `_by`) ===
@@ -292,7 +292,7 @@ public macro fun contains_by<$K: copy + drop + store>(
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
 ): bool {
-    sorted_map::contains_by!(inner_ref($set), $key, $lt)
+    inner_ref($set).contains_by!($key, $lt)
 }
 
 /// `contains_by` with the built-in integer `<`.
@@ -321,7 +321,7 @@ public macro fun insert_by<$K: copy + drop + store>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let set = $set;
-    sorted_map::insert_by!(inner_mut(set), $key, unit(), $lt).is_none()
+    inner_mut(set).insert_by!($key, unit(), $lt).is_none()
 }
 
 /// `insert_by` with the built-in integer `<`.
@@ -352,7 +352,7 @@ public macro fun remove_by<$K: copy + drop + store>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let set = $set;
-    sorted_map::remove_by!(inner_mut(set), $key, $lt).is_some()
+    inner_mut(set).remove_by!($key, $lt).is_some()
 }
 
 /// `remove_by` with the built-in integer `<`.
@@ -382,7 +382,7 @@ public macro fun find_next_by<$K: copy + drop + store>(
     $include: bool,
     $lt: |&$K, &$K| -> bool,
 ): Option<$K> {
-    sorted_map::find_next_by!(inner_ref($set), $key, $include, $lt)
+    inner_ref($set).find_next_by!($key, $include, $lt)
 }
 
 /// `find_next_by` with the built-in integer `<`.
@@ -413,7 +413,7 @@ public macro fun find_prev_by<$K: copy + drop + store>(
     $include: bool,
     $lt: |&$K, &$K| -> bool,
 ): Option<$K> {
-    sorted_map::find_prev_by!(inner_ref($set), $key, $include, $lt)
+    inner_ref($set).find_prev_by!($key, $include, $lt)
 }
 
 /// `find_prev_by` with the built-in integer `<`.
@@ -481,7 +481,7 @@ public macro fun keys_from_by<$K: copy + drop + store>(
     $limit: u64,
     $lt: |&$K, &$K| -> bool,
 ): vector<$K> {
-    sorted_map::keys_from_by!(inner_ref($set), $from, $include, $limit, $lt)
+    inner_ref($set).keys_from_by!($from, $include, $limit, $lt)
 }
 
 /// `keys_from_by` with the built-in integer `<`.
