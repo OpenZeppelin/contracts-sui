@@ -45,7 +45,7 @@ One shared `Vault` holds N coin types at once. Funds are not a struct field: eac
 ### Lifecycle
 
 1. **Create and fund** - `new` returns the `Vault` and its `OwnerCap` by value; `deposit<T>` (or a raw address-balance top-up) funds the pool; `share` makes the vault usable. Compose all of this in one PTB before `share`.
-2. **Grant** - `mint_cap` returns a bare `SpenderCap`; `set_allowance<T>` creates or overwrites the `(cap, coin)` budget. `0` suspends (keeps the cap), `u64::MAX` means unlimited / no expiry, and an optional CAS guard makes read-then-write races safe.
+2. **Grant** - `mint_cap` returns a bare `SpenderCap`; `set_allowance<T>` creates or overwrites the `(cap, coin)` budget. `0` suspends (keeps the cap), `u64::MAX` means unlimited / no expiry, and an optional CAS guard lets an update derived from an earlier read abort instead of clobbering a spend sequenced in between.
 3. **Spend** - the cap holder calls `spend<T>` for exactly `amount`, receiving a `Balance<T>` to route onward. Spending is cap-gated, never sender-gated.
 4. **Manage** - the owner raises, lowers, or suspends a live grant in place with `set_allowance<T>` (the cap object is never invalidated), ends one coin with `revoke<T>`, or kills an entire cap with `revoke_all`. A spender can self-revoke with `renounce`.
 5. **Exit and teardown** - the owner withdraws funds at any time with `withdraw<T>` / `withdraw_all<T>`, then `destroy`s the drained vault. Owner exit is never blocked by spender state.
