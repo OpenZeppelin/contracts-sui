@@ -690,6 +690,9 @@ fun deposit_internal<S: drop, P: copy + drop + store, C>(
 ): u64 {
     let amount = balance.value();
 
+    // SAFETY: the subtractions cannot underflow because `balance + released` is
+    // held `<= u64::MAX` by this same check on every deposit (the only place the
+    // sum grows); `release` merely shifts value between the two fields.
     assert!(
         std::u64::max_value!() - wallet.balance.value() - wallet.released >= amount,
         EBalanceOverflow,
