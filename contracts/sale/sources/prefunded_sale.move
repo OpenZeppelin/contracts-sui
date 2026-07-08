@@ -1308,18 +1308,18 @@ public fun claim_into_vesting<
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): VestingWallet<Witness, VestingScheduleParams, SaleCoin> {
+): (VestingWallet<Witness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_internal(receipt, ctx);
 
-    let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
+    let (mut wallet, destroy_cap) = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
         *sale.vesting_schedule_params.borrow(),
         ctx.sender(), // only buyer can claim
         ctx,
     );
-    wallet.deposit(coin::from_balance(payout, ctx));
+    wallet.deposit(payout);
 
-    wallet
+    (wallet, destroy_cap)
 }
 
 /// Batch variant of `claim_into_vesting`: redeem several receipts into one funded
@@ -1356,18 +1356,18 @@ public fun claim_all_into_vesting<
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
-): VestingWallet<Witness, VestingScheduleParams, SaleCoin> {
+): (VestingWallet<Witness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_all_internal(receipts, ctx);
 
-    let mut wallet = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
+    let (mut wallet, destroy_cap) = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
         *sale.vesting_schedule_params.borrow(),
         ctx.sender(), // only buyer can claim
         ctx,
     );
-    wallet.deposit(coin::from_balance(payout, ctx));
+    wallet.deposit(payout);
 
-    wallet
+    (wallet, destroy_cap)
 }
 
 /// Withdraw the collected proceeds. **Admin-only.** Phase must be `Finalized`.

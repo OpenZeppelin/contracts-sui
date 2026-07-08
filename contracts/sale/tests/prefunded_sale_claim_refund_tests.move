@@ -214,7 +214,7 @@ fun claim_into_vesting_returns_funded_wallet() {
     test.next_tx(tu::buyer());
     let mut sale = tu::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(tu::buyer());
-    let wallet: VestingWallet<Linear, VParams, SALE> = prefunded_sale::claim_into_vesting<
+    let (wallet, destroy_cap) = prefunded_sale::claim_into_vesting<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -226,6 +226,7 @@ fun claim_into_vesting_returns_funded_wallet() {
     assert_eq!(wallet.beneficiary(), tu::buyer());
     assert_eq!(sale.total_allocated(), 0);
     destroy(wallet);
+    destroy(destroy_cap);
     tu::return_sale(sale);
 
     destroy(clk);
@@ -245,7 +246,7 @@ fun claim_all_into_vesting_sums_into_one_wallet() {
     let mut sale = tu::take_sale(&test);
     let r1 = test.take_from_address<Receipt<SALE>>(tu::buyer());
     let r2 = test.take_from_address<Receipt<SALE>>(tu::buyer());
-    let wallet: VestingWallet<Linear, VParams, SALE> = prefunded_sale::claim_all_into_vesting<
+    let (wallet, destroy_cap) = prefunded_sale::claim_all_into_vesting<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -257,6 +258,7 @@ fun claim_all_into_vesting_sums_into_one_wallet() {
     assert_eq!(wallet.beneficiary(), tu::buyer());
     assert_eq!(sale.total_allocated(), 0);
     destroy(wallet);
+    destroy(destroy_cap);
     tu::return_sale(sale);
 
     destroy(clk);
@@ -274,7 +276,7 @@ fun claim_into_vesting_without_schedule_aborts() {
     test.next_tx(tu::buyer());
     let mut sale = tu::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(tu::buyer());
-    let wallet: VestingWallet<Linear, VParams, SALE> = prefunded_sale::claim_into_vesting<
+    let (wallet, destroy_cap) = prefunded_sale::claim_into_vesting<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -283,6 +285,7 @@ fun claim_into_vesting_without_schedule_aborts() {
         Linear,
     >(&mut sale, r, test.ctx()); // aborts: ENoVestingScheduleAttached
     destroy(wallet);
+    destroy(destroy_cap);
     tu::return_sale(sale);
     destroy(clk);
     test.end();
