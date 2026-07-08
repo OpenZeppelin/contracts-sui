@@ -183,14 +183,14 @@ fun nondeterministic_comparator_corrupts() {
     // computation is fully deterministic, so the honest `<` well-formedness check stably
     // reports NOT well-formed: the library cannot detect the bad lambda.
     while (i < 16) {
-        let _ = sm::insert_by!(&mut m, i, i, |_, _| {
+        let _ = m.insert_by!(i, i, |_, _| {
             ctr = ctr + 1;
             ctr % 2 == 0
         });
         i = i + 1;
     };
     assert_eq!(m.length(), 16); // no collapse: every insert landed fresh
-    assert!(!sm::is_well_formed!(&m)); // ... but order is broken
+    assert!(!m.is_well_formed!()); // ... but order is broken
 }
 
 // === `_by` navigation under a CUSTOM (reverse) comparator: ceiling/floor are lt-relative ===

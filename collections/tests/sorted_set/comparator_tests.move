@@ -184,7 +184,7 @@ fun nondeterministic_comparator_corrupts() {
     // type_tests.)
     let mut s = u::fromk(vector[10u64, 20, 30]);
     let mut calls = 0u64;
-    ss::insert_by!(&mut s, 5, |_a, _b| { calls = calls + 1; calls % 2 == 1 });
+    s.insert_by!(5, |_a, _b| { calls = calls + 1; calls % 2 == 1 });
     assert!(!u::wf(&s)); // a non-deterministic lt produced a non-well-formed set
     assert_eq!(s.length(), 4); // 5 was inserted (at the wrong slot), not dropped
 }
@@ -358,5 +358,5 @@ fun aborting_comparator_propagates() {
     // `insert`/`remove`/`contains` totality is library-semantic only; a consumer-supplied
     // abort is the caller's, not the library's.
     let mut s = u::fromk(vector[1u64, 2, 3]);
-    ss::insert_by!(&mut s, 5, |a, b| aborting_lt(a, b));
+    s.insert_by!(5, |a, b| aborting_lt(a, b));
 }

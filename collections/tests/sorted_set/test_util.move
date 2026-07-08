@@ -19,110 +19,110 @@ use openzeppelin_collections::sorted_set::{Self as ss, SortedSet};
 
 // === Thin wrappers - u64, bare forms (built-in integer `<`) ===
 
-public fun ins(s: &mut SortedSet<u64>, k: u64): bool { ss::insert!(s, k) }
+public fun ins(s: &mut SortedSet<u64>, k: u64): bool { s.insert!(k) }
 
-public fun rem(s: &mut SortedSet<u64>, k: u64): bool { ss::remove!(s, &k) }
+public fun rem(s: &mut SortedSet<u64>, k: u64): bool { s.remove!(&k) }
 
-public fun has(s: &SortedSet<u64>, k: u64): bool { ss::contains!(s, &k) }
+public fun has(s: &SortedSet<u64>, k: u64): bool { s.contains!(&k) }
 
-public fun fnext(s: &SortedSet<u64>, k: u64, inc: bool): Option<u64> { ss::find_next!(s, &k, inc) }
+public fun fnext(s: &SortedSet<u64>, k: u64, inc: bool): Option<u64> { s.find_next!(&k, inc) }
 
-public fun fprev(s: &SortedSet<u64>, k: u64, inc: bool): Option<u64> { ss::find_prev!(s, &k, inc) }
+public fun fprev(s: &SortedSet<u64>, k: u64, inc: bool): Option<u64> { s.find_prev!(&k, inc) }
 
-public fun nkey(s: &SortedSet<u64>, k: u64): Option<u64> { ss::next_key!(s, &k) }
+public fun nkey(s: &SortedSet<u64>, k: u64): Option<u64> { s.next_key!(&k) }
 
-public fun pkey(s: &SortedSet<u64>, k: u64): Option<u64> { ss::prev_key!(s, &k) }
+public fun pkey(s: &SortedSet<u64>, k: u64): Option<u64> { s.prev_key!(&k) }
 
 public fun page(s: &SortedSet<u64>, from: u64, inc: bool, lim: u64): vector<u64> {
-    ss::keys_from!(s, &from, inc, lim)
+    s.keys_from!(&from, inc, lim)
 }
 
 public fun fromk(ks: vector<u64>): SortedSet<u64> { ss::from_keys!(ks) }
 
 /// Well-formedness check under the bare integer `<` - REUSED from the map across the package
 /// boundary. No separate set checker exists.
-public fun wf(s: &SortedSet<u64>): bool { sorted_map::is_well_formed!(ss::inner_ref(s)) }
+public fun wf(s: &SortedSet<u64>): bool { s.inner_ref().is_well_formed!() }
 
 // === Thin wrappers - u64, reverse comparator `>` used CONSISTENTLY (legit case) ===
 
-public fun ins_rev(s: &mut SortedSet<u64>, k: u64): bool { ss::insert_by!(s, k, |a, b| *a > *b) }
+public fun ins_rev(s: &mut SortedSet<u64>, k: u64): bool { s.insert_by!(k, |a, b| *a > *b) }
 
-public fun rem_rev(s: &mut SortedSet<u64>, k: u64): bool { ss::remove_by!(s, &k, |a, b| *a > *b) }
+public fun rem_rev(s: &mut SortedSet<u64>, k: u64): bool { s.remove_by!(&k, |a, b| *a > *b) }
 
-public fun has_rev(s: &SortedSet<u64>, k: u64): bool { ss::contains_by!(s, &k, |a, b| *a > *b) }
+public fun has_rev(s: &SortedSet<u64>, k: u64): bool { s.contains_by!(&k, |a, b| *a > *b) }
 
 /// Well-formedness check under the reverse comparator: a consistently-reversed set is well-formed
 /// under `>` even though it is NOT under `<`.
 public fun wf_rev(s: &SortedSet<u64>): bool {
-    sorted_map::is_well_formed_by!(ss::inner_ref(s), |a, b| *a > *b)
+    s.inner_ref().is_well_formed_by!(|a, b| *a > *b)
 }
 
 /// Reverse-comparator navigation/pagination wrappers (one macro per helper). The `>`
 /// lambda is the SAME reverse strict order `ins_rev` builds with, threaded consistently - so
 /// "next"/"prev"/page are about lt-extremes (numeric-descending), not numeric order.
 public fun fnext_rev(s: &SortedSet<u64>, k: u64, inc: bool): Option<u64> {
-    ss::find_next_by!(s, &k, inc, |a, b| *a > *b)
+    s.find_next_by!(&k, inc, |a, b| *a > *b)
 }
 
 public fun fprev_rev(s: &SortedSet<u64>, k: u64, inc: bool): Option<u64> {
-    ss::find_prev_by!(s, &k, inc, |a, b| *a > *b)
+    s.find_prev_by!(&k, inc, |a, b| *a > *b)
 }
 
 public fun nkey_rev(s: &SortedSet<u64>, k: u64): Option<u64> {
-    ss::next_key_by!(s, &k, |a, b| *a > *b)
+    s.next_key_by!(&k, |a, b| *a > *b)
 }
 
 public fun pkey_rev(s: &SortedSet<u64>, k: u64): Option<u64> {
-    ss::prev_key_by!(s, &k, |a, b| *a > *b)
+    s.prev_key_by!(&k, |a, b| *a > *b)
 }
 
 public fun page_rev(s: &SortedSet<u64>, from: u64, inc: bool, lim: u64): vector<u64> {
-    ss::keys_from_by!(s, &from, inc, lim, |a, b| *a > *b)
+    s.keys_from_by!(&from, inc, lim, |a, b| *a > *b)
 }
 
 // === Thin wrappers - u64, BAD comparators (footguns) ===
 
 /// Non-strict `<=`: `search!` never derives equality, so equal-comparing keys are treated as
 /// fresh -> a byte-distinct equal key lands again (length grows).
-public fun ins_le(s: &mut SortedSet<u64>, k: u64): bool { ss::insert_by!(s, k, |a, b| *a <= *b) }
+public fun ins_le(s: &mut SortedSet<u64>, k: u64): bool { s.insert_by!(k, |a, b| *a <= *b) }
 
 /// Probe/remove under the SAME non-strict `<=`: `search!` never derives equality, so an
 /// equal-comparing key is MISSED (returns false) even though it is present (the "miss" half).
-public fun has_le(s: &SortedSet<u64>, k: u64): bool { ss::contains_by!(s, &k, |a, b| *a <= *b) }
+public fun has_le(s: &SortedSet<u64>, k: u64): bool { s.contains_by!(&k, |a, b| *a <= *b) }
 
-public fun rem_le(s: &mut SortedSet<u64>, k: u64): bool { ss::remove_by!(s, &k, |a, b| *a <= *b) }
+public fun rem_le(s: &mut SortedSet<u64>, k: u64): bool { s.remove_by!(&k, |a, b| *a <= *b) }
 
 /// Remove under `>` against a set built with `<`: the descending search reads ascending data,
 /// returns found=false, so the bool is wrong (a no-op).
-public fun rem_gt(s: &mut SortedSet<u64>, k: u64): bool { ss::remove_by!(s, &k, |a, b| *a > *b) }
+public fun rem_gt(s: &mut SortedSet<u64>, k: u64): bool { s.remove_by!(&k, |a, b| *a > *b) }
 
 /// Insert under `>` against a set built with `<`: lands a key under the wrong order, desorting
 /// the set (visible to the `<` well-formedness check).
-public fun ins_gt(s: &mut SortedSet<u64>, k: u64): bool { ss::insert_by!(s, k, |a, b| *a > *b) }
+public fun ins_gt(s: &mut SortedSet<u64>, k: u64): bool { s.insert_by!(k, |a, b| *a > *b) }
 
 // === `inner_mut` misuse drivers - the public but unchecked order-ONLY corruption surface ===
 
 /// Drive the wrapped map's `insert_at` directly at a caller-chosen index. With a wrong index
 /// this desorts THAT set's inner vector - order-only, NO value lost (the value is `Unit`).
 public fun misuse_insert_at(s: &mut SortedSet<u64>, idx: u64, k: u64) {
-    ss::inner_mut(s).insert_at(idx, sorted_map::make_entry(k, ss::unit()));
+    s.inner_mut().insert_at(idx, sorted_map::make_entry(k, ss::unit()));
 }
 
 /// Drive the wrapped map's `insert_by!` with an INCONSISTENT comparator through `inner_mut`.
 public fun misuse_insert_inconsistent(s: &mut SortedSet<u64>, k: u64) {
-    let _ = sorted_map::insert_by!(ss::inner_mut(s), k, ss::unit(), |a, b| *a > *b);
+    let _ = s.inner_mut().insert_by!(k, ss::unit(), |a, b| *a > *b);
 }
 
 /// Direct `pop_front` on the inner map - bypasses the set's own `EEmpty`.
 /// On an empty inner map this aborts at the MAP's location/code, not the set's.
 public fun misuse_pop_front_inner(s: &mut SortedSet<u64>) {
-    let (_k, _u) = ss::inner_mut(s).pop_front();
+    let (_k, _u) = s.inner_mut().pop_front();
 }
 
 /// Direct `pop_back` on the inner map - the symmetric bypass of the set's own `EEmpty`.
 /// On an empty inner map this aborts at the MAP's location/code, not the set's.
 public fun misuse_pop_back_inner(s: &mut SortedSet<u64>) {
-    let (_k, _u) = ss::inner_mut(s).pop_back();
+    let (_k, _u) = s.inner_mut().pop_back();
 }
 
 // === Ability witnesses - instantiating these proves the ability holds ===
@@ -146,14 +146,14 @@ public fun key_tag(k: &Key): u64 { k.tag }
 
 public fun key_id(k: &Key): u64 { k.id }
 
-public fun ins_k(s: &mut SortedSet<Key>, k: Key): bool { ss::insert_by!(s, k, |a, b| a.id < b.id) }
+public fun ins_k(s: &mut SortedSet<Key>, k: Key): bool { s.insert_by!(k, |a, b| a.id < b.id) }
 
 public fun rem_k(s: &mut SortedSet<Key>, id: u64): bool {
-    ss::remove_by!(s, &Key { id, tag: 0 }, |a, b| a.id < b.id)
+    s.remove_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
 public fun has_k(s: &SortedSet<Key>, id: u64): bool {
-    ss::contains_by!(s, &Key { id, tag: 0 }, |a, b| a.id < b.id)
+    s.contains_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
 public fun keys_k(s: &SortedSet<Key>): vector<Key> { s.keys() }
@@ -163,7 +163,7 @@ public fun len_k(s: &SortedSet<Key>): u64 { s.length() }
 public fun fromk_k(ks: vector<Key>): SortedSet<Key> { ss::from_keys_by!(ks, |a, b| a.id < b.id) }
 
 public fun wf_k(s: &SortedSet<Key>): bool {
-    sorted_map::is_well_formed_by!(ss::inner_ref(s), |a, b| a.id < b.id)
+    s.inner_ref().is_well_formed_by!(|a, b| a.id < b.id)
 }
 
 /// Struct-key navigation/pagination via the `_by` forms - the ONLY admissible path for a
@@ -171,23 +171,23 @@ public fun wf_k(s: &SortedSet<Key>): bool {
 /// `a.id < b.id` lambda is defined HERE (where `Key.id` is in-scope) so it cannot be inlined at a
 /// foreign test module - hence these wrappers. Probe keys carry `tag: 0` (membership is by `id`).
 public fun fnext_k(s: &SortedSet<Key>, id: u64, inc: bool): Option<Key> {
-    ss::find_next_by!(s, &Key { id, tag: 0 }, inc, |a, b| a.id < b.id)
+    s.find_next_by!(&Key { id, tag: 0 }, inc, |a, b| a.id < b.id)
 }
 
 public fun fprev_k(s: &SortedSet<Key>, id: u64, inc: bool): Option<Key> {
-    ss::find_prev_by!(s, &Key { id, tag: 0 }, inc, |a, b| a.id < b.id)
+    s.find_prev_by!(&Key { id, tag: 0 }, inc, |a, b| a.id < b.id)
 }
 
 public fun nkey_k(s: &SortedSet<Key>, id: u64): Option<Key> {
-    ss::next_key_by!(s, &Key { id, tag: 0 }, |a, b| a.id < b.id)
+    s.next_key_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
 public fun pkey_k(s: &SortedSet<Key>, id: u64): Option<Key> {
-    ss::prev_key_by!(s, &Key { id, tag: 0 }, |a, b| a.id < b.id)
+    s.prev_key_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
 public fun page_k(s: &SortedSet<Key>, from_id: u64, inc: bool, lim: u64): vector<Key> {
-    ss::keys_from_by!(s, &Key { id: from_id, tag: 0 }, inc, lim, |a, b| a.id < b.id)
+    s.keys_from_by!(&Key { id: from_id, tag: 0 }, inc, lim, |a, b| a.id < b.id)
 }
 
 // === Builders ===
