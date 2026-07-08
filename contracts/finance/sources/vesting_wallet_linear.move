@@ -394,7 +394,7 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// - `EWrongCap` if `cap` was minted for a different wallet.
 /// - `ENotEnded` if called before the schedule's end (`start_ms + period_ms * steps`).
 public fun destroy(receipt: DestroyReceipt<Linear, Params>, cap: DestroyCap, clock: &Clock) {
-    let params = vesting_wallet::consume_receipt(receipt, cap, Linear {});
+    let params = receipt.consume_receipt(cap, Linear {});
 
     assert!(clock.timestamp_ms() >= params.calculate_end(), ENotEnded);
 }
