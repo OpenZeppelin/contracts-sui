@@ -9,7 +9,9 @@ follow the links to the sources of truth.
 
 ## Start here
 
+- [README.md](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/README.md): overview, install, and the pinned Sui CLI version
 - [ARCHITECTURE.md](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/ARCHITECTURE.md): why the library is shaped this way and how to compose it
+- [STYLEGUIDE.md](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/STYLEGUIDE.md): the Sui/Move coding conventions used in this repo, built on the [Sui dev cheat sheet](https://docs.sui.io/getting-started/dev-cheat-sheet)
 - [contracts/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/contracts/README.md), [math/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/math/README.md), and [collections/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/collections/README.md): the package catalogs -
   browse for the available packages, their MVR slugs, paths, and docs
 

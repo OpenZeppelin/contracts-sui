@@ -96,6 +96,13 @@ Prefer explicit, typed storage keys (positional `*Key` structs) for dynamic
 fields over ad-hoc primitive keys - they document intent and prevent key
 collisions across features in the same object.
 
+## Asset custody & balances
+
+For fungible-asset custody, prefer Sui **Address Balances** - an account-level balance
+model that eliminates coin selection, merges deposits automatically, and enables
+stateless transaction construction and direct gas payment. See the
+[Sui asset-custody docs](https://docs.sui.io/onchain-finance/asset-custody/address-balances/).
+
 ## Upgrade safety
 
 This is a library: downstream packages depend on published bytecode that cannot
