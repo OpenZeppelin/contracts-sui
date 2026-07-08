@@ -277,19 +277,19 @@ public struct Deposited<phantom S, phantom C> has copy, drop {
     amount: u64,
 }
 
-/// Emitted by `sweep_settled` when a non-zero amount is added. A sweep of a
-/// zero-value balance emits no event.
+/// Emitted by `sweep_settled` when non-zero settled funds are added. A sweep with
+/// no settled funds emits no event.
 public struct Swept<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
     /// Amount added to the balance by this sweep.
     amount: u64,
 }
 
-/// Emitted by `receive_and_deposit` when a non-zero amount is added. A deposit
-/// of a zero-value coin emits no event.
+/// Emitted by `receive_and_deposit` when a non-zero coin is claimed. A claim of a
+/// zero-value coin emits no event.
 public struct Received<phantom S, phantom C> has copy, drop {
     wallet_id: ID,
-    /// Amount added to the balance by this receival.
+    /// Amount added to the balance by this claim.
     amount: u64,
 }
 
