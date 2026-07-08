@@ -140,16 +140,9 @@ fun coarse_comparator_silently_collapses_distinct_validators() {
     let b = validator_set::validator(100, VAL_B); // distinct addr, SAME stake
 
     // First insert lands.
-    assert!(
-        s.insert_by!(a, |x, y| x.stake() > y.stake()),
-    );
+    assert!(s.insert_by!(a, |x, y| x.stake() > y.stake()));
     // Second compares EQUAL under stake-only -> "already present" -> false (NO abort).
-    assert!(
-        !s.insert_by!(
-            b,
-            |x, y| x.stake() > y.stake(),
-        ),
-    );
+    assert!(!s.insert_by!(b, |x, y| x.stake() > y.stake()));
 
     // Silent collapse: only ONE element, and last-write-wins keeps b's address, dropping a's.
     assert_eq!(s.length(), 1);
