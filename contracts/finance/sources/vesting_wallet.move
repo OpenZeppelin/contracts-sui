@@ -554,12 +554,19 @@ public fun release<S: drop, P: copy + drop + store, C>(
 ///
 /// Coins `public_transfer`'d to this wallet's address but not claimed before this call
 /// are invisible to the held-balance check, and funds settled at the wallet's address
-/// must be swept before teardown. Funds sent to this address after the wallet's `UID`
-/// is deleted have no path back: a coin `public_transfer`'d there is unaddressable, and
-/// a balance `send_funds`'d there settles against an object whose `UID` is gone, so no
-/// `withdraw_funds_from_object` path can ever reclaim it. Pair destruction with halting
-/// upstream emissions, claiming outstanding transferred coins, sweeping settled funds,
-/// and letting the halt settle before tearing the wallet down.
+/// must be swept before teardown. Anyone can settle additional `C` to the wallet's
+/// address; once those funds appear in `root`, `destroy_empty` aborts with
+/// `EUnsweptFunds`, so teardown should be treated as retryable: sweep the newly settled
+/// funds, then retry.
+///
+/// The `root` snapshot cannot detect funds sent in the same checkpoint as teardown.
+/// If teardown deletes the wallet `UID` before those in-flight funds are visible, they
+/// can later settle to an address no `withdraw_funds_from_object` path can reclaim.
+/// Funds sent to this address after the wallet's `UID` is deleted have the same problem:
+/// a coin `public_transfer`'d there is unaddressable, and a balance `send_funds`'d there
+/// settles against an object whose `UID` is gone. Pair destruction with halting upstream
+/// emissions, claiming outstanding transferred coins, sweeping settled funds, and letting
+/// at least one full checkpoint elapse before tearing the wallet down.
 ///
 /// #### Parameters
 /// - `wallet`: The wallet to destroy. Must hold a zero balance and have no pending
