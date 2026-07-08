@@ -174,12 +174,12 @@ fun macro_inlining_headroom() {
     // negative (12+ -> compiler panic) cannot be a live #[test] (it fails to compile), so it is
     // recorded above as a measured fact.
     let mut s = ss::new<u64>();
-    ss::insert!(&mut s, 3);
-    ss::insert!(&mut s, 1);
-    let _ = ss::contains!(&s, &1);
-    let _ = ss::remove!(&mut s, &3);
-    let _ = ss::find_next!(&s, &0, true);
-    let _ = ss::keys_from!(&s, &0, true, 10);
+    s.insert!(3);
+    s.insert!(1);
+    let _ = s.contains!(&1);
+    let _ = s.remove!(&3);
+    let _ = s.find_next!(&0, true);
+    let _ = s.keys_from!(&0, true, 10);
     assert_eq!(s.length(), 1); // only key 1 remains
 }
 
