@@ -1,10 +1,11 @@
 module openzeppelin_finance::example_splitter_tests;
 
-use openzeppelin_finance::example_splitter::{Self, Beneficiary};
+use openzeppelin_finance::example_splitter::{Self, Beneficiary, Dispersed};
 use openzeppelin_finance::vesting_wallet::VestingWallet;
 use openzeppelin_finance::vesting_wallet_linear::{Self as linear, Linear, Params};
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
+use sui::event;
 use sui::test_scenario as ts;
 
 /// Phantom coin marker for the vested asset.
@@ -47,33 +48,37 @@ fun release_to_splitter_fans_out_by_weight() {
 
     scenario.next_tx(EMPLOYER);
     let mut wallet = scenario.take_shared<VestingWallet<Linear, Params, USDC>>();
-    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()));
+    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()).into_balance());
 
     // Release the full total at the end of the schedule; it lands at the splitter.
     clock.set_for_testing(START_MS + DURATION_MS);
-    linear::release(&mut wallet, &clock, scenario.ctx());
+    linear::release(&mut wallet, &clock);
     ts::return_shared(wallet);
 
-    // Anyone fans the parked payout out to the three receivers.
+    // Anyone withdraws the full settled payout from the splitter's accumulator and fans
+    // it out to the three receivers. Uses the test-only bypass because `disperse` reads
+    // the settled balance from an `AccumulatorRoot`, which has no test constructor in the
+    // pinned Sui release.
     scenario.next_tx(EMPLOYER);
     let mut splitter = scenario.take_shared<Beneficiary>();
-    let payout = ts::most_recent_receiving_ticket<Coin<USDC>>(&object::id(&splitter));
-    splitter.disperse<USDC>(payout, scenario.ctx());
+    let splitter_id = object::id(&splitter);
+    splitter.disperse_for_testing<USDC>(TOTAL);
+
+    // 50/30/20 of the total, conserving every unit. The per-receiver credits land in
+    // each address's accumulator (not takeable as coins in the unit-test VM), so the
+    // split is attested by the `Dispersed` event.
+    let dispersed = event::events_by_type<Dispersed<USDC>>();
+    assert_eq!(dispersed.length(), 1);
+    assert_eq!(
+        dispersed[0],
+        example_splitter::test_new_dispersed<USDC>(
+            splitter_id,
+            vector[ALICE, BOB, CAROL],
+            vector[TOTAL * 50 / 100, TOTAL * 30 / 100, TOTAL * 20 / 100],
+        ),
+    );
+
     ts::return_shared(splitter);
-
-    // 50/30/20 of the total, conserving every unit.
-    scenario.next_tx(EMPLOYER);
-    let to_alice = scenario.take_from_address<Coin<USDC>>(ALICE);
-    let to_bob = scenario.take_from_address<Coin<USDC>>(BOB);
-    let to_carol = scenario.take_from_address<Coin<USDC>>(CAROL);
-    assert_eq!(to_alice.value(), TOTAL * 50 / 100);
-    assert_eq!(to_bob.value(), TOTAL * 30 / 100);
-    assert_eq!(to_carol.value(), TOTAL * 20 / 100);
-    assert_eq!(to_alice.value() + to_bob.value() + to_carol.value(), TOTAL);
-
-    destroy(to_alice);
-    destroy(to_bob);
-    destroy(to_carol);
     destroy(clock);
     scenario.end();
 }
@@ -98,21 +103,22 @@ fun rounding_dust_goes_to_last_receiver() {
 
     scenario.next_tx(EMPLOYER);
     let payout = ts::most_recent_receiving_ticket<Coin<USDC>>(&object::id(&splitter));
-    splitter.disperse<USDC>(payout, scenario.ctx());
+    let splitter_id = object::id(&splitter);
+    splitter.receive_and_disperse<USDC>(payout);
+
+    // Floored 33/33 with the last receiver absorbing the +1 dust, summing to 100.
+    let dispersed = event::events_by_type<Dispersed<USDC>>();
+    assert_eq!(dispersed.length(), 1);
+    assert_eq!(
+        dispersed[0],
+        example_splitter::test_new_dispersed<USDC>(
+            splitter_id,
+            vector[ALICE, BOB, CAROL],
+            vector[33, 33, 34],
+        ),
+    );
+
     ts::return_shared(splitter);
-
-    scenario.next_tx(EMPLOYER);
-    let to_alice = scenario.take_from_address<Coin<USDC>>(ALICE);
-    let to_bob = scenario.take_from_address<Coin<USDC>>(BOB);
-    let to_carol = scenario.take_from_address<Coin<USDC>>(CAROL);
-    assert_eq!(to_alice.value(), 33);
-    assert_eq!(to_bob.value(), 33);
-    assert_eq!(to_carol.value(), 34); // absorbs the +1 dust
-    assert_eq!(to_alice.value() + to_bob.value() + to_carol.value(), 100);
-
-    destroy(to_alice);
-    destroy(to_bob);
-    destroy(to_carol);
     scenario.end();
 }
 
@@ -130,14 +136,18 @@ fun single_receiver_takes_everything() {
 
     scenario.next_tx(EMPLOYER);
     let payout = ts::most_recent_receiving_ticket<Coin<USDC>>(&object::id(&splitter));
-    splitter.disperse<USDC>(payout, scenario.ctx());
+    let splitter_id = object::id(&splitter);
+    splitter.receive_and_disperse<USDC>(payout);
+
+    // The lone receiver absorbs the full payout as the "last" one.
+    let dispersed = event::events_by_type<Dispersed<USDC>>();
+    assert_eq!(dispersed.length(), 1);
+    assert_eq!(
+        dispersed[0],
+        example_splitter::test_new_dispersed<USDC>(splitter_id, vector[ALICE], vector[100]),
+    );
+
     ts::return_shared(splitter);
-
-    scenario.next_tx(EMPLOYER);
-    let to_alice = scenario.take_from_address<Coin<USDC>>(ALICE);
-    assert_eq!(to_alice.value(), 100);
-
-    destroy(to_alice);
     scenario.end();
 }
 

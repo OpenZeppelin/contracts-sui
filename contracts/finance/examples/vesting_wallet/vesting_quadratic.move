@@ -116,9 +116,9 @@ public fun releasable<C>(wallet: &VestingWallet<Quadratic, Params, C>, clock: &C
 /// primitive's gate, so this curve does not (and must not) re-implement it as a
 /// `ctx.sender() == beneficiary` check, which could never be satisfied for a wallet
 /// whose beneficiary is an object address. The cap holder bears the strand risk for any
-/// coin sent to the wallet's address but not yet `receive_and_deposit`'d (invisible to
-/// `destroy_empty`'s empty check). The ended gate stops a teardown ahead of a deposit
-/// intended to arrive later.
+/// coin sent to the wallet's address but not yet `receive_and_deposit`'d, and must
+/// sweep settled address-balance funds before `destroy_empty` accepts the teardown. The
+/// ended gate stops a teardown ahead of a deposit intended to arrive later.
 ///
 /// #### Aborts
 /// - `EWrongCap` if `cap` was minted for a different wallet.
