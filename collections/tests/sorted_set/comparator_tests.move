@@ -30,9 +30,9 @@ fun reverse_comparator_consistent() {
     u::ins_rev(&mut s, 20);
     assert!(u::wf_rev(&s)); // well-formed under the reverse order it was built with
     assert!(!u::wf(&s)); // and NOT well-formed under `<` - order is relative to the lt
-    assert_eq!(ss::head(&s), option::some(30)); // head = largest numeric under reverse lt
-    assert_eq!(ss::tail(&s), option::some(10));
-    assert_eq!(ss::keys(&s), vector[30u64, 20, 10]); // stored descending-numeric
+    assert_eq!(s.head(), option::some(30)); // head = largest numeric under reverse lt
+    assert_eq!(s.tail(), option::some(10));
+    assert_eq!(s.keys(), vector[30u64, 20, 10]); // stored descending-numeric
 }
 
 // === a non-strict `<=` never derives equality -> duplicates land ===
@@ -45,7 +45,7 @@ fun nonstrict_comparator_creates_duplicates() {
     // second 5 is also reported FRESH (returns true) and inserted AGAIN. The set's de-dup is
     // only as strict as the comparator's derived equality.
     assert!(u::ins_le(&mut s, 5)); // duplicate, yet reported newly-added
-    assert_eq!(ss::length(&s), 2); // apparent duplicate landed
+    assert_eq!(s.length(), 2); // apparent duplicate landed
     assert!(!u::wf(&s)); // adjacent equal pair -> not strictly increasing under `<`
 }
 
@@ -61,7 +61,7 @@ fun mixed_comparator_wrong_bool_no_value_lost() {
     let mut s = u::fromk(vector[10u64, 20, 30]);
     assert!(!u::rem_gt(&mut s, 10)); // wrong bool: reports "absent"
     assert!(u::has(&s, 10)); // but 10 is still present under `<`
-    assert_eq!(ss::length(&s), 3);
+    assert_eq!(s.length(), 3);
     assert!(u::wf(&s)); // a no-op did not desort
 }
 
@@ -73,8 +73,8 @@ fun mixed_comparator_insert_desorts_no_value_lost() {
     let mut s = u::fromk(vector[10u64, 20, 30]);
     u::ins_gt(&mut s, 5);
     assert!(!u::wf(&s)); // desorted under `<`
-    assert_eq!(ss::length(&s), 4);
-    let ks = ss::keys(&s); // faithfully reflects the (corrupted) stored order, no re-sort
+    assert_eq!(s.length(), 4);
+    let ks = s.keys(); // faithfully reflects the (corrupted) stored order, no re-sort
     assert!(ks.contains(&5) && ks.contains(&10) && ks.contains(&20) && ks.contains(&30)); // nothing lost
 }
 
@@ -87,8 +87,8 @@ fun inner_mut_wrong_index_desorts_no_value_lost() {
     let mut s = u::fromk(vector[10u64, 20, 30]);
     u::misuse_insert_at(&mut s, 0, 99); // 99 at the FRONT - maximal value, wrong slot
     assert!(!u::wf(&s));
-    assert_eq!(ss::length(&s), 4);
-    let ks = ss::keys(&s);
+    assert_eq!(s.length(), 4);
+    let ks = s.keys();
     assert!(ks.contains(&99) && ks.contains(&10) && ks.contains(&20) && ks.contains(&30));
     // keys() faithfully reflects the corrupted PHYSICAL order - it does NOT re-sort or mask the
     // disorder. A bug where keys() silently re-sorted would still pass the membership
@@ -102,8 +102,8 @@ fun inner_mut_inconsistent_comparator_desorts_no_value_lost() {
     let mut s = u::fromk(vector[10u64, 20, 30]);
     u::misuse_insert_inconsistent(&mut s, 5); // inserts 5 under `>` against `<`-sorted data
     assert!(!u::wf(&s));
-    assert_eq!(ss::length(&s), 4);
-    let ks = ss::keys(&s);
+    assert_eq!(s.length(), 4);
+    let ks = s.keys();
     assert!(ks.contains(&5) && ks.contains(&10) && ks.contains(&20) && ks.contains(&30));
 }
 
@@ -150,12 +150,12 @@ fun from_keys_validator_recipe() {
     let dup_input = vector[1u64, 2, 2, 3];
     let n_dup = dup_input.length();
     let s_dup = u::fromk(dup_input);
-    assert!(ss::length(&s_dup) != n_dup); // recipe FIRES: 3 != 4 -> caller would abort EDup
+    assert!(s_dup.length() != n_dup); // recipe FIRES: 3 != 4 -> caller would abort EDup
 
     let ok_input = vector[1u64, 2, 3];
     let n_ok = ok_input.length();
     let s_ok = u::fromk(ok_input);
-    assert_eq!(ss::length(&s_ok), n_ok); // recipe PASSES: 3 == 3
+    assert_eq!(s_ok.length(), n_ok); // recipe PASSES: 3 == 3
 }
 
 #[test]
@@ -166,7 +166,7 @@ fun injective_comparator_control() {
     let mut s = ss::new<u64>();
     assert!(u::ins(&mut s, 1)); // first-seen -> true (well-defined)
     assert!(!u::ins(&mut s, 1)); // exact same value -> false; no hidden byte overwrite
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
 }
 
 // === non-deterministic comparator corrupts even a would-be well-formed set ===
@@ -186,7 +186,7 @@ fun nondeterministic_comparator_corrupts() {
     let mut calls = 0u64;
     ss::insert_by!(&mut s, 5, |_a, _b| { calls = calls + 1; calls % 2 == 1 });
     assert!(!u::wf(&s)); // a non-deterministic lt produced a non-well-formed set
-    assert_eq!(ss::length(&s), 4); // 5 was inserted (at the wrong slot), not dropped
+    assert_eq!(s.length(), 4); // 5 was inserted (at the wrong slot), not dropped
 }
 
 // === the map's well-formedness check is reusable cross-package via inner_ref ===
@@ -216,7 +216,7 @@ fun desort_apparent_membership_loss() {
     let mut s = u::fromk(vector[10u64, 20, 30]);
     u::misuse_insert_at(&mut s, 0, 99);
     assert!(!u::wf(&s)); // desorted under `<`
-    assert!(ss::keys(&s).contains(&99)); // 99 is PHYSICALLY present - no value lost
+    assert!(s.keys().contains(&99)); // 99 is PHYSICALLY present - no value lost
     // ...yet the `<` binary search walks right past index 0, so contains! reports 99 ABSENT:
     // apparent membership loss, no abort. (For an allowlist/registry this is a security event.)
     assert!(!u::has(&s, 99));
@@ -234,16 +234,16 @@ fun reverse_comparator_membership_polarity_pop() {
     assert!(u::ins_rev(&mut s, 30));
     assert!(u::ins_rev(&mut s, 20));
     assert!(!u::ins_rev(&mut s, 20)); // dup under reverse -> false (idempotent)
-    assert_eq!(ss::length(&s), 3);
+    assert_eq!(s.length(), 3);
     assert!(u::has_rev(&s, 20)); // contains_by present under reverse
     assert!(!u::has_rev(&s, 99)); // contains_by absent under reverse
     assert!(u::rem_rev(&mut s, 20)); // remove_by present under reverse -> true (removes middle)
     assert!(!u::has_rev(&s, 20));
     assert!(u::wf_rev(&s)); // still well-formed under the reverse order it was built with
     // pop_front/pop_back read the PHYSICAL endpoints of the stored [30,10]:
-    assert_eq!(ss::pop_front(&mut s), 30); // stored front = numeric-largest
-    assert_eq!(ss::pop_back(&mut s), 10); // stored back = numeric-smallest
-    assert!(ss::is_empty(&s));
+    assert_eq!(s.pop_front(), 30); // stored front = numeric-largest
+    assert_eq!(s.pop_back(), 10); // stored back = numeric-smallest
+    assert!(s.is_empty());
 }
 
 #[test]
@@ -282,7 +282,7 @@ fun reverse_comparator_pagination() {
     assert_eq!(u::page_rev(&s, 40, false, 2), vector[30u64, 20]); // resume strictly past 40 under >
     assert_eq!(u::page_rev(&s, 20, false, 10), vector[10u64]); // fewer than limit at the lt-tail
     assert_eq!(u::page_rev(&s, 10, false, 10), vector[]); // past the lt-tail
-    assert_eq!(ss::keys(&s), vector[50u64, 40, 30, 20, 10]); // stored descending-numeric
+    assert_eq!(s.keys(), vector[50u64, 40, 30, 20, 10]); // stored descending-numeric
 }
 
 // === struct-key navigation + pagination via _by - the ONLY path for non-int K ===
@@ -329,10 +329,10 @@ fun nonstrict_comparator_misses_equal_key() {
     let mut s = ss::new<u64>();
     u::ins_le(&mut s, 5);
     u::ins_le(&mut s, 5);
-    assert_eq!(ss::length(&s), 2); // two equal-comparing keys landed
+    assert_eq!(s.length(), 2); // two equal-comparing keys landed
     assert!(!u::has_le(&s, 5)); // ...yet contains_by under `<=` MISSES the present key
     assert!(!u::rem_le(&mut s, 5)); // remove_by under `<=` also reports false (a no-op)
-    assert_eq!(ss::length(&s), 2); // nothing removed
+    assert_eq!(s.length(), 2); // nothing removed
 }
 
 // === from_keys_by BULK builder threads a reverse comparator ===
@@ -343,9 +343,9 @@ fun from_keys_by_reverse_integer() {
     // (from_keys_by's do!-loop) threading a reverse lt - yields descending-numeric, well-formed
     // under `>` and NOT under `<`.
     let s = ss::from_keys_by!(vector[10u64, 30, 20], |a, b| *a > *b);
-    assert_eq!(ss::keys(&s), vector[30u64, 20, 10]); // descending-numeric (ascending under >)
-    assert_eq!(ss::head(&s), option::some(30)); // lt-smallest = numeric-largest
-    assert_eq!(ss::tail(&s), option::some(10));
+    assert_eq!(s.keys(), vector[30u64, 20, 10]); // descending-numeric (ascending under >)
+    assert_eq!(s.head(), option::some(30)); // lt-smallest = numeric-largest
+    assert_eq!(s.tail(), option::some(10));
     assert!(u::wf_rev(&s)); // well-formed under >
     assert!(!u::wf(&s)); // ...and NOT under < - order is relative to lt
 }

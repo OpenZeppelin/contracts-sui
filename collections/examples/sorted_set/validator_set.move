@@ -37,7 +37,9 @@ use sui::address;
 /// A validator identity: voting `stake` plus the validator's `addr`. `copy + drop + store` so it
 /// can be a set key. `addr` makes the ordering injective (no two distinct validators tie).
 public struct Validator has copy, drop, store {
+    /// Voting stake; the primary ordering key (descending).
     stake: u64,
+    /// Validator address; the injective tiebreak for validators with equal stake.
     addr: address,
 }
 
@@ -47,20 +49,11 @@ public struct Validator has copy, drop, store {
 /// validator population - see the capacity notes in the package README.
 public struct ValidatorSet has key {
     id: UID,
+    /// Registered validators, ordered by descending stake (ties broken by lower address).
     validators: SortedSet<Validator>,
 }
 
 // === Public Functions ===
-
-/// THE comparator. Strict-less-than read as "a outranks b": more stake comes first; equal stake
-/// is broken by the lower address. `address` has no built-in `<` (another reason a struct key
-/// needs `_by`), so the tiebreak compares `address::to_u256`. Breaking ties on `addr` makes this
-/// a STRICT TOTAL ORDER over distinct validators - drop the tiebreak and it becomes coarse, the
-/// bug the red test shows.
-fun outranks(a: &Validator, b: &Validator): bool {
-    if (a.stake != b.stake) a.stake > b.stake
-    else address::to_u256(a.addr) < address::to_u256(b.addr)
-}
 
 /// Construct a `Validator`. Public so callers (and tests) can name set elements.
 public fun validator(stake: u64, addr: address): Validator {
@@ -129,6 +122,18 @@ public fun ranking(vs: &ValidatorSet): vector<Validator> {
 /// Number of registered validators.
 public fun count(vs: &ValidatorSet): u64 {
     vs.validators.length()
+}
+
+// === Private Functions ===
+
+/// THE comparator. Strict-less-than read as "a outranks b": more stake comes first; equal stake
+/// is broken by the lower address. `address` has no built-in `<` (another reason a struct key
+/// needs `_by`), so the tiebreak compares `address::to_u256`. Breaking ties on `addr` makes this
+/// a STRICT TOTAL ORDER over distinct validators - drop the tiebreak and it becomes coarse, the
+/// bug the red test shows.
+fun outranks(a: &Validator, b: &Validator): bool {
+    if (a.stake != b.stake) a.stake > b.stake
+    else address::to_u256(a.addr) < address::to_u256(b.addr)
 }
 
 // === Test-Only Helpers ===

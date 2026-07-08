@@ -21,7 +21,7 @@ fun by_forms_struct_keys() {
     u::ins_ck(&mut m, u::ck(30, 1), 300).destroy_none();
     u::ins_ck(&mut m, u::ck(10, 1), 100).destroy_none();
     u::ins_ck(&mut m, u::ck(20, 1), 200).destroy_none();
-    assert_eq!(sm::length(&m), 3);
+    assert_eq!(m.length(), 3);
     assert!(u::wf_ck(&m)); // ordered by id under the supplied comparator
     assert!(u::has_ck(&m, 20) && u::get_ck(&m, 20) == 200);
     assert!(!u::has_ck(&m, 25));
@@ -38,8 +38,8 @@ fun reverse_comparator_consistent() {
     u::ins_rev(&mut m, 30, 3).destroy_none();
     u::ins_rev(&mut m, 20, 2).destroy_none();
     // physically descending: head() is the largest, tail() the smallest
-    assert_eq!(sm::head(&m), option::some(30));
-    assert_eq!(sm::tail(&m), option::some(10));
+    assert_eq!(m.head(), option::some(30));
+    assert_eq!(m.tail(), option::some(10));
     assert!(u::wf_rev(&m)); // well-formed under `>` ...
     assert!(!u::wf(&m)); // ... but NOT under `<` (it is genuinely reversed)
     assert!(u::has_rev(&m, 20) && u::get_rev(&m, 20) == 2);
@@ -47,7 +47,7 @@ fun reverse_comparator_consistent() {
     assert_eq!(u::rm_rev(&mut m, 30), option::some(3));
     assert_eq!(u::rm_rev(&mut m, 10), option::some(1));
     assert_eq!(u::rm_rev(&mut m, 20), option::some(2));
-    sm::destroy_empty(m);
+    m.destroy_empty();
 }
 
 // === Footgun (a): a non-strict `<=` never detects equality -> duplicate keys ===
@@ -61,7 +61,7 @@ fun nonstrict_comparator_duplicates() {
     // stays false and the second 5 lands as a fresh duplicate. (Equivalently: derived
     // equality `!(a<=b) && !(b<=a)` is unsatisfiable for a non-strict relation.)
     u::ins_le(&mut m, 5, 2).destroy_none();
-    assert_eq!(sm::length(&m), 2); // TWO entries comparing equal
+    assert_eq!(m.length(), 2); // TWO entries comparing equal
     assert!(!u::wf(&m)); // the well-formedness check catches the non-strict disorder
 }
 
@@ -76,7 +76,7 @@ fun mixed_comparator_strands() {
     // remove a PRESENT key under `>`: the descending search reads ascending data, walks
     // the wrong way, and reports not-found -> nothing removed, value stranded.
     assert_eq!(u::rm_gt(&mut m, 10), option::none());
-    assert_eq!(sm::length(&m), 3); // unchanged
+    assert_eq!(m.length(), 3); // unchanged
     assert!(u::wf(&m)); // still well-formed under the original `<`
     assert!(u::has(&m, 10)); // 10 still reachable under `<`
 }
@@ -90,8 +90,8 @@ fun insert_at_wrong_index_corrupts() {
     u::ins(&mut m, 20, 2);
     u::ins(&mut m, 30, 3);
     // Misuse: jam a large key at index 0 (out of sorted position).
-    sm::insert_at(&mut m, 0, sm::make_entry(999, 9));
-    assert_eq!(sm::length(&m), 4);
+    m.insert_at(0, sm::make_entry(999, 9));
+    assert_eq!(m.length(), 4);
     assert!(!u::wf(&m)); // the well-formedness check catches what production never re-checks
 }
 
@@ -103,9 +103,9 @@ fun remove_at_misuse_returns_value() {
     u::ins(&mut m, 10, 1);
     u::ins(&mut m, 20, 2);
     u::ins(&mut m, 30, 3);
-    let v = sm::remove_at(&mut m, 0); // direct index op: returns whatever is at index 0
+    let v = m.remove_at(0); // direct index op: returns whatever is at index 0
     assert_eq!(v, 1); // value moved out, not lost (move semantics)
-    assert_eq!(sm::length(&m), 2);
+    assert_eq!(m.length(), 2);
     assert!(u::wf(&m)); // removing the head left [20,30] well-formed
 }
 
@@ -116,7 +116,7 @@ fun remove_at_misuse_returns_value() {
 fun insert_at_oob_aborts_in_vector() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
-    sm::insert_at(&mut m, 5, sm::make_entry(99, 9)); // index 5 on a length-1 map
+    m.insert_at(5, sm::make_entry(99, 9)); // index 5 on a length-1 map
 }
 
 // The `remove_at` companion: an out-of-bounds index aborts inside std::vector, not the library.
@@ -125,7 +125,7 @@ fun insert_at_oob_aborts_in_vector() {
 fun remove_at_oob_aborts_in_vector() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
-    sm::remove_at(&mut m, 5); // index 5 on a length-1 map
+    m.remove_at(5); // index 5 on a length-1 map
 }
 
 // === Upsert stores the NEW key bytes, observable under a coarse comparator ===
@@ -137,7 +137,7 @@ fun upsert_coarse_comparator_key_bytes() {
     // upsert with the SAME id but a DIFFERENT tag (same class under id-order)
     let old = u::ins_ck(&mut m, u::ck(1, 200), 20);
     assert_eq!(old, option::some(10)); // displaced value returned
-    assert_eq!(sm::length(&m), 1); // exactly one entry
+    assert_eq!(m.length(), 1); // exactly one entry
     assert_eq!(u::get_ck(&m, 1), 20); // new value won
     assert_eq!(u::head_ck_tag(&m), 200); // the NEW key bytes survived
 }
@@ -191,7 +191,7 @@ fun nondeterministic_comparator_corrupts() {
         });
         i = i + 1;
     };
-    assert_eq!(sm::length(&m), 16); // no collapse: every insert landed fresh
+    assert_eq!(m.length(), 16); // no collapse: every insert landed fresh
     assert!(!sm::is_well_formed!(&m)); // ... but order is broken
 }
 
@@ -218,7 +218,7 @@ fun navigation_by_reverse_comparator() {
     assert_eq!(u::fnext_rev(&m, 20, false), option::some(10)); // strict-next under `>` is 10
     assert_eq!(u::fnext_rev(&m, 25, true), option::some(20)); // absent: lt-ceiling is 20
     assert_eq!(u::fprev_rev(&m, 20, false), option::some(30)); // strict-prev under `>` is 30
-    assert_eq!(u::fprev_rev(&m, 5, true), sm::tail(&m)); // lt-floor at the extreme == tail
+    assert_eq!(u::fprev_rev(&m, 5, true), m.tail()); // lt-floor at the extreme == tail
 }
 
 // === `keys_from_by` under a reverse comparator: contiguous lt-ascending page, resumable ===

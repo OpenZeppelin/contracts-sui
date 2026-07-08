@@ -78,8 +78,8 @@ fun two_maps_independent() {
     u::ins(&mut a, 2, 20);
     u::rm(&mut b, 1);
     assert!(u::get(&a, 1) == 10 && u::get(&a, 2) == 20);
-    assert_eq!(sm::length(&a), 2);
-    assert!(sm::is_empty(&b));
+    assert_eq!(a.length(), 2);
+    assert!(b.is_empty());
 }
 
 #[test]
@@ -91,11 +91,11 @@ fun entries_ref_read_only() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 1, 10);
     u::ins(&mut m, 2, 20);
-    let es = sm::entries_ref(&m);
+    let es = m.entries_ref();
     assert_eq!(es.length(), 2);
-    assert_eq!(*sm::entry_key(es.borrow(0)), 1);
-    assert_eq!(*sm::entry_value(es.borrow(0)), 10);
-    assert_eq!(*sm::entry_key(es.borrow(1)), 2);
+    assert_eq!(*es.borrow(0).entry_key(), 1);
+    assert_eq!(*es.borrow(0).entry_value(), 10);
+    assert_eq!(*es.borrow(1).entry_key(), 2);
 }
 
 // `value_at`/`value_at_mut` are the low-level positional accessors the point-access macros
@@ -107,10 +107,10 @@ fun value_at_reads_and_writes() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
     u::ins(&mut m, 20, 2);
-    assert_eq!(*sm::value_at(&m, 0), 1);
-    assert_eq!(*sm::value_at(&m, 1), 2);
-    *sm::value_at_mut(&mut m, 1) = 99; // write through the &mut V
-    assert_eq!(*sm::value_at(&m, 1), 99); // re-read confirms the mutation persisted
+    assert_eq!(*m.value_at(0), 1);
+    assert_eq!(*m.value_at(1), 2);
+    *m.value_at_mut(1) = 99; // write through the &mut V
+    assert_eq!(*m.value_at(1), 99); // re-read confirms the mutation persisted
     assert_eq!(u::get(&m, 20), 99); // and the public borrow agrees
 }
 

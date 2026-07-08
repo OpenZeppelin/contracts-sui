@@ -108,7 +108,7 @@ fun borrow_mut_absent_interior_gap() {
 fun destroy_empty_nonempty() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 1, 1);
-    sm::destroy_empty(m);
+    m.destroy_empty();
 }
 
 // === pop_front / pop_back on an empty map -> EEmpty ===
@@ -122,7 +122,7 @@ fun destroy_empty_nonempty() {
 ]
 fun pop_front_empty() {
     let mut m = sm::new<u64, u64>();
-    let (_k, _v) = sm::pop_front(&mut m);
+    let (_k, _v) = m.pop_front();
 }
 
 #[test]
@@ -134,7 +134,7 @@ fun pop_front_empty() {
 ]
 fun pop_back_empty() {
     let mut m = sm::new<u64, u64>();
-    let (_k, _v) = sm::pop_back(&mut m); // n-1 underflow guarded by the empty check
+    let (_k, _v) = m.pop_back(); // n-1 underflow guarded by the empty check
 }
 
 // === Total API: every non-carve-out op returns none/false/empty, never aborts ===
@@ -150,8 +150,8 @@ fun total_api_no_abort_on_miss() {
     assert_eq!(u::nxt(&m, 7), option::none());
     assert_eq!(u::prv(&m, 7), option::none());
     assert_eq!(u::kfrom(&m, 7, true, 10), vector[]);
-    assert!(sm::head(&m) == option::none() && sm::tail(&m) == option::none());
-    assert!(sm::length(&m) == 0 && sm::is_empty(&m));
+    assert!(m.head() == option::none() && m.tail() == option::none());
+    assert!(m.length() == 0 && m.is_empty());
     assert_eq!(u::ins(&mut m, 7, 70), option::none());
     // populated, miss on an interior gap
     u::ins(&mut m, 9, 90);

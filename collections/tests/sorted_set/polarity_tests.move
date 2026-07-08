@@ -19,10 +19,10 @@ use std::unit_test::assert_eq;
 fun insert_true_on_fresh_false_on_reinsert() {
     let mut s = ss::new<u64>();
     assert!(u::ins(&mut s, 10)); // fresh -> TRUE (inner upsert returned none)
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
     assert!(u::has(&s, 10)); // contains! flips false -> true
     assert!(!u::ins(&mut s, 10)); // re-insert -> FALSE (idempotent, length unchanged)
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
     assert!(u::has(&s, 10)); // still present
     assert!(u::wf(&s));
 }
@@ -33,19 +33,19 @@ fun insert_true_on_fresh_false_on_reinsert() {
 fun remove_true_on_present_false_on_absent() {
     let mut s = u::fromk(vector[10u64, 20]);
     assert!(u::rem(&mut s, 10)); // present -> TRUE (inner remove returned some)
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
     assert!(!u::has(&s, 10)); // contains! flips true -> false
     assert!(!u::rem(&mut s, 10)); // absent -> FALSE, total (no abort)
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
     assert!(!u::rem(&mut s, 999)); // never-present -> FALSE
     assert!(u::wf(&s));
     // The asserts above remove the HEAD (10). Pin a direct MIDDLE and TAIL remove! too - the
     // shifting remove_at path at each position (differential covers them only transitively).
     let mut s3 = u::fromk(vector[10u64, 20, 30]);
     assert!(u::rem(&mut s3, 20)); // middle present -> true
-    assert_eq!(ss::keys(&s3), vector[10u64, 30]);
+    assert_eq!(s3.keys(), vector[10u64, 30]);
     assert!(u::rem(&mut s3, 30)); // tail present -> true
-    assert_eq!(ss::keys(&s3), vector[10u64]);
+    assert_eq!(s3.keys(), vector[10u64]);
     assert!(u::wf(&s3));
 }
 
@@ -127,7 +127,7 @@ fun polarity_counters_over_sequence() {
         d = d + 1;
     };
     assert_eq!(true_inserts, 50);
-    assert_eq!(ss::length(&s), 50);
+    assert_eq!(s.length(), 50);
 
     // Remove a present cohort 0..9 (10 present -> true), then a DISJOINT never-present cohort
     // 100..102 (3 absent -> false). Unequal sizes break the tie a count alone could mask.
@@ -143,6 +143,6 @@ fun polarity_counters_over_sequence() {
         a = a + 1;
     };
     assert_eq!(true_removes, 10);
-    assert_eq!(ss::length(&s), 40); // 50 - 10 removed
+    assert_eq!(s.length(), 40); // 50 - 10 removed
     assert!(u::wf(&s));
 }

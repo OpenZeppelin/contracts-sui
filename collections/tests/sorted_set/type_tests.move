@@ -35,7 +35,7 @@ fun abilities_copy_drop_store_witness() {
 fun populated_set_drops_no_destroy_empty() {
     // A populated set simply falls out of scope - there is no destroy_empty terminal.
     let s = u::fromk(vector[1u64, 2, 3]);
-    assert_eq!(ss::length(&s), 3);
+    assert_eq!(s.length(), 3);
     // no teardown call: `s` drops here because SortedSet is unconditionally `drop`.
 }
 
@@ -43,7 +43,7 @@ fun populated_set_drops_no_destroy_empty() {
 fun embed_in_store_struct() {
     // The set embeds as a `store` field; the wrapper drops, taking the set with it.
     let b = Box { s: u::fromk(vector[1u64, 2]) };
-    assert_eq!(ss::length(&b.s), 2);
+    assert_eq!(b.s.length(), 2);
     // `b` (and its embedded SortedSet) drops out of scope.
 }
 
@@ -56,11 +56,11 @@ fun copy_is_deep_independent_snapshot() {
     u::ins(&mut s2, 4);
     assert!(!u::has(&s1, 4)); // mutating the copy never touches the original
     assert!(u::has(&s2, 4));
-    assert!(ss::length(&s1) == 3 && ss::length(&s2) == 4);
+    assert!(s1.length() == 3 && s2.length() == 4);
     // symmetric: mutating the original leaves the earlier copy frozen at copy time.
     u::rem(&mut s1, 1);
     assert!(u::has(&s2, 1));
-    assert!(ss::length(&s1) == 2 && ss::length(&s2) == 4);
+    assert!(s1.length() == 2 && s2.length() == 4);
     assert!(u::wf(&s1) && u::wf(&s2));
 }
 
@@ -72,16 +72,16 @@ fun copy_then_drain_each_independently() {
     let mut s1 = u::fromk(vector[1u64, 2, 3]);
     let mut s2 = s1; // COPY (s1 is used below)
     // drain s1 fully via pop_*; s2 must stay intact.
-    let _ = ss::pop_front(&mut s1);
-    let _ = ss::pop_back(&mut s1);
-    let _ = ss::pop_front(&mut s1);
-    assert!(ss::is_empty(&s1) && u::wf(&s1));
-    assert_eq!(ss::length(&s2), 3); // s2 untouched by s1's full drain
-    assert_eq!(ss::keys(&s2), vector[1u64, 2, 3]);
+    let _ = s1.pop_front();
+    let _ = s1.pop_back();
+    let _ = s1.pop_front();
+    assert!(s1.is_empty() && u::wf(&s1));
+    assert_eq!(s2.length(), 3); // s2 untouched by s1's full drain
+    assert_eq!(s2.keys(), vector[1u64, 2, 3]);
     assert!(u::wf(&s2));
     // now drain s2 independently; s1 stays empty.
-    let _ = ss::pop_back(&mut s2);
-    assert!(ss::length(&s2) == 2 && ss::is_empty(&s1));
+    let _ = s2.pop_back();
+    assert!(s2.length() == 2 && s1.is_empty());
     assert!(u::wf(&s2));
 }
 
@@ -99,9 +99,9 @@ fun embed_in_key_object_share_drain_delete() {
     sc.next_tx(admin);
     {
         let mut w = sc.take_shared<Watch>();
-        assert_eq!(ss::length(&w.s), 3);
-        let _ = ss::pop_front(&mut w.s); // mutate the embedded set through the shared object
-        assert_eq!(ss::length(&w.s), 2);
+        assert_eq!(w.s.length(), 3);
+        let _ = w.s.pop_front(); // mutate the embedded set through the shared object
+        assert_eq!(w.s.length(), 2);
         ts::return_shared(w);
     };
     sc.next_tx(admin);
@@ -120,8 +120,8 @@ fun embed_in_key_object_share_drain_delete() {
 fun nominal_typing_coexist() {
     let su = ss::singleton<u64>(1);
     let sa = ss::singleton<address>(@0xA); // singleton needs no comparator -> works for address
-    assert_eq!(ss::length(&su), 1);
-    assert_eq!(ss::length(&sa), 1);
+    assert_eq!(su.length(), 1);
+    assert_eq!(sa.length(), 1);
     // SortedSet<u64> and SortedSet<address> coexist; the type system forbids mixing them (see the
     // commented non-compiling snippets below).
 }
@@ -142,7 +142,7 @@ fun non_integer_key_by_roundtrip() {
     // pop_front returns the bare struct K (the inner (Key, Unit)'s Unit is dropped) - proven for
     // u64 by pop_returns_bare_key_not_tuple; this pins the same Unit-drop/bare-K return for a
     // non-integer key. Remaining ids are {1, 3}; pop_front yields the smallest id.
-    let kmin: u::Key = ss::pop_front(&mut s);
+    let kmin: u::Key = s.pop_front();
     assert_eq!(u::key_id(&kmin), 1);
     assert_eq!(u::len_k(&s), 1);
     assert!(u::wf_k(&s));
@@ -180,7 +180,7 @@ fun macro_inlining_headroom() {
     let _ = ss::remove!(&mut s, &3);
     let _ = ss::find_next!(&s, &0, true);
     let _ = ss::keys_from!(&s, &0, true, 10);
-    assert_eq!(ss::length(&s), 1); // only key 1 remains
+    assert_eq!(s.length(), 1); // only key 1 remains
 }
 
 #[test]
@@ -188,7 +188,7 @@ fun pop_returns_bare_key_not_tuple() {
     // pop_* return K alone (the inner (K, Unit)'s Unit is dropped). If pop returned
     // (K, Unit) this binding to a u64 would not type-check.
     let mut s = ss::singleton<u64>(42);
-    let k: u64 = ss::pop_front(&mut s);
+    let k: u64 = s.pop_front();
     assert_eq!(k, 42);
 }
 
@@ -198,9 +198,9 @@ fun from_keys_macro_depth_compiles() {
     // 4-layer from_keys expansion (do! -> set insert! -> map insert_by! -> search!) compiling in a
     // #[test] body directly - both the bare and a _by form - not only via test_util helpers.
     let s = ss::from_keys!(vector[3u64, 1, 2]); // bare 4-layer expansion in-body
-    assert_eq!(ss::keys(&s), vector[1u64, 2, 3]);
+    assert_eq!(s.keys(), vector[1u64, 2, 3]);
     let sk = ss::from_keys_by!(vector[30u64, 10, 20], |a, b| *a > *b); // _by 4-layer expansion in-body
-    assert_eq!(ss::keys(&sk), vector[30u64, 20, 10]);
+    assert_eq!(sk.keys(), vector[30u64, 20, 10]);
 }
 
 // ===========================================================================

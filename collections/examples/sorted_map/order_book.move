@@ -34,6 +34,7 @@ use openzeppelin_collections::sorted_map::{Self, SortedMap};
 
 /// Aggregate resting size at one price.
 public struct Level has copy, drop, store {
+    /// Total resting size aggregated at this price level.
     size: u64,
 }
 
@@ -69,10 +70,6 @@ public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
         book.asks.insert!(price, Level { size });
     }
 }
-
-/// The bid comparator: strict "a outbids b" = higher price first. Defined once here and
-/// threaded as `|a, b| outbids(a, b)` to every `_by` call, so the order cannot drift.
-fun outbids(a: &u64, b: &u64): bool { *a > *b }
 
 /// Add `size` at `price` on the bid side, merging if present. Bids descend, so every
 /// call threads the same `|a, b| outbids(a, b)`.
@@ -118,6 +115,12 @@ public fun fill_best_ask(book: &mut OrderBook): (u64, u64) {
     let Level { size } = lvl;
     (price, size)
 }
+
+// === Private Functions ===
+
+/// The bid comparator: strict "a outbids b" = higher price first. Defined once here and
+/// threaded as `|a, b| outbids(a, b)` to every `_by` call, so the order cannot drift.
+fun outbids(a: &u64, b: &u64): bool { *a > *b }
 
 // === Test-Only Helpers ===
 //

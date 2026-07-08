@@ -113,7 +113,7 @@ public fun ins_gt(s: &mut SortedSet<u64>, k: u64): bool { ss::insert_by!(s, k, |
 /// Drive the wrapped map's `insert_at` directly at a caller-chosen index. With a wrong index
 /// this desorts THAT set's inner vector - order-only, NO value lost (the value is `Unit`).
 public fun misuse_insert_at(s: &mut SortedSet<u64>, idx: u64, k: u64) {
-    sorted_map::insert_at(ss::inner_mut(s), idx, sorted_map::make_entry(k, ss::unit()));
+    ss::inner_mut(s).insert_at(idx, sorted_map::make_entry(k, ss::unit()));
 }
 
 /// Drive the wrapped map's `insert_by!` with an INCONSISTENT comparator through `inner_mut`.
@@ -124,13 +124,13 @@ public fun misuse_insert_inconsistent(s: &mut SortedSet<u64>, k: u64) {
 /// Direct `pop_front` on the inner map - bypasses the set's own `EEmpty`.
 /// On an empty inner map this aborts at the MAP's location/code, not the set's.
 public fun misuse_pop_front_inner(s: &mut SortedSet<u64>) {
-    let (_k, _u) = sorted_map::pop_front(ss::inner_mut(s));
+    let (_k, _u) = ss::inner_mut(s).pop_front();
 }
 
 /// Direct `pop_back` on the inner map - the symmetric bypass of the set's own `EEmpty`.
 /// On an empty inner map this aborts at the MAP's location/code, not the set's.
 public fun misuse_pop_back_inner(s: &mut SortedSet<u64>) {
-    let (_k, _u) = sorted_map::pop_back(ss::inner_mut(s));
+    let (_k, _u) = ss::inner_mut(s).pop_back();
 }
 
 // ===========================================================================
@@ -168,9 +168,9 @@ public fun has_k(s: &SortedSet<Key>, id: u64): bool {
     ss::contains_by!(s, &Key { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
-public fun keys_k(s: &SortedSet<Key>): vector<Key> { ss::keys(s) }
+public fun keys_k(s: &SortedSet<Key>): vector<Key> { s.keys() }
 
-public fun len_k(s: &SortedSet<Key>): u64 { ss::length(s) }
+public fun len_k(s: &SortedSet<Key>): u64 { s.length() }
 
 public fun fromk_k(ks: vector<Key>): SortedSet<Key> { ss::from_keys_by!(ks, |a, b| a.id < b.id) }
 

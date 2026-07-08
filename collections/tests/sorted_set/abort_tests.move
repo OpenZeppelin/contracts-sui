@@ -23,7 +23,7 @@ use std::unit_test::assert_eq;
 ]
 fun pop_front_empty_aborts_at_set() {
     let mut s = ss::new<u64>();
-    ss::pop_front(&mut s);
+    s.pop_front();
 }
 
 #[test]
@@ -35,7 +35,7 @@ fun pop_front_empty_aborts_at_set() {
 ]
 fun pop_back_empty_aborts_at_set() {
     let mut s = ss::new<u64>();
-    ss::pop_back(&mut s);
+    s.pop_back();
 }
 
 #[test]
@@ -48,8 +48,8 @@ fun pop_back_empty_aborts_at_set() {
 fun pop_front_after_draining_aborts_at_set() {
     // Drain a singleton, then pop the now-empty set: still the SET's EEmpty.
     let mut s = ss::singleton<u64>(1);
-    let _ = ss::pop_front(&mut s);
-    ss::pop_front(&mut s);
+    let _ = s.pop_front();
+    s.pop_front();
 }
 
 // === bypass caveat: a direct inner-map pop leaks the MAP's abort, not the set's ===
@@ -96,9 +96,9 @@ fun total_api_no_abort_on_empty() {
     assert_eq!(u::nkey(&s, 7), option::none());
     assert_eq!(u::pkey(&s, 7), option::none());
     assert_eq!(u::page(&s, 7, true, 10), vector[]);
-    assert!(ss::head(&s) == option::none() && ss::tail(&s) == option::none());
-    assert!(ss::length(&s) == 0 && ss::is_empty(&s));
-    assert_eq!(ss::keys(&s), vector[]);
+    assert!(s.head() == option::none() && s.tail() == option::none());
+    assert!(s.length() == 0 && s.is_empty());
+    assert_eq!(s.keys(), vector[]);
     assert!(u::ins(&mut s, 7)); // insert returns a bool, never aborts
 }
 

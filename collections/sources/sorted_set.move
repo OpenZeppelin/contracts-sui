@@ -104,6 +104,7 @@ public struct Unit has copy, drop, store {}
 /// Across every public operation, by delegation to the inner map, the keys are strictly
 /// increasing under the (consistently supplied) comparator: sorted, no duplicates.
 public struct SortedSet<K: copy + drop + store> has copy, drop, store {
+    /// Backing map: every key is a set member; every value is the inert `Unit` marker.
     inner: SortedMap<K, Unit>,
 }
 
@@ -287,7 +288,8 @@ public macro fun contains_by<$K: copy + drop + store>(
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
 ): bool {
-    inner_ref($set).contains_by!($key, $lt)
+    let set = $set;
+    set.inner_ref().contains_by!($key, $lt)
 }
 
 /// `contains_by` with the built-in integer `<`.
@@ -316,7 +318,7 @@ public macro fun insert_by<$K: copy + drop + store>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let set = $set;
-    inner_mut(set).insert_by!($key, unit(), $lt).is_none()
+    set.inner_mut().insert_by!($key, unit(), $lt).is_none()
 }
 
 /// `insert_by` with the built-in integer `<`.
@@ -347,7 +349,7 @@ public macro fun remove_by<$K: copy + drop + store>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let set = $set;
-    inner_mut(set).remove_by!($key, $lt).is_some()
+    set.inner_mut().remove_by!($key, $lt).is_some()
 }
 
 /// `remove_by` with the built-in integer `<`.
@@ -377,7 +379,8 @@ public macro fun find_next_by<$K: copy + drop + store>(
     $include: bool,
     $lt: |&$K, &$K| -> bool,
 ): Option<$K> {
-    inner_ref($set).find_next_by!($key, $include, $lt)
+    let set = $set;
+    set.inner_ref().find_next_by!($key, $include, $lt)
 }
 
 /// `find_next_by` with the built-in integer `<`.
@@ -408,7 +411,8 @@ public macro fun find_prev_by<$K: copy + drop + store>(
     $include: bool,
     $lt: |&$K, &$K| -> bool,
 ): Option<$K> {
-    inner_ref($set).find_prev_by!($key, $include, $lt)
+    let set = $set;
+    set.inner_ref().find_prev_by!($key, $include, $lt)
 }
 
 /// `find_prev_by` with the built-in integer `<`.
@@ -476,7 +480,8 @@ public macro fun keys_from_by<$K: copy + drop + store>(
     $limit: u64,
     $lt: |&$K, &$K| -> bool,
 ): vector<$K> {
-    inner_ref($set).keys_from_by!($from, $include, $limit, $lt)
+    let set = $set;
+    set.inner_ref().keys_from_by!($from, $include, $limit, $lt)
 }
 
 /// `keys_from_by` with the built-in integer `<`.

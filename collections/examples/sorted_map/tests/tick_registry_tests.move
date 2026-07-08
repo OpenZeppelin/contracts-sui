@@ -25,9 +25,9 @@ fun tick_navigation_walkthrough() {
     };
 
     // Tx2 - ALICE: activate ticks 3000, 1000, 2000 (out of order). Each is fresh.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut reg = ts::take_shared<TickRegistry>(&scenario);
+        let mut reg = scenario.take_shared<TickRegistry>();
         assert!(!reg.add_tick(3000, 300, 0));
         assert!(!reg.add_tick(1000, 100, 0));
         assert!(!reg.add_tick(2000, 200, 0));
@@ -35,17 +35,17 @@ fun tick_navigation_walkthrough() {
     };
 
     // Tx3 - BOB: activate tick 4000.
-    ts::next_tx(&mut scenario, BOB);
+    scenario.next_tx(BOB);
     {
-        let mut reg = ts::take_shared<TickRegistry>(&scenario);
+        let mut reg = scenario.take_shared<TickRegistry>();
         assert!(!reg.add_tick(4000, 400, 0));
         ts::return_shared(reg);
     };
 
     // Tx4 - ALICE: walk and query the now-sorted ticks {1000,2000,3000,4000}.
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut reg = ts::take_shared<TickRegistry>(&scenario);
+        let mut reg = scenario.take_shared<TickRegistry>();
 
         assert_eq!(reg.min_tick(), option::some(1000));
         assert_eq!(reg.max_tick(), option::some(4000));
@@ -78,16 +78,16 @@ fun tick_navigation_walkthrough() {
     };
 
     // Tx5 - BOB: deactivate the lowest tick; min advances to 2000.
-    ts::next_tx(&mut scenario, BOB);
+    scenario.next_tx(BOB);
     {
-        let mut reg = ts::take_shared<TickRegistry>(&scenario);
+        let mut reg = scenario.take_shared<TickRegistry>();
         assert!(reg.remove_tick(1000));
         assert!(!reg.contains_tick(1000));
         assert_eq!(reg.min_tick(), option::some(2000));
         ts::return_shared(reg);
     };
 
-    ts::end(scenario);
+    scenario.end();
 }
 
 // === Borrowing an inactive tick aborts EKeyNotFound (the library abort, pinned) ===
@@ -107,12 +107,12 @@ fun borrow_inactive_tick_aborts() {
     {
         tick_registry::deploy_and_share(scenario.ctx());
     };
-    ts::next_tx(&mut scenario, ALICE);
+    scenario.next_tx(ALICE);
     {
-        let mut reg = ts::take_shared<TickRegistry>(&scenario);
+        let mut reg = scenario.take_shared<TickRegistry>();
         let _ = reg.add_tick(1000, 100, 0);
         let _ = reg.borrow_tick(2000); // 2000 inactive -> aborts
         ts::return_shared(reg); // unreachable
     };
-    ts::end(scenario);
+    scenario.end();
 }

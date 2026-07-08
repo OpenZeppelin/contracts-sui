@@ -38,9 +38,9 @@ fun fund_payout_destroy() {
     {
         let mut vault = scenario.take_shared<PrizeVault>();
         let cap = scenario.take_from_sender<OrganizerCap>();
-        vault.fund(&cap, 3, coin::mint_for_testing<SUI>(25, scenario.ctx()));
-        vault.fund(&cap, 1, coin::mint_for_testing<SUI>(100, scenario.ctx()));
-        vault.fund(&cap, 2, coin::mint_for_testing<SUI>(50, scenario.ctx()));
+        vault.fund(&cap, coin::mint_for_testing<SUI>(25, scenario.ctx()), 3);
+        vault.fund(&cap, coin::mint_for_testing<SUI>(100, scenario.ctx()), 1);
+        vault.fund(&cap, coin::mint_for_testing<SUI>(50, scenario.ctx()), 2);
         assert_eq!(vault.unclaimed(), 3);
         scenario.return_to_sender(cap);
         ts::return_shared(vault);
@@ -128,7 +128,7 @@ fun close_nonempty_vault_aborts() {
     {
         let mut vault = scenario.take_shared<PrizeVault>();
         let cap = scenario.take_from_sender<OrganizerCap>();
-        vault.fund(&cap, 1, coin::mint_for_testing<SUI>(100, scenario.ctx()));
+        vault.fund(&cap, coin::mint_for_testing<SUI>(100, scenario.ctx()), 1);
         scenario.return_to_sender(cap);
         ts::return_shared(vault);
     };
@@ -199,7 +199,7 @@ fun fund_rank_zero_aborts() {
     {
         let mut vault = scenario.take_shared<PrizeVault>();
         let cap = scenario.take_from_sender<OrganizerCap>();
-        vault.fund(&cap, 0, coin::mint_for_testing<SUI>(100, scenario.ctx()));
+        vault.fund(&cap, coin::mint_for_testing<SUI>(100, scenario.ctx()), 0);
         // Unreachable past the abort; kept well-formed for the resource checker.
         scenario.return_to_sender(cap);
         ts::return_shared(vault);

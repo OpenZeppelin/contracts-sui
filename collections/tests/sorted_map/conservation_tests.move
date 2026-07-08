@@ -26,7 +26,7 @@ fun conservation_drain_nodrop() {
         u::ins_nd(&mut m, i, u::nd(i * 7 + 1)).destroy_none(); // fresh insert returns none
         i = i + 1;
     };
-    assert_eq!(sm::length(&m), n);
+    assert_eq!(m.length(), n);
     // Drain evens via remove, odds via pop_front. Every returned NoDrop MUST be consumed (it
     // has no `drop`) - failing to thread one back out would not compile, which is the
     // structural no-loss guarantee. We additionally assert each drained value's id matches the
@@ -36,19 +36,19 @@ fun conservation_drain_nodrop() {
     let mut k = 0;
     while (k < n) {
         if (k % 2 == 0) {
-            let id = u::nd_unwrap(u::rm_nd(&mut m, k).destroy_some());
+            let id = u::rm_nd(&mut m, k).destroy_some().nd_unwrap();
             assert_eq!(id, k * 7 + 1); // remove(k) returned key k's OWN value
             cnt_out = cnt_out + 1;
         };
         k = k + 1;
     };
-    while (!sm::is_empty(&m)) {
-        let (kk, w) = sm::pop_front(&mut m); // smallest remaining key
-        assert_eq!(u::nd_unwrap(w), kk * 7 + 1); // popped value matches its own key
+    while (!m.is_empty()) {
+        let (kk, w) = m.pop_front(); // smallest remaining key
+        assert_eq!(w.nd_unwrap(), kk * 7 + 1); // popped value matches its own key
         cnt_out = cnt_out + 1;
     };
     assert_eq!(cnt_out, n); // exactly n values came back out (none lost, none fabricated)
-    sm::destroy_empty(m); // map drained to empty: every value left via a return path
+    m.destroy_empty(); // map drained to empty: every value left via a return path
 }
 
 // === destroy_empty on a NON-EMPTY resource-V map aborts ENotEmpty (no bulk value loss) ===
@@ -66,7 +66,7 @@ fun conservation_drain_nodrop() {
 fun destroy_empty_nonempty_nodrop() {
     let mut m = sm::new<u64, NoDrop>();
     u::ins_nd(&mut m, 1, u::nd(1)).destroy_none();
-    sm::destroy_empty(m); // non-empty -> ENotEmpty at the library location
+    m.destroy_empty(); // non-empty -> ENotEmpty at the library location
 }
 
 // === Upsert returns the displaced value, never drops it ===
@@ -77,12 +77,12 @@ fun upsert_returns_old_nodrop() {
     u::ins_nd(&mut m, 5, u::nd(100)).destroy_none();
     // upsert: the OLD value is returned as some(old) and must be consumed.
     let old = u::ins_nd(&mut m, 5, u::nd(200)).destroy_some();
-    assert_eq!(u::nd_unwrap(old), 100);
-    assert_eq!(sm::length(&m), 1);
+    assert_eq!(old.nd_unwrap(), 100);
+    assert_eq!(m.length(), 1);
     assert_eq!(u::nd_value_id(&m, 5), 200); // new value present
     let w = u::rm_nd(&mut m, 5).destroy_some();
-    u::nd_unwrap(w);
-    sm::destroy_empty(m);
+    w.nd_unwrap();
+    m.destroy_empty();
 }
 
 // === Read paths conserve the multiset / length ===
@@ -93,19 +93,19 @@ fun read_path_conservative_nodrop() {
     u::ins_nd(&mut m, 1, u::nd(10)).destroy_none();
     u::ins_nd(&mut m, 2, u::nd(20)).destroy_none();
     u::ins_nd(&mut m, 3, u::nd(30)).destroy_none();
-    let len0 = sm::length(&m);
+    let len0 = m.length();
     // a battery of reads - none may change the stored-value multiset
     assert!(u::has_nd(&m, 2));
     assert_eq!(u::nd_value_id(&m, 2), 20);
-    assert_eq!(sm::head(&m), option::some(1));
-    assert_eq!(sm::tail(&m), option::some(3));
-    assert_eq!(sm::length(&m), len0);
+    assert_eq!(m.head(), option::some(1));
+    assert_eq!(m.tail(), option::some(3));
+    assert_eq!(m.length(), len0);
     assert!(u::nd_value_id(&m, 1) == 10 && u::nd_value_id(&m, 3) == 30); // values intact
     // drain
-    u::nd_unwrap(u::rm_nd(&mut m, 1).destroy_some());
-    u::nd_unwrap(u::rm_nd(&mut m, 2).destroy_some());
-    u::nd_unwrap(u::rm_nd(&mut m, 3).destroy_some());
-    sm::destroy_empty(m);
+    u::rm_nd(&mut m, 1).destroy_some().nd_unwrap();
+    u::rm_nd(&mut m, 2).destroy_some().nd_unwrap();
+    u::rm_nd(&mut m, 3).destroy_some().nd_unwrap();
+    m.destroy_empty();
 }
 
 // === Real resource V: Coin<SUI> round-trips with value preserved ===
@@ -120,17 +120,17 @@ fun coin_value_roundtrip() {
     // upsert returns the displaced coin - it must be burned, not dropped.
     let old = sm::insert!(&mut m, 1, coin::mint_for_testing<SUI>(999, &mut ctx)).destroy_some();
     assert_eq!(old.value(), 100);
-    coin::burn_for_testing(old);
+    old.burn_for_testing();
     assert_eq!(sm::borrow!(&m, &1).value(), 999);
     // remove returns the coin
     let r1 = sm::remove!(&mut m, &1).destroy_some();
     assert_eq!(r1.value(), 999);
-    coin::burn_for_testing(r1);
+    r1.burn_for_testing();
     // pop the remaining coin
-    let (_k, r2) = sm::pop_back(&mut m);
+    let (_k, r2) = m.pop_back();
     assert_eq!(r2.value(), 250);
-    coin::burn_for_testing(r2);
-    sm::destroy_empty(m);
+    r2.burn_for_testing();
+    m.destroy_empty();
 }
 
 // === Store-only map embedded in a shared object, drained, destroyed ===
@@ -154,8 +154,8 @@ fun store_only_map_wrapped_shared() {
     sc.next_tx(admin);
     {
         let mut w = sc.take_shared<Wrapper>();
-        let a = u::nd_unwrap(u::rm_nd(&mut w.m, 1).destroy_some());
-        let b = u::nd_unwrap(u::rm_nd(&mut w.m, 2).destroy_some());
+        let a = u::rm_nd(&mut w.m, 1).destroy_some().nd_unwrap();
+        let b = u::rm_nd(&mut w.m, 2).destroy_some().nd_unwrap();
         assert_eq!(a + b, 33);
         ts::return_shared(w);
     };
@@ -165,7 +165,7 @@ fun store_only_map_wrapped_shared() {
         // The drained husk is consumed by value. No child/dynamic-field objects could ever
         // exist (the map is UID-less) - this is structural, not asserted here;
         // sc.end() would error on any dangling object, which is the implicit check.
-        sm::destroy_empty(m);
+        m.destroy_empty();
         id.delete();
     };
     sc.end();
@@ -182,11 +182,11 @@ fun from_sorted_conserves_no_drop_values() {
     );
     assert_eq!(u::nd_value_id(&m, 2), 20); // reads conserve
     // The whole multiset leaves only via a return path (pop_back drains largest-first).
-    let (_, w3) = sm::pop_back(&mut m);
-    let (_, w2) = sm::pop_back(&mut m);
-    let (_, w1) = sm::pop_back(&mut m);
-    sm::destroy_empty(m);
-    assert_eq!(u::nd_unwrap(w1), 10);
-    assert_eq!(u::nd_unwrap(w2), 20);
-    assert_eq!(u::nd_unwrap(w3), 30);
+    let (_, w3) = m.pop_back();
+    let (_, w2) = m.pop_back();
+    let (_, w1) = m.pop_back();
+    m.destroy_empty();
+    assert_eq!(w1.nd_unwrap(), 10);
+    assert_eq!(w2.nd_unwrap(), 20);
+    assert_eq!(w3.nd_unwrap(), 30);
 }

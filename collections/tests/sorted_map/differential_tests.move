@@ -53,9 +53,9 @@ fun differential_1200_ops() {
             assert_eq!(u::nxt(&m, k), u::ref_find_next(&r, k, false));
             assert_eq!(u::prv(&m, k), u::ref_find_prev(&r, k, false));
         } else {
-            assert_eq!(sm::length(&m), u::ref_length(&r));
-            assert_eq!(sm::head(&m), u::ref_head(&r));
-            assert_eq!(sm::tail(&m), u::ref_tail(&r));
+            assert_eq!(m.length(), u::ref_length(&r));
+            assert_eq!(m.head(), u::ref_head(&r));
+            assert_eq!(m.tail(), u::ref_tail(&r));
         };
         assert!(u::wf(&m)); // strictly increasing after every op
         i = i + 1;
@@ -63,9 +63,9 @@ fun differential_1200_ops() {
     // Final: the head + next_key walk must reproduce the reference's exact ordered key
     // sequence (verifies the next_key cursor chain end to end), and an independent
     // keys_from page must agree too.
-    assert_eq!(sm::length(&m), u::ref_length(&r));
+    assert_eq!(m.length(), u::ref_length(&r));
     let mut walked = vector[];
-    let mut cur = sm::head(&m);
+    let mut cur = m.head();
     while (cur.is_some()) {
         let kk = *cur.borrow();
         walked.push_back(kk);
@@ -84,7 +84,7 @@ fun differential_1200_ops() {
 fun large_n_build_and_full_walk() {
     let n = 1000;
     let m = u::build_scrambled(n);
-    assert_eq!(sm::length(&m), n);
+    assert_eq!(m.length(), n);
     assert!(u::wf(&m));
     // full-map page in a single op
     let all = u::kfrom(&m, 0, true, n + 10);

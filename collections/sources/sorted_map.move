@@ -116,12 +116,11 @@ public struct Entry<K: copy + drop + store, V: store> has copy, drop, store {
 /// object, exactly like `sui::vec_map::VecMap`. `copy`/`drop` materialize only when both
 /// `K` and `V` allow them: `SortedMap<u64, u64>` is `copy + drop + store`;
 /// `SortedMap<u64, Coin<T>>` is store-only and must be drained then `destroy_empty`'d.
-///
-/// Across the supported (macro) API, `entries` is strictly increasing under the (consistently
-/// supplied) comparator: sorted, with no duplicate keys. The forced-public position-based writers
-/// (`insert_at`/`remove_at`) can break this if misused - see the forced-public internals note
-/// in the module header.
 public struct SortedMap<K: copy + drop + store, V: store> has copy, drop, store {
+    /// The map's entries. Across the supported (macro) API this vector is strictly
+    /// increasing under the (consistently supplied) comparator: sorted, with no duplicate
+    /// keys. The forced-public position-based writers (`insert_at`/`remove_at`) can break
+    /// this if misused - see the forced-public internals note in the module header.
     entries: vector<Entry<K, V>>,
 }
 
@@ -314,7 +313,7 @@ public macro fun search<$K: copy + drop + store, $V: store>(
 ): (bool, u64) {
     let map = $map;
     let target = $target;
-    let es = entries_ref(map);
+    let es = map.entries_ref();
     let n = es.length();
     let mut lo = 0;
     let mut hi = n;
@@ -322,7 +321,7 @@ public macro fun search<$K: copy + drop + store, $V: store>(
     let mut idx = n;
     while (lo < hi) {
         let mid = lo + (hi - lo) / 2;
-        let mk = entry_key(es.borrow(mid));
+        let mk = es.borrow(mid).entry_key();
         if ($lt(mk, target)) {
             lo = mid + 1;
         } else if ($lt(target, mk)) {
@@ -384,8 +383,8 @@ public macro fun from_sorted_keys_values_by<$K: copy + drop + store, $V: store>(
     while (!keys.is_empty()) {
         let k = keys.pop_back();
         let v = values.pop_back();
-        let at = length(&map);
-        insert_at(&mut map, at, make_entry(k, v));
+        let at = map.length();
+        map.insert_at(at, make_entry(k, v));
     };
     keys.destroy_empty();
     values.destroy_empty();
@@ -456,7 +455,7 @@ public macro fun borrow_by<$K: copy + drop + store, $V: store>(
     let map = $map;
     let (found, idx) = search!(map, $key, $lt);
     assert_key_found(found);
-    value_at(map, idx)
+    map.value_at(idx)
 }
 
 /// `borrow_by` with the built-in integer `<`.
@@ -490,7 +489,7 @@ public macro fun borrow_mut_by<$K: copy + drop + store, $V: store>(
     let map = $map;
     let (found, idx) = search!(map, $key, $lt);
     assert_key_found(found);
-    value_at_mut(map, idx)
+    map.value_at_mut(idx)
 }
 
 /// `borrow_mut_by` with the built-in integer `<`.
@@ -530,13 +529,13 @@ public macro fun insert_by<$K: copy + drop + store, $V: store>(
     let value = $value;
     let (found, idx) = search!(map, &key, $lt);
     if (found) {
-        // Extract-then-reinsert, deliberately NOT `*value_at_mut(..) = value`: overwriting
+        // Extract-then-reinsert, deliberately NOT `*map.value_at_mut(..) = value`: overwriting
         // in place would drop the old value (requiring `V: drop`) and silently destroy a `Coin`.
-        let old = remove_at(map, idx);
-        insert_at(map, idx, make_entry(key, value));
+        let old = map.remove_at(idx);
+        map.insert_at(idx, make_entry(key, value));
         option::some(old)
     } else {
-        insert_at(map, idx, make_entry(key, value));
+        map.insert_at(idx, make_entry(key, value));
         option::none()
     }
 }
@@ -570,7 +569,7 @@ public macro fun remove_by<$K: copy + drop + store, $V: store>(
 ): Option<$V> {
     let map = $map;
     let (found, idx) = search!(map, $key, $lt);
-    if (found) option::some(remove_at(map, idx)) else option::none()
+    if (found) option::some(map.remove_at(idx)) else option::none()
 }
 
 /// `remove_by` with the built-in integer `<`.
@@ -606,20 +605,20 @@ public macro fun find_next_by<$K: copy + drop + store, $V: store>(
     let map = $map;
     let include = $include;
     let (found, idx) = search!(map, $key, $lt);
-    let es = entries_ref(map);
+    let es = map.entries_ref();
     let n = es.length();
     if (found) {
         if (include) {
-            option::some(*entry_key(es.borrow(idx)))
+            option::some(*es.borrow(idx).entry_key())
         } else if (idx + 1 < n) {
-            option::some(*entry_key(es.borrow(idx + 1)))
+            option::some(*es.borrow(idx + 1).entry_key())
         } else {
             option::none()
         }
     } else if (idx < n) {
         // miss: idx is the insertion point = first key strictly greater than `key`,
         // which is the ceiling too (key is absent), so `include` doesn't matter here.
-        option::some(*entry_key(es.borrow(idx)))
+        option::some(*es.borrow(idx).entry_key())
     } else {
         option::none()
     }
@@ -657,19 +656,19 @@ public macro fun find_prev_by<$K: copy + drop + store, $V: store>(
     let map = $map;
     let include = $include;
     let (found, idx) = search!(map, $key, $lt);
-    let es = entries_ref(map);
+    let es = map.entries_ref();
     if (found) {
         if (include) {
-            option::some(*entry_key(es.borrow(idx)))
+            option::some(*es.borrow(idx).entry_key())
         } else if (idx > 0) {
-            option::some(*entry_key(es.borrow(idx - 1)))
+            option::some(*es.borrow(idx - 1).entry_key())
         } else {
             option::none()
         }
     } else if (idx > 0) {
         // miss: idx is the insertion point, so idx-1 is the last key strictly less than
         // `key` - the floor too (key is absent), so `include` doesn't matter here.
-        option::some(*entry_key(es.borrow(idx - 1)))
+        option::some(*es.borrow(idx - 1).entry_key())
     } else {
         option::none()
     }
@@ -760,12 +759,12 @@ public macro fun keys_from_by<$K: copy + drop + store, $V: store>(
     // boundary is exclusive. On a miss `idx` is already the first key > from (the
     // ceiling), so `include` does not shift it.
     let start = if (found && !include) idx + 1 else idx;
-    let es = entries_ref(map);
+    let es = map.entries_ref();
     let n = es.length();
     let mut out = vector[];
     let mut i = start;
     while (i < n && out.length() < limit) {
-        out.push_back(*entry_key(es.borrow(i)));
+        out.push_back(*es.borrow(i).entry_key());
         i = i + 1;
     };
     out
@@ -798,7 +797,7 @@ public macro fun keys_from<$K: copy + drop + store, $V: store>(
 /// - `EEmpty` if the map is empty.
 public fun pop_front<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>): (K, V) {
     // Check first: `remove(0)` on an empty vector would abort with a native code, not `EEmpty`.
-    assert!(!is_empty(map), EEmpty);
+    assert!(!map.is_empty(), EEmpty);
     let Entry { key, value } = map.entries.remove(0);
     (key, value)
 }
@@ -812,7 +811,7 @@ public fun pop_front<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>
 /// - `EEmpty` if the map is empty.
 public fun pop_back<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>): (K, V) {
     // Check first: `pop_back` on an empty vector would abort with a native code, not `EEmpty`.
-    assert!(!is_empty(map), EEmpty);
+    assert!(!map.is_empty(), EEmpty);
     let Entry { key, value } = map.entries.pop_back();
     (key, value)
 }
@@ -852,12 +851,12 @@ public macro fun is_well_formed_by<$K: copy + drop + store, $V: store>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let map = $map;
-    let es = entries_ref(map);
+    let es = map.entries_ref();
     let n = es.length();
     let mut ok = true;
     let mut i = 1;
     while (i < n) {
-        if (!$lt(entry_key(es.borrow(i - 1)), entry_key(es.borrow(i)))) {
+        if (!$lt(es.borrow(i - 1).entry_key(), es.borrow(i).entry_key())) {
             ok = false;
             break
         };

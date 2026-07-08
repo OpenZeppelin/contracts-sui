@@ -29,7 +29,9 @@ use openzeppelin_collections::sorted_map::{Self, SortedMap};
 
 /// Per-tick liquidity state.
 public struct TickInfo has copy, drop, store {
+    /// Net liquidity added when the pool price crosses into this tick.
     liquidity_net: u64,
+    /// Cumulative fee growth recorded at this tick.
     fee_growth: u128,
 }
 

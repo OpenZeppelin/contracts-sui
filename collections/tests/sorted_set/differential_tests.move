@@ -50,9 +50,9 @@ fun differential_1200_ops() {
             assert_eq!(u::nkey(&s, k), u::rs_find_next(&r, k, false));
             assert_eq!(u::pkey(&s, k), u::rs_find_prev(&r, k, false));
         } else {
-            assert_eq!(ss::length(&s), u::rs_len(&r));
-            assert_eq!(ss::head(&s), u::rs_head(&r));
-            assert_eq!(ss::tail(&s), u::rs_tail(&r));
+            assert_eq!(s.length(), u::rs_len(&r));
+            assert_eq!(s.head(), u::rs_head(&r));
+            assert_eq!(s.tail(), u::rs_tail(&r));
         };
         assert!(u::wf(&s)); // strictly increasing after every op
         i = i + 1;
@@ -60,9 +60,9 @@ fun differential_1200_ops() {
     // Final: the head + next_key walk must reproduce the reference's exact ordered key sequence
     // (verifies the next_key cursor chain end to end), and an independent keys_from page
     // plus keys() must agree too.
-    assert_eq!(ss::length(&s), u::rs_len(&r));
+    assert_eq!(s.length(), u::rs_len(&r));
     let mut walked = vector[];
-    let mut cur = ss::head(&s);
+    let mut cur = s.head();
     while (cur.is_some()) {
         let kk = *cur.borrow();
         walked.push_back(kk);
@@ -71,7 +71,7 @@ fun differential_1200_ops() {
     let truth = u::rs_keys_from(&r, 0, true, 1000000);
     assert_eq!(walked, truth);
     assert_eq!(u::page(&s, 0, true, 1000000), truth);
-    assert_eq!(ss::keys(&s), truth);
+    assert_eq!(s.keys(), truth);
 }
 
 /// Membership conservation. A fixed cohort of "members" is inserted, then a long
@@ -124,11 +124,11 @@ fun membership_conservation() {
 fun large_n_build_and_full_walk() {
     let n = 1000;
     let s = u::build_scrambled(n);
-    assert_eq!(ss::length(&s), n); // scrambled() is injective over 0..999 -> no dedup loss
+    assert_eq!(s.length(), n); // scrambled() is injective over 0..999 -> no dedup loss
     assert!(u::wf(&s));
     let all = u::page(&s, 0, true, n + 10); // full-set page in a single op
     assert_eq!(all.length(), n);
-    assert_eq!(ss::keys(&s).length(), n);
+    assert_eq!(s.keys().length(), n);
 }
 
 /// pop_front/pop_back delegation-correctness AT SCALE: pops are ABSENT from the 1200-op
@@ -139,22 +139,22 @@ fun large_n_build_and_full_walk() {
 #[test]
 fun pop_drains_true_extremes_at_scale() {
     let s0 = u::build_scrambled(100);
-    let sorted = ss::keys(&s0); // ascending ground truth
+    let sorted = s0.keys(); // ascending ground truth
     let n = sorted.length();
     assert_eq!(n, 100); // scrambled() injective over 0..99 -> no dedup loss
     let mut s = s0;
     let mut lo = 0;
     let mut hi = n;
     while (lo < hi) {
-        assert_eq!(ss::pop_front(&mut s), sorted[lo]); // current min
+        assert_eq!(s.pop_front(), sorted[lo]); // current min
         lo = lo + 1;
         if (lo < hi) {
             hi = hi - 1;
-            assert_eq!(ss::pop_back(&mut s), sorted[hi]); // current max
+            assert_eq!(s.pop_back(), sorted[hi]); // current max
         };
         assert!(u::wf(&s)); // strictly increasing after every pop
     };
-    assert!(ss::is_empty(&s));
+    assert!(s.is_empty());
 }
 
 /// Pagination at scale: resume keys_from in many small pages over a ~1000-key set; the pages must
@@ -174,7 +174,7 @@ fun keys_from_multipage_contiguity() {
         from = last;
         inc = false; // resume strictly past the last key of the previous page
     };
-    assert_eq!(acc, ss::keys(&s)); // pages reconstruct the full ascending list exactly
+    assert_eq!(acc, s.keys()); // pages reconstruct the full ascending list exactly
     let mut i = 1;
     while (i < acc.length()) {
         assert!(acc[i - 1] < acc[i]); // strictly increasing -> no duplicate/overlap across pages

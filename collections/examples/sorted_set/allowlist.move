@@ -48,9 +48,10 @@ const EAlreadyApproved: vector<u8> = "Id is already approved";
 
 // === Structs ===
 
-/// An allowlist of approved token ids. The embedded `SortedSet<u64>` is the only state.
+/// An allowlist of approved token ids.
 public struct Allowlist has key {
     id: UID,
+    /// The set of approved token ids - the allowlist's only state.
     members: SortedSet<u64>,
 }
 

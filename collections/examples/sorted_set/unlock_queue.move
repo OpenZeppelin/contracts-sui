@@ -37,12 +37,15 @@ use sui::event;
 /// pending deadlines - see the capacity notes in the package README.
 public struct UnlockQueue has key {
     id: UID,
+    /// Unique pending unlock timestamps, kept sorted so the earliest deadline is at the
+    /// front and the latest at the back.
     deadlines: SortedSet<u64>,
 }
 
 // === Events ===
 
-/// Emitted when a deadline is processed (popped) off the queue.
+/// Emitted by `process_earliest` / `process_latest` when a deadline is processed (popped) off
+/// the queue.
 public struct Unlocked has copy, drop { deadline: u64 }
 
 // === Public Functions ===

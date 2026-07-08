@@ -52,15 +52,17 @@ const EInvalidRank: vector<u8> = "Rank must be >= 1";
 
 // === Structs ===
 
-/// Shared prize pool. `prizes` maps rank -> the coin awarded for that rank.
+/// Shared prize pool.
 public struct PrizeVault has key {
     id: UID,
+    /// Maps rank -> the coin awarded for that rank.
     prizes: SortedMap<u64, Coin<SUI>>,
 }
 
-/// Authority to fund/pay/close exactly one vault, identified by `vault`.
+/// Authority to fund/pay/close exactly one vault.
 public struct OrganizerCap has key, store {
     id: UID,
+    /// The vault this cap authorizes.
     vault: ID,
 }
 
@@ -76,18 +78,14 @@ public fun create(ctx: &mut TxContext): (ID, OrganizerCap) {
     (vault_id, cap)
 }
 
-/// Abort unless `cap` authorizes `vault`. Called by every privileged op.
-fun assert_cap(vault: &PrizeVault, cap: &OrganizerCap) {
-    assert!(cap.vault == object::id(vault), EWrongVault);
-}
-
-/// Fund the prize at `rank` with `coin` (one coin per rank). Ranks are 1-based (1 = champion),
-/// so `fund` aborts `EInvalidRank` on rank 0. Aborts `ERankAlreadyFunded` if the rank is already
-/// funded - a named guard that keeps `fund` clean: without it a re-fund would make `insert!`
-/// return `some(old_coin)`, and the follow-up `destroy_none()` would abort with the opaque
-/// foreign `std::option::EOPTION_IS_SET`. On the guarded fresh slot `insert!` returns `none`,
-/// which `destroy_none()` consumes (a resource map's `insert!` return cannot be ignored).
-public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64, coin: Coin<SUI>) {
+/// Fund the prize at `rank` with `coin` (one coin per rank). Ranks are 1-based
+/// (1 = champion), so `fund` aborts `EInvalidRank` on rank 0. Aborts `EWrongVault` if `cap`
+/// does not authorize `vault`, or `ERankAlreadyFunded` if the rank is already funded - a named
+/// guard that keeps `fund` clean: without it a re-fund would make `insert!` return
+/// `some(old_coin)`, and the follow-up `destroy_none()` would abort with the opaque foreign
+/// `std::option::EOPTION_IS_SET`. On the guarded fresh slot `insert!` returns `none`, which
+/// `destroy_none()` consumes (a resource map's `insert!` return cannot be ignored).
+public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, coin: Coin<SUI>, rank: u64) {
     assert_cap(vault, cap);
     assert!(rank >= 1, EInvalidRank);
     assert!(!vault.prizes.contains!(&rank), ERankAlreadyFunded);
@@ -95,14 +93,15 @@ public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64, coin: Coi
 }
 
 /// Pay the champion: remove and return the lowest-rank `(rank, coin)` via `pop_front`.
-/// Aborts `EEmpty` if the vault is empty.
+/// Aborts `EWrongVault` if `cap` does not authorize `vault`, or `EEmpty` if the vault is empty.
 public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>) {
     assert_cap(vault, cap);
     vault.prizes.pop_front()
 }
 
 /// Pay a specific `rank`, returning its coin. `remove!` returns `none` for an absent
-/// rank rather than aborting, so we surface our own `ENoSuchRank`.
+/// rank rather than aborting, so we surface our own `ENoSuchRank`. Aborts `EWrongVault` if
+/// `cap` does not authorize `vault`.
 public fun pay_rank(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64): Coin<SUI> {
     assert_cap(vault, cap);
     let prize = vault.prizes.remove!(&rank);
@@ -115,8 +114,9 @@ public fun unclaimed(vault: &PrizeVault): u64 {
     vault.prizes.length()
 }
 
-/// Destroy a fully-paid vault and its cap. Aborts `ENotEmpty` if any prize is unclaimed
-/// - nothing is lost, the transaction simply reverts and the vault stands.
+/// Destroy a fully-paid vault and its cap. Aborts `EWrongVault` if `cap` does not authorize
+/// `vault`, or `ENotEmpty` if any prize is unclaimed - nothing is lost, the transaction simply
+/// reverts and the vault stands.
 public fun close(vault: PrizeVault, cap: OrganizerCap) {
     assert_cap(&vault, &cap);
     let PrizeVault { id, prizes } = vault;
@@ -124,6 +124,13 @@ public fun close(vault: PrizeVault, cap: OrganizerCap) {
     id.delete();
     let OrganizerCap { id: cap_id, vault: _ } = cap;
     cap_id.delete();
+}
+
+// === Private Functions ===
+
+/// Abort unless `cap` authorizes `vault`. Called by every privileged op.
+fun assert_cap(vault: &PrizeVault, cap: &OrganizerCap) {
+    assert!(cap.vault == object::id(vault), EWrongVault);
 }
 
 // === Test-Only Helpers ===

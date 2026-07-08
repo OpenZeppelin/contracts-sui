@@ -17,11 +17,11 @@ const U64_MAX: u64 = 18446744073709551615;
 fun new_empty() {
     // new() takes no ctx, is empty, drops out of scope (no destroy_empty).
     let s = ss::new<u64>();
-    assert!(ss::is_empty(&s));
-    assert_eq!(ss::length(&s), 0);
-    assert_eq!(ss::head(&s), option::none());
-    assert_eq!(ss::tail(&s), option::none());
-    assert_eq!(ss::keys(&s), vector[]);
+    assert!(s.is_empty());
+    assert_eq!(s.length(), 0);
+    assert_eq!(s.head(), option::none());
+    assert_eq!(s.tail(), option::none());
+    assert_eq!(s.keys(), vector[]);
     assert!(u::wf(&s));
 }
 
@@ -29,11 +29,11 @@ fun new_empty() {
 fun singleton() {
     // One element at index 0, no comparator, trivially well-formed.
     let s = ss::singleton<u64>(42);
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
     assert!(u::has(&s, 42));
-    assert_eq!(ss::head(&s), option::some(42));
-    assert_eq!(ss::tail(&s), option::some(42));
-    assert_eq!(ss::keys(&s), vector[42u64]);
+    assert_eq!(s.head(), option::some(42));
+    assert_eq!(s.tail(), option::some(42));
+    assert_eq!(s.keys(), vector[42u64]);
     assert!(u::wf(&s));
 }
 
@@ -42,13 +42,13 @@ fun singleton_then_second_key() {
     // A singleton is a normal well-formed state - inserting a distinct key grows it.
     let mut s = ss::singleton<u64>(20);
     assert!(u::ins(&mut s, 10)); // smaller -> goes to index 0
-    assert_eq!(ss::length(&s), 2);
-    assert_eq!(ss::keys(&s), vector[10u64, 20]);
+    assert_eq!(s.length(), 2);
+    assert_eq!(s.keys(), vector[10u64, 20]);
     assert!(u::wf(&s));
     // symmetric: a LARGER second key appends at index 1 (the existing case only covered prepend).
     let mut s2 = ss::singleton<u64>(20);
     assert!(u::ins(&mut s2, 30)); // larger -> appends at index 1
-    assert_eq!(ss::keys(&s2), vector[20u64, 30]);
+    assert_eq!(s2.keys(), vector[20u64, 30]);
     assert!(u::wf(&s2));
 }
 
@@ -57,7 +57,7 @@ fun singleton_reinsert_same_key() {
     // Re-inserting the singleton's key is a no-op (false), length stays 1.
     let mut s = ss::singleton<u64>(7);
     assert!(!u::ins(&mut s, 7));
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
     assert!(u::wf(&s));
 }
 
@@ -74,8 +74,8 @@ fun singleton_non_integer_key() {
 fun from_keys_dedup() {
     // De-duplicates (distinct count, NOT input length), sorted ascending.
     let s = u::fromk(vector[3u64, 1, 2, 1, 3]);
-    assert_eq!(ss::length(&s), 3);
-    assert_eq!(ss::keys(&s), vector[1u64, 2, 3]);
+    assert_eq!(s.length(), 3);
+    assert_eq!(s.keys(), vector[1u64, 2, 3]);
     assert!(u::wf(&s));
 }
 
@@ -83,9 +83,9 @@ fun from_keys_dedup() {
 fun from_keys_empty_and_singleton() {
     // Boundaries: empty input -> empty set; one key -> singleton-equivalent.
     let s0 = u::fromk(vector[]);
-    assert!(ss::is_empty(&s0));
+    assert!(s0.is_empty());
     let s1 = u::fromk(vector[5u64]);
-    assert!(ss::length(&s1) == 1 && u::has(&s1, 5));
+    assert!(s1.length() == 1 && u::has(&s1, 5));
     assert!(u::wf(&s1));
 }
 
@@ -95,50 +95,50 @@ fun from_keys_empty_and_singleton() {
 fun length_is_empty_track() {
     // Length tracks the entry count exactly, no cached counter to desync.
     let mut s = ss::new<u64>();
-    assert!(ss::is_empty(&s));
+    assert!(s.is_empty());
     u::ins(&mut s, 1);
     u::ins(&mut s, 2);
     u::ins(&mut s, 2); // no-op
-    assert!(ss::length(&s) == 2 && !ss::is_empty(&s));
+    assert!(s.length() == 2 && !s.is_empty());
     u::rem(&mut s, 1);
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
     u::rem(&mut s, 99); // absent no-op
-    assert_eq!(ss::length(&s), 1);
+    assert_eq!(s.length(), 1);
 }
 
 #[test]
 fun head_tail_extremes_and_update() {
     // head/tail are the comparator min/max; update on a new extreme.
     let mut s = u::fromk(vector[20u64, 30, 40]);
-    assert_eq!(ss::head(&s), option::some(20));
-    assert_eq!(ss::tail(&s), option::some(40));
+    assert_eq!(s.head(), option::some(20));
+    assert_eq!(s.tail(), option::some(40));
     u::ins(&mut s, 10); // new min
     u::ins(&mut s, 50); // new max
-    assert_eq!(ss::head(&s), option::some(10));
-    assert_eq!(ss::tail(&s), option::some(50));
+    assert_eq!(s.head(), option::some(10));
+    assert_eq!(s.tail(), option::some(50));
 }
 
 #[test]
 fun pop_drain_monotonic() {
     // pop_front/pop_back return current min/max, -1 each, order preserved.
     let mut s = u::fromk(vector[30u64, 10, 20, 40]);
-    assert_eq!(ss::pop_front(&mut s), 10);
-    assert_eq!(ss::pop_back(&mut s), 40);
+    assert_eq!(s.pop_front(), 10);
+    assert_eq!(s.pop_back(), 40);
     assert!(u::wf(&s));
-    assert_eq!(ss::pop_front(&mut s), 20);
-    assert_eq!(ss::pop_back(&mut s), 30);
-    assert!(ss::is_empty(&s));
+    assert_eq!(s.pop_front(), 20);
+    assert_eq!(s.pop_back(), 30);
+    assert!(s.is_empty());
 }
 
 #[test]
 fun pop_singleton_no_underflow() {
     // pop_back on a length-1 set empties it with no n-1 underflow.
     let mut s = ss::singleton<u64>(99);
-    assert_eq!(ss::pop_back(&mut s), 99);
-    assert!(ss::is_empty(&s));
+    assert_eq!(s.pop_back(), 99);
+    assert!(s.is_empty());
     let mut s2 = ss::singleton<u64>(7);
-    assert_eq!(ss::pop_front(&mut s2), 7);
-    assert!(ss::is_empty(&s2));
+    assert_eq!(s2.pop_front(), 7);
+    assert!(s2.is_empty());
 }
 
 #[test]
@@ -147,16 +147,16 @@ fun drain_to_empty_then_reuse() {
     // drains but then STOPS; this asserts a set drained via pop_* leaves a CLEAN empty state that
     // accepts a fresh insert and behaves as new (no stale internal index/length).
     let mut s = u::fromk(vector[30u64, 10, 20]);
-    assert_eq!(ss::pop_front(&mut s), 10);
-    assert_eq!(ss::pop_back(&mut s), 30);
-    assert_eq!(ss::pop_front(&mut s), 20);
-    assert!(ss::is_empty(&s) && u::wf(&s));
+    assert_eq!(s.pop_front(), 10);
+    assert_eq!(s.pop_back(), 30);
+    assert_eq!(s.pop_front(), 20);
+    assert!(s.is_empty() && u::wf(&s));
     // reuse the just-drained set:
     assert!(u::ins(&mut s, 99)); // fresh insert into a drained set -> true (newly added)
-    assert!(ss::length(&s) == 1 && ss::head(&s) == option::some(99));
+    assert!(s.length() == 1 && s.head() == option::some(99));
     assert!(u::wf(&s));
-    assert_eq!(ss::pop_back(&mut s), 99);
-    assert!(ss::is_empty(&s));
+    assert_eq!(s.pop_back(), 99);
+    assert!(s.is_empty());
 }
 
 // === keys: owned, ascending, deduped ===
@@ -165,12 +165,12 @@ fun drain_to_empty_then_reuse() {
 fun keys_owned_sorted_deduped() {
     // keys() reflects stored ascending order; it is a fresh copy each call.
     let mut s = u::fromk(vector[30u64, 10, 20]);
-    assert_eq!(ss::keys(&s), vector[10u64, 20, 30]);
+    assert_eq!(s.keys(), vector[10u64, 20, 30]);
     // mutate then re-read: a fresh copy, not a stale/cached reference.
     u::ins(&mut s, 5);
-    assert_eq!(ss::keys(&s), vector[5u64, 10, 20, 30]);
+    assert_eq!(s.keys(), vector[5u64, 10, 20, 30]);
     u::rem(&mut s, 20);
-    assert_eq!(ss::keys(&s), vector[5u64, 10, 30]);
+    assert_eq!(s.keys(), vector[5u64, 10, 30]);
 }
 
 #[test]
@@ -181,7 +181,7 @@ fun keys_equals_concat_of_pages() {
     concat.append(u::page(&s, 0, true, 2)); // [10,20]
     concat.append(u::page(&s, 20, false, 2)); // [30,40]
     concat.append(u::page(&s, 40, false, 2)); // [50]
-    assert_eq!(concat, ss::keys(&s));
+    assert_eq!(concat, s.keys());
     assert_eq!(concat, vector[10u64, 20, 30, 40, 50]);
 }
 
@@ -222,8 +222,8 @@ fun navigation_boundary_duality_and_termination() {
     assert_eq!(u::nkey(&s, 10), option::some(20));
     assert_eq!(u::pkey(&s, 30), option::some(20));
     // find_next!(k<=head, true) == head; find_prev!(k>=tail, true) == tail.
-    assert_eq!(u::fnext(&s, 5, true), ss::head(&s));
-    assert_eq!(u::fprev(&s, 99, true), ss::tail(&s));
+    assert_eq!(u::fnext(&s, 5, true), s.head());
+    assert_eq!(u::fprev(&s, 99, true), s.tail());
 }
 
 #[test]
@@ -287,9 +287,9 @@ fun two_sets_independent() {
     u::ins(&mut a, 1);
     u::ins(&mut b, 2);
     u::ins(&mut a, 3);
-    assert_eq!(ss::keys(&a), vector[1u64, 3]);
-    assert_eq!(ss::keys(&b), vector[2u64]);
+    assert_eq!(a.keys(), vector[1u64, 3]);
+    assert_eq!(b.keys(), vector[2u64]);
     u::rem(&mut a, 1);
-    assert_eq!(ss::keys(&a), vector[3u64]);
-    assert_eq!(ss::keys(&b), vector[2u64]); // b untouched by a's removal
+    assert_eq!(a.keys(), vector[3u64]);
+    assert_eq!(b.keys(), vector[2u64]); // b untouched by a's removal
 }

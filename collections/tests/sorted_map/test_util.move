@@ -203,7 +203,7 @@ public fun set_ck(m: &mut SortedMap<CoarseKey, u64>, id: u64, v: u64) {
 /// `head` returns the surviving stored key (including its `tag` bytes) - lets a test
 /// observe which key bytes won an upsert.
 public fun head_ck_tag(m: &SortedMap<CoarseKey, u64>): u64 {
-    let h = sm::head(m);
+    let h = m.head();
     ck_tag(h.borrow())
 }
 
