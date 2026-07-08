@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from gaussian_codegen.cdf import emit_test_vectors as tv
-from gaussian_codegen.cdf.emit_coefficients import quantize
 from gaussian_codegen.shared import constants
+from gaussian_codegen.shared.move_emit import quantize
 
 WAD = constants.WAD
 SCALE = constants.SCALE_DECIMAL
@@ -39,6 +39,11 @@ def test_quantize_rounds_half_up():
     assert quantize("5e-19") == (1, False)
 
 
+def test_quantize_at_family_wad():
+    # an explicit family scale overrides the default 10^18: 0.5 at 10^36 -> 5e35
+    assert quantize("0.5", constants.CDF_WAD) == (5 * 10**35, False)
+
+
 # --- expected_phi_raw saturation boundary mirrors the on-chain `>=` ----------
 
 
@@ -47,15 +52,15 @@ def test_expected_phi_raw_phi0():
 
 
 def test_expected_phi_raw_saturates_at_max_z_inclusive():
-    # z == 6.3 quantizes to MAX_Z_RAW, which the chain saturates (z_raw >= MAX_Z_RAW)
-    assert tv.expected_phi_raw("6.3", False) == SCALE
-    assert tv.expected_phi_raw("6.3", True) == 0
+    # z == 6.109410205 quantizes to MAX_Z_RAW, which the chain saturates (z_raw >= MAX_Z_RAW)
+    assert tv.expected_phi_raw("6.109410205", False) == SCALE
+    assert tv.expected_phi_raw("6.109410205", True) == 0
 
 
 def test_expected_phi_raw_inside_uses_oracle():
-    # z = 6 (< 6.3, not saturated) -> oracle value, strictly below 1.0.
-    # (Φ(6.299) rounds up to exactly 1e9, which is why the saturation boundary
-    # must be the integer `z_raw >= MAX_Z_RAW` check, not a real `> 6.3`.)
+    # z = 6 (< 6.109410205, not saturated) -> oracle value, strictly below 1.0.
+    # (Φ rounds up to exactly 1e9 only at z >= 6.109410205, which is why the
+    # saturation boundary must be the integer `z_raw >= MAX_Z_RAW` check.)
     assert tv.expected_phi_raw("6", False) == 999_999_999
 
 

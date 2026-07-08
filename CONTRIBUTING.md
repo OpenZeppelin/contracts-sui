@@ -55,6 +55,26 @@ same rules:
   Examples are the integration-facing source of truth for AI agents and
   downstream integrators, the same way doc-comments are the source of truth for
   the generated API reference.
+- When you add or change a public capability, make it discoverable. Surface it
+  as a keyword in the Highlights cell of its group catalog README (the top-level
+  `README.md` for its domain group) and make sure it is findable in the package's
+  own `README.md`. The catalog cell is a teaser and the package README plus
+  generated docs carry the detail, but the two must stay consistent - keep every
+  advertised keyword backed by a real, named function in the README, and never
+  advertise what the code does not expose. A capability that appears in neither is
+  invisible to integrators and AI agents.
+- When you make a notable (user-facing) change to a package, record it in
+  [`CHANGELOG.md`](./CHANGELOG.md) under `## Unreleased`, grouped by package
+  (`### openzeppelin_<pkg>`) and change type (`#### Added` / `Changed` /
+  `Fixed` / ...), following [Keep a Changelog](https://keepachangelog.com/), and
+  reference the PR number.
+- When you add a new package, give it a `README.md` whose `## Learn More`
+  section matches its siblings - including the `llms.txt` discovery bullet, using
+  the absolute
+  [`raw.githubusercontent.com`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt)
+  URL the sibling READMEs use (a relative link breaks once the README is rendered
+  on a registry or docs site). It is how AI integrators find the package; a
+  README that omits it is invisible to that path.
 
 ## A typical workflow
 

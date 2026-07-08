@@ -17,16 +17,27 @@ from gaussian_codegen.shared.move_emit import (
 
 def test_constants_literal_values():
     assert constants.WAD == 10**18
+    assert constants.CDF_WAD == 10**36
+    assert constants.PDF_WAD == 10**36
     assert constants.SCALE_DECIMAL == 10**9
-    assert constants.MAX_Z == "6.3"
-    assert constants.MAX_Z_RAW == 6_300_000_000
-    assert constants.MAX_Z_RAW_WAD == 6_300_000_000_000_000_000
+    assert constants.MAX_Z == "6.109410205"
+    assert constants.MAX_Z_RAW == 6_109_410_205
+    assert constants.MAX_Z_RAW_WAD == 6_109_410_205_000_000_000
 
 
 def test_raw_scales_are_internally_consistent():
-    # The WAD-scale bound is the decimal-scale bound promoted by 10^9.
+    # The generic WAD-scale bound is the decimal-scale bound promoted by 10^9.
     assert constants.WAD // constants.SCALE_DECIMAL == 10**9
     assert constants.MAX_Z_RAW_WAD == constants.MAX_Z_RAW * (constants.WAD // constants.SCALE_DECIMAL)
+    # The CDF/PDF families accumulate at 10^36, so their z-promotion factor
+    # (family WAD / 10^9) is 10^27.
+    assert constants.CDF_WAD // constants.SCALE_DECIMAL == 10**27
+    assert constants.PDF_WAD // constants.SCALE_DECIMAL == 10**27
+
+
+def test_pdf_domain_bound():
+    assert constants.PDF_MAX_Z == "6.402729806"
+    assert constants.PDF_MAX_Z_RAW == 6_402_729_806
 
 
 # --- fmt_u128 / grouping ----------------------------------------------------

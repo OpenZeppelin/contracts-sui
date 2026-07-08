@@ -4,8 +4,8 @@ Reads the (u128, bool) coefficient tables out of the committed Move source and
 runs the on-chain CDF computation in Python using **integer arithmetic that
 mirrors the Move implementation exactly**:
 
-  - z_raw at 10^9 → z_wad at 10^18 (multiply by 10^9).
-  - Horner inner step: `acc = (acc.mag * z_wad) // 10^18 + c_i`, with
+  - z_raw at 10^9 → z_wad at 10^36 (multiply by 10^27 = CDF_WAD / 10^9).
+  - Horner inner step: `acc = (acc.mag * z_wad) // 10^36 + c_i`, with
     sign-magnitude tracking and floor-division on the magnitude (matches
     `mul_div(..., Down)` in `math/core/sources/u256.move`).
   - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up
@@ -14,8 +14,10 @@ mirrors the Move implementation exactly**:
 
 Asserts, over a 10,000-point grid, that the worst-case absolute error vs
 `scipy.stats.norm.cdf` stays within `TARGET_ERROR_ULP` × 10^-9 and that the
-outputs are monotone non-decreasing. Returns non-zero exit on failure,
-suitable for CI.
+reflection identity holds. Two exhaustive tail gates (`shared.gates`) then prove
+neighbor-resolution monotonicity (no 1-ULP inversion between adjacent raw inputs -
+what the 10^36 scale exists to guarantee) and u256 overflow margin. Returns
+non-zero exit on failure, suitable for CI.
 """
 from __future__ import annotations
 
@@ -28,15 +30,16 @@ from typing import Sequence
 import numpy as np
 from scipy.stats import norm
 
-from gaussian_codegen.shared import constants
+from gaussian_codegen.shared import constants, gates
+from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_nearest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
-WAD = constants.WAD
 SCALE = constants.SCALE_DECIMAL
-MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at 10^9 - default; the gate parses the committed value
+WAD = constants.CDF_WAD  # CDF Horner-accumulation scale (10^36)
+MAX_Z_RAW = constants.MAX_Z_RAW  # 6.109410205 at 10^9 - default; the gate parses the committed value
 HALF_SCALE = SCALE // 2  # Φ(0) bit-exact
-U256_MAX = 2**256 - 1  # on-chain Move intermediates must fit u256
+MONO_ONSET_RAW = 4_000_000_000  # z=4.0: below the z≈4.42 point where even the old 10^18 noise floor (~1.9e-5 ULP) first reached the per-step Φ increment; nothing inverts lower
 
 COEFF_PATH = (
     REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "cdf_coefficients.move"
@@ -77,67 +80,6 @@ def parse_coefficients(text: str) -> tuple[list[tuple[int, bool]], list[tuple[in
     return list(zip(num_mags, num_negs)), list(zip(den_mags, den_negs))
 
 
-# --- Sign-magnitude integer arithmetic mirroring the on-chain Move code ----
-SignedInt = tuple[int, bool]  # (magnitude, is_negative)
-
-
-def _canonicalize(sm: SignedInt) -> SignedInt:
-    """Zero is always (0, False)."""
-    return (0, False) if sm[0] == 0 else sm
-
-
-def add(a: SignedInt, b: SignedInt) -> SignedInt:
-    am, an = a
-    bm, bn = b
-    if am == 0:
-        return _canonicalize(b)
-    if bm == 0:
-        return _canonicalize(a)
-    if an == bn:
-        s = am + bm
-        if s > U256_MAX:
-            raise RuntimeError(f"u256 overflow in add: {am} + {bm}")
-        return (s, an)
-    if am > bm:
-        return (am - bm, an)
-    if bm > am:
-        return (bm - am, bn)
-    return (0, False)  # exact cancellation
-
-
-def mul_wad(a: SignedInt, b: SignedInt) -> SignedInt:
-    """`(a * b) / WAD` with floor-division on magnitudes (== mul_div with Down rounding)."""
-    am, an = a
-    bm, bn = b
-    prod = am * bm
-    if prod > U256_MAX:
-        raise RuntimeError(f"u256 overflow in mul_wad: {am} * {bm}")
-    mag = prod // WAD
-    return _canonicalize((mag, an ^ bn))
-
-
-def horner_eval(z: SignedInt, coeffs: list[SignedInt]) -> SignedInt:
-    if not coeffs:
-        raise RuntimeError("empty polynomial")
-    acc = _canonicalize(coeffs[-1])
-    for c in reversed(coeffs[:-1]):
-        acc = mul_wad(acc, z)
-        acc = add(acc, c)
-    return acc
-
-
-def mul_div_nearest(a: int, b: int, d: int) -> int:
-    """`(a * b) / d` rounded half-up (ties away from zero), mirroring the
-    on-chain `u256::mul_div(..., Nearest)` from `math/core` (round up iff
-    `rem >= d - rem`). Caller guarantees `d > 0`."""
-    prod = a * b
-    if prod > U256_MAX:
-        raise RuntimeError(f"u256 overflow in mul_div_nearest: {a} * {b}")
-    quot = prod // d
-    rem = prod - quot * d
-    return quot + 1 if rem >= d - rem else quot
-
-
 def cdf_simulate(
     z_raw: int,
     neg: bool,
@@ -155,9 +97,9 @@ def cdf_simulate(
     if z_raw == 0:
         return HALF_SCALE  # Φ(0) bit-exact special case (INV-12)
 
-    z_wad: SignedInt = (z_raw * SCALE, False)  # 10^9 → 10^18
-    n_acc = horner_eval(z_wad, num)
-    d_acc = horner_eval(z_wad, den)
+    z_wad: SignedInt = (z_raw * (WAD // SCALE), False)  # 10^9 → 10^36
+    n_acc = horner_eval(z_wad, num, WAD)
+    d_acc = horner_eval(z_wad, den, WAD)
     if n_acc[1]:
         raise RuntimeError(f"N negative at z_raw={z_raw} - INV-8 violation")
     if d_acc[1] or d_acc[0] == 0:
@@ -169,7 +111,7 @@ def cdf_simulate(
         phi_raw = SCALE  # last-ULP overshoot guard (INV-9)
 
     if neg:
-        # INV-14: cdf_nonneg ≥ 5e8 on [0, 6.3], so this never underflows
+        # INV-14: cdf_nonneg ≥ 5e8 on [0, MAX_Z], so this never underflows
         if phi_raw < HALF_SCALE:
             raise RuntimeError(
                 f"cdf_nonneg returned {phi_raw} < {HALF_SCALE} at z_raw={z_raw} - INV-14 violation"
@@ -195,9 +137,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     text = args.coeffs.read_text(encoding="utf-8")
     num, den = parse_coefficients(text)
     max_z_raw = _parse_u128_const(text, "MAX_Z_RAW")
+    try:
+        coeffs_path = args.coeffs.relative_to(REPO_ROOT)
+    except ValueError:
+        coeffs_path = args.coeffs  # a --coeffs path outside the repo stays absolute
     print(
         f"Parsed {len(num)} numerator + {len(den)} denominator coefficients "
-        f"(MAX_Z_RAW = {max_z_raw}) from {args.coeffs.relative_to(REPO_ROOT)}"
+        f"(MAX_Z_RAW = {max_z_raw}) from {coeffs_path}"
     )
 
     grid = np.linspace(0.0, max_z_raw / SCALE, args.n)
@@ -223,18 +169,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
-        # Monotonicity: Φ is non-decreasing, and in the far tail its true
-        # increment falls below the 10^-9 output resolution, so the fit's
-        # error wiggle could in principle invert neighboring outputs. Gate
-        # against any inversion at grid resolution.
-        if phi_pos < prev_phi_pos:
-            print(
-                f"FAIL: monotonicity broken at z_raw={z_raw}: "
-                f"Φ(z)={phi_pos} < previous {prev_phi_pos}",
-                file=sys.stderr,
-            )
-            return 1
-        prev_phi_pos = phi_pos
         for neg, phi_raw in ((False, phi_pos), (True, phi_neg)):
             ref = float(norm.cdf(-zf if neg else zf))
             err = abs(phi_raw / SCALE - ref)
@@ -243,10 +177,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 worst_z = zf
                 worst_neg = neg
 
+    # Exhaustive tail gates the coarse error grid above cannot see: 1-ULP neighbor
+    # inversions and the peak u256 Horner intermediate.
+    pairs, rechecks = gates.check_neighbor_monotonicity(
+        num, den, WAD, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=True
+    )
+    peak_bits, headroom = gates.check_overflow_margin(num, den, WAD, SCALE, max_z_raw)
+
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
     sign = "-" if worst_neg else "+"
-    print(f"Monotonicity: non-decreasing across all {args.n} grid points ✓")
+    print(
+        f"Monotonicity: non-decreasing across all {pairs:,} neighbor pairs in "
+        f"[{MONO_ONSET_RAW / SCALE:.1f}, {max_z_raw / SCALE:.9f}] "
+        f"({rechecks} exact re-checks) ✓"
+    )
+    print(f"Overflow: peak Horner product {peak_bits} bits, {headroom} bits under 2^256 ✓")
     print(f"Worst error: {worst_err:.3e} = {err_ulp} ULP at z={sign}{worst_z:.5f}")
     print(f"Target:      {target_abs:.3e} = {TARGET_ERROR_ULP} ULP")
     if worst_err <= target_abs:

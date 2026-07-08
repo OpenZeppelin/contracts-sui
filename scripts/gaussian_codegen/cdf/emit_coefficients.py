@@ -19,48 +19,26 @@ import pathlib
 import sys
 from typing import Sequence
 
-from mpmath import mp, mpf
-
 from gaussian_codegen.shared import constants
 from gaussian_codegen.shared.move_emit import (
     auto_generated_banner,
     check_move,
     fmt_u128,
     format_move,
+    quantize,
     rel_or_abs,
+    render_vector,
     write_move,
 )
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
-WAD = constants.WAD
 MAX_Z_RAW = constants.MAX_Z_RAW
 
 DERIVE_OUTPUT_PATH = pathlib.Path(__file__).parent / ".derive_output.json"
 COEFF_OUTPUT_PATH = (
     REPO_ROOT / "math" / "fixed_point" / "sources" / "internal" / "cdf_coefficients.move"
 )
-
-
-def quantize(c_str: str) -> tuple[int, bool]:
-    """Quantize a high-precision coefficient string at unit scale to a
-    `(u128 magnitude, bool is_negative)` pair at WAD scale, half-up rounding.
-
-    The u128 range is enforced downstream by `fmt_u128` when the literal is
-    rendered, so it is not re-checked here."""
-    mp.dps = constants.DPS
-    c = mpf(c_str)
-    is_neg = c < 0
-    mag_real = (-c if is_neg else c) * mpf(WAD)
-    mag = int(mag_real + mpf("0.5"))
-    if mag == 0:
-        is_neg = False  # canonicalize zero
-    return mag, bool(is_neg)
-
-
-def render_vector(name: str, ty: str, items: Sequence[str], indent: str = "    ") -> str:
-    body = f",\n{indent}".join(items)
-    return f"const {name}: vector<{ty}> = vector[\n{indent}{body},\n];"
 
 
 def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str:
@@ -75,8 +53,8 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 
     return f"""{banner}
 /// Numerator and denominator coefficients for the AAA-rational standard-normal
-/// CDF approximation on the central domain `[0, 6.3]`. All values are
-/// sign-magnitude pairs at WAD (`10^18`) scale, indexed in ascending power
+/// CDF approximation on the central domain `[0, {constants.MAX_Z}]`. All values are
+/// sign-magnitude pairs at CDF WAD (`10^36`) scale, indexed in ascending power
 /// order (index 0 is the constant term).
 ///
 /// Accessors return the underlying `vector<u128>` / `vector<bool>` constants so
@@ -117,7 +95,7 @@ public(package) fun cdf_den_mags(): vector<u128> {{ DEN_MAGS }}
 /// Denominator sign flags (ascending power order); index `i` paired with `cdf_den_mags()[i]`.
 public(package) fun cdf_den_negs(): vector<bool> {{ DEN_NEGS }}
 
-/// Saturation threshold |z| at the raw `10^9` scale (`6_300_000_000`).
+/// Saturation threshold |z| at the raw `10^9` scale (`{fmt_u128(MAX_Z_RAW)}`).
 public(package) fun max_z_raw(): u128 {{ MAX_Z_RAW }}
 """
 
@@ -141,8 +119,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     raw = json.loads(args.input.read_text(encoding="utf-8"))
 
-    num = [quantize(s) for s in raw["num_coeffs_str"]]
-    den = [quantize(s) for s in raw["den_coeffs_str"]]
+    num = [quantize(s, constants.CDF_WAD) for s in raw["num_coeffs_str"]]
+    den = [quantize(s, constants.CDF_WAD) for s in raw["den_coeffs_str"]]
     text = emit_module(num, den)
     text = format_move(text, args.output, REPO_ROOT)
 
@@ -153,7 +131,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("FAIL: run `python -m gaussian_codegen.cdf.emit_coefficients` to regenerate", file=sys.stderr)
         return 1
 
-    print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at WAD")
+    print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at CDF_WAD")
     write_move(args.output, text)
     print(f"Wrote {rel_or_abs(args.output, REPO_ROOT)}")
     return 0

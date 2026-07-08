@@ -1,9 +1,10 @@
 module openzeppelin_finance::example_vesting_quadratic_tests;
 
 use openzeppelin_finance::example_vesting_quadratic::{Self as quadratic, Quadratic, Params};
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, Released};
 use std::unit_test::{assert_eq, destroy};
-use sui::coin::{Self, Coin};
+use sui::balance::{Self, Balance};
+use sui::event;
 use sui::test_scenario as ts;
 
 /// Phantom coin marker for the vested asset.
@@ -26,7 +27,7 @@ fun create_and_share(scenario: &mut ts::Scenario) {
         BENEFICIARY,
         scenario.ctx(),
     );
-    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()));
+    wallet.deposit(balance::create_for_testing<USDC>(TOTAL));
     transfer::public_share_object(wallet);
 }
 
@@ -42,6 +43,7 @@ fun compose_create_fund_and_release_across_modules() {
     scenario.next_tx(BENEFICIARY);
 
     let mut wallet = scenario.take_shared<VestingWallet<Quadratic, Params, USDC>>();
+    let wallet_id = object::id(&wallet);
 
     // Before start: nothing vested.
     clock.set_for_testing(START_MS);
@@ -56,24 +58,33 @@ fun compose_create_fund_and_release_across_modules() {
     clock.set_for_testing(START_MS + DURATION_MS / 2);
     assert_eq!(quadratic::releasable(&wallet, &clock), TOTAL / 4);
     let vested = quadratic::vested_amount(&wallet, &clock);
-    wallet.release(&vested, scenario.ctx());
+    wallet.release(&vested);
     assert_eq!(wallet.released(), TOTAL / 4);
 
     // After end: everything remaining is releasable, draining the wallet.
     clock.set_for_testing(START_MS + DURATION_MS);
     assert_eq!(quadratic::releasable(&wallet, &clock), TOTAL - TOTAL / 4);
-    quadratic_release(&mut wallet, &clock, scenario.ctx());
+    quadratic_release(&mut wallet, &clock);
     assert_eq!(wallet.released(), TOTAL);
     assert_eq!(wallet.balance(), 0);
 
-    // The beneficiary received exactly the total across the two releases.
-    scenario.next_tx(BENEFICIARY);
-    let paid = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
-    let paid_2 = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
-    assert_eq!(paid.value() + paid_2.value(), TOTAL);
+    // The beneficiary was paid exactly the total across the two releases, attested
+    // by the two `Released` events: TOTAL / 4 then the remainder.
+    let released = event::events_by_type<Released<Quadratic, USDC>>();
+    assert_eq!(released.length(), 2);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<Quadratic, USDC>(wallet_id, BENEFICIARY, TOTAL / 4),
+    );
+    assert_eq!(
+        released[1],
+        vesting_wallet::test_new_released<Quadratic, USDC>(
+            wallet_id,
+            BENEFICIARY,
+            TOTAL - TOTAL / 4,
+        ),
+    );
 
-    destroy(paid);
-    destroy(paid_2);
     ts::return_shared(wallet);
     destroy(clock);
     scenario.end();
@@ -121,7 +132,7 @@ fun late_deposit_vests_at_current_proportion() {
     // Halfway through, top up by the original total. New total is 2*TOTAL, and the
     // halfway proportion (1/4) applies to all of it.
     clock.set_for_testing(START_MS + DURATION_MS / 2);
-    wallet.deposit(coin::mint_for_testing<USDC>(TOTAL, scenario.ctx()));
+    wallet.deposit(balance::create_for_testing<USDC>(TOTAL));
     assert_eq!(quadratic::releasable(&wallet, &clock), 2 * TOTAL / 4);
 
     ts::return_shared(wallet);
@@ -158,23 +169,29 @@ fun compose_destroy_after_drain() {
     scenario.next_tx(BENEFICIARY);
 
     let mut wallet = scenario.take_shared<VestingWallet<Quadratic, Params, USDC>>();
+    let wallet_id = object::id(&wallet);
 
     // Run to the end and drain the wallet.
     clock.set_for_testing(START_MS + DURATION_MS);
-    quadratic_release(&mut wallet, &clock, scenario.ctx());
+    quadratic_release(&mut wallet, &clock);
     assert_eq!(wallet.balance(), 0);
+
+    // The single release paid the full total to the beneficiary.
+    let released = event::events_by_type<Released<Quadratic, USDC>>();
+    assert_eq!(released.length(), 1);
+    assert_eq!(
+        released[0],
+        vesting_wallet::test_new_released<Quadratic, USDC>(wallet_id, BENEFICIARY, TOTAL),
+    );
 
     // Permissionless half reclaims the storage rebate; the witness-gated half consumes
     // the receipt and enforces the ended and beneficiary gates (the sender is the
     // beneficiary here).
-    let receipt = wallet.destroy_empty();
+    // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
+    // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
+    let receipt = wallet.destroy_empty_for_testing();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
-    scenario.next_tx(BENEFICIARY);
-    let paid = scenario.take_from_address<Coin<USDC>>(BENEFICIARY);
-    assert_eq!(paid.value(), TOTAL);
-
-    destroy(paid);
     destroy(clock);
     scenario.end();
 }
@@ -196,7 +213,7 @@ fun destroy_aborts_before_end() {
     );
     clock.set_for_testing(START_MS + DURATION_MS - 1);
 
-    let receipt = wallet.destroy_empty();
+    let receipt = wallet.destroy_empty_for_testing();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
     abort
@@ -219,7 +236,7 @@ fun destroy_rejects_non_beneficiary() {
     );
     clock.set_for_testing(START_MS + DURATION_MS);
 
-    let receipt = wallet.destroy_empty();
+    let receipt = wallet.destroy_empty_for_testing();
     quadratic::destroy(receipt, &clock, scenario.ctx());
 
     abort
@@ -242,8 +259,7 @@ fun params_rejects_overflowing_end() {
 fun quadratic_release(
     wallet: &mut VestingWallet<Quadratic, Params, USDC>,
     clock: &sui::clock::Clock,
-    ctx: &mut TxContext,
 ) {
     let vested = quadratic::vested_amount(wallet, clock);
-    wallet.release(&vested, ctx);
+    wallet.release(&vested);
 }

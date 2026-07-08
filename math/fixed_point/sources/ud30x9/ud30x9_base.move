@@ -3,6 +3,8 @@ module openzeppelin_fp_math::ud30x9_base;
 
 use openzeppelin_fp_math::cdf::cdf_nonneg_raw;
 use openzeppelin_fp_math::common;
+use openzeppelin_fp_math::inverse_cdf::inverse_cdf_upper_raw;
+use openzeppelin_fp_math::pdf::pdf_nonneg_raw;
 use openzeppelin_fp_math::sd29x9::{Self, SD29x9};
 use openzeppelin_fp_math::ud30x9::{UD30x9, wrap, zero, one};
 use openzeppelin_math::rounding;
@@ -39,6 +41,15 @@ const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be non-zer
 #[error(code = 6)]
 const ELogResultUnrepresentable: vector<u8> =
     "Logarithm result would be negative and is unrepresentable in UD30x9";
+
+/// Probability exceeds `1`, so it is not a valid CDF value
+#[error(code = 7)]
+const EProbabilityOutOfRange: vector<u8> = "Probability must not exceed one";
+
+/// Probability is below `0.5`, so the quantile would be negative and is unrepresentable in `UD30x9`
+#[error(code = 8)]
+const EProbabilityBelowHalf: vector<u8> =
+    "Probability below one half yields a negative quantile, unrepresentable in UD30x9";
 
 // === Public Functions ===
 
@@ -132,9 +143,9 @@ public fun abs(x: UD30x9): UD30x9 {
 /// Returns the probability `Φ(z) ∈ [0.5, 1]` represented as `UD30x9`. Since
 /// `UD30x9` inputs are inherently non-negative, the output is always at least
 /// `0.5`. The implementation evaluates an AAA-rational approximation
-/// `N(z) / D(z)` at WAD scale via Horner's method on a sign-magnitude `u256`
-/// accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a single
-/// nearest-rounding step.
+/// `N(z) / D(z)` at WAD scale (`10^36`) via Horner's method on a sign-magnitude
+/// `u256` accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a
+/// single nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Non-negative input.
@@ -143,16 +154,17 @@ public fun abs(x: UD30x9): UD30x9 {
 /// - `Φ(z) ∈ [0.5, 1]` at `UD30x9` scale.
 ///
 /// #### Behavior
-/// - Saturates exactly to `1.0` for `z ≥ 6.3`. At that bound `Φ` is already
-///   within `~10⁻¹⁰` of `1`, well below the output's `10⁻⁹` resolution.
+/// - Saturates exactly to `1.0` for `z ≥ 6.109410205` - the analytical point at
+///   which `Φ` rounds to `1` at the `10⁻⁹` output resolution, so the cut-off is
+///   lossless.
 /// - `Φ(0)` is exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
 ///   worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
-/// - Monotone non-decreasing across the dense offline validation grid
-///   (enforced by the codegen CI gate). A 1-ULP local inversion between
-///   neighboring raw inputs is not formally excluded in the far tail
-///   (`z ≳ 5.7`), where the true `Φ` increment drops below the `10⁻⁹`
-///   output resolution.
+/// - Monotone non-decreasing between every pair of adjacent representable
+///   inputs. The `10^36` accumulation scale holds floor-truncation noise far
+///   below the true per-step increment, and the codegen CI gate confirms this
+///   exhaustively over the at-risk tail (`z ≥ 4`, where the increment is
+///   smallest), so no 1-ULP inversion occurs.
 /// - Pure, deterministic, and object-free: identical inputs always produce
 ///   identical outputs; touches no storage or Sui objects.
 ///
@@ -171,6 +183,107 @@ public fun abs(x: UD30x9): UD30x9 {
 /// ```
 public fun cdf(z: UD30x9): UD30x9 {
     wrap(cdf_nonneg_raw(z.unwrap()))
+}
+
+/// Standard-normal probability density function `φ(z)` on non-negative `z`.
+///
+/// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` represented
+/// as `UD30x9`, where the peak is `φ(0) = 0.398942280`. The implementation
+/// evaluates an AAA-rational approximation `N(z) / D(z)` at WAD scale (`10^36`)
+/// via Horner's method on a sign-magnitude `u256` accumulator; the final ratio is
+/// cast back to `UD30x9` (`10^9`) in a single nearest-rounding step.
+///
+/// #### Parameters
+/// - `z`: Non-negative input.
+///
+/// #### Returns
+/// - `φ(z) ∈ [0, 0.398942280]` at `UD30x9` scale.
+///
+/// #### Behavior
+/// - Monotone non-increasing in `z` between every pair of adjacent representable
+///   inputs; the peak `φ(0) = 0.398942280` is returned exactly. The `10^36`
+///   accumulation scale holds floor-truncation noise far below the true per-step
+///   decrement, and the codegen CI gate confirms this exhaustively over the
+///   at-risk tail (`z ≥ 4`), so no 1-ULP inversion occurs.
+/// - Saturates exactly to `0` for `z ≥ 6.402729806` - the analytical point at
+///   which `φ` rounds to `0` at the `10⁻⁹` output resolution (`φ ≈ 5 × 10⁻¹⁰`
+///   there), so the cut-off is lossless.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
+///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
+/// - Pure, deterministic, and object-free: identical inputs always produce
+///   identical outputs; touches no storage or Sui objects.
+///
+/// #### Aborts
+/// - Does not abort for any `UD30x9` input under the committed, validated
+///   coefficients. The evaluator carries internal integrity asserts
+///   (`pdf::EInternalNumNegative` / `pdf::EInternalDenNonPositive`) as
+///   defense-in-depth against a corrupted regenerated coefficient table; these
+///   cannot fire for the shipped coefficients.
+///
+/// #### Examples
+///
+/// ```move
+/// let z = ud30x9::wrap(1_000_000_000); // 1.0
+/// let d = z.pdf(); // 0.241970725
+/// ```
+public fun pdf(z: UD30x9): UD30x9 {
+    wrap(pdf_nonneg_raw(z.unwrap()))
+}
+
+/// Inverse standard-normal CDF (quantile / probit) `Φ⁻¹(p)` on `p ∈ [0.5, 1]`.
+///
+/// Returns the value `z ≥ 0` with `Φ(z) = p`, represented as `UD30x9`. Because
+/// `UD30x9` is unsigned, only the upper half of the distribution is representable:
+/// `p` must be at least `0.5` (`Φ(0)`). For the full range including negative `z`,
+/// use `SD29x9::inverse_cdf`. The implementation evaluates a two-region
+/// AAA-rational approximation (a rational in `u = p - 0.5` near the center, and
+/// one in `r = sqrt(-2 * ln(1 - p))` in the tail) at WAD scale via Horner's method
+/// on a sign-magnitude `u256` accumulator, rounded back to `UD30x9` (`10^9`) in a
+/// single nearest-rounding step.
+///
+/// #### Parameters
+/// - `p`: Probability in `[0.5, 1]`.
+///
+/// #### Returns
+/// - `Φ⁻¹(p) ∈ [0, 6.3]` at `UD30x9` scale.
+///
+/// #### Behavior
+/// - `Φ⁻¹(0.5)` is exactly `0`.
+/// - Saturates to `6.3` at `p = 1`, since `Φ⁻¹(1) = +∞` is unrepresentable. `6.3`
+///   lies beyond the CDF saturation bound (`6.109410205`), so `cdf` maps it back
+///   to exactly `1` - `cdf`/`inverse_cdf` agree at the corner.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
+///   worst-case from the committed coefficients and on-chain kernels is
+///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`
+///   change of variable is most sensitive.
+/// - Near `p = 1` the quantile is intrinsically steep - the two largest
+///   representable inputs differ by `≈ 0.11` in `z` - so a 1-ULP change in `p`
+///   maps to a large change in `z`; this is a property of `Φ⁻¹`, not the
+///   approximation. Equivalently, `cdf(inverse_cdf(p))` recovers `p` to a few ULP.
+/// - Monotone non-decreasing across the dense offline validation grid (enforced
+///   by the codegen CI gate).
+/// - Pure, deterministic, and object-free.
+///
+/// #### Aborts
+/// - `EProbabilityBelowHalf` if `p < 0.5` (the quantile would be negative).
+/// - `EProbabilityOutOfRange` if `p > 1`.
+/// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
+///   (defense-in-depth against a corrupted regenerated coefficient table; these
+///   cannot fire for the shipped coefficients).
+/// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`
+///   saturation guard runs first, so `1 - p` is never zero; unreachable).
+///
+/// #### Examples
+///
+/// ```move
+/// let p = ud30x9::wrap(975_000_000); // 0.975
+/// let z = p.inverse_cdf(); // ≈ 1.959963985
+/// ```
+public fun inverse_cdf(p: UD30x9): UD30x9 {
+    let p_raw = p.unwrap();
+    assert!(p_raw <= common::scale!(), EProbabilityOutOfRange); // p ≤ 1
+    assert!(p_raw >= common::scale!() / 2, EProbabilityBelowHalf); // p ≥ 0.5
+    wrap(inverse_cdf_upper_raw(p_raw))
 }
 
 /// Rounds toward positive infinity to the next integer (if fractional), otherwise unchanged.

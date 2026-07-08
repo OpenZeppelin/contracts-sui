@@ -1,8 +1,8 @@
 """Emit test-vector Move files for both `sd29x9_base::cdf` and `ud30x9_base::cdf`.
 
 Picks a deterministic, hand-curated set of test inputs:
-- Well-known critical points (0, ±0.25, ±0.5, ±1, ±2, ±3, ±4, ±5, ±6, ±6.299,
-  ±6.3, ±6.301, ±7) - exercises symmetry, the saturation boundary on both
+- Well-known critical points (0, ±0.25, ±0.5, ±1, ±2, ±3, ±4, ±5, ±6, ±6.1094,
+  ±6.109410205, ±6.11, ±7) - exercises symmetry, the saturation boundary on both
   sides, and the Φ(0) bit-exact case.
 - 16 evenly spaced points across [0, max_z] for breadth.
 
@@ -59,7 +59,7 @@ UD30X9_OUTPUT_PATH = (
     / "cdf_test_vectors.move"
 )
 
-MAX_Z_RAW = constants.MAX_Z_RAW  # 6.3 at UD30x9 scale - saturation threshold
+MAX_Z_RAW = constants.MAX_Z_RAW  # 6.109410205 at UD30x9 scale - saturation threshold
 MAX_Z_FLOAT = float(constants.MAX_Z)
 
 CRITICAL_Z = [
@@ -73,9 +73,9 @@ CRITICAL_Z = [
     "4",
     "5",
     "6",
-    "6.299",
-    "6.3",
-    "6.301",
+    "6.1094",
+    "6.109410205",
+    "6.11",
     "7",
 ]
 
@@ -91,7 +91,7 @@ def expected_phi_raw(z_str: str, neg: bool) -> int:
 
     Saturation mirrors the on-chain boundary exactly: it triggers when the
     *quantized* input `z_raw` meets or exceeds `MAX_Z_RAW` (the `>=` test in
-    `cdf.move::cdf_nonneg_raw`), not on a real-valued `> 6.3` comparison."""
+    `cdf.move::cdf_nonneg_raw`), not on a real-valued `> 6.109410205` comparison."""
     mp.dps = DPS
     if quantize_z(z_str) >= MAX_Z_RAW:
         return 0 if neg else SCALE_DECIMAL

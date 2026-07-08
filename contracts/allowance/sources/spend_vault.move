@@ -28,7 +28,7 @@
 /// never in the cap. `spend`, `withdraw`, and `withdraw_all` all return
 /// `Balance<T>`.
 ///
-/// #### When to use which
+/// # When to use which
 ///
 /// You want to...                                Call
 /// ------------------------------------------   -----------------------------
@@ -43,7 +43,7 @@
 /// emergency stop                                revoke_all (tx1), then withdraw_all<T> (tx2, retry-safe)
 /// tear down the vault                           withdraw_all<T> every coin, THEN destroy
 ///
-/// #### Core semantics
+/// # Core semantics
 ///
 /// - **Untyped, multi-coin.** There is no phantom type; cross-coin safety is a
 ///   runtime gate. The ledger is keyed by `BudgetKey{cap_id, coin_type}`, and
@@ -53,7 +53,7 @@
 /// - **Mixed error model.** This module's own aborts are dense codes 0..7. The
 ///   pool-short case is not one of them: it surfaces as the Sui execution status
 ///   `InsufficientFundsForWithdraw` (a funds-accumulator `ExecutionFailureStatus`)
-///   raised at `redeem_funds` when the object's settled balance is below the
+///   raised at `redeem_funds` when the object's live balance at execution is below the
 ///   amount. You see it as a status in transaction effects or a dry run, not as a
 ///   matchable Move `#[error]` code, so integrator preflight must handle it on top
 ///   of this module's codes.
@@ -85,15 +85,20 @@
 ///   downstream embedding survive any number of owner updates. This is the
 ///   load-bearing composition property of the cap-keyed design.
 /// - **Suspension idiom.** `set_allowance<T>(..., 0, ...)` zeroes the budget but
-///   keeps the entry and cap alive, so the next `spend<T>` aborts
-///   `EAllowanceExceeded` rather than `ENoAllowance`. Removal is lazy too: entries
+///   keeps the entry and cap alive, so the next positive `spend<T>` aborts
+///   `EAllowanceExceeded` rather than `ENoAllowance` (a zero-amount spend aborts
+///   `EZeroAmount` first). Removal is lazy too: entries
 ///   go away only on `revoke`, `revoke_all`, `renounce`, or `destroy`, never by
 ///   spending to zero.
-/// - **Opt-in CAS on `set_allowance`.** Pass `expected = Some(e)` on any
-///   read-derived update. The race-free idiom is `allowance<T>()` then
-///   `set_allowance<T>(..., Some(result), ...)` in one PTB: the shared Vault is
-///   locked for the tx, so the read/write pair is atomic. `Some(e)` on an absent
-///   entry aborts, since there is no value to match.
+/// - **Opt-in CAS on `set_allowance`.** Pass `expected = Some(e)` on any update
+///   derived from an earlier read: read `allowance<T>()` off-chain or in a prior
+///   tx, then write with `Some(that_value)`. If a spend was sequenced after the
+///   read, `remaining` no longer matches and the write aborts
+///   `EUnexpectedAllowance` instead of silently clobbering it. A read in the
+///   same tx needs no CAS: the shared Vault is locked for the whole tx, so the
+///   read/write pair is already atomic, and a same-tx read trivially satisfies
+///   the guard. `Some(e)` on an absent entry aborts, since there is no value to
+///   match.
 /// - **Unconditional owner exit.** `withdraw`, `withdraw_all`, and `destroy`
 ///   consult only the OwnerCap binding and the pool, never the ledger, so no
 ///   spender or ledger state can block defunding or teardown. `withdraw_all<T>`
@@ -125,8 +130,8 @@ use sui::vec_set::{Self, VecSet};
 // Dense, first-publication ABI: codes 0..7, no reserved gaps. There is
 // deliberately NO `EInsufficientVault`: the pool-short case is covered by the
 // Sui execution status `InsufficientFundsForWithdraw` (a funds-accumulator
-// `ExecutionFailureStatus`), raised at `redeem_funds` when the object's settled
-// balance is below the amount, the last failure on the `spend`/`withdraw` hot
+// `ExecutionFailureStatus`), raised at `redeem_funds` when the object's live
+// balance at execution is below the amount, the last failure on the `spend`/`withdraw` hot
 // path. It is recognized by status in transaction effects / a dry run, not a
 // matchable Move `#[error]` code.
 
@@ -184,8 +189,9 @@ const EUnexpectedAllowance: vector<u8> = "Current allowance does not match expec
 // === Structs ===
 
 /// Shared, UNTYPED escrow + per-`(cap, coin)` allowance ledger. One vault holds
-/// N coin types at once; its lifecycle is exactly `new -> share` or
-/// `new -> destroy`.
+/// N coin types at once. The tx that calls `new` must consume the fresh vault
+/// with `share` or `destroy`; a shared vault can still be `destroy`ed later at
+/// teardown, so the shape is `new -> destroy` or `new -> share -> ... -> destroy`.
 ///
 /// The pool is NOT a struct field: per-coin funds live as object-owned address
 /// balances at `object::id_address(&v)`. The `key`-only ability protects `id`
@@ -554,8 +560,9 @@ public fun deposit<T>(v: &Vault, c: Coin<T>, ctx: &mut TxContext) {
 
 /// `Balance<T>`-native deposit: the symmetric ingress to the `Balance<T>`
 /// egress of `spend`/`withdraw`/`withdraw_all`. The natural sink for a
-/// `spend` output routed back into escrow, or for funding from any address
-/// balance the caller controls (`redeem_funds(...)` then `deposit_balance`).
+/// `spend` output routed back into escrow, or for funding from an object balance
+/// the caller controls (`withdraw_funds_from_object(...)` then `redeem_funds(...)`
+/// then `deposit_balance`).
 /// Same permissionless, rights-free, `&Vault` semantics as `deposit`.
 ///
 /// #### Parameters
@@ -644,16 +651,20 @@ public fun mint_cap(v: &Vault, cap: &OwnerCap, ctx: &mut TxContext): SpenderCap 
 ///   Present: overwrite. Re-setting a key OVERWRITES, it never adds. Two summing
 ///   budgets for one person require two caps.
 /// - **Suspension.** `new_amount == 0` zeroes the budget but keeps the
-///   entry and cap alive; the next `spend<T>` aborts `EAllowanceExceeded`. There
-///   is deliberately no `EZeroAmount` here.
+///   entry and cap alive; the next positive `spend<T>` aborts `EAllowanceExceeded`
+///   (a zero-amount spend aborts `EZeroAmount` first). `set_allowance` itself
+///   never aborts `EZeroAmount`.
 /// - **Revival.** A future `new_expires_at_ms` revives an expired entry
 ///   in place. Suspending an already-expired entry necessarily restates a valid
 ///   future expiry (or `u64::MAX`), time-reviving it while zeroing the budget.
 /// - **CAS.** `expected = Some(e)` proceeds only if the entry exists
 ///   AND its current `remaining == e`; on an absent entry or a mismatch it
-///   aborts `EUnexpectedAllowance`. The race-free idiom is `allowance<T>()` then
-///   `set_allowance<T>(..., Some(result), ...)` in one PTB (the shared Vault is
-///   locked for the tx). `None` is the unconditional create-or-overwrite. CAS
+///   aborts `EUnexpectedAllowance`. Derive `e` from an EARLIER read (off-chain
+///   or a prior tx) so a spend sequenced after that read aborts this write
+///   instead of being clobbered. A read in the same tx cannot serve as a guard:
+///   the shared Vault is locked for the whole tx, so a same-tx `allowance<T>()`
+///   value trivially matches and the write always proceeds.
+///   `None` is the unconditional create-or-overwrite. CAS
 ///   compares the RAW `remaining` (0 for suspended and `u64::MAX` for unlimited
 ///   included). CAS guards `remaining` ONLY; the upsert always overwrites
 ///   `expires_at_ms` too. A read-then-CAS-write that means to change only the
@@ -777,8 +788,8 @@ public fun set_allowance<T>(
 /// ceiling on the pool, not a reservation: a live, unexpired, within-budget
 /// spend can still fail when the pool is short, and that failure is the Sui
 /// execution status `InsufficientFundsForWithdraw` (a funds-accumulator
-/// `ExecutionFailureStatus`), raised at `redeem_funds` when the object's settled
-/// balance is below the amount, NOT one of this module's codes. It is not a
+/// `ExecutionFailureStatus`), raised at `redeem_funds` when the object's live
+/// balance at execution is below the amount, NOT one of this module's codes. It is not a
 /// matchable Move `#[error]` code, so detect it with a dry run (it is surfaced
 /// in transaction effects / the SDK) rather than by matching an abort code.
 /// Integrator preflight must handle the framework conditions too. The status is
@@ -804,12 +815,11 @@ public fun set_allowance<T>(
 /// - `EZeroAmount` if `amount == 0`.
 /// - `EAllowanceExceeded` if `remaining` is finite and `amount > remaining`;
 ///   includes suspended-at-zero.
-/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
-///   `enable_object_funds_withdraw` protocol feature is off. Propagated from
-///   `withdraw_funds_from_object`, total (not per-amount) and not a matchable
-///   Move `#[error]` code.
-/// - `InsufficientFundsForWithdraw` (execution status) if the object's settled
-///   balance is below `amount`. A funds-accumulator execution status raised at
+/// - `EObjectFundsWithdrawNotEnabled` if the `enable_object_funds_withdraw`
+///   protocol feature is off. A framework Move `#[error]` abort (code 3 in
+///   `sui::funds_accumulator`) propagated from `withdraw_funds_from_object`.
+/// - `InsufficientFundsForWithdraw` (execution status) if the object's live
+///   balance at execution is below `amount`. A funds-accumulator execution status raised at
 ///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
 ///   code you can match with `expected_failure(abort_code = ...)`, and not one
 ///   of this module's codes.
@@ -859,7 +869,7 @@ public fun spend<T>(
     // Order is load-bearing: decrement the budget, THEN draw from the
     // pool. The pool is deliberately NOT pre-checked against the root;
     // if it is short, `redeem_funds` fails with the `InsufficientFundsForWithdraw`
-    // execution status (when the object's settled balance is below the amount)
+    // execution status (when the object's live balance at execution is below the amount)
     // and Move's atomic revert rolls the decrement back. No external call runs
     // between the decrement and the withdraw, so there is no observable window
     // where the budget shrank but no funds moved.
@@ -995,17 +1005,14 @@ public fun revoke_all(v: &mut Vault, cap: &OwnerCap, cap_id: ID, ctx: &mut TxCon
     // ledger with no outstanding immutable borrow of the vault. O(k) in the
     // owner-granted distinct coin types (owner-bounded, un-griefable).
     let types = *v.granted_coin_types.keys();
-    let n = types.length();
-    let mut i = 0;
-    while (i < n) {
-        let coin_type = *types.borrow(i);
+    types.do_ref!(|coin_type| {
+        let coin_type = *coin_type;
         let key = BudgetKey { cap_id, coin_type };
         if (v.allowances.contains(key)) {
             v.allowances.remove(key);
             event::emit(Revoked { vault_id, cap_id, coin_type, was_present: true, by });
         };
-        i = i + 1;
-    };
+    });
 }
 
 /// Spender self-revoke against a LIVE vault, whole-cap. Consumes the cap by
@@ -1040,15 +1047,12 @@ public fun renounce(v: &mut Vault, cap: SpenderCap, ctx: &mut TxContext) {
     // Remove every (cap, T) entry the cap holds. Snapshot the type set (copy)
     // so the loop can mutate the ledger; absent coins are harmless no-op probes.
     let types = *v.granted_coin_types.keys();
-    let n = types.length();
-    let mut i = 0;
-    while (i < n) {
-        let key = BudgetKey { cap_id, coin_type: *types.borrow(i) };
+    types.do_ref!(|coin_type| {
+        let key = BudgetKey { cap_id, coin_type: *coin_type };
         if (v.allowances.contains(key)) {
             v.allowances.remove(key);
         };
-        i = i + 1;
-    };
+    });
 
     id.delete();
 
@@ -1097,7 +1101,9 @@ public fun delete_orphaned_cap(cap: SpenderCap) {
 ///
 /// Recovers only strays sent to THIS vault: a generic cross-address squash is
 /// unbuildable (you cannot consume a coin you do not control). It needs
-/// `&mut v.id` only for `public_receive`.
+/// `&mut v.id` only for `public_receive`. It is the vault's only object-receive
+/// path and is `Coin`-typed, so any non-`Coin` object sent to the vault address
+/// cannot be recovered.
 ///
 /// #### Parameters
 /// - `v`: The vault whose pool receives the recovered stray.
@@ -1132,7 +1138,7 @@ public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) 
 /// Consults only the OwnerCap binding and the pool, never the ledger,
 /// so no spender state can block it. Pool-short is the Sui execution status
 /// `InsufficientFundsForWithdraw` (a funds-accumulator `ExecutionFailureStatus`),
-/// raised at `redeem_funds` when the object's settled balance is below the
+/// raised at `redeem_funds` when the object's live balance at execution is below the
 /// amount, consistent with `spend` (no root, no pre-check).
 ///
 /// #### Parameters
@@ -1147,10 +1153,11 @@ public fun squash<T>(v: &mut Vault, c: Receiving<Coin<T>>, ctx: &mut TxContext) 
 /// #### Aborts
 /// - `EWrongOwnerCap` if cap is bound to a different Vault.
 /// - `EZeroAmount` if `amount == 0`.
-/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
-///   `enable_object_funds_withdraw` protocol feature is off.
-/// - `InsufficientFundsForWithdraw` (execution status) if the object's settled
-///   balance is below `amount`. A funds-accumulator execution status raised at
+/// - `EObjectFundsWithdrawNotEnabled` if the `enable_object_funds_withdraw`
+///   protocol feature is off: a framework Move `#[error]` abort (code 3 in
+///   `sui::funds_accumulator`).
+/// - `InsufficientFundsForWithdraw` (execution status) if the object's live
+///   balance at execution is below `amount`. A funds-accumulator execution status raised at
 ///   `redeem_funds` (surfaced in effects / dry run / SDK), NOT a Move `#[error]`
 ///   code you can match with `expected_failure(abort_code = ...)`, and not one
 ///   of this module's codes.
@@ -1192,7 +1199,7 @@ public fun withdraw<T>(
 /// - over-ask -> abort: a prior same-checkpoint `spend` lowers the live pool below
 ///   the settled snapshot, so the withdraw fails with the `InsufficientFundsForWithdraw`
 ///   execution status (a funds-accumulator `ExecutionFailureStatus` at
-///   `redeem_funds`, when the object's settled balance is below the amount) (e.g.
+///   `redeem_funds`, when the object's live balance at execution is below the amount) (e.g.
 ///   settled 1000, a prior `spend(600)`
 ///   leaves live 400, draining 1000 against 400 aborts; even `spend(1)` trips it);
 /// - under-drain: a same-checkpoint `deposit` is not yet in the snapshot, so the
@@ -1223,10 +1230,10 @@ public fun withdraw<T>(
 ///
 /// #### Aborts
 /// - `EWrongOwnerCap` if cap is bound to a different Vault.
-/// - `EObjectFundsWithdrawNotEnabled` (execution status) if the
-///   `enable_object_funds_withdraw` protocol feature is off; only reachable on a
-///   non-empty settled pool (the empty-pool path returns `balance::zero` without
-///   touching the primitive).
+/// - `EObjectFundsWithdrawNotEnabled` if the `enable_object_funds_withdraw`
+///   protocol feature is off: a framework Move `#[error]` abort (code 3 in
+///   `sui::funds_accumulator`); only reachable on a non-empty settled pool (the
+///   empty-pool path returns `balance::zero` without touching the primitive).
 /// - `InsufficientFundsForWithdraw` (execution status) if the live pool fell
 ///   below the settled snapshot earlier in this checkpoint (the settled-vs-live
 ///   skew; retry-safe). A funds-accumulator execution status raised at
@@ -1275,10 +1282,17 @@ public fun withdraw_all<T>(
 //
 // All reads are ADVISORY: results are stale the moment a later tx mutates the
 // vault or the pool (a permissionless `send_funds` top-up moves the pool between
-// a read and a later act). Cross-tx check-then-act is unsound; within one PTB
-// the shared Vault is locked for the whole tx, so read -> decide -> write is
-// atomic (the CAS idiom on `set_allowance`). The pool-reading reads take the
-// `AccumulatorRoot` and report the settled (start-of-checkpoint) balance.
+// a read and a later act). For LEDGER state (budgets, expiries, entry presence,
+// coin types, cap bindings) a same-tx read is exact: the shared Vault is locked
+// for the whole tx, so read -> decide -> write is atomic with no guard needed.
+// Cross-tx check-then-act on ledger state is unsound UNLESS the earlier read is
+// passed as the CAS guard on `set_allowance` (`Some(expected)`), turning
+// staleness into an `EUnexpectedAllowance` abort instead of a silent overwrite.
+// POOL reads (`spendable_now`, `balance_value`) are weaker even within one tx:
+// they take the `AccumulatorRoot` and report the settled (start-of-checkpoint)
+// balance, not the live pool a `spend`/`withdraw` draws from, so a settled
+// quote is a ceiling, not a guarantee (the settled-vs-live skew; see each
+// function's doc).
 
 /// Raw `remaining` for `(cap, T)`; `0` if absent. Ambiguous at 0: suspended and
 /// absent both read 0, disambiguate with `contains`. `u64::MAX` is the
@@ -1335,8 +1349,9 @@ public fun spendable_now<T>(v: &Vault, root: &AccumulatorRoot, cap_id: ID, clock
 }
 
 /// Raw `expires_at_ms` for `(cap, T)`; `0` if absent. A present entry's value is
-/// a future timestamp or the `u64::MAX` no-expiry sentinel, never `0`, so use
-/// `contains` to distinguish absent from present.
+/// non-zero: a timestamp (possibly already in the past, since expired entries are
+/// not pruned) or the `u64::MAX` no-expiry sentinel. Use `contains` for
+/// absent-vs-present, and compare against the clock for live-vs-expired.
 public fun expiry<T>(v: &Vault, cap_id: ID): u64 {
     let key = budget_key<T>(cap_id);
     if (v.allowances.contains(key)) {

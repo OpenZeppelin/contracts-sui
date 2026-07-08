@@ -12,14 +12,19 @@ These conventions target **Move 2024** (module label syntax, receiver syntax,
 `#[error(code = N)]`, macros). Every package in this repo declares
 `edition = "2024"`.
 
+Based on the [Sui dev cheat sheet](https://docs.sui.io/getting-started/dev-cheat-sheet).
+
 ## Naming
 
 - **Error constants**: `EPascalCase`, declared with `#[error(code = N)]`, type
-  `vector<u8>`, plain `"..."` string literal (NOT `b"..."`). Codes are sequential
-  from 0 and **append-only** - never renumber existing errors when adding new
-  ones. Callers (frontends, integrators, tests in other packages) may match on
-  the numeric abort code; renumbering silently breaks them. New errors go at the
-  bottom with `code = N+1`.
+  `vector<u8>`, plain `"..."` string literal (NOT `b"..."`). The message is plain,
+  user-facing English describing what went wrong - no field, function, or type
+  identifiers and no integer-type names (`u64`); that implementation detail belongs
+  in the constant's `///` doc-comment (see Documentation), not in the abort message.
+  Codes are sequential from 0 and **append-only** - never renumber existing errors
+  when adding new ones. Callers (frontends, integrators, tests in other packages) may
+  match on the numeric abort code; renumbering silently breaks them. New errors go at
+  the bottom with `code = N+1`.
 - **Regular constants**: `UPPER_SNAKE_CASE`
 - **Capability structs**: suffix with `Cap` (e.g. `AdminCap`)
 - **Event structs**: past tense (e.g. `RoleGranted`, `TraderAccountCreated`)
@@ -189,7 +194,7 @@ Examples of required rewrites:
 ## Collections & object size
 
 - Objects max 250 KB - transactions abort if exceeded
-- Use `vector` / `VecSet` / `VecMap` only for bounded collections ≤ 1000 items
+- Use `vector` / `VecSet` / `VecMap` / `PriorityQueue` only for bounded collections ≤ 1000 items
 - Use `Table` / `Bag` / `ObjectBag` / `ObjectTable` / `LinkedTable` for large or
   unbounded collections
 - Never put ever-growing vectors inside objects
@@ -251,7 +256,13 @@ concise.
 - No JavaDoc-style `/** */`
 - Use regular dashes (`-`) instead of em dashes (`—`) in all prose, comments,
   and documentation
-- Document struct fields, complex params, and return values
+- Give every public type a `///` summary, and every event a `///` summary of the
+  form "Emitted by `fn` when ...". Also document complex params and return values
+- Document the fields of every non-event public type with a field-level `///` (skip
+  the self-evident `id: UID`); event fields may be documented more lightly
+- Give every error constant a `///` doc comment stating the condition that raises it
+  (e.g. "`set_per_buyer_cap` was called a second time"). Implementation detail
+  (field/function names) belongs here, not in the abort message string (see Naming)
 - Write for a human reader: prefer short, plain sentences over dense,
   multi-clause prose. Completeness (every param, return, and abort) is required,
   not verbosity
@@ -267,11 +278,21 @@ concise.
   already states what it returns needs neither. Always include an `#### Aborts`
   section whenever a function can abort, listing **every** cause it can raise -
   including native aborts (e.g. arithmetic overflow, division by zero) and
-  errors propagated from internal calls
+  errors propagated from internal or cross-module calls. An internal or
+  cross-module abort must be listed even when it is unreachable in normal
+  operation, because it is part of the function's full error surface; mark such
+  cases as unreachable rather than omitting them - e.g.
+  "`refund_vault::EWrongVaultCap` (guarded by the paired-vault invariant; unreachable
+  in normal operation)". This is a deliberate exception to the rule against
+  documenting impossible paths below: the rule forbids inventing aborts that the
+  code can never reach, whereas these aborts are reachable in the callee and only
+  guarded out by a caller-side invariant, so they stay in the error surface
 - State caller preconditions explicitly and map each to the error it fails with,
   one bullet per cause (e.g. "`EUnauthorized` if the caller lacks the role")
 - Keep terminology consistent with the implementation (e.g. avoid documenting
-  impossible paths)
+  impossible paths) - but note the exception above for propagated internal or
+  cross-module aborts that are unreachable only because of a caller-side
+  invariant: those stay documented to preserve the full error surface
 
   ```move
   /// Compute something.
