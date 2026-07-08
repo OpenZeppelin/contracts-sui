@@ -189,8 +189,9 @@ const EUnexpectedAllowance: vector<u8> = "Current allowance does not match expec
 // === Structs ===
 
 /// Shared, UNTYPED escrow + per-`(cap, coin)` allowance ledger. One vault holds
-/// N coin types at once; its lifecycle is exactly `new -> share` or
-/// `new -> destroy`.
+/// N coin types at once. The tx that calls `new` must consume the fresh vault
+/// with `share` or `destroy`; a shared vault can still be `destroy`ed later at
+/// teardown, so the shape is `new -> destroy` or `new -> share -> ... -> destroy`.
 ///
 /// The pool is NOT a struct field: per-coin funds live as object-owned address
 /// balances at `object::id_address(&v)`. The `key`-only ability protects `id`
