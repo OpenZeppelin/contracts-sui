@@ -509,7 +509,10 @@ public macro fun borrow_mut<$K: copy + drop + store, $V: store>(
 ///
 /// Deliberate divergence from `sui::vec_map::insert`, which aborts on a duplicate key: this
 /// is a total upsert, matching `sorted_set`'s divergence from `vec_set`. To recover the
-/// abort-on-duplicate behavior, write `assert!(insert!(&mut m, k, v).is_none(), E)`.
+/// abort-on-duplicate behavior when `V: drop`, write
+/// `assert!(insert!(&mut m, k, v).is_none(), E)`. For a resource `V` (no `drop`) the returned
+/// option cannot be dropped, so bind and consume it instead:
+/// `let old = insert!(&mut m, k, v); assert!(old.is_none(), E); old.destroy_none();`.
 ///
 /// #### Parameters
 /// - `key`: Key to insert or update.

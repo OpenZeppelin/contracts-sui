@@ -1,5 +1,5 @@
-/// A generic, ordered set of unique keys - the gap `sui::vec_set` leaves, which is unordered
-/// and hash-keyed. Iterates in comparator order.
+/// A generic, ordered set of unique keys - the gap `sui::vec_set` leaves. Iterates in
+/// comparator order.
 ///
 /// `SortedSet<K>` is a thin wrapper over `SortedMap<K, Unit>`, where `Unit` is an empty marker:
 /// a set is a map whose values carry no information, exactly as `BTreeSet<K> = BTreeMap<K, ()>`
