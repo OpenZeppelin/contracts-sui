@@ -14,8 +14,8 @@ use std::unit_test::assert_eq;
 
 // === the ONE abort: pop_front/pop_back on empty -> set-owned EEmpty ===
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_set::EEmpty,
         location = openzeppelin_collections::sorted_set,
@@ -26,8 +26,8 @@ fun pop_front_empty_aborts_at_set() {
     s.pop_front();
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_set::EEmpty,
         location = openzeppelin_collections::sorted_set,
@@ -38,8 +38,8 @@ fun pop_back_empty_aborts_at_set() {
     s.pop_back();
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_set::EEmpty,
         location = openzeppelin_collections::sorted_set,
@@ -54,8 +54,8 @@ fun pop_front_after_draining_aborts_at_set() {
 
 // === bypass caveat: a direct inner-map pop leaks the MAP's abort, not the set's ===
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EEmpty,
         location = openzeppelin_collections::sorted_map,
@@ -70,8 +70,8 @@ fun inner_mut_direct_pop_empty_aborts_at_map() {
     u::misuse_pop_front_inner(&mut s);
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EEmpty,
         location = openzeppelin_collections::sorted_map,

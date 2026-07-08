@@ -236,8 +236,10 @@ public fun tail<K: copy + drop + store>(set: &SortedSet<K>): Option<K> {
 ///
 /// #### Aborts
 /// - `EEmpty` if the set is empty.
+/// - `sorted_map::EEmpty` (guarded by the prior `is_empty` check; unreachable in normal
+///   operation).
 public fun pop_front<K: copy + drop + store>(set: &mut SortedSet<K>): K {
-    assert!(!is_empty(set), EEmpty);
+    assert!(!set.is_empty(), EEmpty);
     let (key, _unit) = set.inner.pop_front();
     key
 }
@@ -250,8 +252,10 @@ public fun pop_front<K: copy + drop + store>(set: &mut SortedSet<K>): K {
 ///
 /// #### Aborts
 /// - `EEmpty` if the set is empty.
+/// - `sorted_map::EEmpty` (guarded by the prior `is_empty` check; unreachable in normal
+///   operation).
 public fun pop_back<K: copy + drop + store>(set: &mut SortedSet<K>): K {
-    assert!(!is_empty(set), EEmpty);
+    assert!(!set.is_empty(), EEmpty);
     let (key, _unit) = set.inner.pop_back();
     key
 }

@@ -16,11 +16,10 @@ use openzeppelin_collections::sorted_map::{Self as sm, SortedMap};
 
 /// The reference model's `ref_get` was called on an absent key (the differential test only
 /// reads keys it has confirmed present, so this is unreachable in practice).
-const EKeyNotFound: u64 = 0;
+#[error(code = 0)]
+const EKeyNotFound: vector<u8> = "Reference model queried for an absent key";
 
-// ===========================================================================
-// Witness types
-// ===========================================================================
+// === Witness types ===
 
 /// Non-droppable, non-copyable value witness. Storing this as V means
 /// the compiler forbids implicitly dropping a value: any test that fails to thread every
@@ -62,9 +61,7 @@ public fun bid_px(b: &Bid): u64 { b.px }
 
 public fun ask_px(a: &Ask): u64 { a.px }
 
-// ===========================================================================
-// Thin wrappers - u64/u64, bare forms (built-in integer `<`)
-// ===========================================================================
+// === Thin wrappers - u64/u64, bare forms (built-in integer `<`) ===
 
 public fun ins(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> { sm::insert!(m, k, v) }
 
@@ -96,9 +93,7 @@ public fun kfrom(m: &SortedMap<u64, u64>, from: u64, inc: bool, lim: u64): vecto
 /// Well-formedness check under the bare integer `<`.
 public fun wf(m: &SortedMap<u64, u64>): bool { sm::is_well_formed!(m) }
 
-// ===========================================================================
-// Thin wrappers - u64/u64, reverse comparator `>` (used CONSISTENTLY: legit case)
-// ===========================================================================
+// === Thin wrappers - u64/u64, reverse comparator `>` (used CONSISTENTLY: legit case) ===
 
 public fun ins_rev(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
     sm::insert_by!(m, k, v, |a, b| *a > *b)
@@ -143,9 +138,7 @@ public fun kfrom_rev(m: &SortedMap<u64, u64>, from: u64, inc: bool, lim: u64): v
     sm::keys_from_by!(m, &from, inc, lim, |a, b| *a > *b)
 }
 
-// ===========================================================================
-// Thin wrappers - u64/u64, BAD comparators (footguns)
-// ===========================================================================
+// === Thin wrappers - u64/u64, BAD comparators (footguns) ===
 
 /// Non-strict `<=`: `search!` never derives equality, so equal keys are never detected
 /// (every insert is treated as fresh) -> duplicate keys land. Demonstrates footgun (a).
@@ -159,9 +152,7 @@ public fun rm_gt(m: &mut SortedMap<u64, u64>, k: u64): Option<u64> {
     sm::remove_by!(m, &k, |a, b| *a > *b)
 }
 
-// ===========================================================================
-// Thin wrappers - SortedMap<u64, NoDrop> (conservation)
-// ===========================================================================
+// === Thin wrappers - SortedMap<u64, NoDrop> (conservation) ===
 
 public fun ins_nd(m: &mut SortedMap<u64, NoDrop>, k: u64, w: NoDrop): Option<NoDrop> {
     sm::insert!(m, k, w)
@@ -173,9 +164,7 @@ public fun nd_value_id(m: &SortedMap<u64, NoDrop>, k: u64): u64 { nd_id(sm::borr
 
 public fun rm_nd(m: &mut SortedMap<u64, NoDrop>, k: u64): Option<NoDrop> { sm::remove!(m, &k) }
 
-// ===========================================================================
-// Thin wrappers - SortedMap<CoarseKey, u64> ordered on `id`
-// ===========================================================================
+// === Thin wrappers - SortedMap<CoarseKey, u64> ordered on `id` ===
 
 public fun ins_ck(m: &mut SortedMap<CoarseKey, u64>, k: CoarseKey, v: u64): Option<u64> {
     sm::insert_by!(m, k, v, |a, b| a.id < b.id)
@@ -211,9 +200,7 @@ public fun wf_ck(m: &SortedMap<CoarseKey, u64>): bool {
     sm::is_well_formed_by!(m, |a, b| a.id < b.id)
 }
 
-// ===========================================================================
-// Thin wrappers - distinct instantiations coexist
-// ===========================================================================
+// === Thin wrappers - distinct instantiations coexist ===
 
 public fun ins_bid(m: &mut SortedMap<u64, Bid>, k: u64, v: Bid): Option<Bid> {
     sm::insert!(m, k, v)
@@ -227,9 +214,7 @@ public fun get_bid_px(m: &SortedMap<u64, Bid>, k: u64): u64 { bid_px(sm::borrow!
 
 public fun get_ask_px(m: &SortedMap<u64, Ask>, k: u64): u64 { ask_px(sm::borrow!(m, &k)) }
 
-// ===========================================================================
-// Builders
-// ===========================================================================
+// === Builders ===
 
 /// Deterministic scramble (coprime multiplier mod a prime) so a "build N" walks keys in a
 /// non-sorted order, exercising arbitrary insertion points.
@@ -246,9 +231,7 @@ public fun build_scrambled(n: u64): SortedMap<u64, u64> {
     m
 }
 
-// ===========================================================================
-// Reference model - a linear sorted-vector map used as ground truth
-// ===========================================================================
+// === Reference model - a linear sorted-vector map used as ground truth ===
 //
 // Plain, obviously-correct O(n) code. The differential test drives this and the real
 // `SortedMap` through identical op streams and asserts they agree at every step.

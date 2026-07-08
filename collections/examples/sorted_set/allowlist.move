@@ -90,8 +90,11 @@ public fun approve(list: &mut Allowlist, id: u64): bool {
     added
 }
 
-/// Approve `id`, ABORTING `EAlreadyApproved` if it is already present - the one-line recipe
-/// that recovers `vec_set::insert`'s strict semantics on top of the total `insert!`.
+/// Approve `id`, recovering `vec_set::insert`'s strict semantics on top of the total `insert!`
+/// in one line. Emits `Approved` on success.
+///
+/// #### Aborts
+/// - `EAlreadyApproved` if `id` is already present.
 public fun approve_strict(list: &mut Allowlist, id: u64) {
     assert!(list.members.insert!(id), EAlreadyApproved);
     event::emit(Approved { id });

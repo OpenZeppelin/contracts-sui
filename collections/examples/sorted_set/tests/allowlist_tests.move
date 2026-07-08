@@ -83,8 +83,8 @@ fun membership_lifecycle() {
 // `sui::vec_set::insert`'s abort-on-duplicate when the integrator WANTS it. `approve_strict`
 // does exactly that, aborting the integrator's OWN `EAlreadyApproved` (NOT a library abort -
 // the location is this example module, not openzeppelin_collections::sorted_set).
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_set_allowlist::EAlreadyApproved,
         location = openzeppelin_collections::sorted_set_allowlist,

@@ -78,13 +78,16 @@ public fun create(ctx: &mut TxContext): (ID, OrganizerCap) {
     (vault_id, cap)
 }
 
-/// Fund the prize at `rank` with `coin` (one coin per rank). Ranks are 1-based
-/// (1 = champion), so `fund` aborts `EInvalidRank` on rank 0. Aborts `EWrongVault` if `cap`
-/// does not authorize `vault`, or `ERankAlreadyFunded` if the rank is already funded - a named
-/// guard that keeps `fund` clean: without it a re-fund would make `insert!` return
-/// `some(old_coin)`, and the follow-up `destroy_none()` would abort with the opaque foreign
-/// `std::option::EOPTION_IS_SET`. On the guarded fresh slot `insert!` returns `none`, which
-/// `destroy_none()` consumes (a resource map's `insert!` return cannot be ignored).
+/// Fund the prize at `rank` with `coin` (one coin per rank). Ranks are 1-based (1 = champion).
+/// The `ERankAlreadyFunded` guard keeps `fund` clean: without it a re-fund would make `insert!`
+/// return `some(old_coin)`, and the follow-up `destroy_none()` would abort with the opaque
+/// foreign `std::option::EOPTION_IS_SET`. On the guarded fresh slot `insert!` returns `none`,
+/// which `destroy_none()` consumes (a resource map's `insert!` return cannot be ignored).
+///
+/// #### Aborts
+/// - `EWrongVault` if `cap` does not authorize `vault`.
+/// - `EInvalidRank` if `rank` is 0.
+/// - `ERankAlreadyFunded` if `rank` already holds a prize.
 public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, coin: Coin<SUI>, rank: u64) {
     assert_cap(vault, cap);
     assert!(rank >= 1, EInvalidRank);
@@ -93,15 +96,21 @@ public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, coin: Coin<SUI>, ran
 }
 
 /// Pay the champion: remove and return the lowest-rank `(rank, coin)` via `pop_front`.
-/// Aborts `EWrongVault` if `cap` does not authorize `vault`, or `EEmpty` if the vault is empty.
+///
+/// #### Aborts
+/// - `EWrongVault` if `cap` does not authorize `vault`.
+/// - `EEmpty` if the vault is empty.
 public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>) {
     assert_cap(vault, cap);
     vault.prizes.pop_front()
 }
 
-/// Pay a specific `rank`, returning its coin. `remove!` returns `none` for an absent
-/// rank rather than aborting, so we surface our own `ENoSuchRank`. Aborts `EWrongVault` if
-/// `cap` does not authorize `vault`.
+/// Pay a specific `rank`, returning its coin. `remove!` returns `none` for an absent rank
+/// rather than aborting, so we surface our own `ENoSuchRank`.
+///
+/// #### Aborts
+/// - `EWrongVault` if `cap` does not authorize `vault`.
+/// - `ENoSuchRank` if no prize rests at `rank`.
 public fun pay_rank(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64): Coin<SUI> {
     assert_cap(vault, cap);
     let prize = vault.prizes.remove!(&rank);
@@ -114,9 +123,12 @@ public fun unclaimed(vault: &PrizeVault): u64 {
     vault.prizes.length()
 }
 
-/// Destroy a fully-paid vault and its cap. Aborts `EWrongVault` if `cap` does not authorize
-/// `vault`, or `ENotEmpty` if any prize is unclaimed - nothing is lost, the transaction simply
+/// Destroy a fully-paid vault and its cap. Nothing is lost on failure - the transaction simply
 /// reverts and the vault stands.
+///
+/// #### Aborts
+/// - `EWrongVault` if `cap` does not authorize `vault`.
+/// - `ENotEmpty` if any prize is still unclaimed.
 public fun close(vault: PrizeVault, cap: OrganizerCap) {
     assert_cap(&vault, &cap);
     let PrizeVault { id, prizes } = vault;

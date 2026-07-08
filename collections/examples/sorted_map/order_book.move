@@ -62,6 +62,9 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
 }
 
 /// Add `size` at `price` on the ask side, merging into an existing level if present.
+///
+/// #### Aborts
+/// - Arithmetic overflow if merging `size` into an existing level exceeds `u64`.
 public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
     if (book.asks.contains!(&price)) {
         let lvl = book.asks.borrow_mut!(&price);
@@ -73,6 +76,9 @@ public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
 
 /// Add `size` at `price` on the bid side, merging if present. Bids descend, so every
 /// call threads the same `|a, b| outbids(a, b)`.
+///
+/// #### Aborts
+/// - Arithmetic overflow if merging `size` into an existing level exceeds `u64`.
 public fun place_bid(book: &mut OrderBook, price: u64, size: u64) {
     if (book.bids.contains_by!(&price, |a, b| outbids(a, b))) {
         let lvl = book.bids.borrow_mut_by!(&price, |a, b| outbids(a, b));
@@ -101,15 +107,20 @@ public fun ask_levels(book: &OrderBook, from: u64, include: bool, limit: u64): v
     book.asks.keys_from!(&from, include, limit)
 }
 
-/// Resting size at a specific ask `price`. Aborts `EKeyNotFound` if no level rests
-/// there - gate with `contains!`, or read live prices via `best_ask` / `ask_levels`.
+/// Resting size at a specific ask `price` - gate with `contains!`, or read live prices via
+/// `best_ask` / `ask_levels`.
+///
+/// #### Aborts
+/// - `EKeyNotFound` if no level rests at `price`.
 public fun ask_size_at(book: &OrderBook, price: u64): u64 {
     let lvl = book.asks.borrow!(&price);
     lvl.size
 }
 
-/// Remove and return the best (lowest) ask as `(price, size)`. Aborts `EEmpty` on an
-/// empty ask side - guard with `best_ask` first.
+/// Remove and return the best (lowest) ask as `(price, size)`.
+///
+/// #### Aborts
+/// - `EEmpty` if the ask side is empty - guard with `best_ask` first.
 public fun fill_best_ask(book: &mut OrderBook): (u64, u64) {
     let (price, lvl) = book.asks.pop_front();
     let Level { size } = lvl;

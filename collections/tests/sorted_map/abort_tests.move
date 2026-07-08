@@ -13,8 +13,8 @@ use std::unit_test::assert_eq;
 
 // === borrow / borrow_mut on an absent key -> EKeyNotFound ===
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,
@@ -27,8 +27,8 @@ fun borrow_absent_below_head() {
     u::get(&m, 5); // below head
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,
@@ -41,8 +41,8 @@ fun borrow_absent_above_tail() {
     u::get(&m, 99); // above tail: idx == n, assert must precede the OOB read
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,
@@ -55,8 +55,8 @@ fun borrow_absent_interior_gap() {
     u::get(&m, 20); // interior gap: idx < n; a pre-assert read would return 30 silently
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,
@@ -67,8 +67,8 @@ fun borrow_empty_map() {
     u::get(&m, 1);
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,
@@ -80,8 +80,8 @@ fun borrow_mut_absent() {
     u::set(&mut m, 7, 0); // borrow_mut on an absent key (idx == n, above tail)
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,
@@ -98,8 +98,8 @@ fun borrow_mut_absent_interior_gap() {
 
 // === destroy_empty on a non-empty map -> ENotEmpty ===
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::ENotEmpty,
         location = openzeppelin_collections::sorted_map,
@@ -113,8 +113,8 @@ fun destroy_empty_nonempty() {
 
 // === pop_front / pop_back on an empty map -> EEmpty ===
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EEmpty,
         location = openzeppelin_collections::sorted_map,
@@ -125,8 +125,8 @@ fun pop_front_empty() {
     let (_k, _v) = m.pop_front();
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EEmpty,
         location = openzeppelin_collections::sorted_map,
@@ -181,8 +181,8 @@ fun ptb_chain_no_abort() {
 
 // === from_sorted_keys_values -> EUnequalLengths / EKeysNotStrictlyIncreasing ===
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EUnequalLengths,
         location = openzeppelin_collections::sorted_map,
@@ -192,8 +192,8 @@ fun from_sorted_unequal_lengths() {
     let _m = sm::from_sorted_keys_values!(vector<u64>[1, 2, 3], vector<u64>[10, 20]);
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeysNotStrictlyIncreasing,
         location = openzeppelin_collections::sorted_map,
@@ -203,8 +203,8 @@ fun from_sorted_out_of_order() {
     let _m = sm::from_sorted_keys_values!(vector<u64>[1, 3, 2], vector<u64>[10, 30, 20]);
 }
 
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeysNotStrictlyIncreasing,
         location = openzeppelin_collections::sorted_map,

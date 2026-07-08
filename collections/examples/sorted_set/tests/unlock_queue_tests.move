@@ -63,8 +63,8 @@ fun drain_earliest_first() {
 // map, so the abort surfaces at `location = openzeppelin_collections::sorted_set`. Pinning the
 // wrapped map's location (`openzeppelin_collections::sorted_map`, code 2) here would make this test
 // FAIL - that branch is never reached through the set's own `pop_*`.
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_set::EEmpty,
         location = openzeppelin_collections::sorted_set,

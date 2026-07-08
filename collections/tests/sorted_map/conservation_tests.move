@@ -56,8 +56,8 @@ fun conservation_drain_nodrop() {
 // Exercising the guard under a non-droppable V proves destroy_empty can never silently
 // bulk-discard stored resources. The abort consumes the still-owned NoDrop as the tx unwinds -
 // the test compiles BECAUSE the map is moved into destroy_empty.
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::ENotEmpty,
         location = openzeppelin_collections::sorted_map,

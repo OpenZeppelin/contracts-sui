@@ -85,8 +85,8 @@ fun order_book_lifecycle() {
 // `borrow!` aborts when the key is absent. The abort originates inside the `sorted_map`
 // module, not in this consumer module - so `#[expected_failure]` must pin
 // `location = openzeppelin_collections::sorted_map`.
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,

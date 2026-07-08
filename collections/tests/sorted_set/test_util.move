@@ -17,9 +17,7 @@ module openzeppelin_collections::sorted_set_test_util;
 use openzeppelin_collections::sorted_map;
 use openzeppelin_collections::sorted_set::{Self as ss, SortedSet};
 
-// ===========================================================================
-// Thin wrappers - u64, bare forms (built-in integer `<`)
-// ===========================================================================
+// === Thin wrappers - u64, bare forms (built-in integer `<`) ===
 
 public fun ins(s: &mut SortedSet<u64>, k: u64): bool { ss::insert!(s, k) }
 
@@ -45,9 +43,7 @@ public fun fromk(ks: vector<u64>): SortedSet<u64> { ss::from_keys!(ks) }
 /// boundary. No separate set checker exists.
 public fun wf(s: &SortedSet<u64>): bool { sorted_map::is_well_formed!(ss::inner_ref(s)) }
 
-// ===========================================================================
-// Thin wrappers - u64, reverse comparator `>` used CONSISTENTLY (legit case)
-// ===========================================================================
+// === Thin wrappers - u64, reverse comparator `>` used CONSISTENTLY (legit case) ===
 
 public fun ins_rev(s: &mut SortedSet<u64>, k: u64): bool { ss::insert_by!(s, k, |a, b| *a > *b) }
 
@@ -84,9 +80,7 @@ public fun page_rev(s: &SortedSet<u64>, from: u64, inc: bool, lim: u64): vector<
     ss::keys_from_by!(s, &from, inc, lim, |a, b| *a > *b)
 }
 
-// ===========================================================================
-// Thin wrappers - u64, BAD comparators (footguns)
-// ===========================================================================
+// === Thin wrappers - u64, BAD comparators (footguns) ===
 
 /// Non-strict `<=`: `search!` never derives equality, so equal-comparing keys are treated as
 /// fresh -> a byte-distinct equal key lands again (length grows).
@@ -106,9 +100,7 @@ public fun rem_gt(s: &mut SortedSet<u64>, k: u64): bool { ss::remove_by!(s, &k, 
 /// the set (visible to the `<` well-formedness check).
 public fun ins_gt(s: &mut SortedSet<u64>, k: u64): bool { ss::insert_by!(s, k, |a, b| *a > *b) }
 
-// ===========================================================================
-// `inner_mut` misuse drivers - the public but unchecked order-ONLY corruption surface
-// ===========================================================================
+// === `inner_mut` misuse drivers - the public but unchecked order-ONLY corruption surface ===
 
 /// Drive the wrapped map's `insert_at` directly at a caller-chosen index. With a wrong index
 /// this desorts THAT set's inner vector - order-only, NO value lost (the value is `Unit`).
@@ -133,9 +125,7 @@ public fun misuse_pop_back_inner(s: &mut SortedSet<u64>) {
     let (_k, _u) = ss::inner_mut(s).pop_back();
 }
 
-// ===========================================================================
-// Ability witnesses - instantiating these proves the ability holds
-// ===========================================================================
+// === Ability witnesses - instantiating these proves the ability holds ===
 
 public fun needs_copy<T: copy>() { let _ = std::type_name::with_defining_ids<T>(); }
 
@@ -143,9 +133,7 @@ public fun needs_drop<T: drop>() { let _ = std::type_name::with_defining_ids<T>(
 
 public fun needs_store<T: store>() { let _ = std::type_name::with_defining_ids<T>(); }
 
-// ===========================================================================
-// Coarse struct key ordered on `id` ALONE (non-integer `_by`)
-// ===========================================================================
+// === Coarse struct key ordered on `id` ALONE (non-integer `_by`) ===
 //
 // Two byte-distinct keys with the same `id` but different `tag` compare EQUAL under the
 // comparator - so membership is under-the-comparator, not byte-identity.
@@ -202,9 +190,7 @@ public fun page_k(s: &SortedSet<Key>, from_id: u64, inc: bool, lim: u64): vector
     ss::keys_from_by!(s, &Key { id: from_id, tag: 0 }, inc, lim, |a, b| a.id < b.id)
 }
 
-// ===========================================================================
-// Builders
-// ===========================================================================
+// === Builders ===
 
 /// Deterministic scramble (coprime multiplier mod a prime), same as the map suite, so a
 /// "build N" walks keys in a non-sorted order, exercising arbitrary insertion points.
@@ -221,9 +207,7 @@ public fun build_scrambled(n: u64): SortedSet<u64> {
     s
 }
 
-// ===========================================================================
-// Reference model - a keys-only linear sorted-vector set used as ground truth
-// ===========================================================================
+// === Reference model - a keys-only linear sorted-vector set used as ground truth ===
 //
 // Plain, obviously-correct O(n) code. The differential test drives this and the real
 // `SortedSet` through identical op streams and asserts they agree at every step,

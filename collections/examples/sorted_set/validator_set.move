@@ -34,8 +34,7 @@ use sui::address;
 
 // === Structs ===
 
-/// A validator identity: voting `stake` plus the validator's `addr`. `copy + drop + store` so it
-/// can be a set key. `addr` makes the ordering injective (no two distinct validators tie).
+/// A validator identity used as a `SortedSet` key: voting `stake` plus the validator's `addr`.
 public struct Validator has copy, drop, store {
     /// Voting stake; the primary ordering key (descending).
     stake: u64,

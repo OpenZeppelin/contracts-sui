@@ -108,8 +108,8 @@ fun fund_payout_destroy() {
 // The conservation safety net: `destroy_empty` refuses to discard a map that still
 // holds value. The abort is the library's ENotEmpty, at the library location - the
 // transaction reverts and the vault (with its coin) stands.
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::ENotEmpty,
         location = openzeppelin_collections::sorted_map,
@@ -146,8 +146,8 @@ fun close_nonempty_vault_aborts() {
 //
 // prize_vault's second library abort: `pay_next` -> `pop_front` on an empty map asserts
 // EEmpty at the library location, so an over-eager payout reverts cleanly.
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EEmpty,
         location = openzeppelin_collections::sorted_map,
@@ -179,8 +179,8 @@ fun pay_next_on_empty_vault_aborts() {
 //
 // `pop_front` pays the lowest rank first, so a rank-0 prize would be paid before the
 // champion (rank 1). `fund` guards against it with a named EInvalidRank at this module.
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map_prize_vault::EInvalidRank,
         location = openzeppelin_collections::sorted_map_prize_vault,

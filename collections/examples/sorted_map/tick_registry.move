@@ -66,6 +66,7 @@ public fun remove_tick(reg: &mut TickRegistry, tick: u64): bool {
     reg.ticks.remove!(&tick).is_some()
 }
 
+/// True iff `tick` is currently active in the registry.
 public fun contains_tick(reg: &TickRegistry, tick: u64): bool {
     reg.ticks.contains!(&tick)
 }

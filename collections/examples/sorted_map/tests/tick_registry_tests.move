@@ -95,8 +95,8 @@ fun tick_navigation_walkthrough() {
 // The failing companion to the walkthrough: `borrow_tick` on a tick that was never
 // activated aborts the library's `EKeyNotFound` at `location = ...::sorted_map` (the
 // abort originates in the library, not here). Gate with `contains_tick` to avoid it.
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,

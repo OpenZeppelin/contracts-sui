@@ -111,8 +111,7 @@ fun remove_at_misuse_returns_value() {
 
 // === Out-of-bounds index aborts inside std::vector, not the library ===
 
-#[test]
-#[expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS, location = std::vector)]
+#[test, expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS, location = std::vector)]
 fun insert_at_oob_aborts_in_vector() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -120,8 +119,7 @@ fun insert_at_oob_aborts_in_vector() {
 }
 
 // The `remove_at` companion: an out-of-bounds index aborts inside std::vector, not the library.
-#[test]
-#[expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS, location = std::vector)]
+#[test, expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS, location = std::vector)]
 fun remove_at_oob_aborts_in_vector() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -156,8 +154,8 @@ fun contains_borrow_agree_by() {
 /// The other half of the contains/borrow agreement under a custom comparator: when
 /// `contains_by` is false, the matching `borrow_by` aborts EKeyNotFound at the library
 /// location (it does not succeed).
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,
@@ -254,8 +252,8 @@ fun borrow_mut_by_persists_order_safe() {
 
 /// Absent key under a custom comparator: borrow_mut_by aborts EKeyNotFound at the library
 /// location (the mutable companion to borrow_by_absent_aborts).
-#[test]
 #[
+    test,
     expected_failure(
         abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
         location = openzeppelin_collections::sorted_map,
