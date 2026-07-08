@@ -28,6 +28,7 @@ fun buy_once(test: &mut Scenario, clk: &Clock, paid: u64) {
 }
 
 // Advance past close and finalize as admin (soft cap must already be met).
+#[test_only] // allows accepting &mut Clock
 fun finalize_now(test: &mut Scenario, clk: &mut Clock) {
     clk.set_for_testing(5_001);
     test.next_tx(tu::admin());
@@ -39,6 +40,7 @@ fun finalize_now(test: &mut Scenario, clk: &mut Clock) {
 }
 
 // Advance past close and cancel as the (permissionless) caller.
+#[test_only] // allows accepting &mut Clock
 fun cancel_now(test: &mut Scenario, clk: &mut Clock) {
     clk.set_for_testing(5_001);
     test.next_tx(tu::buyer());
