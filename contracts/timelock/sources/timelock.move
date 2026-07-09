@@ -284,12 +284,14 @@ public struct OpenExecutorChanged has copy, drop {
 
 // === Construction ===
 
-/// Mint a fresh `Timelock` bound to the four consumer role types. Returns the object
-/// by value; the caller must dispose of it via `share` (or use `new_shared`).
+/// Mint a fresh `Timelock` bound to the four consumer role types.
 ///
 /// #### Parameters
 /// - `min_delay_ms`: floor on every operation's delay; may be 0.
 /// - `grace_period_ms`: window, after an op becomes ready, during which it stays executable.
+///
+/// #### Returns
+/// - The unshared `Timelock`; the caller must dispose of it via `share` (or use `new_shared`).
 ///
 /// #### Aborts
 /// - `EInvalidConfig` if `min_delay_ms > MAX_DELAY_MS`, or `grace_period_ms` is zero
@@ -330,6 +332,13 @@ public fun new<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
 
 /// Convenience constructor that shares the `Timelock` and returns its `ID`.
 ///
+/// #### Parameters
+/// - `min_delay_ms`: floor on every operation's delay; may be 0.
+/// - `grace_period_ms`: window, after an op becomes ready, during which it stays executable.
+///
+/// #### Returns
+/// - The shared `Timelock`'s `ID`.
+///
 /// #### Aborts
 /// - `EInvalidConfig` on the same config bounds as `new`.
 public fun new_shared<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
@@ -362,6 +371,9 @@ public fun share(self: Timelock) {
 /// - `payload_digest`: `keccak256(bcs(params))` of the operation params.
 /// - `predecessor`: id of an op that must be `Done` first, or empty for none.
 /// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
+///
+/// #### Returns
+/// - The 32-byte operation id.
 public fun hash_operation<Action>(
     timelock_id: ID,
     payload_digest: vector<u8>,
@@ -383,13 +395,16 @@ public fun hash_operation<Action>(
 // === Scheduling ===
 
 /// Schedule an operation, storing its typed `params` on-chain. Caller must hold the
-/// proposer role. Returns the operation id.
+/// proposer role.
 ///
 /// #### Parameters
 /// - `params`: the typed operation parameters; stored on-chain and returned by `consume`.
 /// - `predecessor`: id of an op that must be `Done` before this one, or empty for none.
 /// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
 /// - `delay_ms`: delay before the op becomes ready; must be `>= min_delay_ms`.
+///
+/// #### Returns
+/// - The operation id (pass to `execute` / `cancel`).
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `proposer_role`.
@@ -415,9 +430,14 @@ public fun schedule<Role, Action, Params: store + drop>(
 
 // === Execution ===
 
-/// Execute a ready operation by id. Caller must hold the executor role. Returns a hot
-/// potato carrying the scheduled `params`; it must be consumed by `consume` in the
-/// same PTB.
+/// Execute a ready operation by id. Caller must hold the executor role.
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - An `ExecutionTicket<Action, Params>` carrying the scheduled `params`: a no-ability hot
+///   potato that must be consumed by `consume` in the same PTB.
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `executor_role`.
@@ -442,8 +462,14 @@ public fun execute<Role, Action, Params: store + drop>(
 /// caller who cannot construct `Action` cannot `consume` the returned ticket - and since it
 /// has no abilities, their transaction aborts (reverting the state change atomically).
 ///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - An `ExecutionTicket<Action, Params>` (see `execute`).
+///
 /// #### Aborts
-/// - `EOpenExecutorDisabled` if `open_executor` is false.
+/// - `EOpenExecutorDisabled` if `open_executor` is `false`.
 /// - Plus the same operation-state aborts as `execute`.
 public fun execute_open<Action, Params: store + drop>(
     self: &mut Timelock,
@@ -458,10 +484,17 @@ public fun execute_open<Action, Params: store + drop>(
 
 // === Ticket consumption ===
 
-/// Redeem an execution ticket, returning `(op_id, params)`. Two gates fire:
-/// timelock-binding and witness-by-value (`Action` is consumed, so
-/// only a module that can construct `Action` can call this). The params are the exact
-/// values committed at schedule time - there is no payload to re-supply or mismatch.
+/// Redeem an execution ticket. Two gates fire: timelock-binding and witness-by-value
+/// (`Action` is consumed, so only a module that can construct `Action` can call this). The
+/// params are the exact values committed at schedule time - there is no payload to re-supply
+/// or mismatch.
+///
+/// #### Parameters
+/// - `ticket`: the `ExecutionTicket` minted by `execute` / `execute_open`.
+/// - `witness`: a value of the operation's `Action` witness type (the consumption gate).
+///
+/// #### Returns
+/// - `(op_id, params)`: the operation id and the typed params committed at schedule time.
 ///
 /// #### Aborts
 /// - `EWrongTimelock` if the ticket was minted by a different `Timelock`.
@@ -481,6 +514,9 @@ public fun consume<Action: drop, Params>(
 /// Cancel a scheduled operation by id, dropping its stored params. Caller must hold
 /// the canceller role. Allowed on Waiting / Ready / Expired operations; not on `Done`.
 /// The operation's `Params` type must be named so the stored params can be cleaned up.
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `canceller_role`.
@@ -508,6 +544,9 @@ public fun cancel<Role, Params: store + drop>(
 /// Mint an `OperationCap` binding `(Action, Params)` to this `Timelock`. Permissionless
 /// and authority-free: call it once at consumer `init` against your canonical timelock
 /// and store the result in the object you protect.
+///
+/// #### Returns
+/// - A new `OperationCap<Action, Params>` bound to this `Timelock`.
 public fun new_operation_cap<Action, Params>(self: &Timelock): OperationCap<Action, Params> {
     OperationCap { timelock_id: object::id(self) }
 }
@@ -521,11 +560,20 @@ public fun operation_cap_timelock_id<Action, Params>(cap: &OperationCap<Action, 
 /// `OperationCap` has `store` but not `drop`, so it cannot be discarded implicitly; this is
 /// the explicit disposal. The cap carries no authority - a fresh one is always mintable via
 /// `new_operation_cap`.
+///
+/// #### Parameters
+/// - `cap`: the `OperationCap` to destroy.
 public fun destroy_operation_cap<Action, Params>(cap: OperationCap<Action, Params>) {
     let OperationCap { timelock_id: _ } = cap;
 }
 
 /// Like `schedule`, but the `OperationCap` enforces the canonical-timelock binding.
+///
+/// #### Parameters
+/// - `cap`: the `OperationCap` binding this call to its `Timelock`; other params as `schedule`.
+///
+/// #### Returns
+/// - The operation id (as `schedule`).
 ///
 /// #### Aborts
 /// - `EWrongTimelock` if `cap` is not bound to `self`.
@@ -556,6 +604,12 @@ public fun schedule_with<Role, Action, Params: store + drop>(
 
 /// Like `execute`, but the `OperationCap` enforces the canonical-timelock binding.
 ///
+/// #### Parameters
+/// - `cap`: the `OperationCap` binding this call to its `Timelock`; other params as `execute`.
+///
+/// #### Returns
+/// - An `ExecutionTicket<Action, Params>` (as `execute`).
+///
 /// #### Aborts
 /// - `EWrongTimelock` if `cap` is not bound to `self`.
 /// - Plus the same aborts as `execute`.
@@ -573,6 +627,12 @@ public fun execute_with<Role, Action, Params: store + drop>(
 
 /// Like `execute_open`, but the `OperationCap` enforces the canonical-timelock binding.
 ///
+/// #### Parameters
+/// - `cap`: the `OperationCap` binding this call to its `Timelock`; other params as `execute_open`.
+///
+/// #### Returns
+/// - An `ExecutionTicket<Action, Params>` (as `execute_open`).
+///
 /// #### Aborts
 /// - `EWrongTimelock` if `cap` is not bound to `self`.
 /// - `EOpenExecutorDisabled` if open-executor mode is disabled.
@@ -589,6 +649,9 @@ public fun execute_open_with<Action, Params: store + drop>(
 }
 
 /// Like `cancel`, but the `OperationCap` enforces the canonical-timelock binding.
+///
+/// #### Parameters
+/// - `cap`: the `OperationCap` binding this call to its `Timelock`; other params as `cancel`.
 ///
 /// #### Aborts
 /// - `EWrongTimelock` if `cap` is not bound to `self`.
@@ -613,6 +676,9 @@ public fun cancel_with<Role, Action, Params: store + drop>(
 /// - `predecessor`: id of an op that must be `Done` first, or empty for none.
 /// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
 /// - `delay_ms`: delay before this change becomes ready; must be `>= min_delay_ms`.
+///
+/// #### Returns
+/// - The operation id (pass to `execute_update_min_delay`).
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
@@ -643,6 +709,9 @@ public fun schedule_update_min_delay<Role>(
 }
 
 /// Execute a scheduled `min_delay_ms` change by id. Admin-gated. Applies the stored value.
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule_update_min_delay`.
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
@@ -678,6 +747,9 @@ public fun execute_update_min_delay<Role>(
 /// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
 /// - `delay_ms`: delay before this change becomes ready; must be `>= min_delay_ms`.
 ///
+/// #### Returns
+/// - The operation id (pass to `execute_update_grace_period`).
+///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - `EInvalidConfig` if `new_grace_period_ms` is zero or `> MAX_DELAY_MS`.
@@ -707,6 +779,9 @@ public fun schedule_update_grace_period<Role>(
 }
 
 /// Execute a scheduled `grace_period_ms` change by id. Admin-gated.
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule_update_grace_period`.
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
@@ -740,6 +815,9 @@ public fun execute_update_grace_period<Role>(
 /// - `salt`: arbitrary bytes to disambiguate otherwise-identical operations.
 /// - `delay_ms`: delay before this change becomes ready; must be `>= min_delay_ms`.
 ///
+/// #### Returns
+/// - The operation id (pass to `execute_set_open_executor`).
+///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
@@ -767,6 +845,9 @@ public fun schedule_set_open_executor<Role>(
 }
 
 /// Execute a scheduled `open_executor` toggle by id. Admin-gated.
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule_set_open_executor`.
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
@@ -814,18 +895,32 @@ public fun canceller_role(self: &Timelock): TypeName { self.canceller_role }
 public fun admin_role(self: &Timelock): TypeName { self.admin_role }
 
 /// Whether an operation with this id exists in the timelock (any state but `Unset`).
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - `true` if an operation with this id exists (`Waiting`, `Ready`, `Expired`, or `Done`);
+///   `false` otherwise.
 public fun is_operation(self: &Timelock, id: vector<u8>): bool {
     self.timestamps.contains(id)
 }
 
 /// Whether the operation is on the execution track: `Waiting` or `Ready`. `Expired`,
-/// `Done`, and `Unset` operations return false.
+/// `Done`, and `Unset` operations return `false`.
 ///
-/// Narrower than `isOperationPending` in OpenZeppelin's Solidity `TimelockController`,
-/// where operations never expire and pending doubles as the cancellability check. Here
-/// an `Expired` operation is no longer pending but is still cancellable - to gate
-/// cancellation or cleanup, use `is_operation(id) && !is_operation_done(id)` (or match
-/// on `operation_state`).
+/// Narrower than
+/// [`isOperationPending`](https://docs.openzeppelin.com/contracts/5.x/api/governance#TimelockController-isOperationPending-bytes32-)
+/// in OpenZeppelin's Solidity `TimelockController`, where operations never expire and
+/// pending doubles as the cancellability check. Here an `Expired` operation is no longer
+/// pending but is still cancellable - to gate cancellation or cleanup, use
+/// `is_operation(id) && !is_operation_done(id)` (or match on `operation_state`).
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - `true` if the operation is `Waiting` or `Ready`; `false` otherwise.
 public fun is_operation_pending(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Waiting { .. } => true,
@@ -836,6 +931,12 @@ public fun is_operation_pending(self: &Timelock, id: vector<u8>, clock: &Clock):
 
 /// Whether the operation is `Ready`: its delay has elapsed and its grace window is
 /// still open, so it can be executed now (predecessor permitting).
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - `true` if the operation is `Ready`; `false` otherwise.
 public fun is_operation_ready(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Ready { .. } => true,
@@ -845,6 +946,12 @@ public fun is_operation_ready(self: &Timelock, id: vector<u8>, clock: &Clock): b
 
 /// Whether the operation is `Expired`: its grace window has closed, so it can no
 /// longer be executed - only cancelled.
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - `true` if the operation is `Expired`; `false` otherwise.
 public fun is_operation_expired(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Expired { .. } => true,
@@ -853,6 +960,12 @@ public fun is_operation_expired(self: &Timelock, id: vector<u8>, clock: &Clock):
 }
 
 /// Whether the operation has been executed (`Done`).
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - `true` if the operation is `Done`; `false` otherwise.
 public fun is_operation_done(self: &Timelock, id: vector<u8>): bool {
     if (!self.timestamps.contains(id)) return false;
     match (self.timestamps.borrow(id)) {
@@ -862,12 +975,24 @@ public fun is_operation_done(self: &Timelock, id: vector<u8>): bool {
 }
 
 /// The observable `OperationState` of an operation at the current clock time.
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - The operation's `OperationState`: `Unset`, `Waiting`, `Ready`, `Expired`, or `Done`.
 public fun operation_state(self: &Timelock, id: vector<u8>, clock: &Clock): OperationState {
     self.op_state(id, clock.timestamp_ms())
 }
 
 /// Borrow the typed params of a scheduled, not-yet-executed operation - `Waiting`,
 /// `Ready`, or `Expired` (for off-chain inspection / UIs).
+///
+/// #### Parameters
+/// - `id`: the operation id returned by `schedule`.
+///
+/// #### Returns
+/// - A reference to the operation's stored `Params`.
 ///
 /// #### Aborts
 /// - A `sui::dynamic_field` abort if the id has no stored `Params` (Unset or already Done).
