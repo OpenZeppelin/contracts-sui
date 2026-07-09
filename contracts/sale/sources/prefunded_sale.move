@@ -376,15 +376,26 @@ const ENotTerminal: vector<u8> = "The sale must have ended";
 // === Structs ===
 
 /// A fixed-price, pre-funded token sale. Generic over a pricing `Curve` (and its
-/// `CurveParams`), the `SaleCoin` being sold, the `PaymentCoin` collected, and the
-/// `VestingScheduleParams` of an optional vesting policy. Created as an owned value
-/// during setup, then shared on activation. See the module doc for the full
-/// lifecycle and authority model.
+/// `CurveParams`), the `SaleCoin` being sold, the `PaymentCoin` collected, and - for
+/// an optional vesting policy - both the `VestingWitness` and the
+/// `VestingScheduleParams` it owns. Created as an owned value during setup, then
+/// shared on activation. See the module doc for the full lifecycle and authority
+/// model.
+///
+/// `VestingWitness` is the `drop`-only schedule witness of the curve module that
+/// interprets `VestingScheduleParams` (e.g. `vesting_wallet_linear::Linear` pairs
+/// with its `Params`). Pinning it in the sale's type is what makes the vesting
+/// lockup unbypassable: `claim_into_vesting` builds a
+/// `VestingWallet<VestingWitness, ..>`, and only the module declaring
+/// `VestingWitness` can mint the `VestedAmount` that releases it - so a buyer cannot
+/// substitute a permissive witness of their own to release early. For a non-vesting
+/// sale the slot is inert (any `drop` type); no schedule is ever attached.
 public struct PrefundedSale<
     phantom Curve: drop,
     CurveParams: copy + drop + store,
     phantom SaleCoin,
     phantom PaymentCoin,
+    phantom VestingWitness: drop, // schedule witness that owns `VestingScheduleParams`
     VestingScheduleParams: copy + drop + store, // abilities required by `VestingWallet`
 > has key {
     id: UID,
@@ -473,8 +484,8 @@ public struct ActivationTicket<phantom Curve: drop> {
     required_inventory: u64,
 }
 
-// A `Quote<C>` is the only way to drive `purchase` on a
-// `PrefundedSale<C, _, _, _, _>`. The hot-potato has no abilities, so:
+// A `Quote<C>` is the only way to drive `purchase` on a `PrefundedSale`.
+// The hot-potato has no abilities, so:
 //
 // - It can only be produced by `mint_quote`, which requires a value
 //   of type `C: drop`. Since `C`'s constructor is private to the curve
@@ -640,6 +651,15 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// (see the `Quote` section). Integrators build `curve_params` through the curve
 /// module's own `params` constructor.
 ///
+/// The `VestingWitness` and `VestingScheduleParams` type arguments are fixed here and
+/// carried in the sale's type for its whole life. For a vesting sale they must be the
+/// witness/params pair of the intended schedule curve (e.g.
+/// `vesting_wallet_linear::{Linear, Params}`); `set_vesting_schedule_params` then
+/// attaches a concrete schedule, and `claim_into_vesting` builds the wallet under this
+/// pinned witness so the lockup cannot be bypassed. For a non-vesting sale both slots
+/// are inert - pick any `drop` witness and any `copy + drop + store` params type and
+/// never attach a schedule.
+///
 /// #### Parameters
 /// - `curve_params`: The curve's stored configuration, opaque to the sale.
 /// - `hard_cap`: Maximum raise, in `PaymentCoin` units.
@@ -660,6 +680,7 @@ public fun create_sale<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
     curve_params: CurveParams,
@@ -669,7 +690,7 @@ public fun create_sale<
     closes_at_ms: u64,
     ctx: &mut TxContext,
 ): (
-    PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams>,
     SaleAdminCap<SaleCoin, PaymentCoin>,
 ) {
     assert!(hard_cap > 0, EHardCapZero);
@@ -726,9 +747,17 @@ public fun deposit<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     inventory: Balance<SaleCoin>,
 ) {
     assert!(sale.phase.is_init(), ENotInit);
@@ -759,9 +788,17 @@ public fun set_per_buyer_cap<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     per_buyer_cap: u64,
     ctx: &mut TxContext,
 ) {
@@ -780,9 +817,12 @@ public fun set_per_buyer_cap<
 ///
 /// Once a schedule is attached, the plain `claim` path aborts and buyers must redeem
 /// through `claim_into_vesting`, which returns a funded `VestingWallet` and its
-/// `DestroyCap`. The library enforces this so a buyer cannot trivially bypass the
-/// schedule. The schedule is **issuer-defined**: the buyer is the caller of the
-/// redemption path and cannot supply or override these values.
+/// `DestroyCap`. The schedule cannot be bypassed: `claim_into_vesting` builds the
+/// wallet under the sale's pinned `VestingWitness` type parameter, so only the curve
+/// module that owns that witness can mint the `VestedAmount` needed to release - a
+/// buyer cannot supply a permissive witness of their own. The schedule is
+/// **issuer-defined**: the buyer is the caller of the redemption path and cannot
+/// supply or override these values, nor the witness that interprets them.
 ///
 /// #### Parameters
 /// - `sale`: The sale to configure, in `Init` phase.
@@ -796,9 +836,17 @@ public fun set_vesting_schedule_params<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     params: VestingScheduleParams,
 ) {
     assert!(sale.phase.is_init(), ENotInit);
@@ -834,9 +882,17 @@ public fun pair_refund_vault<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     vault: &RefundVault<PaymentCoin>,
     vault_cap: RefundVaultCap<PaymentCoin>,
 ) {
@@ -878,9 +934,17 @@ public fun enable_allowlist<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     ctx: &mut TxContext,
 ): AllowlistAdmin<SaleCoin> {
     assert!(sale.phase.is_init(), ENotInit);
@@ -913,9 +977,17 @@ public fun mint_activation_ticket<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     _w: Curve,
     required_inventory: u64,
 ): ActivationTicket<Curve> { ActivationTicket { sale_id: object::id(sale), required_inventory } }
@@ -948,9 +1020,17 @@ public fun share_and_activate<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    mut sale: PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    mut sale: PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     ticket: ActivationTicket<Curve>,
     clock: &Clock,
 ) {
@@ -1038,9 +1118,17 @@ public fun purchase<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     quote: Quote<PaymentCoin>,
     allow: Option<AllowEntry<SaleCoin>>,
     clock: &Clock,
@@ -1142,9 +1230,17 @@ public fun finalize<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
@@ -1201,9 +1297,17 @@ public fun cancel_after_close<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
@@ -1249,9 +1353,17 @@ public fun cancel_emergency<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
@@ -1294,9 +1406,17 @@ public fun claim<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
@@ -1326,9 +1446,17 @@ public fun claim_all<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
@@ -1337,16 +1465,19 @@ public fun claim_all<
 }
 
 /// Redeem a receipt directly into a funded
-/// `VestingWallet<Witness, VestingScheduleParams, SaleCoin>` from
+/// `VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>` from
 /// `openzeppelin_finance`. The only redemption path for a vesting-attached sale.
 ///
 /// The wallet is constructed with the sale's issuer-defined schedule params and
 /// `beneficiary == ctx.sender()` (the asserted buyer), then funded with exactly the
 /// claimed `allocation`. The buyer cannot influence the schedule - it is fixed at
-/// sale construction. The caller chooses the vesting curve by supplying its `Witness`
-/// type (e.g. `vesting_wallet_linear::Linear`); the witness must be the curve module
-/// that interprets the sale's `VestingScheduleParams`, or the returned wallet cannot
-/// be released.
+/// sale construction. The vesting curve is **not** caller-chosen: the wallet's schedule
+/// witness is the sale's own `VestingWitness` type parameter, fixed at
+/// `create_sale`. Because the `&mut sale` argument unifies this function's
+/// `VestingWitness` with the sale's pinned witness, a buyer cannot substitute a
+/// permissive witness declared in their own package to mint a full `VestedAmount` and
+/// release the whole allocation immediately - the lockup holds. Only the module
+/// declaring the pinned `VestingWitness` can advance the returned wallet.
 ///
 /// Alongside the wallet, `vesting_wallet::new` mints a `DestroyCap` bound to it - the
 /// teardown authority, deliberately decoupled from `beneficiary`. This call returns
@@ -1362,7 +1493,7 @@ public fun claim_all<
 ///   becomes the wallet's beneficiary.
 ///
 /// #### Returns
-/// - A `VestingWallet<Witness, VestingScheduleParams, SaleCoin>` funded with the
+/// - A `VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>` funded with the
 ///   receipt's `allocation`.
 /// - The wallet's `vesting_wallet::DestroyCap` - the authority to tear the wallet
 ///   down once it is drained.
@@ -1380,17 +1511,28 @@ public fun claim_into_vesting<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
-    Witness: drop,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
-): (VestingWallet<Witness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
+): (VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_internal(receipt, ctx);
 
-    let (mut wallet, destroy_cap) = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
+    let (mut wallet, destroy_cap) = vesting_wallet::new<
+        VestingWitness,
+        VestingScheduleParams,
+        SaleCoin,
+    >(
         *sale.vesting_schedule_params.borrow(),
         ctx.sender(), // only buyer can claim
         ctx,
@@ -1401,7 +1543,7 @@ public fun claim_into_vesting<
 }
 
 /// Batch variant of `claim_into_vesting`: redeem several receipts into one funded
-/// `VestingWallet<Witness, VestingScheduleParams, SaleCoin>`, summing their
+/// `VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>`, summing their
 /// allocations. Aborts the whole call if any receipt is invalid.
 ///
 /// #### Parameters
@@ -1411,7 +1553,7 @@ public fun claim_into_vesting<
 ///   becomes the wallet's beneficiary.
 ///
 /// #### Returns
-/// - A single `VestingWallet<Witness, VestingScheduleParams, SaleCoin>` funded with
+/// - A single `VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>` funded with
 ///   the summed allocations.
 /// - The wallet's `vesting_wallet::DestroyCap` - the authority to tear the wallet
 ///   down once it is drained.
@@ -1430,17 +1572,28 @@ public fun claim_all_into_vesting<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
-    Witness: drop,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
-): (VestingWallet<Witness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
+): (VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
     assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_all_internal(receipts, ctx);
 
-    let (mut wallet, destroy_cap) = vesting_wallet::new<Witness, VestingScheduleParams, SaleCoin>(
+    let (mut wallet, destroy_cap) = vesting_wallet::new<
+        VestingWitness,
+        VestingScheduleParams,
+        SaleCoin,
+    >(
         *sale.vesting_schedule_params.borrow(),
         ctx.sender(), // only buyer can claim
         ctx,
@@ -1470,9 +1623,17 @@ public fun withdraw_proceeds<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
 ): Balance<PaymentCoin> {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
@@ -1510,9 +1671,17 @@ public fun withdraw_unsold_inventory<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
 ): Balance<SaleCoin> {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
@@ -1558,9 +1727,17 @@ public fun refund<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     vault: &mut RefundVault<PaymentCoin>,
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
@@ -1618,9 +1795,17 @@ public fun mint_quote<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     _w: Curve,
     payment: Balance<PaymentCoin>,
     rate: u64,
@@ -1645,9 +1830,17 @@ public fun phase<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): Phase {
     sale.phase
 }
@@ -1664,9 +1857,17 @@ public fun raised<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.raised
 }
@@ -1685,9 +1886,17 @@ public fun curve_params<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): CurveParams { sale.curve_params }
 
 /// The configured hard cap (maximum raise), in `PaymentCoin` units.
@@ -1702,9 +1911,17 @@ public fun hard_cap<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.hard_cap
 }
@@ -1721,9 +1938,17 @@ public fun soft_cap<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.soft_cap
 }
@@ -1740,9 +1965,17 @@ public fun opens_at_ms<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.opens_at_ms
 }
@@ -1759,9 +1992,17 @@ public fun closes_at_ms<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.closes_at_ms
 }
@@ -1778,9 +2019,17 @@ public fun requires_allowlist<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): bool { sale.requires_allowlist }
 
 /// Read the sale's vesting schedule. Vesting adapters read this to determine the
@@ -1797,9 +2046,17 @@ public fun vesting_schedule_params<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): Option<VestingScheduleParams> {
     sale.vesting_schedule_params
 }
@@ -1816,9 +2073,17 @@ public fun inventory_total<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.inventory.value()
 }
@@ -1835,9 +2100,17 @@ public fun total_allocated<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.total_allocated
 }
@@ -1854,9 +2127,17 @@ public fun inventory_remaining<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.inventory.value() - sale.total_allocated
 }
@@ -1873,9 +2154,17 @@ public fun proceeds_amount<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): u64 {
     sale.proceeds.value()
 }
@@ -1894,9 +2183,17 @@ public fun is_open<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     clock: &Clock,
 ): bool {
     if (sale.phase != Phase::Active) { return false };
@@ -1917,9 +2214,17 @@ public fun has_reached_soft_cap<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): bool {
     sale.raised >= sale.soft_cap
 }
@@ -1936,9 +2241,17 @@ public fun has_reached_hard_cap<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
 ): bool {
     sale.raised >= sale.hard_cap
 }
@@ -2023,9 +2336,17 @@ fun do_cancel<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     vault: &mut RefundVault<PaymentCoin>,
     reason: CancelReason,
     now: u64,
@@ -2056,9 +2377,17 @@ fun claim_internal<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     receipt: Receipt<SaleCoin>,
     ctx: &TxContext,
 ): Balance<SaleCoin> {
@@ -2087,9 +2416,17 @@ fun claim_all_internal<
     CurveParams: copy + drop + store,
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop + store,
 >(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
     mut receipts: vector<Receipt<SaleCoin>>,
     ctx: &TxContext,
 ): Balance<SaleCoin> {

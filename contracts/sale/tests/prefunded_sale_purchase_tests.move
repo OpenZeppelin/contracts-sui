@@ -8,7 +8,7 @@
 // lives in `prefunded_sale_curve_trust_tests`.
 module openzeppelin_sale::prefunded_sale_purchase_tests;
 
-use openzeppelin_finance::vesting_wallet_linear::Params as VParams;
+use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
 use openzeppelin_sale::allowlist::{Self, AllowlistAdmin};
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
@@ -31,6 +31,7 @@ fun setup_with_per_buyer_cap(test: &mut Scenario, clk: &Clock, per_buyer: u64) {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -53,7 +54,7 @@ fun setup_with_per_buyer_cap(test: &mut Scenario, clk: &Clock, per_buyer: u64) {
 // Purchase `paid` via an allowlist entry minted for `buyer` with `max_amount`.
 // Must run in a tx whose sender is `buyer`.
 fun buy_with_entry(
-    sale: &mut PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>,
+    sale: &mut PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>,
     test: &mut Scenario,
     buyer: address,
     max_amount: u64,
@@ -362,6 +363,7 @@ fun purchase_with_foreign_quote_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),

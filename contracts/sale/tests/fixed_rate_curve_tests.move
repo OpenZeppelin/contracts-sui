@@ -6,7 +6,7 @@
 // hard_cap * rate`) and the u128 overflow guards on both.
 module openzeppelin_sale::fixed_rate_curve_tests;
 
-use openzeppelin_finance::vesting_wallet_linear::Params as VParams;
+use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
 use openzeppelin_sale::test_utils::{Self as u, SALE, USDC};
@@ -19,10 +19,10 @@ fun new_sale(
     hard_cap: u64,
     ctx: &mut TxContext,
 ): (
-    PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>,
+    PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>,
     prefunded_sale::SaleAdminCap<SALE, USDC>,
 ) {
-    prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
         fixed_rate_curve::params(rate),
         hard_cap,
         0,

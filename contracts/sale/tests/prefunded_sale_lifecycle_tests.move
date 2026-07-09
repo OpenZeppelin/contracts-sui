@@ -7,7 +7,7 @@
 // after finalize the vault flips to Closed. Terminal phases reject re-entry.
 module openzeppelin_sale::prefunded_sale_lifecycle_tests;
 
-use openzeppelin_finance::vesting_wallet_linear::Params as VParams;
+use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
 use openzeppelin_sale::refund_vault;
@@ -345,6 +345,7 @@ fun cancel_emergency_wrong_cap_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),

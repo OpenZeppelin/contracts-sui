@@ -52,15 +52,16 @@ fun cancel_now(test: &mut Scenario, clk: &mut Clock) {
     u::return_vault(vault);
 }
 
-// Build an Active sale carrying an issuer-defined vesting schedule (4 monthly-ish
-// steps), rate 1, no soft cap, inventory 1_000.
-fun setup_vesting_sale(test: &mut Scenario, clk: &Clock) {
+// Build an Active sale carrying the given issuer-defined vesting schedule, rate 1,
+// no soft cap, inventory 1_000.
+fun setup_vesting_sale_with(test: &mut Scenario, clk: &Clock, params: VParams) {
     let ctx = test.ctx();
     let (mut sale, cap) = prefunded_sale::create_sale<
         FixedRateCurve,
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -71,13 +72,18 @@ fun setup_vesting_sale(test: &mut Scenario, clk: &Clock) {
         ctx,
     );
     sale.deposit(u::sale_balance(1_000));
-    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4));
+    sale.set_vesting_schedule_params(params);
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
     sale.share_and_activate(ticket, clk);
     refund_vault::share(vault);
     transfer::public_transfer(cap, u::admin());
+}
+
+// A vesting sale with the default 4-step (monthly-ish) schedule.
+fun setup_vesting_sale(test: &mut Scenario, clk: &Clock) {
+    setup_vesting_sale_with(test, clk, vesting_wallet_linear::params(0, 0, 1_000, 4));
 }
 
 // === claim ===
@@ -253,8 +259,8 @@ fun claim_into_vesting_returns_funded_wallet() {
         FrcParams,
         SALE,
         USDC,
-        VParams,
         Linear,
+        VParams,
     >(&mut sale, r, test.ctx());
     assert_eq!(wallet.balance(), 100);
     assert_eq!(wallet.beneficiary(), u::buyer());
@@ -285,8 +291,8 @@ fun claim_all_into_vesting_sums_into_one_wallet() {
         FrcParams,
         SALE,
         USDC,
-        VParams,
         Linear,
+        VParams,
     >(&mut sale, vector[r1, r2], test.ctx());
     assert_eq!(wallet.balance(), 350);
     assert_eq!(wallet.beneficiary(), u::buyer());
@@ -295,6 +301,47 @@ fun claim_all_into_vesting_sums_into_one_wallet() {
     destroy(destroy_cap);
     u::return_sale(sale);
 
+    destroy(clk);
+    test.end();
+}
+
+// Regression (H-1): the vesting lockup cannot be bypassed. `claim_into_vesting` pins
+// the sale's `Linear` witness (the `&mut sale` argument unifies the function's
+// `VestingWitness` with the sale's), so the buyer must release through the honest
+// curve, which enforces the cliff. Right after finalize nothing is releasable; only
+// after the cliff elapses does the allocation unlock. A buyer-supplied witness that
+// ignored the schedule would not type-check, so the "release everything immediately"
+// attack has no on-chain path.
+#[test]
+fun vesting_lockup_holds_through_pinned_witness() {
+    let (mut test, mut clk) = u::setup();
+    // Cliff one full period long: nothing vests until start(=OPENS) + 100_000.
+    setup_vesting_sale_with(&mut test, &clk, vesting_wallet_linear::params(u::opens(), 100_000, 100_000, 1));
+    buy_once(&mut test, &clk, 100); // rate 1 -> alloc 100
+    finalize_now(&mut test, &mut clk); // clk -> 5_001, still far below the cliff
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let (wallet, destroy_cap) = prefunded_sale::claim_into_vesting<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(&mut sale, r, test.ctx());
+
+    // Cliff not reached: the honest curve releases nothing (the exploit wanted 100 here).
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 0);
+
+    // Past the cliff: the full allocation unlocks - on the issuer's schedule, not early.
+    clk.set_for_testing(u::opens() + 100_000);
+    assert_eq!(vesting_wallet_linear::releasable(&wallet, &clk), 100);
+
+    destroy(wallet);
+    destroy(destroy_cap);
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -315,8 +362,8 @@ fun claim_into_vesting_without_schedule_aborts() {
         FrcParams,
         SALE,
         USDC,
-        VParams,
         Linear,
+        VParams,
     >(&mut sale, r, test.ctx()); // aborts: ENoVestingScheduleAttached
     destroy(wallet);
     destroy(destroy_cap);
@@ -500,6 +547,7 @@ fun withdraw_proceeds_wrong_cap_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -611,6 +659,7 @@ fun withdraw_unsold_wrong_cap_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),

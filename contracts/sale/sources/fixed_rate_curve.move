@@ -98,8 +98,8 @@ public fun params(rate: u64): Params {
 ///
 /// #### Aborts
 /// - `ERequiredInventoryOverflow` if `hard_cap * rate` would exceed `u64::MAX`.
-public fun activation_ticket<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
+public fun activation_ticket<SaleCoin, PaymentCoin, VestingWitness: drop, VestingScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams>,
 ): ActivationTicket<FixedRateCurve> {
     let rate = sale.curve_params().rate;
     let required_inventory = (sale.hard_cap() as u128) * (rate as u128);
@@ -125,8 +125,8 @@ public fun activation_ticket<SaleCoin, PaymentCoin, VestingScheduleParams: copy 
 /// - `prefunded_sale::EZeroPayment` if `balance` has zero value.
 /// - `prefunded_sale::EAllocationOverflow` if `balance.value() * rate` would exceed
 ///   `u64::MAX`.
-public fun quote<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
+public fun quote<SaleCoin, PaymentCoin, VestingWitness: drop, VestingScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams>,
     balance: Balance<PaymentCoin>,
 ): Quote<PaymentCoin> {
     let rate = sale.curve_params().rate;
@@ -142,8 +142,8 @@ public fun quote<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + sto
 ///
 /// #### Returns
 /// - The configured rate.
-public fun rate<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop + store>(
-    sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingScheduleParams>,
+public fun rate<SaleCoin, PaymentCoin, VestingWitness: drop, VestingScheduleParams: copy + drop + store>(
+    sale: &PrefundedSale<FixedRateCurve, Params, SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams>,
 ): u64 {
     sale.curve_params().rate
 }

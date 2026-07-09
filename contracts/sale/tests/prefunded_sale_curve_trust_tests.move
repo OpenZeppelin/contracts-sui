@@ -33,7 +33,7 @@ fun activate_bad(
     required_inventory: u64,
 ) {
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<BadCurve, u64, SALE, USDC, u64>(
+    let (mut sale, cap) = prefunded_sale::create_sale<BadCurve, u64, SALE, USDC, BadCurve, u64>(
         0,
         hard_cap,
         0,
@@ -44,7 +44,7 @@ fun activate_bad(
     sale.deposit(u::sale_balance(inventory));
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
-    let ticket = prefunded_sale::mint_activation_ticket<BadCurve, u64, SALE, USDC, u64>(
+    let ticket = prefunded_sale::mint_activation_ticket<BadCurve, u64, SALE, USDC, BadCurve, u64>(
         &sale,
         BadCurve {},
         required_inventory,
@@ -54,8 +54,8 @@ fun activate_bad(
     transfer::public_transfer(cap, u::admin());
 }
 
-fun take_bad_sale(test: &Scenario): PrefundedSale<BadCurve, u64, SALE, USDC, u64> {
-    ts::take_shared<PrefundedSale<BadCurve, u64, SALE, USDC, u64>>(test)
+fun take_bad_sale(test: &Scenario): PrefundedSale<BadCurve, u64, SALE, USDC, BadCurve, u64> {
+    ts::take_shared<PrefundedSale<BadCurve, u64, SALE, USDC, BadCurve, u64>>(test)
 }
 
 // === The sale trusts the curve's required_inventory ===
@@ -91,7 +91,7 @@ fun overallocating_quote_beyond_inventory_aborts() {
     test.next_tx(u::buyer());
     let mut sale = take_bad_sale(&test);
     // paid 1, rate 100 -> allocation 100 > unallocated 10.
-    let quote = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
+    let quote = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
         &sale,
         BadCurve {},
         u::pay_balance(1),
@@ -114,7 +114,7 @@ fun overallocating_quote_within_inventory_is_accepted() {
     test.next_tx(u::buyer());
     let mut sale = take_bad_sale(&test);
     // paid 1, rate 500 -> allocation 500; raised only advances by 1.
-    let quote = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
+    let quote = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
         &sale,
         BadCurve {},
         u::pay_balance(1),
@@ -144,7 +144,7 @@ fun purchase_raised_overflow_aborts() {
     test.next_tx(u::buyer());
     let mut sale = take_bad_sale(&test);
     // First buy: paid = u64::MAX, rate 0 -> allocation 0; raised becomes u64::MAX.
-    let q1 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
+    let q1 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
         &sale,
         BadCurve {},
         u::pay_balance(max),
@@ -152,7 +152,7 @@ fun purchase_raised_overflow_aborts() {
     );
     sale.purchase(q1, option::none(), &clk, test.ctx());
     // Second buy: paid = 1 -> u64::MAX - 1 >= u64::MAX is false -> ERaisedOverflow.
-    let q2 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
+    let q2 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
         &sale,
         BadCurve {},
         u::pay_balance(1),

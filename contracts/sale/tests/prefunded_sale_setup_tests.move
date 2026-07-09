@@ -5,7 +5,7 @@
 // `allowlist_tests`; purchase/lifecycle live in their own files.
 module openzeppelin_sale::prefunded_sale_setup_tests;
 
-use openzeppelin_finance::vesting_wallet_linear::{Self, Params as VParams};
+use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params as VParams};
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
 use openzeppelin_sale::refund_vault;
@@ -21,7 +21,7 @@ use sui::test_scenario as ts;
 #[test, expected_failure(abort_code = prefunded_sale::EHardCapZero)]
 fun create_sale_rejects_zero_hard_cap() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
         fixed_rate_curve::params(1),
         0,
         0,
@@ -37,7 +37,7 @@ fun create_sale_rejects_zero_hard_cap() {
 #[test, expected_failure(abort_code = prefunded_sale::EInvalidCapsOrdering)]
 fun create_sale_rejects_soft_cap_above_hard() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
         fixed_rate_curve::params(1),
         100,
         101,
@@ -53,7 +53,7 @@ fun create_sale_rejects_soft_cap_above_hard() {
 #[test, expected_failure(abort_code = prefunded_sale::EInvalidTimeRange)]
 fun create_sale_rejects_inverted_time_range() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
         fixed_rate_curve::params(1),
         100,
         0,
@@ -70,7 +70,7 @@ fun create_sale_rejects_inverted_time_range() {
 #[test]
 fun create_sale_initializes_in_init_phase() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
         fixed_rate_curve::params(2),
         1_000,
         500,
@@ -118,6 +118,7 @@ fun deposit_accumulates_inventory() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -174,6 +175,7 @@ fun set_per_buyer_cap_rejects_zero() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -197,6 +199,7 @@ fun set_per_buyer_cap_twice_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -237,6 +240,7 @@ fun set_vesting_schedule_params_fills_option() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -273,6 +277,7 @@ fun set_vesting_schedule_params_twice_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -314,6 +319,7 @@ fun pair_rejects_nonempty_vault() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -342,6 +348,7 @@ fun pair_rejects_mismatched_cap() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -372,6 +379,7 @@ fun pair_rejects_inactive_vault() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -400,6 +408,7 @@ fun pair_twice_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -448,6 +457,7 @@ fun enable_allowlist_twice_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -496,6 +506,7 @@ fun activate_without_vault_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -525,6 +536,7 @@ fun activate_insufficient_inventory_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(2), // requires hard_cap * 2 = 2_000
@@ -573,6 +585,7 @@ fun activate_after_close_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -609,6 +622,7 @@ fun activate_with_foreign_ticket_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -628,6 +642,7 @@ fun activate_with_foreign_ticket_aborts() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -660,6 +675,7 @@ fun set_per_buyer_cap_emits_event() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -690,6 +706,7 @@ fun enable_allowlist_emits_event() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),
@@ -729,6 +746,7 @@ fun share_and_activate_emits_pairing_and_activation_events() {
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(1),

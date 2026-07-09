@@ -7,13 +7,13 @@
 // on the boilerplate of threading a sale through Init -> Active.
 //
 // All sales in the suite are parameterized on `FixedRateCurve` (the only curve
-// that can mint quotes/tickets for them) and use `vesting_wallet_linear::Params`
-// as the `VestingScheduleParams` slot. Vesting and non-vesting sales therefore
-// share one concrete type; the difference is only whether the schedule Option is
-// filled via `set_vesting_schedule_params`.
+// that can mint quotes/tickets for them) and use `vesting_wallet_linear::{Params,
+// Linear}` as the `VestingScheduleParams` and `VestingWitness` slots. Vesting and
+// non-vesting sales therefore share one concrete type; the difference is only
+// whether the schedule Option is filled via `set_vesting_schedule_params`.
 module openzeppelin_sale::test_utils;
 
-use openzeppelin_finance::vesting_wallet_linear::Params as VParams;
+use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale, SaleAdminCap};
 use openzeppelin_sale::refund_vault::{Self, RefundVault};
@@ -48,8 +48,8 @@ public fun closes(): u64 { CLOSES }
 
 // === Setup helpers ===
 //
-// Move 2024 has no type aliases, so the five-parameter sale type
-// `PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>` is spelled out
+// Move 2024 has no type aliases, so the six-parameter sale type
+// `PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>` is spelled out
 // in the helper signatures below. Thematic test files call the helpers and get
 // the concrete type back without having to name it.
 
@@ -105,6 +105,7 @@ public fun create_and_activate_full(
         FrcParams,
         SALE,
         USDC,
+        Linear,
         VParams,
     >(
         fixed_rate_curve::params(rate),
@@ -130,12 +131,12 @@ public fun create_and_activate_full(
 /// Take the (single) shared sale.
 public fun take_sale(
     test: &Scenario,
-): PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams> {
-    ts::take_shared<PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>>(test)
+): PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams> {
+    ts::take_shared<PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>>(test)
 }
 
 /// Return the shared sale.
-public fun return_sale(sale: PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>) {
+public fun return_sale(sale: PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>) {
     ts::return_shared(sale);
 }
 
@@ -162,7 +163,7 @@ public fun return_cap(cap: SaleAdminCap<SALE, USDC>) {
 /// Purchase `paid` units of payment from `sale` with no allowlist entry.
 /// The receipt is delivered to `ctx.sender()`.
 public fun buy(
-    sale: &mut PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>,
+    sale: &mut PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>,
     paid: u64,
     clk: &Clock,
     ctx: &mut TxContext,
