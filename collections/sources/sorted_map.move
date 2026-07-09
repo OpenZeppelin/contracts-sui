@@ -74,7 +74,7 @@ module openzeppelin_collections::sorted_map;
 
 // === Errors ===
 
-/// A key was not present in the map. Raised by `borrow`/`borrow_mut`.
+/// A key was not present in the map.
 #[error(code = 0)]
 const EKeyNotFound: vector<u8> = "Key not found";
 
@@ -95,6 +95,10 @@ const EKeysNotStrictlyIncreasing: vector<u8> = "Keys are not strictly increasing
 /// lengths.
 #[error(code = 4)]
 const EUnequalLengths: vector<u8> = "Keys and values differ in length";
+
+/// A key was present in the map.
+#[error(code = 5)]
+const EKeyAlreadyExists: vector<u8> = "Key already exists";
 
 // === Structs ===
 
@@ -282,6 +286,16 @@ public fun value_at_mut<K: copy, V>(map: &mut SortedMap<K, V>, i: u64): &mut V {
 /// - `EKeyNotFound` if `found` is false.
 public fun assert_key_found(found: bool) {
     assert!(found, EKeyNotFound);
+}
+
+/// Abort `EKeyAlreadyExists` if `absent` is false. Routed through this regular fun so `add`'s
+/// abort fires at this module's location, not the consumer's inlined macro body (and so the
+/// module-internal `EKeyAlreadyExists` const is not referenced from the expansion site).
+///
+/// #### Aborts
+/// - `EKeyAlreadyExists` if `absent` is false.
+public fun assert_key_absent(absent: bool) {
+    assert!(absent, EKeyAlreadyExists);
 }
 
 /// Abort `EUnequalLengths` if `equal` is false. Routed through this regular fun so the bulk
@@ -510,6 +524,43 @@ public macro fun borrow_mut_by<$K: copy, $V>(
 /// - `EKeyNotFound` if `key` is absent.
 public macro fun borrow_mut<$K: copy, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): &mut $V {
     borrow_mut_by!($map, $key, |a, b| *a < *b)
+}
+
+/// Insert `key`/`value` under `$lt`, aborting if `key` is already present (length + 1).
+/// `key` is taken by value and moved into storage; nothing is returned.
+///
+/// Matches `sui::vec_map::insert`: a strict insert that refuses to touch an existing entry,
+/// so a duplicate is always a caller bug rather than a silent overwrite. Use [`upsert_by`]
+/// instead when replacing an existing value is the intended behavior - it returns the
+/// displaced value rather than aborting.
+///
+/// #### Parameters
+/// - `key`: Key to insert; must not already be present.
+/// - `value`: Value to store.
+/// - `lt`: Strict less-than comparator.
+///
+/// #### Aborts
+/// - `EKeyAlreadyExists` if `key` is already present.
+public macro fun add_by<$K: copy, $V>(
+    $map: &mut SortedMap<$K, $V>,
+    $key: $K,
+    $value: $V,
+    $lt: |&$K, &$K| -> bool,
+) {
+    let map = $map;
+    let key = $key;
+    let value = $value;
+    let (found, idx) = search!(map, &key, $lt);
+    assert_key_absent(!found);
+    map.insert_at(idx, new_entry(key, value));
+}
+
+/// `add_by` with the built-in integer `<`.
+///
+/// #### Aborts
+/// - `EKeyAlreadyExists` if `key` is already present.
+public macro fun add<$K: copy, $V>($map: &mut SortedMap<$K, $V>, $key: $K, $value: $V) {
+    add_by!($map, $key, $value, |a, b| *a < *b)
 }
 
 /// Insert `key`/`value`, or replace the value if `key` is already present, under

@@ -56,6 +56,23 @@ fun insert_upsert_replaces() {
     assert!(u::wf(&m));
 }
 
+// === add: strict insert (fresh only); the duplicate-aborts side lives in abort_tests ===
+
+#[test]
+fun add_fresh_grows() {
+    let mut m = sm::new<u64, u64>();
+    // add takes the key by value and returns nothing; each fresh key grows the map by 1
+    // and lands in sorted position regardless of insertion order.
+    u::add(&mut m, 20, 200);
+    u::add(&mut m, 10, 100);
+    u::add(&mut m, 30, 300);
+    assert_eq!(m.length(), 3); // +1 each, no aborts on distinct keys
+    assert!(u::wf(&m)); // strictly ascending
+    assert_eq!(u::get(&m, 10), 100);
+    assert_eq!(u::get(&m, 20), 200);
+    assert_eq!(u::get(&m, 30), 300);
+}
+
 #[test]
 fun insert_order_shuffled() {
     // 60 scrambled keys inserted in arbitrary order -> still strictly ascending.

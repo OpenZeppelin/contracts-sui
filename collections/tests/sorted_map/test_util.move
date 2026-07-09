@@ -65,6 +65,9 @@ public fun ask_px(a: &Ask): u64 { a.px }
 
 public fun ins(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> { m.upsert!(&k, v) }
 
+/// Strict insert (aborts `EKeyAlreadyExists` on a duplicate). Takes the key by value.
+public fun add(m: &mut SortedMap<u64, u64>, k: u64, v: u64) { m.add!(k, v) }
+
 public fun has(m: &SortedMap<u64, u64>, k: u64): bool { m.contains!(&k) }
 
 public fun get(m: &SortedMap<u64, u64>, k: u64): u64 { *m.borrow!(&k) }
@@ -100,6 +103,11 @@ public fun wf(m: &SortedMap<u64, u64>): bool { m.is_well_formed!() }
 
 public fun ins_rev(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
     m.upsert_by!(&k, v, |a, b| *a > *b)
+}
+
+/// Strict insert under the reverse comparator (aborts `EKeyAlreadyExists` on a duplicate).
+public fun add_rev(m: &mut SortedMap<u64, u64>, k: u64, v: u64) {
+    m.add_by!(k, v, |a, b| *a > *b)
 }
 
 public fun has_rev(m: &SortedMap<u64, u64>, k: u64): bool {
@@ -176,6 +184,12 @@ public fun rm_nd(m: &mut SortedMap<u64, NoDrop>, k: u64): NoDrop {
 
 public fun ins_ck(m: &mut SortedMap<CoarseKey, u64>, k: CoarseKey, v: u64): Option<u64> {
     m.upsert_by!(&k, v, |a, b| a.id < b.id)
+}
+
+/// Strict insert ordered on `id` alone (aborts `EKeyAlreadyExists` when a stored key
+/// compares equal, i.e. shares the `id`, regardless of `tag`).
+public fun add_ck(m: &mut SortedMap<CoarseKey, u64>, k: CoarseKey, v: u64) {
+    m.add_by!(k, v, |a, b| a.id < b.id)
 }
 
 public fun has_ck(m: &SortedMap<CoarseKey, u64>, id: u64): bool {

@@ -60,6 +60,32 @@ fun borrow_mut_absent_interior_gap() {
     u::set(&mut m, 20, 0); // absent interior key
 }
 
+// === add / add_by on a present key -> EKeyAlreadyExists ===
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_duplicate_aborts() {
+    let mut m = sm::new<u64, u64>();
+    u::add(&mut m, 10, 1);
+    u::add(&mut m, 10, 2); // re-add an existing key: strict insert refuses to overwrite
+}
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_by_duplicate_aborts() {
+    // Same contract under a custom comparator (reverse `>`).
+    let mut m = sm::new<u64, u64>();
+    u::add_rev(&mut m, 10, 1);
+    u::add_rev(&mut m, 10, 2);
+}
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_coarse_equal_key_aborts() {
+    // A COMPARE-EQUAL key is a duplicate: same id, different tag compares equal under
+    // id-order, so the second add aborts even though the key bytes differ.
+    let mut m = sm::new<u::CoarseKey, u64>();
+    u::add_ck(&mut m, u::ck(1, 100), 10);
+    u::add_ck(&mut m, u::ck(1, 200), 20); // id=1 already present -> EKeyAlreadyExists
+}
+
 // === destroy_empty on a non-empty map -> ENotEmpty ===
 
 #[test, expected_failure(abort_code = sm::ENotEmpty, location = sm)]

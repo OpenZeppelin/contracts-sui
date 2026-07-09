@@ -125,6 +125,23 @@ fun remove_at_oob_aborts_in_vector() {
     m.remove_at(5); // index 5 on a length-1 map
 }
 
+// === add_by under a custom (reverse) comparator: fresh inserts stay well-formed under `>` ===
+
+#[test]
+fun add_by_reverse_comparator() {
+    let mut m = sm::new<u64, u64>();
+    // Strict insert of distinct keys in arbitrary order under `>`: the map is consistently
+    // reversed - well-formed under `>` (and NOT under `<`).
+    u::add_rev(&mut m, 10, 100);
+    u::add_rev(&mut m, 30, 300);
+    u::add_rev(&mut m, 20, 200);
+    assert_eq!(m.length(), 3);
+    assert!(u::wf_rev(&m)); // strictly DEscending under `>`
+    assert!(!u::wf(&m)); // ... hence not well-formed under `<`
+    assert_eq!(u::get_rev(&m, 30), 300); // head under `>`
+    assert_eq!(u::get_rev(&m, 10), 100); // tail under `>`
+}
+
 // === Upsert keeps the FIRST (stored) key bytes, observable under a coarse comparator ===
 
 #[test]
