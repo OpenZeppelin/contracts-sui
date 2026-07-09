@@ -8,25 +8,25 @@
 /// ### Lifecycle
 ///
 /// ```text
-///   create_sale ──┐
-///   deposit ──┐
-///   set_per_buyer_cap   │  (Init phase - sale is owned by caller;
-///   pair_refund_vault   ├   holding it by &mut is the authority)
-///   enable_allowlist    │
-///                       │
-///   share_and_activate ─┴──>  (Active phase - sale is shared)
-///                                  │
-///                              purchase ×N
-///                                  │
-///                                  ├──> finalize          (permissionless;
-///                                  │      claim, withdraw_proceeds,        successful close)
-///                                  │      withdraw_unsold_inventory
-///                                  │
-///                                  ├──> cancel_after_close (permissionless;
-///                                  │      refund,                            soft-cap miss)
-///                                  │      withdraw_unsold_inventory
-///                                  │
-///                                  └──> cancel_emergency   (admin-only;
+///   create_sale --+
+///   deposit --+
+///   set_per_buyer_cap   |  (Init phase - sale is owned by caller;
+///   pair_refund_vault   +   holding it by &mut is the authority)
+///   enable_allowlist    |
+///                       |
+///   share_and_activate -+-->  (Active phase - sale is shared)
+///                                  |
+///                              purchase xN
+///                                  |
+///                                  +--> finalize          (permissionless;
+///                                  |      claim, withdraw_proceeds,        successful close)
+///                                  |      withdraw_unsold_inventory
+///                                  |
+///                                  +--> cancel_after_close (permissionless;
+///                                  |      refund,                            soft-cap miss)
+///                                  |      withdraw_unsold_inventory
+///                                  |
+///                                  +--> cancel_emergency   (admin-only;
 ///                                          refund,                            in-window emergency)
 ///                                          withdraw_unsold_inventory
 /// ```
@@ -180,201 +180,201 @@ const EEmergencyCancelAfterClose: vector<u8> =
 // Time
 
 /// `create_sale` was given `opens_at_ms >= closes_at_ms`.
-#[error(code = 10)]
+#[error(code = 3)]
 const EInvalidTimeRange: vector<u8> = "The sale must open before it closes";
 
 /// A `purchase` was attempted outside the sale window `[opens_at_ms, closes_at_ms]`.
-#[error(code = 11)]
+#[error(code = 4)]
 const ESaleWindowClosed: vector<u8> = "The sale is not open for purchases at this time";
 
 /// A close (`finalize` / `cancel_after_close`) was attempted while the window is
 /// still open and the hard cap has not been reached.
-#[error(code = 12)]
+#[error(code = 5)]
 const ESaleWindowStillOpen: vector<u8> =
     "The sale cannot be closed yet: it is still open and has not sold out";
 
 /// `share_and_activate` was called after `closes_at_ms` had already passed.
-#[error(code = 13)]
+#[error(code = 6)]
 const EActivationAfterClose: vector<u8> =
     "The sale cannot be activated after its closing time has passed";
 
 // Pricing & accounting
 
 /// `create_sale` was given `hard_cap == 0`; every sale must have a bounded raise.
-#[error(code = 20)]
+#[error(code = 7)]
 const EHardCapZero: vector<u8> = "The maximum raise must be greater than zero";
 
 /// `create_sale` was given `soft_cap > hard_cap`.
-#[error(code = 21)]
+#[error(code = 8)]
 const EInvalidCapsOrdering: vector<u8> = "The minimum raise cannot exceed the maximum raise";
 
 /// A quote was requested for a zero-value payment.
-#[error(code = 22)]
+#[error(code = 9)]
 const EZeroPayment: vector<u8> = "The payment must be greater than zero";
 
 /// A purchase would push `raised + paid` past `u64::MAX`.
-#[error(code = 23)]
+#[error(code = 10)]
 const ERaisedOverflow: vector<u8> = "The total amount raised would be too large to represent";
 
 /// A purchase would push `raised` past `hard_cap`.
-#[error(code = 24)]
+#[error(code = 11)]
 const EHardCapExceeded: vector<u8> = "This purchase would exceed the maximum raise";
 
 /// At activation, `inventory` did not cover the backing the curve's
 /// `ActivationTicket` requires.
-#[error(code = 25)]
+#[error(code = 12)]
 const EInsufficientInventoryAtActivate: vector<u8> =
     "Not enough tokens have been deposited to back the sale";
 
 /// A quote's `allocation` (`paid * rate`) would exceed `u64::MAX`.
-#[error(code = 26)]
+#[error(code = 13)]
 const EAllocationOverflow: vector<u8> = "The token allocation would be too large to represent";
 
 /// A purchase's `allocation` exceeded the sale's unallocated inventory
 /// (`inventory - total_allocated`). Only reachable via a dishonest curve.
-#[error(code = 27)]
+#[error(code = 14)]
 const EInsufficientInventory: vector<u8> = "Not enough tokens remain available for this purchase";
 
 // Caps
 
 /// A purchase would push the buyer's cumulative payment past the configured
 /// per-buyer cap.
-#[error(code = 30)]
+#[error(code = 15)]
 const EPerBuyerCapExceeded: vector<u8> = "This purchase would exceed the per-buyer limit";
 
 /// A purchase's payment exceeded the consumed `AllowEntry`'s `max_amount`.
-#[error(code = 31)]
+#[error(code = 16)]
 const EPerEntryCapExceeded: vector<u8> =
     "This purchase would exceed the amount permitted by the allowlist entry";
 
 /// `finalize` was called with `raised < soft_cap`.
-#[error(code = 32)]
+#[error(code = 17)]
 const ESoftCapNotMet: vector<u8> = "The sale cannot be finalized: the minimum raise was not met";
 
 /// A cancel was attempted on a sale that has met its goal: `cancel_after_close` with
 /// the soft cap reached or no soft cap configured, or `cancel_emergency` with the
 /// soft cap reached.
-#[error(code = 33)]
+#[error(code = 18)]
 const ESoftCapMet: vector<u8> =
     "The sale cannot be cancelled: it has met its minimum raise, or none was set";
 
 /// `cancel_emergency` was called on a sold-out sale (`raised >= hard_cap`); it must
 /// `finalize`.
-#[error(code = 34)]
+#[error(code = 19)]
 const ESaleAlreadyComplete: vector<u8> =
     "The sale cannot be cancelled: it has sold out and must be finalized";
 
 // Allowlist coupling
 
 /// The sale requires an `AllowEntry` but `purchase` was called without one.
-#[error(code = 40)]
+#[error(code = 20)]
 const EAllowlistRequired: vector<u8> =
     "This sale requires an allowlist entry, but none was provided";
 
 /// The sale does not require an `AllowEntry` but `purchase` was given one.
-#[error(code = 41)]
+#[error(code = 21)]
 const EAllowlistNotRequired: vector<u8> =
     "This sale does not use an allowlist, but an entry was provided";
 
 /// `enable_allowlist` was called a second time on the same sale.
-#[error(code = 42)]
+#[error(code = 22)]
 const EAllowlistAlreadyEnabled: vector<u8> = "The allowlist has already been enabled for this sale";
 
 // Vault coupling
 
 /// `pair_refund_vault` was called after a vault had already been paired.
-#[error(code = 50)]
+#[error(code = 23)]
 const EVaultAlreadyPaired: vector<u8> = "A refund vault has already been paired with this sale";
 
 /// `share_and_activate` was called before a refund vault was paired.
-#[error(code = 51)]
+#[error(code = 24)]
 const EVaultRequiredForActivate: vector<u8> =
     "The sale cannot be activated without a paired refund vault";
 
 /// The vault passed to a sale operation is not the one paired with this sale; at
 /// pairing time, the cap does not control the supplied vault.
-#[error(code = 52)]
+#[error(code = 25)]
 const EWrongVault: vector<u8> = "The provided refund vault is not the one paired with this sale";
 
 /// The vault offered to `pair_refund_vault` was not in the `Active` state.
-#[error(code = 53)]
+#[error(code = 26)]
 const EVaultNotActive: vector<u8> = "The refund vault must be active when paired";
 
 /// The vault offered to `pair_refund_vault` held a non-zero balance; pre-existing
 /// funds would be stranded after finalize/cancel.
-#[error(code = 54)]
+#[error(code = 27)]
 const EVaultNotEmpty: vector<u8> =
     "The refund vault must be empty when paired, otherwise existing funds would be stranded";
 
 // Receipts
 
 /// A receipt passed to `claim` / `refund` was issued by a different sale.
-#[error(code = 60)]
+#[error(code = 28)]
 const EReceiptSaleMismatch: vector<u8> = "This receipt was issued by a different sale";
 
 // Quote / curve coupling
 
 /// A quote passed to `purchase` was minted for a different sale.
-#[error(code = 61)]
+#[error(code = 29)]
 const EQuoteSaleMismatch: vector<u8> = "This quote was issued for a different sale";
 
 // Activation ticket
 
 /// An activation ticket passed to `share_and_activate` was minted for a different
 /// sale.
-#[error(code = 62)]
+#[error(code = 30)]
 const ETicketSaleMismatch: vector<u8> = "This activation ticket was issued for a different sale";
 
 // Per-buyer cap configuration
 
 /// `set_per_buyer_cap` was called a second time on the same sale.
-#[error(code = 70)]
+#[error(code = 31)]
 const EPerBuyerCapAlreadySet: vector<u8> = "The per-buyer limit has already been set";
 
 /// `set_per_buyer_cap` was given `0`; a zero cap would block every buyer.
-#[error(code = 71)]
+#[error(code = 32)]
 const EPerBuyerCapZero: vector<u8> = "The per-buyer limit must be greater than zero";
 
 // Vesting schedule configuration
 
 /// `set_vesting_schedule_params` was called a second time on the same sale.
-#[error(code = 80)]
+#[error(code = 33)]
 const EVestingScheduleAlreadySet: vector<u8> = "The vesting schedule has already been set";
 
 /// Plain `claim` was called on a sale that has a vesting schedule; redeem via
 /// `claim_into_vesting`.
-#[error(code = 81)]
+#[error(code = 34)]
 const EClaimRequiresVesting: vector<u8> =
     "This sale uses vesting; tokens must be claimed into a vesting wallet";
 
 /// `claim_into_vesting` was called on a sale with no vesting schedule; use `claim`.
-#[error(code = 82)]
+#[error(code = 35)]
 const ENoVestingScheduleAttached: vector<u8> =
     "This sale does not use vesting; claim the tokens directly";
 
 // Phase
 
 /// A phase-gated operation required the `Init` phase but the sale was past it.
-#[error(code = 90)]
+#[error(code = 36)]
 const ENotInit: vector<u8> = "The sale must be in the setup phase";
 
 /// A phase-gated operation required the `Active` phase: the sale was not yet
 /// activated, or has already closed.
-#[error(code = 91)]
+#[error(code = 37)]
 const ENotActive: vector<u8> = "The sale must be open";
 
 /// A phase-gated operation required the `Finalized` phase, e.g. a claim before the
 /// sale was finalized.
-#[error(code = 92)]
+#[error(code = 38)]
 const ENotFinalized: vector<u8> = "The sale must have closed successfully first";
 
 /// A phase-gated operation required the `Cancelled` phase, e.g. a refund before the
 /// sale was cancelled.
-#[error(code = 93)]
+#[error(code = 39)]
 const ENotCancelled: vector<u8> = "The sale must have been cancelled";
 
 /// A phase-gated operation required a terminal phase (`Finalized` or `Cancelled`).
-#[error(code = 94)]
+#[error(code = 40)]
 const ENotTerminal: vector<u8> = "The sale must have ended";
 
 // === Structs ===
@@ -1310,8 +1310,7 @@ public fun finalize<
 /// Propagated through the internal cancel path (guarded by the sale's invariants, so
 /// unreachable in normal operation):
 /// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState` (depositing
-///   proceeds into the vault and flipping it to refunding);
-/// - `phase::EAlreadyCancelled` (the phase transition).
+///   proceeds into the vault and flipping it to refunding).
 public fun cancel_after_close<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1366,8 +1365,7 @@ public fun cancel_after_close<
 /// Propagated through the internal cancel path (guarded by the sale's invariants, so
 /// unreachable in normal operation):
 /// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState` (depositing
-///   proceeds into the vault and flipping it to refunding);
-/// - `phase::EAlreadyCancelled` (the phase transition).
+///   proceeds into the vault and flipping it to refunding).
 public fun cancel_emergency<
     Curve: drop,
     CurveParams: copy + drop + store,

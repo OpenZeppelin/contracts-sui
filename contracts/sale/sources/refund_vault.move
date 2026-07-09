@@ -54,11 +54,11 @@ const ENotRefundingState: vector<u8> = "The refund vault must be in the refundin
 const ENotClosedState: vector<u8> = "The refund vault must be closed";
 
 /// The supplied cap does not control this vault (`cap.vault_id != id(vault)`).
-#[error(code = 10)]
+#[error(code = 3)]
 const EWrongVaultCap: vector<u8> = "This capability does not control this refund vault";
 
 /// A release requested more than the vault's locked balance.
-#[error(code = 20)]
+#[error(code = 4)]
 const EInsufficientLocked: vector<u8> = "The requested amount exceeds the funds held in the vault";
 
 // === Structs ===
