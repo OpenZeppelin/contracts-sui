@@ -520,6 +520,7 @@ public fun release<S: drop, P: copy + drop + store, C>(
     if (releasable == 0) return;
     assert!(releasable <= wallet.balance.value(), EInsufficientBalance);
 
+    let wallet_id = object::id(wallet);
     let beneficiary = wallet.beneficiary;
 
     wallet.released = wallet.released + releasable;
@@ -528,7 +529,7 @@ public fun release<S: drop, P: copy + drop + store, C>(
     balance::send_funds(payout, beneficiary);
 
     event::emit(Released<S, C> {
-        wallet_id: object::id(wallet),
+        wallet_id,
         beneficiary,
         amount: releasable,
     });
