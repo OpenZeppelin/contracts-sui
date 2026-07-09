@@ -222,6 +222,27 @@ public fun page_k(s: &SortedSet<Key>, from_id: u64, inc: bool, lim: u64): vector
     s.keys_from_by!(&Key { id: from_id, tag: 0 }, inc, lim, |a, b| a.id < b.id)
 }
 
+// === Store-only (non-`drop`) key: witnesses the store-only set + the destroy_empty terminal ===
+//
+// A key with `store` but NOT `copy`/`drop` makes `SortedSet<NoDropKey>` itself store-only: it
+// cannot fall out of scope, so it must be drained (keys leave via `pop_*`, each consumed by
+// `ndk_unwrap`) and then `destroy_empty`'d. Ordered on `id`. Only the non-displacing ops apply:
+// `add_by!` (strict insert) inserts, `pop_*` return the bare key; `upsert!` (drops the displaced
+// key) and `remove!` (drops the stored key) require `K: drop` and are unavailable here.
+
+public struct NoDropKey has store { id: u64 }
+
+public fun ndk(id: u64): NoDropKey { NoDropKey { id } }
+
+/// Consume a `NoDropKey`, returning its id. The only way to dispose of one (it has no `drop`).
+public fun ndk_unwrap(k: NoDropKey): u64 {
+    let NoDropKey { id } = k;
+    id
+}
+
+/// Strict insert of a store-only key, ordered on `id` (no displacement -> no `drop` needed).
+public fun add_ndk(s: &mut SortedSet<NoDropKey>, k: NoDropKey) { s.add_by!(k, |a, b| a.id < b.id) }
+
 // === Builders ===
 
 /// Deterministic scramble (coprime multiplier mod a prime), same as the map suite, so a

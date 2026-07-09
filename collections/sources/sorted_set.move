@@ -19,12 +19,14 @@
 /// - **`upsert` returns `bool` and never aborts** on a duplicate key, unlike `sui::vec_set`;
 ///   `add!` is the strict counterpart that aborts on a duplicate, matching `sui::vec_set::insert`.
 ///   `remove!` aborts on an absent key, matching `sui::vec_set`.
-/// - **Always `copy + drop + store`.** The value is always `Unit`, so there is no resource set and
-///   no `destroy_empty`; a set just falls out of scope.
-/// - **Four aborts:** `pop_front` / `pop_back` on an empty set (`EEmpty`), `remove!` on an absent
+/// - **Abilities follow `K`.** The value is always the `copy + drop + store` `Unit`, so
+///   `SortedSet<K>` has exactly the abilities `K` does. A set of droppable keys just falls out of
+///   scope; a set of non-`drop` keys (rare - e.g. a resource key) is itself non-`drop` and must be
+///   drained then `destroy_empty`'d, exactly like `SortedMap<K, Coin<T>>`.
+/// - **Five aborts:** `pop_front` / `pop_back` on an empty set (`EEmpty`), `remove!` on an absent
 ///   key (`sorted_map::EKeyNotFound`), `add!` / `add_by!` on a duplicate key
-///   (`sorted_map::EKeyAlreadyExists`), and `from_sorted_keys!` on unsorted input
-///   (`EKeysNotSorted`); every other op is total.
+///   (`sorted_map::EKeyAlreadyExists`), `from_sorted_keys!` on unsorted input (`EKeysNotSorted`),
+///   and `destroy_empty` on a non-empty set (`ENotEmpty`); every other op is total.
 ///
 /// # The comparator
 ///
@@ -96,6 +98,11 @@ const EEmpty: vector<u8> = "Set is empty";
 #[error(code = 1)]
 const EKeysNotSorted: vector<u8> = "Keys are not sorted";
 
+/// `destroy_empty` was called on a set that still holds keys. Asserted at this module's location -
+/// distinct from the wrapped map's `ENotEmpty`.
+#[error(code = 2)]
+const ENotEmpty: vector<u8> = "Set is not empty";
+
 // === Structs ===
 
 /// Internal membership marker so a set can reuse `SortedMap<K, Unit>`. A zero-field empty
@@ -105,15 +112,16 @@ const EKeysNotSorted: vector<u8> = "Keys are not sorted";
 /// `public` only because it appears in the forced-public accessors' signatures (macro
 /// hygiene). Consumers never construct it (`unit()` does, internally) or read it. Declared
 /// `copy, drop, store` so the value conjunction of `SortedMap<K, Unit>` collapses onto `K`
-/// alone, making `SortedSet<K>` unconditionally `copy + drop + store`.
+/// alone: `SortedSet<K>` then has exactly the abilities `K` does.
 public struct Unit has copy, drop, store {}
 
 /// An ordered set of unique keys, backed by one sorted vector via `SortedMap<K, Unit>`.
 ///
 /// A pure value - no `UID`, no dynamic fields - so it embeds directly in an integrator's
 /// object, exactly like `sui::vec_set::VecSet`. Because the value is always the
-/// `copy + drop + store` `Unit`, `SortedSet<K>` is unconditionally `copy + drop + store`
-/// for any admissible `K` - there is no store-only set analogous to `SortedMap<K, Coin<T>>`.
+/// `copy + drop + store` `Unit`, `SortedSet<K>` has exactly the abilities `K` does:
+/// with a `copy + drop + store` key it is `copy + drop + store`; with a non-`drop` (e.g.
+/// resource) key it is store-only and must be `destroy_empty`'d, like `SortedMap<K, Coin<T>>`.
 ///
 /// Across every public operation, by delegation to the inner map, the keys are strictly
 /// increasing under the (consistently supplied) comparator: sorted, no duplicates.
@@ -191,6 +199,22 @@ public fun singleton<K>(key: K): SortedSet<K> {
     set
 }
 
+/// Destroy an empty set.
+///
+/// Only needed when `K` lacks `drop` (e.g. a resource key): such a `SortedSet<K>` is itself
+/// non-`drop` and cannot fall out of scope, so drain every key via `remove!`/`pop_*` first, then
+/// call this. A set of droppable keys never needs it. The set's own `ENotEmpty` is asserted FIRST,
+/// so a non-empty set aborts at THIS module's location; the wrapped map's `ENotEmpty` is never
+/// reached through here.
+///
+/// #### Aborts
+/// - `ENotEmpty` if the set still holds keys.
+public fun destroy_empty<K>(set: SortedSet<K>) {
+    assert!(set.is_empty(), ENotEmpty);
+    let SortedSet { inner } = set;
+    inner.destroy_empty();
+}
+
 /// Build a set from a vector of keys by idempotent insertion, under `$lt`. Duplicates are
 /// silently collapsed - the result holds each distinct key once, in comparator order, so
 /// `length(result)` is the number of distinct keys, NOT the input length. This diverges
@@ -211,7 +235,7 @@ public fun singleton<K>(key: K): SortedSet<K> {
 public macro fun from_keys_by<$K>($keys: vector<$K>, $lt: |&$K, &$K| -> bool): SortedSet<$K> {
     let keys = $keys;
     let mut set = new();
-    keys.do!(|k| { upsert_by!(&mut set, k, $lt); });
+    keys.do!(|k| { set.upsert_by!(k, $lt); });
     set
 }
 

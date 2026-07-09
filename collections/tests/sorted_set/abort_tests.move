@@ -1,9 +1,10 @@
-/// The abort surface: two set-owned library aborts - `EEmpty` (pop on an empty set) and
-/// `EKeysNotSorted` (`from_sorted_keys!` on unsorted input) - each asserted at THIS module's
-/// location/code; two more are DELEGATED and surface at the wrapped MAP - `remove!` on an absent
-/// key (`sorted_map::EKeyNotFound`) and `add!` / `add_by!` on a duplicate key
-/// (`sorted_map::EKeyAlreadyExists`). The rest is the affirmative total-API contract for mid-PTB
-/// chaining: every op except `remove!`, `add!` / `add_by!`, and the pops is total.
+/// The abort surface: three set-owned library aborts - `EEmpty` (pop on an empty set),
+/// `EKeysNotSorted` (`from_sorted_keys!` on unsorted input), and `ENotEmpty` (`destroy_empty` on a
+/// non-empty set) - each asserted at THIS module's location/code; two more are DELEGATED and
+/// surface at the wrapped MAP - `remove!` on an absent key (`sorted_map::EKeyNotFound`) and `add!` /
+/// `add_by!` on a duplicate key (`sorted_map::EKeyAlreadyExists`). The rest is the affirmative
+/// total-API contract for mid-PTB chaining: every op except `remove!`, `add!` / `add_by!`,
+/// `destroy_empty`, and the pops is total.
 ///
 /// Every set-owned `#[expected_failure]` pins BOTH `abort_code = ...sorted_set::E*` AND
 /// `location = openzeppelin_collections::sorted_set` - the SET's location. The bypass and
@@ -57,6 +58,26 @@ fun from_sorted_minimal_decrease_aborts_at_set() {
     // The decrease is the FIRST comparison (i == 1), not a later pair as in [1,3,2] - so the abort
     // fires on the very first adjacent check, with only one element built so far.
     let _s = u::from_sorted(vector[2u64, 1]);
+}
+
+// === destroy_empty on a NON-EMPTY set -> set-owned ENotEmpty at the SET's location ===
+
+#[test, expected_failure(abort_code = ss::ENotEmpty, location = ss)]
+fun destroy_empty_nonempty_aborts_at_set() {
+    // destroy_empty asserts the set's OWN ENotEmpty FIRST, before delegating to the wrapped map's
+    // destroy_empty, so a non-empty set aborts at THIS module's location/code 2, not the map's.
+    let s = u::fromk(vector[1u64, 2]);
+    s.destroy_empty();
+}
+
+#[test, expected_failure(abort_code = ss::ENotEmpty, location = ss)]
+fun destroy_empty_nonempty_nodrop_key_aborts_at_set() {
+    // Under a non-`drop` key the guard proves destroy_empty can never silently bulk-discard stored
+    // keys: the still-owned NoDropKey is consumed only as the tx unwinds on the abort. This
+    // compiles BECAUSE the set is moved into destroy_empty.
+    let mut s = ss::new<u::NoDropKey>();
+    u::add_ndk(&mut s, u::ndk(1));
+    s.destroy_empty(); // non-empty -> ENotEmpty at the set's location
 }
 
 // === bypass caveat: a direct inner-map pop leaks the MAP's abort, not the set's ===

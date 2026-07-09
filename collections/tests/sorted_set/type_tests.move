@@ -14,29 +14,54 @@ public struct Watch has key { id: UID, s: SortedSet<u64> }
 // A store+drop wrapper to witness the set embeds as a `store` field and falls out of scope.
 public struct Box has drop, store { s: SortedSet<u64> }
 
-// === SortedSet<K> is UNCONDITIONALLY copy + drop + store for every admissible K ===
+// === SortedSet<K> has exactly the abilities of K (Unit contributes copy + drop + store) ===
 
 #[test]
-fun abilities_copy_drop_store_witness() {
-    // Each instantiation type-checks ONLY if the witnessed ability holds. There is no
-    // non-droppable instantiation to write a negative for - its very absence IS the invariant.
+fun abilities_follow_key() {
+    // Each instantiation type-checks ONLY if the witnessed ability holds. A copy+drop+store key
+    // yields a copy+drop+store set; a store-ONLY key (`NoDropKey`) yields a store-only set - it
+    // witnesses `store` but there is deliberately no `needs_drop<SortedSet<NoDropKey>>()` (it would
+    // NOT compile - that absence IS the "abilities follow K" invariant, exercised via the terminal
+    // in store_only_key_drain_then_destroy_empty).
     u::needs_copy<SortedSet<u64>>();
     u::needs_drop<SortedSet<u64>>();
     u::needs_store<SortedSet<u64>>();
     u::needs_copy<SortedSet<address>>();
     u::needs_drop<SortedSet<address>>();
     u::needs_store<SortedSet<address>>();
-    u::needs_copy<SortedSet<u::Key>>(); // struct key -> still copy+drop+store
+    u::needs_copy<SortedSet<u::Key>>(); // copy+drop+store struct key -> copy+drop+store set
     u::needs_drop<SortedSet<u::Key>>();
     u::needs_store<SortedSet<u::Key>>();
+    u::needs_store<SortedSet<u::NoDropKey>>(); // store-only key -> store-only set (no copy, no drop)
 }
 
 #[test]
-fun populated_set_drops_no_destroy_empty() {
-    // A populated set simply falls out of scope - there is no destroy_empty terminal.
+fun droppable_key_set_drops_no_destroy_empty() {
+    // With a `drop` key the set is `drop`, so a populated set simply falls out of scope - no
+    // destroy_empty needed. (A non-`drop` key set does need it: see below.)
     let s = u::fromk(vector[1u64, 2, 3]);
     assert_eq!(s.length(), 3);
-    // no teardown call: `s` drops here because SortedSet is unconditionally `drop`.
+    // no teardown call: `s` drops here because SortedSet<u64> is `drop`.
+}
+
+#[test]
+fun store_only_key_drain_then_destroy_empty() {
+    // A store-only key makes SortedSet<NoDropKey> itself store-only - it CANNOT fall out of scope,
+    // so it must be drained then explicitly torn down. Keys leave only via pop_* (each consumed by
+    // ndk_unwrap, since NoDropKey has no `drop`); the emptied set is then closed by destroy_empty -
+    // the ONLY terminal for a non-`drop`-key set. Omitting destroy_empty would not compile, which
+    // is the structural proof that the terminal is load-bearing here.
+    let mut s = ss::new<u::NoDropKey>();
+    u::add_ndk(&mut s, u::ndk(2));
+    u::add_ndk(&mut s, u::ndk(1));
+    u::add_ndk(&mut s, u::ndk(3));
+    assert_eq!(s.length(), 3);
+    let mut ids = vector[];
+    while (!s.is_empty()) {
+        ids.push_back(u::ndk_unwrap(s.pop_front())); // smallest id first
+    };
+    assert_eq!(ids, vector[1u64, 2, 3]); // drained in comparator (id) order, none lost
+    s.destroy_empty(); // the emptied store-only set's only terminal
 }
 
 #[test]
@@ -211,12 +236,13 @@ fun from_keys_macro_depth_compiles() {
 // are kept here (positive round-trips + commented non-compiling snippets) so a reviewer can see
 // exactly what the type system forecloses.
 //
-// No resource-valued or store-only set; V is fixed to Unit (no second type arg):
+// No resource-valued or store-only VALUE set; V is fixed to Unit (no second type arg):
 //     let s = ss::new<u64, sui::coin::Coin<SUI>>();   // E: SortedSet takes ONE type parameter
 //
-// A store-only key is rejected at the type annotation:
-//     public struct SO has store {}
-//     let s = ss::new<SO>();                          // E05001: SO is missing copy, drop
+// A store-only KEY is ACCEPTED (the set is then store-only and must be destroy_empty'd - see
+// store_only_key_drain_then_destroy_empty); it is a NON-drop set that has no live negative. But an
+// ability the KEY lacks is still forbidden on the set - a store-only-key set is not `drop`:
+//     u::needs_drop<SortedSet<u::NoDropKey>>();       // E05001: SortedSet<NoDropKey> lacks `drop`
 //
 // A bare macro on a non-integer key fails (no built-in `<`); use the _by form:
 //     let mut s = ss::new<address>();
