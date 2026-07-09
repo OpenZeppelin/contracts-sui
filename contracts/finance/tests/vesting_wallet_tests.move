@@ -42,15 +42,20 @@ const PARAMS_TAG: u64 = 7;
 
 // === Test-Only Helpers ===
 
+// Most tests do not exercise teardown, so this helper discards the `DestroyCap` and
+// returns just the wallet. Teardown tests call `vesting_wallet::new` directly to keep
+// the cap.
 fun new_wallet(
     beneficiary: address,
     ctx: &mut TxContext,
 ): VestingWallet<TestCurve, TestParams, USDC> {
-    vesting_wallet::new<TestCurve, TestParams, USDC>(
+    let (wallet, cap) = vesting_wallet::new<TestCurve, TestParams, USDC>(
         TestParams { tag: PARAMS_TAG },
         beneficiary,
         ctx,
-    )
+    );
+    destroy(cap);
+    wallet
 }
 
 fun mint(amount: u64): Balance<USDC> {
@@ -506,7 +511,7 @@ fun release_aborts_when_vested_exceeds_total() {
     wallet.deposit(mint(100));
 
     // Attest more than balance + released (= 100). `release` clears the wallet_id and
-    // `>= released` guards, then `EInsufficientBalance` aborts before any coin is minted.
+    // `>= released` guards, then `EInsufficientBalance` aborts before funds are sent.
     let vested = wallet.mint_vested_amount(TestCurve {}, 200);
     wallet.release(&vested);
     abort
@@ -564,8 +569,7 @@ fun destroy_empty_returns_params_and_emits() {
     // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
     // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
     let receipt = wallet.destroy_empty_for_testing();
-    assert_eq!(receipt.test_receipt_beneficiary(), BENEFICIARY);
-    assert_eq!(receipt.test_receipt_params(), TestParams { tag: PARAMS_TAG });
+    assert_eq!(vesting_wallet::test_receipt_params(&receipt), TestParams { tag: PARAMS_TAG });
 
     let destroyed = event::events_by_type<Destroyed<TestCurve, USDC>>();
     assert_eq!(destroyed.length(), 1);
@@ -587,6 +591,48 @@ fun destroy_empty_rejects_nonempty_balance() {
     wallet.deposit(mint(1));
 
     let _receipt = wallet.destroy_empty_for_testing();
+    abort
+}
+
+// `consume_receipt` retires a drained wallet's receipt when handed the matching
+// `DestroyCap` and the curve witness, returning the schedule params. Teardown authority
+// is the cap, not the caller's address - so this works for any beneficiary, object
+// addresses included.
+#[test]
+fun consume_receipt_with_matching_cap_returns_params() {
+    let mut ctx = tx_context::dummy();
+
+    let (wallet, cap) = vesting_wallet::new<TestCurve, TestParams, USDC>(
+        TestParams { tag: PARAMS_TAG },
+        BENEFICIARY,
+        &mut ctx,
+    );
+
+    let receipt = wallet.destroy_empty_for_testing();
+    let params = receipt.consume_receipt(cap, TestCurve {});
+
+    assert_eq!(params, TestParams { tag: PARAMS_TAG });
+}
+
+// A `DestroyCap` minted for a different wallet cannot finalize this wallet's teardown.
+#[test, expected_failure(abort_code = vesting_wallet::EWrongCap)]
+fun consume_receipt_rejects_foreign_cap() {
+    let mut ctx = tx_context::dummy();
+
+    let (wallet_a, _cap_a) = vesting_wallet::new<TestCurve, TestParams, USDC>(
+        TestParams { tag: PARAMS_TAG },
+        BENEFICIARY,
+        &mut ctx,
+    );
+    let (_wallet_b, cap_b) = vesting_wallet::new<TestCurve, TestParams, USDC>(
+        TestParams { tag: PARAMS_TAG },
+        BENEFICIARY,
+        &mut ctx,
+    );
+
+    // Tearing A's receipt down with B's cap aborts: the cap's `wallet_id` does not match.
+    let receipt_a = wallet_a.destroy_empty_for_testing();
+    receipt_a.consume_receipt(cap_b, TestCurve {});
     abort
 }
 
@@ -714,7 +760,7 @@ fun beneficiary_params_and_id_are_immutable() {
 // beneficiary are attested by their `Released` events, which together sum to
 // exactly what was released.
 #[test]
-fun released_coins_stay_with_beneficiary() {
+fun released_funds_stay_with_beneficiary() {
     let mut scenario = test_scenario::begin(@0x1);
 
     let mut wallet = new_wallet(BENEFICIARY, scenario.ctx());

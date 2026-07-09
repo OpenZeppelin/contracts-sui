@@ -8,19 +8,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
-### `openzeppelin_allowance`
-
-#### Added
-
-- New `spend_vault` module: a shared multi-coin vault that grants capped, expiring, revocable spending allowances to capability holders. (#402)
-
-### `openzeppelin_finance`
-
-#### Added
-
-- New `vesting_wallet` module: a curve-agnostic release-accounting core for authoring custom vesting curves.
-- New `vesting_wallet_linear` module: built-in linear/stepped vesting with an optional cliff, plus a continuous mode.
-
 ### `openzeppelin_timelock`
 
 #### Added
@@ -41,9 +28,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Added
 
-- New `openzeppelin_collections` package: an ordered-collections family in a single package, with two modules - `sorted_map` and `sorted_set`. Both provide bare (built-in integer `<`) and `_by` (custom comparator) macro forms. (#261, #118)
-  - `sorted_map`: a generic, ordered key-value map (`SortedMap<K, V>`) backed by a single sorted vector. A UID-less value type you embed in your own object like `sui::vec_map::VecMap`, with ordered reads (head/tail, floor/ceiling, bounded pagination), O(log N) lookup, and exactly one stored-object access per operation. (#261)
-  - `sorted_set`: a generic, ordered set of unique keys (`SortedSet<K>`), a thin wrapper over `sorted_map`. Fills the gap left by the unordered `sui::vec_set` - iterates in comparator order, with nearest-neighbour navigation and bounded pagination. A UID-less value type, unconditionally `copy + drop + store`; `insert`/`remove` are total, returning `bool` rather than aborting on duplicates. (#118)
+- New `openzeppelin_collections` package: an ordered-collections family in a single package, with two modules - `sorted_map` and `sorted_set`. Both provide bare (built-in integer `<`) and `_by` (custom comparator) macro forms. (#454)
+
+## 1.4.0 (09-07-2026)
+
+### `openzeppelin_allowance`
+
+#### Added
+
+- New `spend_vault` module: a shared multi-coin vault that grants capped, expiring, revocable spending allowances to capability holders. (#402)
+
+### `openzeppelin_finance`
+
+#### Added
+
+- New `vesting_wallet` module: a curve-agnostic release-accounting core for authoring custom vesting curves.
+- New `vesting_wallet_linear` module: built-in linear/stepped vesting with an optional cliff, plus a continuous mode.
 
 ## 1.3.0 (15-06-2026)
 

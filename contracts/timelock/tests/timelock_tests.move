@@ -252,7 +252,43 @@ fun cancel_happy() {
 
     let cancelled = event::events_by_type<timelock::OperationCancelled>();
     assert_eq!(cancelled.length(), 1);
-    assert_eq!(cancelled[0], timelock::test_new_operation_cancelled(id, DEPLOYER));
+    assert_eq!(
+        cancelled[0],
+        timelock::test_new_operation_cancelled(id, with_original_ids<TestAction>(), DEPLOYER),
+    );
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(tl);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun cancel_succeeds_after_expiry() {
+    let mut scenario = setup(0, 100);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    let p_auth = ac.new_auth<_, ProposerRole>(scenario.ctx());
+    let id = tl.schedule<ProposerRole, TestAction, u64>(
+        &p_auth,
+        42,
+        vector[],
+        b"salt",
+        50,
+        &clk,
+        scenario.ctx(),
+    );
+    // Past the grace window: no longer pending, but still resident and cancellable.
+    clk.set_for_testing(150);
+    assert!(tl.is_operation_expired(id, &clk));
+    assert!(!tl.is_operation_pending(id, &clk));
+
+    let c_auth = ac.new_auth<_, CancellerRole>(scenario.ctx());
+    tl.cancel<CancellerRole, u64>(&c_auth, id, scenario.ctx());
+    assert!(!tl.is_operation(id));
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(tl);
@@ -947,6 +983,104 @@ fun set_open_executor_emits_event() {
     scenario.end();
 }
 
+// No-op config updates (the op carries the already-configured value) complete
+// normally - op Done, OperationExecuted emitted - but the config-change event is
+// suppressed: those events record actual changes only.
+#[test]
+fun update_min_delay_noop_emits_no_event() {
+    let mut scenario = setup(1000, 100000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let mut clk = clock::create_for_testing(scenario.ctx());
+    clk.set_for_testing(0);
+
+    let a_auth = ac.new_auth<_, AdminRole>(scenario.ctx());
+    let id = tl.schedule_update_min_delay<AdminRole>(
+        &a_auth,
+        1000, // already the configured min_delay_ms
+        vector[],
+        b"s",
+        1000,
+        &clk,
+        scenario.ctx(),
+    );
+    clk.set_for_testing(1000);
+    let a_auth2 = ac.new_auth<_, AdminRole>(scenario.ctx());
+    tl.execute_update_min_delay<AdminRole>(&a_auth2, id, &clk, scenario.ctx());
+
+    assert_eq!(tl.min_delay_ms(), 1000);
+    assert!(tl.is_operation_done(id));
+    assert_eq!(event::events_by_type<timelock::OperationExecuted>().length(), 1);
+    assert_eq!(event::events_by_type<timelock::MinDelayChanged>().length(), 0);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(tl);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun update_grace_period_noop_emits_no_event() {
+    let mut scenario = setup(0, 100000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let clk = clock::create_for_testing(scenario.ctx());
+
+    let a_auth = ac.new_auth<_, AdminRole>(scenario.ctx());
+    let id = tl.schedule_update_grace_period<AdminRole>(
+        &a_auth,
+        100000, // already the configured grace_period_ms
+        vector[],
+        b"g",
+        0,
+        &clk,
+        scenario.ctx(),
+    );
+    let a_auth2 = ac.new_auth<_, AdminRole>(scenario.ctx());
+    tl.execute_update_grace_period<AdminRole>(&a_auth2, id, &clk, scenario.ctx());
+
+    assert_eq!(tl.grace_period_ms(), 100000);
+    assert!(tl.is_operation_done(id));
+    assert_eq!(event::events_by_type<timelock::OperationExecuted>().length(), 1);
+    assert_eq!(event::events_by_type<timelock::GracePeriodChanged>().length(), 0);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(tl);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
+#[test]
+fun set_open_executor_noop_emits_no_event() {
+    let mut scenario = setup(0, 100000);
+    let mut tl = scenario.take_shared<Timelock>();
+    let ac = scenario.take_shared<AccessControl<TIMELOCK_TESTS>>();
+    let clk = clock::create_for_testing(scenario.ctx());
+
+    let a_auth = ac.new_auth<_, AdminRole>(scenario.ctx());
+    let id = tl.schedule_set_open_executor<AdminRole>(
+        &a_auth,
+        false, // open_executor already starts false
+        vector[],
+        b"o",
+        0,
+        &clk,
+        scenario.ctx(),
+    );
+    let a_auth2 = ac.new_auth<_, AdminRole>(scenario.ctx());
+    tl.execute_set_open_executor<AdminRole>(&a_auth2, id, &clk, scenario.ctx());
+
+    assert!(!tl.is_open_executor());
+    assert!(tl.is_operation_done(id));
+    assert_eq!(event::events_by_type<timelock::OperationExecuted>().length(), 1);
+    assert_eq!(event::events_by_type<timelock::OpenExecutorChanged>().length(), 0);
+
+    clock::destroy_for_testing(clk);
+    test_scenario::return_shared(tl);
+    test_scenario::return_shared(ac);
+    scenario.end();
+}
+
 // Changing min_delay does not move an in-flight op's locked timing.
 #[test]
 fun in_flight_op_keeps_timing_after_min_delay_change() {
@@ -1155,6 +1289,32 @@ fun share_makes_timelock_shared() {
     assert_eq!(tl.grace_period_ms(), 1000);
     test_scenario::return_shared(tl);
     scenario.end();
+}
+
+#[test]
+fun domain_tag_getter_pins_published_value() {
+    // Changing the tag re-keys every operation id, so pin the published value.
+    assert_eq!(timelock::domain_tag(), b"OZ_Timelock_1_Sui");
+}
+
+// Golden vector for the byte-exact preimage encoding documented on `hash_operation`.
+// Every input is pinned, so the expected id was recomputed independently off-chain:
+//   preimage = "OZ_Timelock_1_Sui"                       raw 17 bytes, no length prefix
+//           || 0x4a || "0000..0002::sui::SUI"            action: ULEB128 len (74) + ascii
+//           || 0x20 || 0x11 * 32                         payload_digest: len + bytes
+//           || 0x00                                      predecessor: empty vector
+//           || 0x04 || "salt"                            salt: len + bytes
+//           || 0x00 * 31 || 0xaa                         timelock_id: raw 32 bytes
+//   id = keccak256(preimage)
+#[test]
+fun hash_operation_matches_documented_encoding() {
+    let id = timelock::hash_operation<sui::sui::SUI>(
+        object::id_from_address(@0xAA),
+        x"1111111111111111111111111111111111111111111111111111111111111111",
+        vector[],
+        b"salt",
+    );
+    assert_eq!(id, x"e18d98c162999a5d9644720daa1771b0cebc3569064fa498adf55d5035bc60e5");
 }
 
 #[test]
