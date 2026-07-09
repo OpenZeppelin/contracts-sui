@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_allowance`
+
+#### Added
+
+- New `spend_vault` module: a shared multi-coin vault that grants capped, expiring, revocable spending allowances to capability holders. (#402)
+
 ### `openzeppelin_finance`
 
 #### Added

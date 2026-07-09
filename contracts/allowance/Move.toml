@@ -1,0 +1,3 @@
+[package]
+name = "openzeppelin_allowance"
+edition = "2024"
