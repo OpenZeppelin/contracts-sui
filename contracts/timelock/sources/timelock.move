@@ -398,6 +398,8 @@ public fun hash_operation<Action>(
 /// - `EInvalidPredecessor` if `predecessor` is non-empty and not a 32-byte id.
 /// - `EPredecessorIsSelf` if `predecessor` equals the computed id.
 /// - `EOperationAlreadyExists` if the id is already scheduled.
+/// - `sui::dynamic_field::EFieldAlreadyExists` from the internal table and params-field adds
+///   (guarded by the `EOperationAlreadyExists` check above; unreachable in normal operation).
 public fun schedule<Role, Action, Params: store + drop>(
     self: &mut Timelock,
     _proposer_auth: &Auth<Role>,
@@ -421,10 +423,19 @@ public fun schedule<Role, Action, Params: store + drop>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `executor_role`.
+/// - `EOperationUnset` if no operation with this id exists.
+/// - `EOperationAlreadyDone` if the operation has already been executed.
+/// - `EDelayNotElapsed` if the operation's delay has not elapsed yet.
+/// - `EOperationExpired` if the operation's grace window has closed.
+/// - `EPredecessorUnset` if the operation names a predecessor that is not in the timelock.
+/// - `EPredecessorNotDone` if the operation names a predecessor that is not yet executed.
 /// - `EWrongAction` if `Action` does not match the type the operation was scheduled with.
 /// - `EWrongParams` if `Params` does not match the type the operation was scheduled with.
-/// - `EOperationUnset`, `EOperationAlreadyDone`, `EDelayNotElapsed`,
-///   `EOperationExpired`, `EPredecessorUnset`, `EPredecessorNotDone`.
+/// - `sui::dynamic_field::EFieldDoesNotExist` from the internal table reads and params removal
+///   (guarded by the `EOperationUnset`, `EPredecessorUnset`, and `EWrongParams` checks above;
+///   unreachable in normal operation).
+/// - `sui::dynamic_field::EFieldTypeMismatch` from the internal params removal (guarded by the
+///   `EWrongParams` check above; unreachable in normal operation).
 public fun execute<Role, Action, Params: store + drop>(
     self: &mut Timelock,
     _executor_auth: &Auth<Role>,
@@ -444,7 +455,7 @@ public fun execute<Role, Action, Params: store + drop>(
 ///
 /// #### Aborts
 /// - `EOpenExecutorDisabled` if `open_executor` is false.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the aborts of `execute`, apart from its role check.
 public fun execute_open<Action, Params: store + drop>(
     self: &mut Timelock,
     id: vector<u8>,
@@ -487,6 +498,11 @@ public fun consume<Action: drop, Params>(
 /// - `EOperationUnset` if no such operation.
 /// - `EOperationAlreadyDone` if the operation was already executed.
 /// - `EWrongParams` if `Params` does not match the type the operation was scheduled with.
+/// - `sui::dynamic_field::EFieldDoesNotExist` from the internal table and params-field
+///   removals (guarded by the `EOperationUnset` and `EWrongParams` checks above; unreachable
+///   in normal operation).
+/// - `sui::dynamic_field::EFieldTypeMismatch` from the internal params removal (guarded by the
+///   `EWrongParams` check above; unreachable in normal operation).
 public fun cancel<Role, Params: store + drop>(
     self: &mut Timelock,
     _canceller_auth: &Auth<Role>,
@@ -575,8 +591,7 @@ public fun execute_with<Role, Action, Params: store + drop>(
 ///
 /// #### Aborts
 /// - `EWrongTimelock` if `cap` is not bound to `self`.
-/// - `EOpenExecutorDisabled` if open-executor mode is disabled.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the same aborts as `execute_open`.
 public fun execute_open_with<Action, Params: store + drop>(
     self: &mut Timelock,
     cap: &OperationCap<Action, Params>,
@@ -617,8 +632,7 @@ public fun cancel_with<Role, Action, Params: store + drop>(
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - `EInvalidConfig` if `new_min_delay_ms > MAX_DELAY_MS`.
-/// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+/// - Plus the aborts of `schedule`, except `EWrongRole`.
 public fun schedule_update_min_delay<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -646,7 +660,9 @@ public fun schedule_update_min_delay<Role>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the aborts of `execute`, apart from its role check.
+/// - `EInvalidConfig` if the stored `new_min_delay_ms` exceeds `MAX_DELAY_MS`. The bound is
+///   re-asserted at apply time because the op can be staged through the generic `schedule`.
 public fun execute_update_min_delay<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -681,8 +697,7 @@ public fun execute_update_min_delay<Role>(
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - `EInvalidConfig` if `new_grace_period_ms` is zero or `> MAX_DELAY_MS`.
-/// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+/// - Plus the aborts of `schedule`, apart from its role check.
 public fun schedule_update_grace_period<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -710,7 +725,10 @@ public fun schedule_update_grace_period<Role>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the aborts of `execute`, apart from its role check.
+/// - `EInvalidConfig` if the stored `new_grace_period_ms` is zero or exceeds `MAX_DELAY_MS`.
+///   The bound is re-asserted at apply time because the op can be staged through the generic
+///   `schedule`.
 public fun execute_update_grace_period<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -742,8 +760,7 @@ public fun execute_update_grace_period<Role>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
-/// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+/// - Plus the aborts of `schedule`, apart from its role check.
 public fun schedule_set_open_executor<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -770,7 +787,7 @@ public fun schedule_set_open_executor<Role>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the aborts of `execute`, apart from its role check.
 public fun execute_set_open_executor<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -846,7 +863,10 @@ public fun operation_state(self: &Timelock, id: vector<u8>, clock: &Clock): Oper
 /// Borrow the typed params of a pending operation (for off-chain inspection / UIs).
 ///
 /// #### Aborts
-/// - A `sui::dynamic_field` abort if the id has no stored `Params` (Unset or already Done).
+/// - `sui::dynamic_field::EFieldDoesNotExist` if the id has no stored params (Unset or
+///   already Done).
+/// - `sui::dynamic_field::EFieldTypeMismatch` if `Params` does not match the type the
+///   operation was scheduled with.
 public fun operation_params<Params: store>(self: &Timelock, id: vector<u8>): &Params {
     df::borrow<vector<u8>, Params>(&self.id, id)
 }
