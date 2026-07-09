@@ -17,7 +17,7 @@ use sui::test_scenario as ts;
 
 // === create_sale: construction guards ===
 
-// A zero hard cap is rejected — every sale must have a bounded raise.
+// A zero hard cap is rejected - every sale must have a bounded raise.
 #[test, expected_failure(abort_code = prefunded_sale::EHardCapZero)]
 fun create_sale_rejects_zero_hard_cap() {
     let mut ctx = tx_context::dummy();
@@ -533,7 +533,7 @@ fun activate_after_close_aborts() {
 }
 
 // A ticket minted for a different sale is rejected. Code uses
-// ETicketSaleMismatch (code 62) — the invariants doc still names the old
+// ETicketSaleMismatch (code 62) - the invariants doc still names the old
 // EReceiptSaleMismatch; corrected since commit 547c315.
 #[test, expected_failure(abort_code = prefunded_sale::ETicketSaleMismatch)]
 fun activate_with_foreign_ticket_aborts() {
@@ -542,7 +542,7 @@ fun activate_with_foreign_ticket_aborts() {
     clk.set_for_testing(u::opens());
     let ctx = test.ctx();
 
-    // Sale A — the one we try to activate.
+    // Sale A - the one we try to activate.
     let (mut sale_a, cap_a) = prefunded_sale::create_sale<
         FixedRateCurve,
         FrcParams,
@@ -561,7 +561,7 @@ fun activate_with_foreign_ticket_aborts() {
     let (vault_a, vault_cap_a) = refund_vault::new<USDC>(ctx);
     sale_a.pair_refund_vault(&vault_a, vault_cap_a);
 
-    // Sale B — same type; its ticket pins B's id, not A's.
+    // Sale B - same type; its ticket pins B's id, not A's.
     let (sale_b, cap_b) = prefunded_sale::create_sale<
         FixedRateCurve,
         FrcParams,

@@ -603,7 +603,7 @@ fun withdraw_unsold_in_cancelled_recovers_freed_inventory() {
 }
 
 // withdraw_unsold_inventory is phase-gated to terminal states; calling it while the
-// sale is still Active aborts (ENotTerminal) — the sibling of withdraw_proceeds's
+// sale is still Active aborts (ENotTerminal) - the sibling of withdraw_proceeds's
 // ENotFinalized guard, which was the only terminal-gate failure previously tested.
 #[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotTerminal)]
 fun withdraw_unsold_before_terminal_aborts() {

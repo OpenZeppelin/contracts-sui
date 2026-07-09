@@ -2,9 +2,9 @@
 //
 // The curve-trust boundary is an INTENTIONAL design decision: the sale accepts
 // the curve's `allocation` (from the quote) and `required_inventory` (from the
-// activation ticket) verbatim — there is no `max_rate` field and no independent
+// activation ticket) verbatim - there is no `max_rate` field and no independent
 // rate bound. The only protections are the inventory bound and the u128
-// overflow guards. These tests use a test-only `BadCurve` witness — the
+// overflow guards. These tests use a test-only `BadCurve` witness - the
 // only way to exercise a dishonest curve and to reach EInsufficientInventory,
 // which an honest, tightly-provisioned `FixedRateCurve` sale can never trip.
 module openzeppelin_sale::prefunded_sale_curve_trust_tests;
@@ -69,7 +69,7 @@ fun take_bad_sale(test: &Scenario): PrefundedSale<BadCurve, u64, SALE, USDC, u64
 
 // A dishonest curve can under-size `required_inventory`, activating a sale whose
 // real inventory (10) is far below `hard_cap` (1_000). The sale performs no
-// independent backing check — this is the documented, intentional trust.
+// independent backing check - this is the documented, intentional trust.
 #[test]
 fun activation_trusts_undersized_required_inventory() {
     let (mut test, clk) = setup();
@@ -112,7 +112,7 @@ fun overallocating_quote_beyond_inventory_aborts() {
 
 // Within the inventory ceiling, an over-allocating curve IS accepted: inventory
 // drains far faster than `raised` approaches `hard_cap` (sold-out before
-// hard-cap). This pins the residual trust — the sale does not re-derive price.
+// hard-cap). This pins the residual trust - the sale does not re-derive price.
 #[test]
 fun overallocating_quote_within_inventory_is_accepted() {
     let (mut test, clk) = setup();

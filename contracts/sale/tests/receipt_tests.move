@@ -1,7 +1,7 @@
 // Receipt construction / view / consume tests.
 //
 // `Receipt<S>` non-transferability is a *type-level* property (`key` only, no
-// `store`, package-private transfer path) enforced at compile time — it cannot
+// `store`, package-private transfer path) enforced at compile time - it cannot
 // be exercised at runtime and is documented in the test artifact's Out of Scope.
 // These tests pin the data carried by a receipt and the consume round-trip,
 // which the sale's claim/refund paths depend on.

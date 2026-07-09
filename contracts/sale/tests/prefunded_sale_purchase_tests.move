@@ -320,7 +320,7 @@ fun per_entry_cap_exact_boundary_ok() {
     test.end();
 }
 
-// A quote minted for a different sale is rejected — the quote-side analogue of the
+// A quote minted for a different sale is rejected - the quote-side analogue of the
 // activation-ticket sale-id check.
 #[test, expected_failure(abort_code = prefunded_sale::EQuoteSaleMismatch)]
 fun purchase_with_foreign_quote_aborts() {
@@ -329,7 +329,7 @@ fun purchase_with_foreign_quote_aborts() {
 
     test.next_tx(u::buyer());
     let mut sale_a = u::take_sale(&test);
-    // Sale B — same type, never activated; its quote pins B's id, not A's.
+    // Sale B - same type, never activated; its quote pins B's id, not A's.
     let (sale_b, cap_b) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
         fixed_rate_curve::params(1),
         1_000,
