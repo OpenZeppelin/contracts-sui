@@ -39,6 +39,8 @@ public fun page(s: &SortedSet<u64>, from: u64, inc: bool, lim: u64): vector<u64>
 
 public fun fromk(ks: vector<u64>): SortedSet<u64> { ss::from_keys!(ks) }
 
+public fun from_sorted(ks: vector<u64>): SortedSet<u64> { ss::from_sorted_keys!(ks) }
+
 /// Well-formedness check under the bare integer `<` - REUSED from the map across the package
 /// boundary. No separate set checker exists.
 public fun wf(s: &SortedSet<u64>): bool { s.inner_ref().is_well_formed!() }
@@ -78,6 +80,18 @@ public fun pkey_rev(s: &SortedSet<u64>, k: u64): Option<u64> {
 
 public fun page_rev(s: &SortedSet<u64>, from: u64, inc: bool, lim: u64): vector<u64> {
     s.keys_from_by!(&from, inc, lim, |a, b| *a > *b)
+}
+
+/// Sorted constructor under the reverse comparator: input must be descending-numeric (which is
+/// "sorted" - non-increasing numerically, i.e. non-decreasing under `>`).
+public fun from_sorted_rev(ks: vector<u64>): SortedSet<u64> {
+    ss::from_sorted_keys_by!(ks, |a, b| *a > *b)
+}
+
+/// The O(N^2) `from_keys!` oracle under the reverse comparator - ground truth for cross-checking
+/// `from_sorted_rev` at scale (any input order; de-duplicates).
+public fun fromk_rev(ks: vector<u64>): SortedSet<u64> {
+    ss::from_keys_by!(ks, |a, b| *a > *b)
 }
 
 // === Thin wrappers - u64, BAD comparators (footguns) ===
@@ -161,6 +175,11 @@ public fun keys_k(s: &SortedSet<Key>): vector<Key> { s.keys() }
 public fun len_k(s: &SortedSet<Key>): u64 { s.length() }
 
 public fun fromk_k(ks: vector<Key>): SortedSet<Key> { ss::from_keys_by!(ks, |a, b| a.id < b.id) }
+
+/// Sorted constructor for the coarse struct key (ordered on `id`); input must be id-ascending.
+public fun from_sorted_k(ks: vector<Key>): SortedSet<Key> {
+    ss::from_sorted_keys_by!(ks, |a, b| a.id < b.id)
+}
 
 public fun wf_k(s: &SortedSet<Key>): bool {
     s.inner_ref().is_well_formed_by!(|a, b| a.id < b.id)

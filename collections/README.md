@@ -103,7 +103,7 @@ Complete integration examples live in [`examples/sorted_map/`](examples/sorted_m
 
 ### Lifecycle
 
-1. **Construct** - `new()` / `singleton(k)` / `from_keys!(keys)` (de-duplicates, never aborts). Takes no `TxContext`; embed the result as a field.
+1. **Construct** - `new()` / `singleton(k)` / `from_keys!(keys)` (any order, de-duplicates, never aborts) / `from_sorted_keys!(keys)` (pre-sorted input, O(N), de-duplicates; aborts `EKeysNotSorted` otherwise). Takes no `TxContext`; embed the result as a field.
 2. **Membership** - `insert!`/`remove!` return `bool` (`true` = the set changed); `contains!` tests presence. Bare macros for integer keys, `_by` macros with a consistent comparator otherwise.
 3. **Iterate** - `head`/`tail`, `next_key!`/`prev_key!`, `find_next!`/`find_prev!`, `keys_from!` pages, `pop_front`/`pop_back`. A set is always droppable, so there is no `destroy_empty`.
 
@@ -145,7 +145,7 @@ Complete integration examples live in [`examples/sorted_set/`](examples/sorted_s
 
 - [`allowlist`](examples/sorted_set/allowlist.move) - the canonical embed and the headline `vec_set` divergence: `insert!`/`remove!` return `bool` (never abort), side effects gated on a real state change, `from_keys!` de-dup.
 - [`validator_set`](examples/sorted_set/validator_set.move) - the `_by` struct-key story and the comparator footgun: a coarse (non-injective) comparator silently collapses byte-distinct keys, shown with a red test.
-- [`unlock_queue`](examples/sorted_set/unlock_queue.move) - ordered drain / priority queue (head/tail peek, pop extremes) and the set's single `EEmpty` abort pinned to `openzeppelin_collections::sorted_set`.
+- [`unlock_queue`](examples/sorted_set/unlock_queue.move) - ordered drain / priority queue (head/tail peek, pop extremes) and the set's `EEmpty` abort pinned to `openzeppelin_collections::sorted_set`.
 
 ## Security Notes
 
@@ -164,7 +164,7 @@ The comparator footgun applies to both modules and is stated once at the top of 
 
 - **The worst case is order-only - no key is ever lost.** Unlike the map (which can strand a `Coin` on misuse), the set's value is the trivial `Unit`, so a comparator violation gives wrong membership *answers* on a desorted set, but every key is still physically present and recoverable via `keys()`. This is the decisive simplification over the map. In tests, call `sorted_map::is_well_formed_by!(sorted_set::inner_ref(&s), lt)` after `_by` sequences.
 - **`insert`/`remove` return `bool` and do not abort.** `insert! -> true` iff newly added; `remove! -> true` iff was present. `from_keys!` de-duplicates. Diverges from `vec_set`; recover the abort with one `assert!`.
-- **Exactly one abort.** `pop_front`/`pop_back` on an empty set abort `EEmpty` at this module's location; consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_set`. Every other operation is total.
+- **Two aborts.** `pop_front`/`pop_back` on an empty set abort `EEmpty`; `from_sorted_keys!`/`_by` on unsorted input abort `EKeysNotSorted`. Both at this module's location, so consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_set`. Every other operation is total.
 - **Forced-public internals are not an API.** `inner_ref`, `inner_mut`, and `unit` are `public` only for macro hygiene. Driving the wrapped map through `inner_mut` with an inconsistent comparator can desort the set (order-only, local to that set). Use the macro API.
 - **No capabilities, `Clock`, `Random`, global state, or events.** The library never checks the caller; gate your own entry functions and emit your own events.
 - **Capacity.** Every operation loads exactly one stored object, so the set is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. Illustratively, measured on localnet (Sui 1.74.1), the ceiling is 28,440 `u64` keys (≈1.78× the map's 15,997 `u64`/`u64` entries - each set entry is 9 bytes: an 8-byte key plus the 1-byte `Unit`); treat it as a guide, not a guarantee. Past it, `insert` self-limits via `MoveObjectTooBig` (no capacity guard); the set is never soft-bricked.

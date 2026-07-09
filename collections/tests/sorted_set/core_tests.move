@@ -89,6 +89,193 @@ fun from_keys_empty_and_singleton() {
     assert!(u::wf(&s1));
 }
 
+// === lifecycle: from_sorted_keys (O(N) constructor for pre-sorted input) ===
+
+#[test]
+fun from_sorted_builds_ascending_and_dedups() {
+    // Sorted input with adjacent duplicates -> distinct keys ascending (dedup like from_keys).
+    let s = u::from_sorted(vector[1u64, 2, 2, 3, 3, 3, 5]);
+    assert_eq!(s.length(), 4);
+    assert_eq!(s.keys(), vector[1u64, 2, 3, 5]);
+    assert!(u::wf(&s));
+}
+
+#[test]
+fun from_sorted_empty_and_singleton() {
+    // Boundaries: empty input -> empty set; one key -> singleton-equivalent. No comparator call
+    // happens for n < 2, so a single key never touches the sorted check.
+    let s0 = u::from_sorted(vector[]);
+    assert!(s0.is_empty());
+    let s1 = u::from_sorted(vector[9u64]);
+    assert!(s1.length() == 1 && u::has(&s1, 9));
+    assert!(u::wf(&s1));
+}
+
+#[test]
+fun from_sorted_matches_from_keys_on_sorted_input() {
+    // For any sorted input, from_sorted_keys! must produce EXACTLY what from_keys! does.
+    let input = vector[0u64, 1, 1, 2, 4, 4, 4, 7, 9];
+    let a = u::from_sorted(input);
+    let b = u::fromk(input);
+    assert_eq!(a.keys(), b.keys());
+    assert_eq!(a.length(), b.length());
+    assert!(u::wf(&a));
+}
+
+#[test]
+fun from_sorted_by_reverse_comparator() {
+    // Descending-numeric input is "sorted" (non-decreasing) under `>`; dup 20 collapses.
+    let s = u::from_sorted_rev(vector[30u64, 20, 20, 10]);
+    assert_eq!(s.length(), 3);
+    assert_eq!(s.keys(), vector[30u64, 20, 10]); // stored descending-numeric under `>`
+    assert!(u::wf_rev(&s)); // well-formed under `>` ...
+    assert!(!u::wf(&s)); // ... but genuinely reversed vs `<`
+}
+
+#[test]
+fun from_sorted_coarse_keeps_last_bytes() {
+    // Under a coarse (id-only) comparator, a compare-equal run collapses keeping the LAST key's
+    // bytes - identical to from_keys!'s upsert-last-wins rule.
+    let s = u::from_sorted_k(vector[u::mk(1, 100), u::mk(1, 200), u::mk(2, 9)]);
+    assert_eq!(u::len_k(&s), 2);
+    let ks = u::keys_k(&s);
+    assert_eq!(u::key_id(ks.borrow(0)), 1);
+    assert_eq!(u::key_tag(ks.borrow(0)), 200); // the LAST of the id==1 run won
+    assert!(u::wf_k(&s));
+}
+
+#[test]
+fun from_sorted_large_n_builds_correctly() {
+    // Build 500 strictly-increasing keys in O(N); result is complete, sorted, well-formed.
+    let mut input = vector[];
+    let mut i = 0u64;
+    while (i < 500) {
+        input.push_back(i * 3);
+        i = i + 1;
+    };
+    let s = u::from_sorted(input);
+    assert_eq!(s.length(), 500);
+    assert!(u::wf(&s));
+    assert_eq!(*s.keys().borrow(0), 0);
+    assert_eq!(*s.keys().borrow(499), 499 * 3);
+}
+
+#[test]
+fun from_sorted_all_equal_collapses() {
+    // A run of ALL-equal keys collapses to one element. Every i>=1 takes the dedup branch, so the
+    // loop's LAST op is a back-refresh (remove_at + insert_at at the tail) - a position the
+    // mid-run dedup cases never reach.
+    let s = u::from_sorted(vector[5u64, 5, 5, 5]);
+    assert_eq!(s.length(), 1);
+    assert_eq!(s.keys(), vector[5u64]);
+    assert!(u::has(&s, 5));
+    assert!(u::wf(&s));
+}
+
+#[test]
+fun from_sorted_two_element_minimal() {
+    // Minimal non-trivial cases: exactly one append (i=1) and one dedup (i=1).
+    let inc = u::from_sorted(vector[1u64, 2]); // append branch fires once
+    assert_eq!(inc.keys(), vector[1u64, 2]);
+    let dup = u::from_sorted(vector[5u64, 5]); // dedup branch fires once
+    assert_eq!(dup.keys(), vector[5u64]);
+    assert!(u::wf(&inc) && u::wf(&dup));
+}
+
+#[test]
+fun from_sorted_matches_from_keys_dups_at_scale() {
+    // Differential at SCALE with DUPLICATES: a long sorted input where every value appears twice
+    // must produce EXACTLY the tested O(N^2) reference constructor's result (full key vector, not
+    // just length/first/last). The strongest single check of the dedup path.
+    let mut input = vector[];
+    let mut i = 0u64;
+    while (i < 300) {
+        input.push_back(i / 2); // 0,0,1,1,...,149,149 - sorted, each value twice
+        i = i + 1;
+    };
+    let a = u::from_sorted(input);
+    let b = u::fromk(input); // from_keys!, differentially validated against RefSet elsewhere
+    assert_eq!(a.keys(), b.keys()); // identical, key for key
+    assert_eq!(a.length(), 150); // 300 inputs -> 150 distinct
+    assert!(u::wf(&a));
+}
+
+#[test]
+fun from_sorted_then_mutate_is_normal_set() {
+    // A from_sorted-built set must behave as a fully functional SortedSet afterwards: mutate,
+    // query membership, navigate, and pop - all correct and well-formed.
+    let mut s = u::from_sorted(vector[10u64, 20, 30, 40]);
+    assert!(u::ins(&mut s, 25)); // insert into the interior
+    assert!(!u::ins(&mut s, 30)); // duplicate -> false
+    assert!(u::rem(&mut s, 20)); // remove a present key
+    assert!(u::has(&s, 25) && !u::has(&s, 20));
+    assert_eq!(s.keys(), vector[10u64, 25, 30, 40]);
+    assert_eq!(u::fnext(&s, 10, false), option::some(25)); // navigation intact
+    assert_eq!(s.pop_front(), 10);
+    assert_eq!(s.pop_back(), 40);
+    assert!(u::wf(&s));
+}
+
+#[test]
+fun from_sorted_trailing_duplicate_run() {
+    // The input's final elements are a compare-equal run, so the loop's LAST iteration is a dedup
+    // (back-refresh), not an append - the mirror of the other tests, which all end on an append.
+    let s = u::from_sorted(vector[1u64, 2, 3, 3, 3]);
+    assert_eq!(s.keys(), vector[1u64, 2, 3]);
+    assert_eq!(s.length(), 3);
+    assert!(u::wf(&s));
+}
+
+#[test]
+fun from_sorted_leading_equal_run_then_append() {
+    // A leading run of equal keys collapses at index 0 (back == 0 on every dedup), then a
+    // strictly-greater key must still append correctly at index 1 afterwards.
+    let s = u::from_sorted(vector[7u64, 7, 7, 9]);
+    assert_eq!(s.keys(), vector[7u64, 9]);
+    assert_eq!(s.head(), option::some(7));
+    assert_eq!(s.tail(), option::some(9));
+    assert!(u::wf(&s));
+}
+
+#[test]
+fun from_sorted_coarse_trailing_dedup_keeps_last_bytes() {
+    // Coarse last-wins when the winning byte-refresh is the FINAL loop iteration; the existing
+    // coarse test's dedup is interior and its loop ends on an append.
+    let s = u::from_sorted_k(vector[u::mk(7, 1), u::mk(7, 2), u::mk(7, 3)]);
+    assert_eq!(u::len_k(&s), 1);
+    let ks = u::keys_k(&s);
+    assert_eq!(u::key_id(ks.borrow(0)), 7);
+    assert_eq!(u::key_tag(ks.borrow(0)), 3); // the LAST of the run won, as the final op
+    assert!(u::wf_k(&s));
+}
+
+#[test]
+fun from_sorted_rev_at_scale_matches_from_keys() {
+    // Reverse comparator BEYOND n=4: a long descending-with-duplicates input must match the
+    // reverse from_keys! oracle key-for-key and be well-formed under `>`.
+    let mut input = vector[];
+    let mut i = 0u64;
+    while (i < 200) {
+        input.push_back(199 - i / 2); // 199,199,198,198,...,100,100 - non-increasing (sorted under >)
+        i = i + 1;
+    };
+    let a = u::from_sorted_rev(input);
+    let b = u::fromk_rev(input);
+    assert_eq!(a.keys(), b.keys()); // identical stored (descending) order
+    assert_eq!(a.length(), 100); // 200 inputs -> 100 distinct
+    assert!(u::wf_rev(&a));
+}
+
+#[test]
+fun from_sorted_u64_max_boundary() {
+    // Values at the top of the u64 range: append then a dedup at U64_MAX. The macro never does
+    // arithmetic on key values, so there is no overflow surprise; back = length - 1 stays in range.
+    let s = u::from_sorted(vector[U64_MAX - 1, U64_MAX, U64_MAX]);
+    assert_eq!(s.keys(), vector[U64_MAX - 1, U64_MAX]);
+    assert_eq!(s.length(), 2);
+    assert!(u::wf(&s));
+}
+
 // === size & extremes ===
 
 #[test]

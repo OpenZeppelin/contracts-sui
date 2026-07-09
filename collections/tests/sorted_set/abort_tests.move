@@ -1,9 +1,9 @@
-/// The abort surface: exactly ONE library abort (`EEmpty`), asserted FIRST at THIS
-/// module's location/code, plus the affirmative total-API contract for mid-PTB chaining.
-/// The set is "total except ONE" - strictly more total than the map's abort carve-outs.
+/// The abort surface: two library aborts - `EEmpty` (pop on an empty set) and `EKeysNotSorted`
+/// (`from_sorted_keys!` on unsorted input) - each asserted at THIS module's location/code, plus
+/// the affirmative total-API contract for mid-PTB chaining. Every other op is total.
 ///
-/// Every set-owned `#[expected_failure]` pins BOTH `abort_code = ...sorted_set::EEmpty` AND
-/// `location = openzeppelin_collections::sorted_set` - code 0 at the SET's location. The bypass
+/// Every set-owned `#[expected_failure]` pins BOTH `abort_code = ...sorted_set::E*` AND
+/// `location = openzeppelin_collections::sorted_set` - the SET's location. The bypass
 /// test proves the caveat: a direct `sorted_map::pop_front(inner_mut(set))` leaks the
 /// MAP's abort instead.
 module openzeppelin_collections::sorted_set_abort_tests;
@@ -50,6 +50,45 @@ fun pop_front_after_draining_aborts_at_set() {
     let mut s = ss::singleton<u64>(1);
     let _ = s.pop_front();
     s.pop_front();
+}
+
+// === from_sorted_keys! on unsorted input -> set-owned EKeysNotSorted at the SET's location ===
+
+#[
+    test,
+    expected_failure(
+        abort_code = openzeppelin_collections::sorted_set::EKeysNotSorted,
+        location = openzeppelin_collections::sorted_set,
+    ),
+]
+fun from_sorted_out_of_order_aborts_at_set() {
+    // A strictly decreasing adjacent pair (3 then 2) is unsorted -> EKeysNotSorted at the SET.
+    let _s = u::from_sorted(vector[1u64, 3, 2]);
+}
+
+#[
+    test,
+    expected_failure(
+        abort_code = openzeppelin_collections::sorted_set::EKeysNotSorted,
+        location = openzeppelin_collections::sorted_set,
+    ),
+]
+fun from_sorted_by_reverse_out_of_order_aborts_at_set() {
+    // Under `>`, "sorted" means descending-numeric; an ascending step (1 then 2) is a decrease.
+    let _s = u::from_sorted_rev(vector[3u64, 1, 2]);
+}
+
+#[
+    test,
+    expected_failure(
+        abort_code = openzeppelin_collections::sorted_set::EKeysNotSorted,
+        location = openzeppelin_collections::sorted_set,
+    ),
+]
+fun from_sorted_minimal_decrease_aborts_at_set() {
+    // The decrease is the FIRST comparison (i == 1), not a later pair as in [1,3,2] - so the abort
+    // fires on the very first adjacent check, with only one element built so far.
+    let _s = u::from_sorted(vector[2u64, 1]);
 }
 
 // === bypass caveat: a direct inner-map pop leaks the MAP's abort, not the set's ===

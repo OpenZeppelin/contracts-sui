@@ -1,12 +1,12 @@
-/// Ordered-drain / priority-queue pattern - and the home of the library's SINGLE abort.
+/// Ordered-drain / priority-queue pattern - and the home of the set's `EEmpty` abort.
 ///
 /// A `SortedSet<u64>` of unique unlock TIMESTAMPS in a SHARED vesting object, drained
 /// earliest-first. Because the set keeps its keys sorted, the smallest is always at the front
 /// and the largest at the back, so it doubles as a min/max priority queue with O(1) peeks.
 ///
-/// # The one abort in the whole library
-/// Every other set operation is total (returns `Option` / `bool` / `vector` / `u64`). The ONLY
-/// exception is popping an extreme of an EMPTY set: `pop_front` / `pop_back` abort `EEmpty`.
+/// # The one operation that aborts
+/// Every operation this queue uses is total (returns `Option` / `bool` / `vector` / `u64`)
+/// except one: popping an extreme of an EMPTY set - `pop_front` / `pop_back` abort `EEmpty`.
 /// Crucially the set asserts its OWN `EEmpty` (code 0) FIRST, before delegating to the wrapped
 /// map, so the abort surfaces at `openzeppelin_collections::sorted_set` - a consumer's
 /// `#[expected_failure]` must pin that location, NOT the map's. We expose both a guarded drain

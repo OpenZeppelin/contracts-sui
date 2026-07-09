@@ -20,7 +20,8 @@
 ///   `sui::vec_set`, whose versions abort.
 /// - **Always `copy + drop + store`.** The value is always `Unit`, so there is no resource set and
 ///   no `destroy_empty`; a set just falls out of scope.
-/// - **The library's only abort:** `pop_front` / `pop_back` on an empty set (`EEmpty`).
+/// - **Two aborts only:** `pop_front` / `pop_back` on an empty set (`EEmpty`), and
+///   `from_sorted_keys!` on unsorted input (`EKeysNotSorted`); every other op is total.
 ///
 /// # The comparator
 ///
@@ -42,13 +43,15 @@
 /// iff the key was newly added; `remove! -> true` iff it was present. This matches the wrapped
 /// map's total upsert, stays composable mid-PTB, and is strictly more general: for vec_set's
 /// abort-on-duplicate, write `assert!(insert!(&mut s, k), E)`. `from_keys` likewise de-duplicates;
-/// to reject duplicates instead, build then `assert!(length(&s) == n, E)`.
+/// to reject duplicates instead, build then `assert!(length(&s) == n, E)`. `from_sorted_keys!`
+/// de-duplicates the same way but needs pre-sorted input and runs in O(N) (see Complexity).
 ///
 /// # Complexity and limits
 ///
 /// Costs mirror `SortedMap`, which the set wraps: O(log N) membership, O(N) insert and remove, one
 /// object loaded per call, and the same ~250 KB object-size ceiling. `pop_front` is O(N) - it
-/// shifts every remaining key - while `pop_back` is O(1).
+/// shifts every remaining key - while `pop_back` is O(1). `from_keys!` is O(N^2) (a search per
+/// key); `from_sorted_keys!` skips the search on pre-sorted input, building in O(N).
 ///
 /// The set's `_by` macros expand the map's `search!` inline. A single function with many distinct
 /// macro calls can therefore hit Move's ~256 local-variable limit (compiler error `value (N)
@@ -77,10 +80,16 @@ use openzeppelin_collections::sorted_map::{Self, SortedMap};
 
 // === Errors ===
 
-/// `pop_front`/`pop_back` was called on an empty set. The only abort in this library,
-/// asserted at this module's location - distinct from the wrapped map's `EEmpty`.
+/// `pop_front`/`pop_back` was called on an empty set. Asserted at this module's location -
+/// distinct from the wrapped map's `EEmpty`.
 #[error(code = 0)]
 const EEmpty: vector<u8> = "Set is empty";
+
+/// A sorted constructor (`from_sorted_keys`/`from_sorted_keys_by`) received keys that are not
+/// sorted under the comparator - a strictly decreasing adjacent pair. Asserted at this module's
+/// location.
+#[error(code = 1)]
+const EKeysNotSorted: vector<u8> = "Keys are not sorted";
 
 // === Structs ===
 
@@ -112,7 +121,7 @@ public struct SortedSet<K: copy + drop + store> has copy, drop, store {
 
 // === Macro-internal accessors (forced-public; NOT a supported API) ===
 //
-// These three items are `public` ONLY because Move 2024 macro hygiene requires every
+// These items are `public` ONLY because Move 2024 macro hygiene requires every
 // symbol a macro body references to be public at the consumer's expansion site. They are
 // NOT a supported mutation API. `inner_mut` in particular lets a caller drive the wrapped
 // map directly with an inconsistent comparator or a wrong index and desort this set -
@@ -140,6 +149,15 @@ public fun inner_mut<K: copy + drop + store>(set: &mut SortedSet<K>): &mut Sorte
 /// can never be threaded into a set.
 public fun unit(): Unit {
     Unit {}
+}
+
+/// Abort `EKeysNotSorted` if `sorted` is false. Routed through this regular fun so the sorted
+/// constructor's abort fires at this module's location, not the consumer's inlined macro body.
+///
+/// #### Aborts
+/// - `EKeysNotSorted` if `sorted` is false.
+public fun assert_sorted(sorted: bool) {
+    assert!(sorted, EKeysNotSorted);
 }
 
 // === Lifecycle ===
@@ -197,6 +215,71 @@ public macro fun from_keys_by<$K: copy + drop + store>(
 /// - A set of the distinct keys, in ascending order.
 public macro fun from_keys<$K: copy + drop + store>($keys: vector<$K>): SortedSet<$K> {
     from_keys_by!($keys, |a, b| *a < *b)
+}
+
+/// Build a set from `keys` that are ALREADY sorted (non-decreasing) under `$lt`. O(N): one pass
+/// validates each adjacent pair and appends at the back - no per-element search - so prefer this to
+/// `from_keys!` (which is O(N^2)) when the input is pre-sorted.
+///
+/// De-duplicates exactly like `from_keys!`: a run of compare-equal keys collapses to one element,
+/// keeping the LAST key's bytes (observable only under a coarse, non-injective comparator). A set
+/// has no value to lose, so a duplicate collapses rather than aborts - the divergence from the
+/// map's `from_sorted_keys_values!`, which aborts on a duplicate to conserve values. The only
+/// rejection is genuinely unsorted input.
+///
+/// If your keys are not yet ordered, use `from_keys!` (any order, O(N^2)) or sort them first.
+///
+/// #### Parameters
+/// - `keys`: Keys sorted (non-decreasing) under `lt`; compare-equal runs are collapsed.
+/// - `lt`: Strict less-than comparator.
+///
+/// #### Returns
+/// - A set of the distinct keys, in comparator order.
+///
+/// #### Aborts
+/// - `EKeysNotSorted` if `keys` has a strictly decreasing adjacent pair (not sorted under `lt`).
+public macro fun from_sorted_keys_by<$K: copy + drop + store>(
+    $keys: vector<$K>,
+    $lt: |&$K, &$K| -> bool,
+): SortedSet<$K> {
+    let keys = $keys;
+    let n = keys.length();
+    let mut set = new();
+    let mut i = 0;
+    while (i < n) {
+        let cur = *keys.borrow(i);
+        if (i == 0) {
+            set.inner_mut().insert_at(0, sorted_map::make_entry(cur, unit()));
+        } else {
+            let prev = keys.borrow(i - 1);
+            // Input MUST be sorted: reject a strictly decreasing pair (`cur` < `prev`).
+            assert_sorted(!$lt(&cur, prev));
+            if ($lt(prev, &cur)) {
+                // Strictly greater than `prev` - a new distinct key; append at the back (O(1)).
+                let at = set.length();
+                set.inner_mut().insert_at(at, sorted_map::make_entry(cur, unit()));
+            } else {
+                // Compare-equal to `prev` - a duplicate. Refresh the back entry's key bytes to
+                // `cur`, so a coarse comparator keeps the LAST key, exactly like `from_keys!`.
+                let back = set.length() - 1;
+                set.inner_mut().remove_at(back);
+                set.inner_mut().insert_at(back, sorted_map::make_entry(cur, unit()));
+            };
+        };
+        i = i + 1;
+    };
+    set
+}
+
+/// `from_sorted_keys_by` with the built-in integer `<`. De-duplicates - see `from_sorted_keys_by`.
+///
+/// #### Returns
+/// - A set of the distinct keys, in ascending order.
+///
+/// #### Aborts
+/// - `EKeysNotSorted` if `keys` is not ascending.
+public macro fun from_sorted_keys<$K: copy + drop + store>($keys: vector<$K>): SortedSet<$K> {
+    from_sorted_keys_by!($keys, |a, b| *a < *b)
 }
 
 // === Size and bounds (regular funs, no comparator) ===
