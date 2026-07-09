@@ -16,6 +16,7 @@ use openzeppelin_sale::refund_vault;
 use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::Clock;
+use sui::event;
 use sui::test_scenario::Scenario;
 
 // === Test-Only Helpers ===
@@ -91,10 +92,23 @@ fun claim_returns_allocation_and_draws_inventory() {
     test.next_tx(tu::buyer());
     let mut sale = tu::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(tu::buyer());
+    let receipt_id = object::id(&r);
     let payout = sale.claim(r, test.ctx());
     assert_eq!(payout.value(), 200);
     assert_eq!(sale.total_allocated(), 0);
     assert_eq!(sale.inventory_total(), 1_800); // 2_000 - 200 drawn
+
+    let claimed = event::events_by_type<prefunded_sale::Claimed<SALE, USDC>>();
+    assert_eq!(claimed.length(), 1);
+    assert_eq!(
+        claimed[0],
+        prefunded_sale::test_new_claimed<SALE, USDC>(
+            object::id(&sale),
+            tu::buyer(),
+            receipt_id,
+            200,
+        ),
+    );
     destroy(payout);
     tu::return_sale(sale);
 
@@ -306,10 +320,27 @@ fun refund_returns_paid_and_draws_vault() {
     let mut sale = tu::take_sale(&test);
     let mut vault = tu::take_vault(&test);
     let r = test.take_from_address<Receipt<SALE>>(tu::buyer());
+    let receipt_id = object::id(&r);
     let payment = sale.refund(&mut vault, r, test.ctx());
     assert_eq!(payment.value(), 300);
     assert_eq!(vault.value(), 0); // drained exactly
     assert_eq!(sale.total_allocated(), 0);
+
+    let refunded = event::events_by_type<prefunded_sale::Refunded<SALE, USDC>>();
+    assert_eq!(refunded.length(), 1);
+    assert_eq!(
+        refunded[0],
+        prefunded_sale::test_new_refunded<SALE, USDC>(
+            object::id(&sale),
+            tu::buyer(),
+            receipt_id,
+            300,
+        ),
+    );
+    // refund releases the payment out of the vault (VaultRelease 300, nothing left).
+    let releases = event::events_by_type<refund_vault::VaultRelease<USDC>>();
+    assert_eq!(releases.length(), 1);
+    assert_eq!(releases[0], refund_vault::test_new_vault_release<USDC>(object::id(&vault), 300, 0));
     destroy(payment);
     tu::return_sale(sale);
     tu::return_vault(vault);
@@ -393,6 +424,13 @@ fun withdraw_proceeds_returns_raised() {
     let proceeds = sale.withdraw_proceeds(&cap);
     assert_eq!(proceeds.value(), 400);
     assert_eq!(sale.proceeds_amount(), 0);
+
+    let withdrawn = event::events_by_type<prefunded_sale::ProceedsWithdrawn<SALE, USDC>>();
+    assert_eq!(withdrawn.length(), 1);
+    assert_eq!(
+        withdrawn[0],
+        prefunded_sale::test_new_proceeds_withdrawn<SALE, USDC>(object::id(&sale), 400),
+    );
     destroy(proceeds);
     tu::return_sale(sale);
     tu::return_cap(cap);
@@ -468,6 +506,13 @@ fun withdraw_unsold_returns_only_slack() {
     assert_eq!(unsold.value(), 1_800); // 2_000 - 200 allocated
     assert_eq!(sale.inventory_remaining(), 0);
     assert_eq!(sale.total_allocated(), 200); // receipt still backed
+
+    let withdrawn = event::events_by_type<prefunded_sale::InventoryWithdrawn<SALE, USDC>>();
+    assert_eq!(withdrawn.length(), 1);
+    assert_eq!(
+        withdrawn[0],
+        prefunded_sale::test_new_inventory_withdrawn<SALE, USDC>(object::id(&sale), 1_800),
+    );
     destroy(unsold);
     tu::return_sale(sale);
     tu::return_cap(cap);
@@ -552,6 +597,45 @@ fun withdraw_unsold_in_cancelled_recovers_freed_inventory() {
     destroy(freed);
     tu::return_sale(sale);
     tu::return_cap(cap);
+
+    destroy(clk);
+    test.end();
+}
+
+// withdraw_unsold_inventory is phase-gated to terminal states; calling it while the
+// sale is still Active aborts (ENotTerminal) — the sibling of withdraw_proceeds's
+// ENotFinalized guard, which was the only terminal-gate failure previously tested.
+#[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotTerminal)]
+fun withdraw_unsold_before_terminal_aborts() {
+    let (mut test, clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 100);
+
+    test.next_tx(tu::admin());
+    let mut sale = tu::take_sale(&test);
+    let cap = tu::take_cap(&test);
+    let unsold = sale.withdraw_unsold_inventory(&cap); // aborts: ENotTerminal (still Active)
+    destroy(unsold);
+    tu::return_sale(sale);
+    tu::return_cap(cap);
+    destroy(clk);
+    test.end();
+}
+
+// claim_all with no receipts returns an empty balance (the batch loop is a no-op).
+#[test]
+fun claim_all_empty_returns_zero() {
+    let (mut test, mut clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    // No purchases; soft_cap 0, so finalize succeeds once the window closes.
+    finalize_now(&mut test, &mut clk);
+
+    test.next_tx(tu::buyer());
+    let mut sale = tu::take_sale(&test);
+    let payout = sale.claim_all(vector<Receipt<SALE>>[], test.ctx());
+    assert_eq!(payout.value(), 0);
+    destroy(payout);
+    tu::return_sale(sale);
 
     destroy(clk);
     test.end();

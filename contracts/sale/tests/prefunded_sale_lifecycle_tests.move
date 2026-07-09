@@ -14,6 +14,7 @@ use openzeppelin_sale::refund_vault;
 use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::Clock;
+use sui::event;
 use sui::test_scenario::Scenario;
 
 // === Test-Only Helpers ===
@@ -43,6 +44,25 @@ fun finalize_after_close_succeeds() {
     assert_eq!(sale.phase().is_finalized(), true);
     assert_eq!(vault.is_closed(), true);
     assert_eq!(sale.proceeds_amount(), 500); // proceeds stay until withdrawn
+
+    let finalized = event::events_by_type<prefunded_sale::SaleFinalized<SALE, USDC>>();
+    assert_eq!(finalized.length(), 1);
+    assert_eq!(
+        finalized[0],
+        prefunded_sale::test_new_sale_finalized<SALE, USDC>(object::id(&sale), 500, 5_001),
+    );
+    // finalize flips the paired vault Active -> Closed.
+    let changed = event::events_by_type<refund_vault::VaultStateChanged<USDC>>();
+    assert_eq!(changed.length(), 1);
+    assert_eq!(
+        changed[0],
+        refund_vault::test_new_vault_state_changed<USDC>(
+            object::id(&vault),
+            refund_vault::test_state_active(),
+            refund_vault::test_state_closed(),
+        ),
+    );
+
     tu::return_sale(sale);
     tu::return_vault(vault);
 
@@ -141,6 +161,36 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
     assert_eq!(vault.is_refunding(), true);
     assert_eq!(vault.value(), 300); // locked == raised
     assert_eq!(sale.proceeds_amount(), 0); // proceeds drained
+
+    let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
+    assert_eq!(cancelled.length(), 1);
+    assert_eq!(
+        cancelled[0],
+        prefunded_sale::test_new_sale_cancelled<SALE, USDC>(
+            object::id(&sale),
+            300,
+            prefunded_sale::test_cancel_reason_soft_cap_missed(),
+            5_001,
+        ),
+    );
+    // do_cancel routes proceeds into the vault (VaultDeposit 300) then flips Active -> Refunding.
+    let deposits = event::events_by_type<refund_vault::VaultDeposit<USDC>>();
+    assert_eq!(deposits.length(), 1);
+    assert_eq!(
+        deposits[0],
+        refund_vault::test_new_vault_deposit<USDC>(object::id(&vault), 300, 300),
+    );
+    let changed = event::events_by_type<refund_vault::VaultStateChanged<USDC>>();
+    assert_eq!(changed.length(), 1);
+    assert_eq!(
+        changed[0],
+        refund_vault::test_new_vault_state_changed<USDC>(
+            object::id(&vault),
+            refund_vault::test_state_active(),
+            refund_vault::test_state_refunding(),
+        ),
+    );
+
     tu::return_sale(sale);
     tu::return_vault(vault);
 
@@ -199,6 +249,19 @@ fun cancel_emergency_succeeds() {
     sale.cancel_emergency(&cap, &mut vault, &clk);
     assert_eq!(sale.phase().is_cancelled(), true);
     assert_eq!(vault.value(), 100);
+
+    let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
+    assert_eq!(cancelled.length(), 1);
+    assert_eq!(
+        cancelled[0],
+        prefunded_sale::test_new_sale_cancelled<SALE, USDC>(
+            object::id(&sale),
+            100,
+            prefunded_sale::test_cancel_reason_admin_emergency(),
+            tu::opens(),
+        ),
+    );
+
     tu::return_sale(sale);
     tu::return_vault(vault);
     tu::return_cap(cap);
@@ -223,6 +286,22 @@ fun cancel_emergency_zero_raised_succeeds() {
     assert_eq!(sale.phase().is_cancelled(), true);
     assert_eq!(vault.is_refunding(), true);
     assert_eq!(vault.value(), 0);
+
+    // Zero proceeds -> the vault deposit is a no-op and emits no VaultDeposit; the sale
+    // still cancels (SaleCancelled with raised == 0) and the vault still flips to Refunding.
+    assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 0);
+    let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
+    assert_eq!(cancelled.length(), 1);
+    assert_eq!(
+        cancelled[0],
+        prefunded_sale::test_new_sale_cancelled<SALE, USDC>(
+            object::id(&sale),
+            0,
+            prefunded_sale::test_cancel_reason_admin_emergency(),
+            tu::opens(),
+        ),
+    );
+
     tu::return_sale(sale);
     tu::return_vault(vault);
     tu::return_cap(cap);

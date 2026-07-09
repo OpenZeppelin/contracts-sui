@@ -17,6 +17,7 @@ use openzeppelin_sale::refund_vault;
 use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::Clock;
+use sui::event;
 use sui::test_scenario::{Self as ts, Scenario};
 
 // === Test-Only Helpers ===
@@ -80,6 +81,10 @@ fun purchase_delivers_receipt_and_updates_state() {
     assert_eq!(sale.total_allocated(), 200); // rate 2
     assert_eq!(sale.proceeds_amount(), 100);
     assert_eq!(sale.inventory_remaining(), 1_800);
+    // Purchased is emitted once for the buy. Its receipt_id is the freshly-delivered
+    // receipt (not takeable until the next tx), so pin emission here; the payload's
+    // paid/allocation are cross-checked against the receipt's own fields below.
+    assert_eq!(event::events_by_type<prefunded_sale::Purchased<SALE, USDC>>().length(), 1);
     tu::return_sale(sale);
 
     // Receipt landed with the buyer carrying the right data.
@@ -285,6 +290,59 @@ fun per_entry_cap_exceeded_aborts() {
     let mut sale = tu::take_sale(&test);
     buy_with_entry(&mut sale, &mut test, tu::buyer(), 50, 51, &clk); // 51 > max 50
     tu::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
+// Boundary: paying exactly the entry's max_amount is allowed (the guard is paid <= max).
+#[test]
+fun per_entry_cap_exact_boundary_ok() {
+    let (mut test, clk) = tu::setup();
+    tu::create_and_activate_full(
+        &mut test,
+        &clk,
+        1,
+        1_000,
+        0,
+        tu::opens(),
+        tu::closes(),
+        1_000,
+        true,
+    );
+
+    test.next_tx(tu::buyer());
+    let mut sale = tu::take_sale(&test);
+    buy_with_entry(&mut sale, &mut test, tu::buyer(), 50, 50, &clk); // paid == max 50
+    assert_eq!(sale.raised(), 50);
+    tu::return_sale(sale);
+
+    destroy(clk);
+    test.end();
+}
+
+// A quote minted for a different sale is rejected — the quote-side analogue of the
+// activation-ticket sale-id check.
+#[test, expected_failure(abort_code = prefunded_sale::EQuoteSaleMismatch)]
+fun purchase_with_foreign_quote_aborts() {
+    let (mut test, clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000); // sale A (shared)
+
+    test.next_tx(tu::buyer());
+    let mut sale_a = tu::take_sale(&test);
+    // Sale B — same type, never activated; its quote pins B's id, not A's.
+    let (sale_b, cap_b) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        tu::opens(),
+        tu::closes(),
+        test.ctx(),
+    );
+    let foreign_quote = fixed_rate_curve::quote(&sale_b, tu::pay_balance(10));
+    sale_a.purchase(foreign_quote, option::none(), &clk, test.ctx()); // aborts: EQuoteSaleMismatch
+    destroy(sale_b);
+    destroy(cap_b);
+    tu::return_sale(sale_a);
     destroy(clk);
     test.end();
 }

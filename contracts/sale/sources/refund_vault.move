@@ -368,3 +368,58 @@ fun is_closed_state(s: &VaultState): bool {
         _ => false,
     }
 }
+
+// === Test-only event constructors ===
+//
+// Event struct fields and the `VaultState` variants are module-private, so tests in
+// other modules cannot build an expected event to compare against
+// `event::events_by_type`. These mirror the `test_new_*` seam used by
+// `openzeppelin_finance::vesting_wallet`.
+
+/// The `Active` vault state, for asserting `VaultStateChanged` events.
+#[test_only]
+public fun test_state_active(): VaultState { VaultState::Active }
+
+/// The `Refunding` vault state, for asserting `VaultStateChanged` events.
+#[test_only]
+public fun test_state_refunding(): VaultState { VaultState::Refunding }
+
+/// The `Closed` vault state, for asserting `VaultStateChanged` events.
+#[test_only]
+public fun test_state_closed(): VaultState { VaultState::Closed }
+
+/// Build a `RefundVaultCreated` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_refund_vault_created<P>(vault_id: ID): RefundVaultCreated<P> {
+    RefundVaultCreated { vault_id }
+}
+
+/// Build a `VaultDeposit` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_vault_deposit<P>(
+    vault_id: ID,
+    amount: u64,
+    locked_after: u64,
+): VaultDeposit<P> {
+    VaultDeposit { vault_id, amount, locked_after }
+}
+
+/// Build a `VaultStateChanged` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_vault_state_changed<P>(
+    vault_id: ID,
+    old_state: VaultState,
+    new_state: VaultState,
+): VaultStateChanged<P> {
+    VaultStateChanged { vault_id, old_state, new_state }
+}
+
+/// Build a `VaultRelease` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_vault_release<P>(
+    vault_id: ID,
+    amount: u64,
+    locked_after: u64,
+): VaultRelease<P> {
+    VaultRelease { vault_id, amount, locked_after }
+}

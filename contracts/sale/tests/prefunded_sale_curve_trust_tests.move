@@ -135,3 +135,38 @@ fun overallocating_quote_within_inventory_is_accepted() {
     destroy(clk);
     test.end();
 }
+
+// === raised overflow guard ===
+
+// ERaisedOverflow fires before the hard-cap check when `raised + paid` would exceed
+// u64::MAX. Reached with a BadCurve so allocation stays 0 (rate 0) and never trips the
+// inventory bound: a first buy of u64::MAX pushes raised to u64::MAX (== hard_cap), then
+// any further non-zero payment overflows.
+#[test, expected_failure(abort_code = prefunded_sale::ERaisedOverflow)]
+fun purchase_raised_overflow_aborts() {
+    let (mut test, clk) = setup();
+    let max = 18_446_744_073_709_551_615;
+    activate_bad(&mut test, &clk, max, 10, 10); // hard_cap = u64::MAX, tiny inventory
+
+    test.next_tx(tu::buyer());
+    let mut sale = take_bad_sale(&test);
+    // First buy: paid = u64::MAX, rate 0 -> allocation 0; raised becomes u64::MAX.
+    let q1 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
+        &sale,
+        BadCurve {},
+        tu::pay_balance(max),
+        0,
+    );
+    sale.purchase(q1, option::none(), &clk, test.ctx());
+    // Second buy: paid = 1 -> u64::MAX - 1 >= u64::MAX is false -> ERaisedOverflow.
+    let q2 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
+        &sale,
+        BadCurve {},
+        tu::pay_balance(1),
+        0,
+    );
+    sale.purchase(q2, option::none(), &clk, test.ctx()); // aborts: ERaisedOverflow
+    ts::return_shared(sale);
+    destroy(clk);
+    test.end();
+}

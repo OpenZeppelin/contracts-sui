@@ -12,6 +12,7 @@ use openzeppelin_sale::refund_vault;
 use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock;
+use sui::event;
 use sui::test_scenario as ts;
 
 // === create_sale: construction guards ===
@@ -88,6 +89,20 @@ fun create_sale_initializes_in_init_phase() {
     assert_eq!(sale.vesting_schedule_params().is_none(), true);
     assert_eq!(cap.cap_sale_id(), object::id(&sale));
 
+    let created = event::events_by_type<prefunded_sale::SaleCreated<FrcParams, SALE, USDC>>();
+    assert_eq!(created.length(), 1);
+    assert_eq!(
+        created[0],
+        prefunded_sale::test_new_sale_created<FrcParams, SALE, USDC>(
+            object::id(&sale),
+            1_000,
+            500,
+            1_000,
+            5_000,
+            fixed_rate_curve::params(2),
+        ),
+    );
+
     destroy(sale);
     destroy(cap);
 }
@@ -117,6 +132,18 @@ fun deposit_accumulates_inventory() {
     sale.deposit(tu::sale_balance(700));
     assert_eq!(sale.inventory_total(), 1_000);
     assert_eq!(sale.inventory_remaining(), 1_000);
+
+    // Each deposit emits InventoryDeposited carrying the added amount and the running total.
+    let deposits = event::events_by_type<prefunded_sale::InventoryDeposited<SALE, USDC>>();
+    assert_eq!(deposits.length(), 2);
+    assert_eq!(
+        deposits[0],
+        prefunded_sale::test_new_inventory_deposited<SALE, USDC>(object::id(&sale), 300, 300),
+    );
+    assert_eq!(
+        deposits[1],
+        prefunded_sale::test_new_inventory_deposited<SALE, USDC>(object::id(&sale), 700, 1_000),
+    );
 
     destroy(sale);
     destroy(cap);
@@ -207,6 +234,17 @@ fun set_vesting_schedule_params_fills_option() {
     );
     sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4));
     assert_eq!(sale.vesting_schedule_params().is_some(), true);
+
+    let set = event::events_by_type<prefunded_sale::VestingScheduleParamsSet<SALE, USDC, VParams>>();
+    assert_eq!(set.length(), 1);
+    assert_eq!(
+        set[0],
+        prefunded_sale::test_new_vesting_schedule_params_set<SALE, USDC, VParams>(
+            object::id(&sale),
+            vesting_wallet_linear::params(0, 0, 1_000, 4),
+        ),
+    );
+
     destroy(sale);
     destroy(cap);
 }
@@ -545,6 +583,105 @@ fun activate_with_foreign_ticket_aborts() {
     destroy(cap_b);
     destroy(sale_b);
     destroy(vault_a);
+    destroy(clk);
+    test.end();
+}
+
+// === Setup event emission (happy paths) ===
+
+// set_per_buyer_cap happy path: there is no state getter for the cap, so the
+// PerBuyerCapSet event is the observable that the setter ran with the right value.
+#[test]
+fun set_per_buyer_cap_emits_event() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+    sale.set_per_buyer_cap(250, &mut ctx);
+    let events = event::events_by_type<prefunded_sale::PerBuyerCapSet<SALE, USDC>>();
+    assert_eq!(events.length(), 1);
+    assert_eq!(
+        events[0],
+        prefunded_sale::test_new_per_buyer_cap_set<SALE, USDC>(object::id(&sale), 250),
+    );
+    destroy(sale);
+    destroy(cap);
+}
+
+// enable_allowlist happy path: flips requires_allowlist and emits AllowlistEnabled
+// carrying the id of the issued admin.
+#[test]
+fun enable_allowlist_emits_event() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+    let admin = sale.enable_allowlist(&mut ctx);
+    assert_eq!(sale.requires_allowlist(), true);
+    let events = event::events_by_type<prefunded_sale::AllowlistEnabled<SALE, USDC>>();
+    assert_eq!(events.length(), 1);
+    assert_eq!(
+        events[0],
+        prefunded_sale::test_new_allowlist_enabled<SALE, USDC>(
+            object::id(&sale),
+            object::id(&admin),
+        ),
+    );
+    destroy(sale);
+    destroy(cap);
+    destroy(admin);
+}
+
+// share_and_activate happy path, built inline so pairing + activation emit into this
+// tx: RefundVaultPaired (from pair_refund_vault) and SaleActivated (activated_at_ms is
+// the clock value, pre-open activation at OPENS).
+#[test]
+fun share_and_activate_emits_pairing_and_activation_events() {
+    let mut test = ts::begin(tu::admin());
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(tu::opens());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    sale.deposit(tu::sale_balance(1_000));
+    let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
+    let vault_id = object::id(&vault);
+    sale.pair_refund_vault(&vault, vault_cap);
+    let sale_id = object::id(&sale);
+    let ticket = fixed_rate_curve::activation_ticket(&sale);
+    sale.share_and_activate(ticket, &clk);
+    refund_vault::share(vault);
+
+    let paired = event::events_by_type<prefunded_sale::RefundVaultPaired<SALE, USDC>>();
+    assert_eq!(paired.length(), 1);
+    assert_eq!(
+        paired[0],
+        prefunded_sale::test_new_refund_vault_paired<SALE, USDC>(sale_id, vault_id),
+    );
+    let activated = event::events_by_type<prefunded_sale::SaleActivated<SALE, USDC>>();
+    assert_eq!(activated.length(), 1);
+    assert_eq!(
+        activated[0],
+        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, tu::opens()),
+    );
+
+    destroy(cap);
     destroy(clk);
     test.end();
 }
