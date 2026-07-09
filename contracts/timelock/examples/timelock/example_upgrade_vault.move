@@ -89,7 +89,7 @@ fun init(otw: EXAMPLE_UPGRADE_VAULT, ctx: &mut TxContext) {
     ac.set_role_admin<_, CancellerRole, EXAMPLE_UPGRADE_VAULT>(ctx);
     ac.set_role_admin<_, AdminRole, EXAMPLE_UPGRADE_VAULT>(ctx);
 
-    timelock::new_shared<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
+    let _ = timelock::new_shared<ProposerRole, ExecutorRole, CancellerRole, AdminRole>(
         DAY_MS,
         7 * DAY_MS,
         ctx,
