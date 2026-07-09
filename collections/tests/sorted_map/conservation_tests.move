@@ -108,16 +108,16 @@ fun read_path_conservative_nodrop() {
 fun coin_value_roundtrip() {
     let mut ctx = tx_context::dummy();
     let mut m = sm::new<u64, Coin<SUI>>();
-    m.insert!(1, coin::mint_for_testing<SUI>(100, &mut ctx)).destroy_none();
-    m.insert!(2, coin::mint_for_testing<SUI>(250, &mut ctx)).destroy_none();
+    m.upsert!(&1, coin::mint_for_testing<SUI>(100, &mut ctx)).destroy_none();
+    m.upsert!(&2, coin::mint_for_testing<SUI>(250, &mut ctx)).destroy_none();
     assert_eq!(m.borrow!(&1).value(), 100);
     // upsert returns the displaced coin - it must be burned, not dropped.
-    let old = m.insert!(1, coin::mint_for_testing<SUI>(999, &mut ctx)).destroy_some();
+    let old = m.upsert!(&1, coin::mint_for_testing<SUI>(999, &mut ctx)).destroy_some();
     assert_eq!(old.value(), 100);
     old.burn_for_testing();
     assert_eq!(m.borrow!(&1).value(), 999);
-    // remove returns the coin
-    let r1 = m.remove!(&1);
+    // remove returns the (key, coin)
+    let (_, r1) = m.remove!(&1);
     assert_eq!(r1.value(), 999);
     r1.burn_for_testing();
     // pop the remaining coin

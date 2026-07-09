@@ -140,13 +140,13 @@ fun value_at_reads_and_writes() {
 //
 // A bare macro on a non-integer key is a hard compile error:
 //   let mut m = sm::new<address, u64>();
-//   sm::insert!(&mut m, @0x1, 1);     // E04003: `<` not defined for address -> use insert_by!
+//   sm::upsert!(&mut m, &@0x1, 1);   // E04003: `<` not defined for address -> use upsert_by!
 //
 // A bare (UID-less) map cannot be transferred:
 //   sui::transfer::public_transfer(sm::new<u64, u64>(), @0x1); // needs T: key
 //
 // A comparator cannot re-enter to mutate the map mid-search:
-//   sm::insert_by!(&mut m, 1, 1, |a, b| { sm::insert!(&mut m, 9, 9); *a < *b }); // borrow conflict
+//   sm::upsert_by!(&mut m, &1, 1, |a, b| { sm::upsert!(&mut m, &9, 9); *a < *b }); // borrow conflict
 //
 // is_well_formed[_by] is `#[test_only]`, absent from the published module: a
 // PRODUCTION (non-#[test_only]) consumer function cannot resolve it (zero on-chain cost; an

@@ -189,3 +189,79 @@ fun fund_rank_zero_aborts() {
     };
     scenario.end();
 }
+
+// === Scenario 10 - pay_rank pays out a specific (non-champion) rank ===
+//
+// The point-payout complement to pay_next's champion-first drain: `pay_rank` removes an
+// arbitrary rank, leaving the rest of the ladder intact and well-formed.
+#[test]
+fun pay_rank_specific() {
+    let mut scenario = ts::begin(ORGANIZER);
+
+    // Tx1 - ORGANIZER: create the shared vault; keep its bound cap.
+    {
+        let (_, cap) = prize_vault::create(scenario.ctx());
+        transfer::public_transfer(cap, ORGANIZER);
+    };
+    // Tx2 - ORGANIZER: fund ranks 1, 2, 3.
+    scenario.next_tx(ORGANIZER);
+    {
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        vault.fund(&cap, coin::mint_for_testing<SUI>(100, scenario.ctx()), 1);
+        vault.fund(&cap, coin::mint_for_testing<SUI>(50, scenario.ctx()), 2);
+        vault.fund(&cap, coin::mint_for_testing<SUI>(25, scenario.ctx()), 3);
+        scenario.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    // Tx3 - ORGANIZER: pay rank 2 specifically; ranks 1 and 3 remain, still well-formed.
+    scenario.next_tx(ORGANIZER);
+    {
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        let c = vault.pay_rank(&cap, 2);
+        assert_eq!(c.value(), 50);
+        transfer::public_transfer(c, SECOND);
+        assert_eq!(vault.unclaimed(), 2);
+        assert!(vault.vault_well_formed());
+        scenario.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    scenario.end();
+}
+
+// === Scenario 12 - pay_rank on an absent rank aborts ENoSuchRank at this module ===
+//
+// `remove!` alone would abort with the library's opaque `sorted_map::EKeyNotFound`; the
+// `contains!` guard surfaces a domain-specific `ENoSuchRank` at this module's location
+// instead - the payout mirror of `fund`'s `ERankAlreadyFunded`.
+#[test, expected_failure(abort_code = prize_vault::ENoSuchRank, location = prize_vault)]
+fun pay_rank_absent_aborts() {
+    let mut scenario = ts::begin(ORGANIZER);
+
+    // Tx1 - ORGANIZER: create; fund only rank 1.
+    {
+        let (_, cap) = prize_vault::create(scenario.ctx());
+        transfer::public_transfer(cap, ORGANIZER);
+    };
+    scenario.next_tx(ORGANIZER);
+    {
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        vault.fund(&cap, coin::mint_for_testing<SUI>(100, scenario.ctx()), 1);
+        scenario.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    // Tx2 - ORGANIZER: pay a rank that was never funded -> ENoSuchRank.
+    scenario.next_tx(ORGANIZER);
+    {
+        let mut vault = scenario.take_shared<PrizeVault>();
+        let cap = scenario.take_from_sender<OrganizerCap>();
+        let c = vault.pay_rank(&cap, 9); // aborts here (rank 9 absent)
+        // Unreachable past the abort; kept well-formed for the resource checker.
+        transfer::public_transfer(c, SECOND);
+        scenario.return_to_sender(cap);
+        ts::return_shared(vault);
+    };
+    scenario.end();
+}

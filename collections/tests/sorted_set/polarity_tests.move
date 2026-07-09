@@ -1,7 +1,7 @@
-/// The highest-leverage wrapper suite: `insert!` `bool` POLARITY, `remove!` delegation by
+/// The highest-leverage wrapper suite: `upsert` `bool` POLARITY, `remove!` delegation by
 /// EFFECT, and `contains!` agreement.
 ///
-/// Why `insert!`'s bool is the riskiest property: `insert! = ...insert_by!(...).is_none()` is a
+/// Why `upsert`'s bool is the riskiest property: `upsert = ...upsert_by!(...).is_none()` is a
 /// projection of the inner map's `Option`. Inverting that projection COMPILES, keeps the set
 /// perfectly well-formed, conserves nothing-to-conserve, and is INVISIBLE to the well-formedness
 /// check (`is_well_formed!`). Only a test that asserts the exact boolean on a known transition
@@ -18,7 +18,7 @@ use openzeppelin_collections::sorted_set as ss;
 use openzeppelin_collections::sorted_set_test_util as u;
 use std::unit_test::assert_eq;
 
-// === insert! polarity: true on fresh, false on re-insert ===
+// === upsert polarity: true on fresh, false on re-insert ===
 
 #[test]
 fun insert_true_on_fresh_false_on_reinsert() {
@@ -65,12 +65,12 @@ fun contains_boundaries() {
     assert!(u::has(&s, 30)); // present (tail)
 }
 
-// === transitions: insert!'s bool and remove!'s effect agree with the contains! flip ===
+// === transitions: upsert's bool and remove!'s effect agree with the contains! flip ===
 
 #[test]
 fun insert_remove_transitions_agree_with_contains() {
     let mut s = ss::new<u64>();
-    // Before each insert, contains! predicts the bool: insert! true iff NOT contained.
+    // Before each insert, contains! predicts the bool: upsert true iff NOT contained.
     let before_ins = u::has(&s, 5);
     let ins_bool = u::ins(&mut s, 5);
     assert_eq!(ins_bool, !before_ins); // was absent -> newly added
@@ -101,7 +101,7 @@ fun insert_remove_roundtrip() {
 
 #[test]
 fun polarity_counters_over_sequence() {
-    // Count TRUE returns of insert! over a deterministic op stream. The partitions are
+    // Count TRUE returns of upsert over a deterministic op stream. The partitions are
     // deliberately ASYMMETRIC so the counter can be hit ONLY under correct polarity - an inverted
     // projection changes the total, not just which call in a pair returns true. (A symmetric
     // fresh/duplicate split would be inversion-invariant and thus vacuous.) The remove half then

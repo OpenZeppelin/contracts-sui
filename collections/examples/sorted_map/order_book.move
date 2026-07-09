@@ -6,7 +6,7 @@
 ///
 /// # Two sides, two orders
 /// - **Asks** ascend, so the best (lowest) ask sits at index 0. Ascending integer
-///   keys use the plain macros (`insert!`, `borrow_mut!`, `keys_from!`).
+///   keys use the plain macros (`upsert`, `borrow_mut!`, `keys_from!`).
 /// - **Bids** descend, so the best (highest) bid sits at index 0. A custom order needs a
 ///   comparator: the strict order lives in one private fn, `outbids`, threaded as
 ///   `|a, b| outbids(a, b)` to every bid call.
@@ -70,7 +70,7 @@ public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
         let lvl = book.asks.borrow_mut!(&price);
         lvl.size = lvl.size + size;
     } else {
-        book.asks.insert!(price, Level { size });
+        book.asks.upsert!(&price, Level { size });
     }
 }
 
@@ -84,7 +84,7 @@ public fun place_bid(book: &mut OrderBook, price: u64, size: u64) {
         let lvl = book.bids.borrow_mut_by!(&price, |a, b| outbids(a, b));
         lvl.size = lvl.size + size;
     } else {
-        book.bids.insert_by!(price, Level { size }, |a, b| outbids(a, b));
+        book.bids.upsert_by!(&price, Level { size }, |a, b| outbids(a, b));
     }
 }
 

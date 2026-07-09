@@ -133,14 +133,14 @@ fun from_sorted_by_reverse_comparator() {
 }
 
 #[test]
-fun from_sorted_coarse_keeps_last_bytes() {
-    // Under a coarse (id-only) comparator, a compare-equal run collapses keeping the LAST key's
-    // bytes - identical to from_keys!'s upsert-last-wins rule.
+fun from_sorted_coarse_keeps_first_bytes() {
+    // Under a coarse (id-only) comparator, a compare-equal run collapses keeping the FIRST key's
+    // bytes - identical to from_keys!'s upsert-first-wins rule (later equal keys are skipped).
     let s = u::from_sorted_k(vector[u::mk(1, 100), u::mk(1, 200), u::mk(2, 9)]);
     assert_eq!(u::len_k(&s), 2);
     let ks = u::keys_k(&s);
     assert_eq!(u::key_id(ks.borrow(0)), 1);
-    assert_eq!(u::key_tag(ks.borrow(0)), 200); // the LAST of the id==1 run won
+    assert_eq!(u::key_tag(ks.borrow(0)), 100); // the FIRST of the id==1 run won
     assert!(u::wf_k(&s));
 }
 
@@ -162,9 +162,8 @@ fun from_sorted_large_n_builds_correctly() {
 
 #[test]
 fun from_sorted_all_equal_collapses() {
-    // A run of ALL-equal keys collapses to one element. Every i>=1 takes the dedup branch, so the
-    // loop's LAST op is a back-refresh (remove_at + insert_at at the tail) - a position the
-    // mid-run dedup cases never reach.
+    // A run of ALL-equal keys collapses to one element. Every i>=1 takes the dedup branch, which
+    // simply skips the compare-equal key (keeping the first), so only the index-0 insert survives.
     let s = u::from_sorted(vector[5u64, 5, 5, 5]);
     assert_eq!(s.length(), 1);
     assert_eq!(s.keys(), vector[5u64]);
@@ -219,7 +218,7 @@ fun from_sorted_then_mutate_is_normal_set() {
 #[test]
 fun from_sorted_trailing_duplicate_run() {
     // The input's final elements are a compare-equal run, so the loop's LAST iteration is a dedup
-    // (back-refresh), not an append - the mirror of the other tests, which all end on an append.
+    // (a skip), not an append - the mirror of the other tests, which all end on an append.
     let s = u::from_sorted(vector[1u64, 2, 3, 3, 3]);
     assert_eq!(s.keys(), vector[1u64, 2, 3]);
     assert_eq!(s.length(), 3);
@@ -228,7 +227,7 @@ fun from_sorted_trailing_duplicate_run() {
 
 #[test]
 fun from_sorted_leading_equal_run_then_append() {
-    // A leading run of equal keys collapses at index 0 (back == 0 on every dedup), then a
+    // A leading run of equal keys collapses at index 0 (every dedup skips), then a
     // strictly-greater key must still append correctly at index 1 afterwards.
     let s = u::from_sorted(vector[7u64, 7, 7, 9]);
     assert_eq!(s.keys(), vector[7u64, 9]);
@@ -238,14 +237,14 @@ fun from_sorted_leading_equal_run_then_append() {
 }
 
 #[test]
-fun from_sorted_coarse_trailing_dedup_keeps_last_bytes() {
-    // Coarse last-wins when the winning byte-refresh is the FINAL loop iteration; the existing
-    // coarse test's dedup is interior and its loop ends on an append.
+fun from_sorted_coarse_trailing_dedup_keeps_first_bytes() {
+    // Coarse first-wins even when the trailing keys are the ones skipped: the index-0 insert holds
+    // the first key's bytes and every later compare-equal key is skipped.
     let s = u::from_sorted_k(vector[u::mk(7, 1), u::mk(7, 2), u::mk(7, 3)]);
     assert_eq!(u::len_k(&s), 1);
     let ks = u::keys_k(&s);
     assert_eq!(u::key_id(ks.borrow(0)), 7);
-    assert_eq!(u::key_tag(ks.borrow(0)), 3); // the LAST of the run won, as the final op
+    assert_eq!(u::key_tag(ks.borrow(0)), 1); // the FIRST of the run won; the rest were skipped
     assert!(u::wf_k(&s));
 }
 

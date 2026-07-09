@@ -62,7 +62,7 @@ public fun deploy_and_share(initial: vector<u64>, ctx: &mut TxContext): ID {
 /// Schedule `deadline`. Returns `true` iff newly scheduled (a duplicate returns `false`,
 /// no abort).
 public fun schedule(q: &mut UnlockQueue, deadline: u64): bool {
-    q.deadlines.insert!(deadline)
+    q.deadlines.upsert!(&deadline)
 }
 
 /// Cancel `deadline`.

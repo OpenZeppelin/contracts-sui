@@ -394,7 +394,7 @@ fun from_sorted_by_reverse_comparator() {
 
 #[test]
 fun from_sorted_matches_insert_loop() {
-    // Differential: the O(n) builder produces the same map as a loop of `insert!`.
+    // Differential: the O(n) builder produces the same map as a loop of `upsert`.
     let built = sm::from_sorted_keys_values!(vector[1, 5, 9], vector[10, 50, 90]);
     let mut looped = sm::new<u64, u64>();
     u::ins(&mut looped, 1, 10);

@@ -101,7 +101,8 @@ fun remove_at_misuse_returns_value() {
     u::ins(&mut m, 10, 1);
     u::ins(&mut m, 20, 2);
     u::ins(&mut m, 30, 3);
-    let v = m.remove_at(0); // direct index op: returns whatever is at index 0
+    let (k, v) = m.remove_at(0); // direct index op: returns (key, value) at index 0
+    assert_eq!(k, 10); // key moved out, not lost
     assert_eq!(v, 1); // value moved out, not lost (move semantics)
     assert_eq!(m.length(), 2);
     assert!(u::wf(&m)); // removing the head left [20,30] well-formed
@@ -124,7 +125,7 @@ fun remove_at_oob_aborts_in_vector() {
     m.remove_at(5); // index 5 on a length-1 map
 }
 
-// === Upsert stores the NEW key bytes, observable under a coarse comparator ===
+// === Upsert keeps the FIRST (stored) key bytes, observable under a coarse comparator ===
 
 #[test]
 fun upsert_coarse_comparator_key_bytes() {
@@ -135,7 +136,7 @@ fun upsert_coarse_comparator_key_bytes() {
     assert_eq!(old, option::some(10)); // displaced value returned
     assert_eq!(m.length(), 1); // exactly one entry
     assert_eq!(u::get_ck(&m, 1), 20); // new value won
-    assert_eq!(u::head_ck_tag(&m), 200); // the NEW key bytes survived
+    assert_eq!(u::head_ck_tag(&m), 100); // upsert reuses the stored key: the FIRST key bytes survive
 }
 
 // === contains == borrow-succeeds under a custom comparator ===
@@ -175,7 +176,7 @@ fun nondeterministic_comparator_corrupts() {
     // computation is fully deterministic, so the honest `<` well-formedness check stably
     // reports NOT well-formed: the library cannot detect the bad lambda.
     while (i < 16) {
-        let _ = m.insert_by!(i, i, |_, _| {
+        let _ = m.upsert_by!(&i, i, |_, _| {
             ctr = ctr + 1;
             ctr % 2 == 0
         });

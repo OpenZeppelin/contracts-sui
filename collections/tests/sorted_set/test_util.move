@@ -19,7 +19,7 @@ use openzeppelin_collections::sorted_set::{Self as ss, SortedSet};
 
 // === Thin wrappers - u64, bare forms (built-in integer `<`) ===
 
-public fun ins(s: &mut SortedSet<u64>, k: u64): bool { s.insert!(k) }
+public fun ins(s: &mut SortedSet<u64>, k: u64): bool { s.upsert!(&k) }
 
 public fun rem(s: &mut SortedSet<u64>, k: u64) { s.remove!(&k) }
 
@@ -47,7 +47,7 @@ public fun wf(s: &SortedSet<u64>): bool { s.inner().is_well_formed!() }
 
 // === Thin wrappers - u64, reverse comparator `>` used CONSISTENTLY (legit case) ===
 
-public fun ins_rev(s: &mut SortedSet<u64>, k: u64): bool { s.insert_by!(k, |a, b| *a > *b) }
+public fun ins_rev(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(&k, |a, b| *a > *b) }
 
 public fun rem_rev(s: &mut SortedSet<u64>, k: u64) { s.remove_by!(&k, |a, b| *a > *b); }
 
@@ -98,7 +98,7 @@ public fun fromk_rev(ks: vector<u64>): SortedSet<u64> {
 
 /// Non-strict `<=`: `search!` never derives equality, so equal-comparing keys are treated as
 /// fresh -> a byte-distinct equal key lands again (length grows).
-public fun ins_le(s: &mut SortedSet<u64>, k: u64): bool { s.insert_by!(k, |a, b| *a <= *b) }
+public fun ins_le(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(&k, |a, b| *a <= *b) }
 
 /// Probe/remove under the SAME non-strict `<=`: `search!` never derives equality, so an
 /// equal-comparing key is MISSED (returns false) even though it is present (the "miss" half).
@@ -114,7 +114,7 @@ public fun rem_gt(s: &mut SortedSet<u64>, k: u64) { s.remove_by!(&k, |a, b| *a >
 
 /// Insert under `>` against a set built with `<`: lands a key under the wrong order, desorting
 /// the set (visible to the `<` well-formedness check).
-public fun ins_gt(s: &mut SortedSet<u64>, k: u64): bool { s.insert_by!(k, |a, b| *a > *b) }
+public fun ins_gt(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(&k, |a, b| *a > *b) }
 
 // === `inner_mut` misuse drivers - the public but unchecked order-ONLY corruption surface ===
 
@@ -124,9 +124,9 @@ public fun misuse_insert_at(s: &mut SortedSet<u64>, idx: u64, k: u64) {
     s.inner_mut().insert_at(idx, sorted_map::new_entry(k, ss::unit()));
 }
 
-/// Drive the wrapped map's `insert_by!` with an INCONSISTENT comparator through `inner_mut`.
+/// Drive the wrapped map's `upsert_by!` with an INCONSISTENT comparator through `inner_mut`.
 public fun misuse_insert_inconsistent(s: &mut SortedSet<u64>, k: u64) {
-    let _ = s.inner_mut().insert_by!(k, ss::unit(), |a, b| *a > *b);
+    let _ = s.inner_mut().upsert_by!(&k, ss::unit(), |a, b| *a > *b);
 }
 
 /// Direct `pop_front` on the inner map - bypasses the set's own `EEmpty`.
@@ -162,7 +162,7 @@ public fun key_tag(k: &Key): u64 { k.tag }
 
 public fun key_id(k: &Key): u64 { k.id }
 
-public fun ins_k(s: &mut SortedSet<Key>, k: Key): bool { s.insert_by!(k, |a, b| a.id < b.id) }
+public fun ins_k(s: &mut SortedSet<Key>, k: Key): bool { s.upsert_by!(&k, |a, b| a.id < b.id) }
 
 public fun rem_k(s: &mut SortedSet<Key>, id: u64) {
     s.remove_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id)
@@ -217,7 +217,7 @@ public fun page_k(s: &SortedSet<Key>, from_id: u64, inc: bool, lim: u64): vector
 /// "build N" walks keys in a non-sorted order, exercising arbitrary insertion points.
 public fun scrambled(i: u64): u64 { (i * 7919) % 100003 }
 
-/// Build a set of `n` scrambled keys via the public `insert!` path.
+/// Build a set of `n` scrambled keys via the public `upsert` path.
 public fun build_scrambled(n: u64): SortedSet<u64> {
     let mut s = ss::new<u64>();
     let mut i = 0u64;
@@ -232,7 +232,7 @@ public fun build_scrambled(n: u64): SortedSet<u64> {
 //
 // Plain, obviously-correct O(n) code. The differential test drives this and the real
 // `SortedSet` through identical op streams and asserts they agree at every step,
-// including the insert! boolean and membership conservation. Like the set's `remove!`, the
+// including the upsert boolean and membership conservation. Like the set's `remove!`, the
 // model's `rs_remove` ABORTS on an absent key, so the differential only removes present keys.
 
 /// The reference model was asked to remove an absent key (mirrors `remove!`'s abort).
@@ -246,7 +246,7 @@ public fun rs_new(): RefSet { RefSet { keys: vector[] } }
 public fun rs_len(r: &RefSet): u64 { r.keys.length() }
 
 /// Insert keeping `keys` ascending. Returns `true` iff the key was NEWLY added (mirrors the
-/// set's `insert!` bool polarity).
+/// set's `upsert` bool polarity).
 public fun rs_insert(r: &mut RefSet, k: u64): bool {
     let n = r.keys.length();
     let mut i = 0u64;

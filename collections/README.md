@@ -19,7 +19,7 @@ Consumers write `use openzeppelin_collections::sorted_map;` (or `::sorted_set`) 
 | Module | Summary |
 |--------|---------|
 | `sorted_map` | An ordered `SortedMap<K, V>` over one sorted vector: O(log N) lookup, bare and `_by` comparator macros, and exactly one stored-object access per operation. |
-| `sorted_set` | An ordered `SortedSet<K>` wrapping `SortedMap<K, Unit>`: `bool`-returning `insert` (no abort-on-duplicate) and abort-on-absent `remove`, nearest-neighbour navigation, and a single-object footprint. |
+| `sorted_set` | An ordered `SortedSet<K>` wrapping `SortedMap<K, Unit>`: `bool`-returning `upsert` (no abort-on-duplicate) and abort-on-absent `remove`, nearest-neighbour navigation, and a single-object footprint. |
 
 ---
 
@@ -38,7 +38,7 @@ Abilities materialize jointly over `K` and `V`: `SortedMap<u64, u64>` is `copy +
 ### Lifecycle
 
 1. **Construct** - `new()` (empty), `singleton(k, v)`, or `from_sorted_keys_values!(keys, values)` (parallel vectors that must be strictly increasing under the comparator - aborts otherwise; unlike `sorted_set`'s de-duplicating `from_keys!`). None take a `TxContext`; embed the result as a field on your object.
-2. **Read / write** - use the bare macros (`insert!`, `borrow!`, `remove!`, ...) for integer keys; use the `_by` macros with a consistently threaded comparator for non-integer keys.
+2. **Read / write** - use the bare macros (`upsert`, `borrow!`, `remove!`, ...) for integer keys; use the `_by` macros with a consistently threaded comparator for non-integer keys.
 3. **Drain** - a store-only `V` (e.g. `Coin`) cannot be dropped: remove every value, then `destroy_empty`.
 
 ### Usage
@@ -67,7 +67,7 @@ public fun place(book: &mut PriceBook, price: u64, size: u64) {
         let cur = sorted_map::borrow_mut!(&mut book.levels, &price);
         *cur = *cur + size;
     } else {
-        sorted_map::insert!(&mut book.levels, price, size);
+        sorted_map::upsert!(&mut book.levels, &price, size);
     };
 }
 
@@ -83,7 +83,7 @@ public fun levels_from(book: &PriceBook, from: u64, include: bool, limit: u64): 
 }
 ```
 
-For non-integer keys, or to sort descending, pass a comparator with the `_by` macros (threaded consistently): `sorted_map::insert_by!(&mut bids, price, size, |a, b| *a > *b)`.
+For non-integer keys, or to sort descending, pass a comparator with the `_by` macros (threaded consistently): `sorted_map::upsert_by!(&mut bids, &price, size, |a, b| *a > *b)`.
 
 Complete integration examples live in [`examples/sorted_map/`](examples/sorted_map):
 
@@ -104,12 +104,12 @@ Complete integration examples live in [`examples/sorted_map/`](examples/sorted_m
 ### Lifecycle
 
 1. **Construct** - `new()` / `singleton(k)` / `from_keys!(keys)` (any order, de-duplicates, never aborts) / `from_sorted_keys!(keys)` (pre-sorted input, O(N), de-duplicates; aborts `EKeysNotSorted` otherwise). Takes no `TxContext`; embed the result as a field.
-2. **Membership** - `insert!` returns `bool` (`true` = newly added, never aborts); `remove!` aborts `EKeyNotFound` on an absent key; `contains!` tests presence. Bare macros for integer keys, `_by` macros with a consistent comparator otherwise.
+2. **Membership** - `upsert` returns `bool` (`true` = newly added, never aborts); `remove!` aborts `EKeyNotFound` on an absent key; `contains!` tests presence. Bare macros for integer keys, `_by` macros with a consistent comparator otherwise.
 3. **Iterate** - `head`/`tail`, `next_key!`/`prev_key!`, `find_next!`/`find_prev!`, `keys_from!` pages, `pop_front`/`pop_back`. A set is always droppable, so there is no `destroy_empty`.
 
 ### Usage
 
-A watchlist embeds a `SortedSet<u64>` and uses the `insert!` `bool` to emit an event only the first time an id is watched.
+A watchlist embeds a `SortedSet<u64>` and uses the `upsert` `bool` to emit an event only the first time an id is watched.
 
 ```move
 module my_app::watchlist;
@@ -127,7 +127,7 @@ public fun new(ctx: &mut TxContext): Watchlist {
 
 /// Add a token id; emit only the FIRST time it is watched - the `bool` return earns its keep.
 public fun watch(w: &mut Watchlist, id: u64) {
-    if (sorted_set::insert!(&mut w.ids, id)) {
+    if (sorted_set::upsert!(&mut w.ids, &id)) {
         event::emit(Added { id });
     }
 }
@@ -139,11 +139,11 @@ public fun page(w: &Watchlist, from: u64, include: bool, limit: u64): vector<u64
 }
 ```
 
-For non-integer keys, or to sort descending, use the `_by` macros with a consistently threaded comparator. To recover `vec_set`'s abort-on-duplicate, wrap the bool: `assert!(sorted_set::insert!(&mut s, k), EAlreadyThere)`.
+For non-integer keys, or to sort descending, use the `_by` macros with a consistently threaded comparator. To recover `vec_set`'s abort-on-duplicate, wrap the bool: `assert!(sorted_set::upsert!(&mut s, &k), EAlreadyThere)`.
 
 Complete integration examples live in [`examples/sorted_set/`](examples/sorted_set):
 
-- [`allowlist`](examples/sorted_set/allowlist.move) - the canonical embed and the headline `vec_set` divergence: `insert!` returns `bool` (never aborts on a duplicate), a side effect gated on a real state change, `from_keys!` de-dup; `remove!` aborts on an absent key.
+- [`allowlist`](examples/sorted_set/allowlist.move) - the canonical embed and the headline `vec_set` divergence: `upsert` returns `bool` (never aborts on a duplicate), a side effect gated on a real state change, `from_keys!` de-dup; `remove!` aborts on an absent key.
 - [`validator_set`](examples/sorted_set/validator_set.move) - the `_by` struct-key story and the comparator footgun: a coarse (non-injective) comparator silently collapses byte-distinct keys, shown with a red test.
 - [`unlock_queue`](examples/sorted_set/unlock_queue.move) - ordered drain / priority queue (head/tail peek, pop extremes) and the set's `EEmpty` abort pinned to `openzeppelin_collections::sorted_set`.
 
@@ -154,20 +154,20 @@ The comparator footgun applies to both modules and is stated once at the top of 
 ### SortedMap
 
 - **Aborts, all at the library's location.** Only these abort: `borrow`/`borrow_mut`/`remove`/`remove_by` -> `EKeyNotFound`; `destroy_empty` on a non-empty map -> `ENotEmpty`; `pop_front`/`pop_back` on an empty map -> `EEmpty`; `from_sorted_keys_values`/`_by` -> `EUnequalLengths` or `EKeysNotStrictlyIncreasing` on invalid input. Everything else is total (returns `Option`/`bool`/`vector`). Consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_map`.
-- **Resource-`V` conservation.** `insert`'s upsert returns the displaced value (`some(old)`) rather than dropping it; `remove`/`pop_*` move values out; `destroy_empty` refuses a non-empty map. A store-only `V` like `Coin<T>` is never silently burned.
+- **Resource-`V` conservation.** `upsert`'s upsert returns the displaced value (`some(old)`) rather than dropping it; `remove`/`pop_*` move values out; `destroy_empty` refuses a non-empty map. A store-only `V` like `Coin<T>` is never silently burned.
 - **Forced-public internals are not an API.** Macro hygiene forces `search!`, `insert_at`, `remove_at`, `new_entry` to be `public`. `insert_at`/`remove_at` write at a caller-given position with no order check - calling them directly can corrupt order. They exist only to serve the macro bodies; use the macro API.
 - **No events.** A UID-less value has no on-chain identity; emit events yourself at your entry functions. Embedding in a shared object serializes writers per object, not per key - shard into multiple maps or use an owned object for hot paths.
-- **Capacity.** Every operation loads exactly one stored object, so the map is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. Illustratively, measured on localnet (Sui 1.74.1), a `SortedMap<u64, u64>` holds 15,997 entries before `insert` aborts at the Sui runtime with `MoveObjectTooBig` - treat this as a guide, not a guarantee (the protocol size cap is config-governed and can change). `remove` always survives at the ceiling, so a full map is never soft-bricked (hence no `ECapacityExceeded` guard). The ceiling scales inversely with entry size.
+- **Capacity.** Every operation loads exactly one stored object, so the map is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. Illustratively, measured on localnet (Sui 1.74.1), a `SortedMap<u64, u64>` holds 15,997 entries before `upsert` aborts at the Sui runtime with `MoveObjectTooBig` - treat this as a guide, not a guarantee (the protocol size cap is config-governed and can change). `remove` always survives at the ceiling, so a full map is never soft-bricked (hence no `ECapacityExceeded` guard). The ceiling scales inversely with entry size.
 - **Deliberate omissions.** No non-aborting `Option<&V>` borrow (Move cannot put a reference in `Option`) - use `if (contains!(..)) borrow!(..)`. No `values()`/`entries()` copy-out - `V` is only `store` (it may be a non-copyable resource like `Coin`), so values cannot be copied into a `vector`; read them per key via `borrow!`, or snapshot keys with `keys()` (or page with `keys_from!`) and `borrow!` each. No descending pagination - use a reverse comparator.
 
 ### SortedSet
 
 - **The worst case is order-only - no key is ever lost.** Unlike the map (which can strand a `Coin` on misuse), the set's value is the trivial `Unit`, so a comparator violation gives wrong membership *answers* on a desorted set, but every key is still physically present and recoverable via `keys()`. This is the decisive simplification over the map. In tests, call `sorted_map::is_well_formed_by!(sorted_set::inner_ref(&s), lt)` after `_by` sequences.
-- **`insert` returns `bool` and does not abort; `remove` aborts on an absent key.** `insert! -> true` iff newly added (diverges from `vec_set`'s abort-on-duplicate; recover it with one `assert!`). `remove!` aborts `EKeyNotFound` on an absent key, matching `vec_set::remove`. `from_keys!` de-duplicates.
+- **`upsert` returns `bool` and does not abort; `remove` aborts on an absent key.** `upsert -> true` iff newly added (diverges from `vec_set`'s abort-on-duplicate; recover it with one `assert!`). `remove!` aborts `EKeyNotFound` on an absent key, matching `vec_set::remove`. `from_keys!` de-duplicates.
 - **Three aborts.** `pop_front`/`pop_back` on an empty set abort `EEmpty` and `from_sorted_keys!`/`_by` on unsorted input abort `EKeysNotSorted`, both at this module's location. `remove!` on an absent key is DELEGATED to the wrapped map and aborts `sorted_map::EKeyNotFound` at the *map's* location. Consumer `#[expected_failure]` tests must pin `location` accordingly (`openzeppelin_collections::sorted_set` for the first two, `::sorted_map` for the remove abort). Every other operation is total.
 - **Forced-public internals are not an API.** `inner_ref`, `inner_mut`, and `unit` are `public` only for macro hygiene. Driving the wrapped map through `inner_mut` with an inconsistent comparator can desort the set (order-only, local to that set). Use the macro API.
 - **No capabilities, `Clock`, `Random`, global state, or events.** The library never checks the caller; gate your own entry functions and emit your own events.
-- **Capacity.** Every operation loads exactly one stored object, so the set is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. Illustratively, measured on localnet (Sui 1.74.1), the ceiling is 28,440 `u64` keys (≈1.78× the map's 15,997 `u64`/`u64` entries - each set entry is 9 bytes: an 8-byte key plus the 1-byte `Unit`); treat it as a guide, not a guarantee. Past it, `insert` self-limits via `MoveObjectTooBig` (no capacity guard); the set is never soft-bricked.
+- **Capacity.** Every operation loads exactly one stored object, so the set is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. Illustratively, measured on localnet (Sui 1.74.1), the ceiling is 28,440 `u64` keys (≈1.78× the map's 15,997 `u64`/`u64` entries - each set entry is 9 bytes: an 8-byte key plus the 1-byte `Unit`); treat it as a guide, not a guarantee. Past it, `upsert` self-limits via `MoveObjectTooBig` (no capacity guard); the set is never soft-bricked.
 
 ## Learn More
 

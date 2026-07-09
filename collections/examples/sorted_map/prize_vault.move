@@ -7,7 +7,7 @@
 /// - A `SortedMap<u64, Coin<SUI>>` is itself not droppable - it cannot fall out of
 ///   scope; it must be drained and then `destroy_empty`'d.
 /// - Every op that could displace a value hands it back instead of dropping it
-///   (`insert!` returns `Option<Coin>`, `remove!` returns the `Coin` (aborting if the rank
+///   (`upsert` returns `Option<Coin>`, `remove!` returns `(rank, Coin)` (aborting if the rank
 ///   is absent), `pop_front` returns `(rank, Coin)`), and for a resource the compiler forces
 ///   you to consume what you get back - so value cannot silently leak.
 /// - `destroy_empty` aborts `ENotEmpty` if any prize is unclaimed - the safety net that
@@ -46,6 +46,9 @@ const ERankAlreadyFunded: vector<u8> = "Rank already funded";
 /// `fund` was called with rank 0; ranks are 1-based (1 = champion).
 #[error(code = 2)]
 const EInvalidRank: vector<u8> = "Rank must be >= 1";
+/// `pay_rank` was called for a rank that holds no prize.
+#[error(code = 3)]
+const ENoSuchRank: vector<u8> = "No prize at rank";
 
 // === Structs ===
 
@@ -76,10 +79,10 @@ public fun create(ctx: &mut TxContext): (ID, OrganizerCap) {
 }
 
 /// Fund the prize at `rank` with `coin` (one coin per rank). Ranks are 1-based (1 = champion).
-/// The `ERankAlreadyFunded` guard keeps `fund` clean: without it a re-fund would make `insert!`
+/// The `ERankAlreadyFunded` guard keeps `fund` clean: without it a re-fund would make `upsert`
 /// return `some(old_coin)`, and the follow-up `destroy_none()` would abort with the opaque
-/// foreign `std::option::EOPTION_IS_SET`. On the guarded fresh slot `insert!` returns `none`,
-/// which `destroy_none()` consumes (a resource map's `insert!` return cannot be ignored).
+/// foreign `std::option::EOPTION_IS_SET`. On the guarded fresh slot `upsert` returns `none`,
+/// which `destroy_none()` consumes (a resource map's `upsert` return cannot be ignored).
 ///
 /// #### Aborts
 /// - `EWrongVault` if `cap` does not authorize `vault`.
@@ -89,7 +92,7 @@ public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, coin: Coin<SUI>, ran
     assert_cap(vault, cap);
     assert!(rank >= 1, EInvalidRank);
     assert!(!vault.prizes.contains!(&rank), ERankAlreadyFunded);
-    vault.prizes.insert!(rank, coin).destroy_none();
+    vault.prizes.upsert!(&rank, coin).destroy_none();
 }
 
 /// Pay the champion: remove and return the lowest-rank `(rank, coin)` via `pop_front`.
@@ -102,15 +105,18 @@ public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>
     vault.prizes.pop_front()
 }
 
-/// Pay a specific `rank`, returning its coin. `remove!` returns `none` for an absent rank
-/// rather than aborting, so we surface our own `ENoSuchRank`.
+/// Pay a specific `rank`, returning its coin. `remove!` aborts with the library's opaque
+/// `sorted_map::EKeyNotFound` on an absent rank, so we guard with `contains!` first and surface
+/// our own domain error - mirroring `fund`'s `ERankAlreadyFunded` guard.
 ///
 /// #### Aborts
 /// - `EWrongVault` if `cap` does not authorize `vault`.
 /// - `ENoSuchRank` if no prize rests at `rank`.
 public fun pay_rank(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64): Coin<SUI> {
     assert_cap(vault, cap);
-    vault.prizes.remove!(&rank)
+    assert!(vault.prizes.contains!(&rank), ENoSuchRank);
+    let (_, coin) = vault.prizes.remove!(&rank);
+    coin
 }
 
 /// Number of unclaimed prizes still resting in the vault.

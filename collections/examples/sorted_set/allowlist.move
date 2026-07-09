@@ -7,14 +7,14 @@
 /// (contrast the shared `unlock_queue` / `validator_set` modules).
 ///
 /// # The bool return earns its keep
-/// `sui::vec_set::insert` ABORTS on a duplicate. This set's `insert!` instead returns `bool` and
-/// never aborts: `insert! -> true` iff the id was NEWLY added. That lets us gate a side effect on a
+/// `sui::vec_set::insert` ABORTS on a duplicate. This set's `upsert` instead returns `bool` and
+/// never aborts: `upsert -> true` iff the id was NEWLY added. That lets us gate a side effect on a
 /// genuine state change - we `event::emit` `Approved` only when the membership actually flipped -
 /// and keeps the call composable mid-PTB (a benign re-approval does not roll back the whole
 /// transaction).
 ///
 /// If you want vec_set's abort-on-duplicate, layer it back on in one line:
-/// `assert!(insert!(&mut s, k), E)` - that is exactly what `approve_strict` does.
+/// `assert!(s.upsert!(&k), E)` - that is exactly what `approve_strict` does.
 ///
 /// `remove!`, by contrast, ABORTS on an absent key (matching `vec_set::remove`), so `revoke` aborts
 /// rather than reporting a miss; there is no membership to gate on, and it emits `Revoked` on every
@@ -25,7 +25,7 @@
 /// `from_keys` aborts on a duplicate). `create([7, 7, 3])` yields the two-member set {3, 7}.
 /// To instead REJECT duplicate input, build then `assert!(count(&s) == input.length(), E)`.
 ///
-/// Integer keys use the bare macros (`insert!`, `remove!`, `contains!`), which assume the
+/// Integer keys use the bare macros (`upsert`, `remove!`, `contains!`), which assume the
 /// built-in `<`. A non-integer key (address, struct) would need the `_by` forms - see
 /// `validator_set`.
 ///
@@ -46,7 +46,7 @@ use sui::event;
 
 /// `approve_strict` was asked to add an id that is already approved. This is the integrator's
 /// OWN opt-in error - it recovers `vec_set::insert`'s abort-on-duplicate on top of the set's
-/// total `insert!`. It is NOT a library abort.
+/// total `upsert`. It is NOT a library abort.
 #[error(code = 0)]
 const EAlreadyApproved: vector<u8> = "Id is already approved";
 
@@ -61,7 +61,7 @@ public struct Allowlist has key {
 
 // === Events ===
 
-/// Emitted only on a genuine first-time approval (gated on `insert!`'s `true`).
+/// Emitted only on a genuine first-time approval (gated on `upsert`'s `true`).
 public struct Approved has copy, drop { id: u64 }
 
 /// Emitted on every successful revocation (`remove!` aborts if the id was absent).
@@ -89,18 +89,18 @@ public fun transfer_to(list: Allowlist, recipient: address) {
 /// Approve `id`. Returns `true` iff it was NEWLY approved; a re-approval returns `false` and
 /// does NOT abort (idempotent, total). Emits `Approved` only on the `true` (first-seen) case.
 public fun approve(list: &mut Allowlist, id: u64): bool {
-    let added = list.members.insert!(id);
+    let added = list.members.upsert!(&id);
     if (added) event::emit(Approved { id });
     added
 }
 
-/// Approve `id`, recovering `vec_set::insert`'s strict semantics on top of the total `insert!`
+/// Approve `id`, recovering `vec_set::insert`'s strict semantics on top of the total `upsert`
 /// in one line. Emits `Approved` on success.
 ///
 /// #### Aborts
 /// - `EAlreadyApproved` if `id` is already present.
 public fun approve_strict(list: &mut Allowlist, id: u64) {
-    assert!(list.members.insert!(id), EAlreadyApproved);
+    assert!(list.members.upsert!(&id), EAlreadyApproved);
     event::emit(Approved { id });
 }
 

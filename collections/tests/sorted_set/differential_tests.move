@@ -2,7 +2,7 @@
 ///
 /// Drives the real `SortedSet` and a keys-only sorted-vector REFERENCE MODEL (`test_util::RefSet`)
 /// through an identical stream of deterministic-pseudorandom ops, asserting they agree at every
-/// step - including the `insert!` BOOLEAN and `contains!` - and re-checks
+/// step - including the `upsert` BOOLEAN and `contains!` - and re-checks
 /// `is_well_formed!` after EVERY op. None of this has a runtime guard in production; the
 /// differential is where it is actually pinned. Membership conservation is the cross-cutting
 /// consequence: a key the reference model holds is never reported absent unless a

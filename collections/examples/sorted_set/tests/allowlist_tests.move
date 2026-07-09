@@ -18,9 +18,9 @@ const BOB: address = @0x0B;
 //
 // Teaches the canonical set integration. An owned `Allowlist` is seeded with a DUPLICATE id
 // (de-duplicated by `from_keys!`), then driven through approve / re-approve / revoke. The proof
-// that `insert!`'s bool gates side effects correctly is the per-transaction EVENT count: a
+// that `upsert`'s bool gates side effects correctly is the per-transaction EVENT count: a
 // first-time approval emits exactly one `Approved`; a re-approval of the same id emits NONE (the
-// polarity is `insert! == newly-added`, not the inverse). `revoke` of a present id emits `Revoked`
+// polarity is `upsert == newly-added`, not the inverse). `revoke` of a present id emits `Revoked`
 // (revoking an absent id aborts - see `revoke_absent_aborts`). Finally ALICE hands the owned object
 // to BOB, who sees the same membership - the embedded set travels inline.
 #[test]
@@ -99,7 +99,7 @@ fun revoke_absent_aborts() {
 
 // === Scenario 2 - opt-in strict insert: recover vec_set's abort-on-duplicate ===
 //
-// The set's `insert!` is total, but a one-line `assert!(insert!(...), E)` recovers
+// The set's `upsert` is total, but a one-line `assert!(upsert(...), E)` recovers
 // `sui::vec_set::insert`'s abort-on-duplicate when the integrator WANTS it. `approve_strict`
 // does exactly that, aborting the integrator's OWN `EAlreadyApproved` (NOT a library abort -
 // the location is this example module, not openzeppelin_collections::sorted_set).

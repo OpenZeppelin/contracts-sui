@@ -67,7 +67,7 @@ fun copy_is_deep_independent_snapshot() {
 #[test]
 fun copy_then_drain_each_independently() {
     // Copy a populated set then DRAIN each independently and assert each stays internally
-    // consistent. The snapshot test above covers insert!/remove! only; pop_* is the one mutator
+    // consistent. The snapshot test above covers upsert/remove! only; pop_* is the one mutator
     // never run on a copy. Draining one copy must not alias the other's backing vector.
     let mut s1 = u::fromk(vector[1u64, 2, 3]);
     let mut s2 = s1; // COPY (s1 is used below)
@@ -165,7 +165,7 @@ fun unit_is_one_byte() {
 fun macro_inlining_headroom() {
     // Each set macro inlines THREE layers (set macro -> map macro -> search!; from_keys is four),
     // so a function's ~256-locals budget is spent fast. MEASURED on sui 1.73.1: 11 distinct bare
-    // `insert!` expansions in ONE function compile; the 12th panics with `value (277) cannot exceed
+    // `upsert` expansions in ONE function compile; the 12th panics with `value (277) cannot exceed
     // (255)` - vs ~20 for the map (the extra inlining layer is why it is WORSE for the set). `_by`
     // forms and `from_keys` are heavier still. This is why every comparator op in the rest of the
     // suite is wrapped one-per-helper in test_util (a helper CALL does not expand) and op streams
@@ -174,8 +174,8 @@ fun macro_inlining_headroom() {
     // negative (12+ -> compiler panic) cannot be a live #[test] (it fails to compile), so it is
     // recorded above as a measured fact.
     let mut s = ss::new<u64>();
-    s.insert!(3);
-    s.insert!(1);
+    s.upsert!(&3);
+    s.upsert!(&1);
     let _ = s.contains!(&1);
     s.remove!(&3);
     let _ = s.find_next!(&0, true);
@@ -195,7 +195,7 @@ fun pop_returns_bare_key_not_tuple() {
 #[test]
 fun from_keys_macro_depth_compiles() {
     // macro_inlining_headroom pins 3-layer BARE ops in-body; this pins the HEADLINE
-    // 4-layer from_keys expansion (do! -> set insert! -> map insert_by! -> search!) compiling in a
+    // 4-layer from_keys expansion (do! -> set upsert -> map upsert_by! -> search!) compiling in a
     // #[test] body directly - both the bare and a _by form - not only via test_util helpers.
     let s = ss::from_keys!(vector[3u64, 1, 2]); // bare 4-layer expansion in-body
     assert_eq!(s.keys(), vector[1u64, 2, 3]);
@@ -220,7 +220,7 @@ fun from_keys_macro_depth_compiles() {
 //
 // A bare macro on a non-integer key fails (no built-in `<`); use the _by form:
 //     let mut s = ss::new<address>();
-//     ss::insert!(&mut s, @0x1);                      // E04003: `<` not defined for address
+//     ss::upsert!(&mut s, &@0x1);                    // E04003: `<` not defined for address
 //
 // No accessor yields &mut K or &mut Entry<K, Unit>; a stored key is reachable only as
 // &K. The strongest mutable handle reachable through inner_mut is &mut Unit (the value), never
@@ -237,7 +237,7 @@ fun from_keys_macro_depth_compiles() {
 //
 // Instantiations are nominal; cannot mix a u64 key into an address set:
 //     let mut sa = ss::new<address>();
-//     ss::insert!(&mut sa, 1u64);                     // E: expected address, found u64
+//     ss::upsert!(&mut sa, &1u64);                   // E: expected address, found u64
 //
 // A bare SortedSet is NOT `key`, so it cannot be transferred/shared directly; it must
 // be wrapped in a consumer's own `has key` object (as `Watch` is above):
@@ -251,4 +251,4 @@ fun from_keys_macro_depth_compiles() {
 //
 // Mutation-reentrancy is foreclosed by the borrow checker; a comparator that tries to
 // mutate the set mid-search cannot type-check (the set is already borrowed &mut for the op):
-//     ss::insert_by!(&mut s, k, |a, b| { ss::insert!(&mut s, 0); *a < *b });  // E: borrow conflict
+//     ss::upsert_by!(&mut s, &k, |a, b| { ss::upsert!(&mut s, &0); *a < *b });  // E: borrow conflict
