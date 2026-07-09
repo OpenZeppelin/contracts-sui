@@ -206,6 +206,30 @@ fun cancel_emergency_succeeds() {
     test.end();
 }
 
+// Emergency cancel with zero raised: do_cancel routes an empty proceeds balance
+// through the vault's deposit (the zero-value no-op path) and still cancels cleanly.
+#[test]
+fun cancel_emergency_zero_raised_succeeds() {
+    let (mut test, clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    // No purchase: raised == 0.
+
+    test.next_tx(tu::admin());
+    let mut sale = tu::take_sale(&test);
+    let mut vault = tu::take_vault(&test);
+    let cap = tu::take_cap(&test);
+    sale.cancel_emergency(&cap, &mut vault, &clk);
+    assert_eq!(sale.phase().is_cancelled(), true);
+    assert_eq!(vault.is_refunding(), true);
+    assert_eq!(vault.value(), 0);
+    tu::return_sale(sale);
+    tu::return_vault(vault);
+    tu::return_cap(cap);
+
+    destroy(clk);
+    test.end();
+}
+
 // A cap that does not match the sale is rejected.
 #[test, expected_failure(abort_code = prefunded_sale::EWrongAdminCap)]
 fun cancel_emergency_wrong_cap_aborts() {

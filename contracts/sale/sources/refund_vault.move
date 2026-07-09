@@ -176,6 +176,7 @@ public fun deposit<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>, funds
     assert!(vault.state.is_active_state(), ENotActiveState);
     let amount = funds.value();
     vault.locked.join(funds);
+    if (amount == 0) return;
     event::emit(VaultDeposit<P> {
         vault_id: object::id(vault),
         amount,

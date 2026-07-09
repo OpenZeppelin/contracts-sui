@@ -60,6 +60,26 @@ fun deposit_then_refunding_then_release_partial() {
     destroy(cap);
 }
 
+// A zero-value deposit is a no-op: the balance is consumed, but the locked
+// amount and state are unchanged (and no VaultDeposit event is emitted). The
+// vault stays fully usable afterwards.
+#[test]
+fun deposit_zero_is_noop() {
+    let mut ctx = tx_context::dummy();
+    let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
+
+    vault.deposit(&cap, tu::pay_balance(0));
+    assert_eq!(vault.value(), 0);
+    assert_eq!(vault.is_active(), true);
+
+    // Still accepts real deposits after the no-op.
+    vault.deposit(&cap, tu::pay_balance(500));
+    assert_eq!(vault.value(), 500);
+
+    destroy(vault);
+    destroy(cap);
+}
+
 // === Cap-gating ===
 
 #[test, expected_failure(abort_code = refund_vault::EWrongVaultCap)]
