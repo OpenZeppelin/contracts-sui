@@ -38,10 +38,11 @@ One shared `Vault` holds N coin types at once. Funds are not a struct field: eac
 ### Lifecycle
 
 1. **Create and fund** - `new` returns the `Vault` and its `OwnerCap` by value; `deposit<T>` (or a raw address-balance top-up) funds the pool; `share` makes the vault usable. Compose all of this in one PTB before `share`.
-2. **Grant** - `mint_cap` returns a bare `SpenderCap`; `set_allowance<T>` creates or overwrites the `(cap, coin)` budget. `0` suspends (keeps the cap), `u64::MAX` means unlimited / no expiry, and an optional CAS guard makes read-then-write races safe.
+2. **Grant** - `mint_cap` returns a bare `SpenderCap`; `set_allowance<T>` creates or overwrites the `(cap, coin)` budget. `0` suspends (keeps the cap), `u64::MAX` means unlimited / no expiry, and an optional CAS guard lets an update derived from an earlier read abort instead of clobbering a spend sequenced in between.
 3. **Spend** - the cap holder calls `spend<T>` for exactly `amount`, receiving a `Balance<T>` to route onward. Spending is cap-gated, never sender-gated.
-4. **Manage** - the owner raises, lowers, or suspends a live grant in place with `set_allowance<T>` (the cap object is never invalidated), ends one coin with `revoke<T>`, or kills an entire cap with `revoke_all`. A spender can self-revoke with `renounce`.
-5. **Exit and teardown** - the owner withdraws funds at any time with `withdraw<T>` / `withdraw_all<T>`, then `destroy`s the drained vault. Owner exit is never blocked by spender state.
+4. **Inspect** - read allowance state on-chain without mutating: `allowance<T>` (the configured budget), `spendable_now<T>` (an advisory upper bound on what a spend may allow right now, after expiry and the pool balance - not a guarantee, since the pool can be short at spend time under same-checkpoint contention; see [Security Notes](#security-notes)), `expiry<T>`, `contains<T>`, and `balance_value<T>` (the pooled balance of a coin type).
+5. **Manage** - the owner raises, lowers, or suspends a live grant in place with `set_allowance<T>` (the cap object is never invalidated), ends one coin with `revoke<T>`, or kills an entire cap with `revoke_all`. A spender can self-revoke with `renounce`.
+6. **Exit and teardown** - the owner withdraws funds at any time with `withdraw<T>` / `withdraw_all<T>`, then `destroy`s the drained vault. Owner exit is never blocked by spender state.
 
 ### Usage
 
@@ -97,7 +98,7 @@ public fun draw<T>(
 
 ### Examples
 
-> [!WARNING]
+> [!Warning]
 > These are **unaudited illustrations** of how the primitive can be integrated, not production-ready code.
 
 Complete integration examples live in [`examples/spend_vault/`](examples/spend_vault):
