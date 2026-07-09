@@ -135,7 +135,7 @@ jobs:
     # green fast run so we never trace a broken build.
     needs: [setup, test]
     runs-on: ubuntu-latest
-    timeout-minutes: 30Expand commentComment on line R138Resolved
+    timeout-minutes: 30
     continue-on-error: true
     permissions:
       contents: read
@@ -145,6 +145,11 @@ jobs:
       matrix:
         package: ${{ fromJson(needs.setup.outputs.packages) }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restore Sui CLI
+        uses: ./.github/actions/restore-sui
         with:
           version: ${{ env.SUI_VERSION }}
 
@@ -153,10 +158,6 @@ jobs:
         # full randomized property iterations run in the `test` job above, so a
         # single iteration here keeps trace volume down without losing coverage.
         run: sui move test --trace --rand-num-iters 1
-        working-directory: ./${{ matrix.package }}
-
-      - name: Generate Codecov report
-        run: sui move coverage lcov > lcov.info
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov
