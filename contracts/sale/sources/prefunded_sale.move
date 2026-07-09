@@ -60,7 +60,11 @@
 ///   asserts `inventory >= required_inventory`, the backing amount the
 ///   curve commits to via its `ActivationTicket` (a fixed-rate curve
 ///   sets it to `hard_cap * rate`), so sold-out and hard-cap-reached
-///   coincide.
+///   coincide. The cap is enforced **all-or-nothing**: a `purchase`
+///   whose payment would push `raised` past `hard_cap` aborts in full
+///   with `EHardCapExceeded` - there is no partial fill up to the
+///   remaining capacity. See `purchase` for how buyers size a payment
+///   near sell-out.
 /// - **Soft cap (optional, `0 = none`).** Minimum raise required for
 ///   `finalize`. If the window closes with `raised < soft_cap`,
 ///   `cancel_after_close` is callable by anyone; refunds become
@@ -979,6 +983,14 @@ public fun share_and_activate<
 /// delegated to the witness-gated curve module - the witness gate (only the
 /// declaring curve can mint a `Quote` for its sale type) is what makes this safe.
 /// See the `Quote` section below.
+///
+/// **Hard cap is all-or-nothing.** The sale never partially fills a purchase up to the
+/// remaining capacity and refunds the rest. This is deliberate: the `Quote` carries a
+/// single curve-computed `allocation` priced for the exact `paid` amount, and honoring
+/// a partial payment would require re-pricing the accepted portion, which only the curve
+/// can do. Near sell-out, buyers must size their payment to the remaining capacity -
+/// `hard_cap() - raised()` - off-chain before minting the quote. A payment for the exact
+/// remaining capacity closes the sale (`raised == hard_cap`); anything larger reverts.
 ///
 /// All arithmetic on user-controlled inputs (`raised + paid`, `contribution + paid`)
 /// is widened to `u128` and bounds-checked before downcasting, so oversized payments
