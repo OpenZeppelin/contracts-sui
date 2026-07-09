@@ -111,7 +111,11 @@
 ///
 /// 4. **Every sale requires a paired `RefundVault<PaymentCoin>`.** Even sales
 ///    with `soft_cap == 0` need a vault - `cancel_emergency` always
-///    has a refund destination. Pair the vault before activation.
+///    has a refund destination. Pair the vault before activation;
+///    `share_and_activate` then takes it by value and shares it
+///    alongside the sale, so the vault is always public once the sale
+///    is live and the permissionless refund paths cannot be bricked by
+///    a forgotten sharing step.
 ///
 /// 5. **Receipts are non-transferable and buyer-bound.** A buyer with
 ///    multiple purchases holds multiple receipts; `claim_all` batches
@@ -992,8 +996,18 @@ public fun mint_activation_ticket<
     required_inventory: u64,
 ): ActivationTicket<Curve> { ActivationTicket { sale_id: object::id(sale), required_inventory } }
 
-/// Transition `Init -> Active` and share the sale. Consumes both the sale and the
-/// activation ticket.
+/// Transition `Init -> Active` and share both the sale and its paired refund vault.
+/// Consumes the sale, the vault, and the activation ticket.
+///
+/// The vault is taken **by value** and shared here, in the same call that shares the
+/// sale, so the two always go public together. This is what makes the module's
+/// "buyer claims and refunds never depend on admin liveness" guarantee structural
+/// rather than a convention: the permissionless close/refund paths (`finalize`,
+/// `cancel_after_close`, `refund`) all need `&mut vault`, which only works on a
+/// *shared* vault. Were sharing left to a separate integrator step, skipping it would
+/// leave the vault owned by the issuer and silently brick those paths - unnoticed on
+/// the success path (`claim` needs no vault) and locking buyer funds on a soft-cap
+/// miss. Requiring the vault by value removes that failure mode entirely.
 ///
 /// The `required_inventory` carried by the ticket is the backing the curve commits
 /// to (a fixed-rate curve sets it to `hard_cap * rate`, overflow-checked when the
@@ -1005,6 +1019,8 @@ public fun mint_activation_ticket<
 ///
 /// #### Parameters
 /// - `sale`: The sale to activate, in `Init` phase. Consumed and shared.
+/// - `vault`: The paired refund vault. Consumed and shared; must be the vault paired
+///   via `pair_refund_vault`.
 /// - `ticket`: The curve's `ActivationTicket`, carrying `required_inventory`.
 ///   Consumed.
 /// - `clock`: Sui `Clock`, read for the current timestamp.
@@ -1013,6 +1029,7 @@ public fun mint_activation_ticket<
 /// - `ETicketSaleMismatch` if `ticket` was minted for a different sale.
 /// - `ENotInit` if the sale is not in `Init` phase.
 /// - `EVaultRequiredForActivate` if no refund vault has been paired.
+/// - `EWrongVault` if `vault` is not the one paired with this sale.
 /// - `EActivationAfterClose` if `now >= closes_at_ms`.
 /// - `EInsufficientInventoryAtActivate` if `inventory < required_inventory`.
 public fun share_and_activate<
@@ -1031,6 +1048,7 @@ public fun share_and_activate<
         VestingWitness,
         VestingScheduleParams,
     >,
+    vault: RefundVault<PaymentCoin>,
     ticket: ActivationTicket<Curve>,
     clock: &Clock,
 ) {
@@ -1043,6 +1061,7 @@ public fun share_and_activate<
     // so this is a purely defensive check.
     assert!(sale.phase.is_init(), ENotInit);
     assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
+    assert!(object::id(&vault) == *sale.refund_vault_id.borrow(), EWrongVault);
 
     let activated_at_ms = clock.timestamp_ms();
     assert!(activated_at_ms < sale.closes_at_ms, EActivationAfterClose);
@@ -1051,6 +1070,7 @@ public fun share_and_activate<
 
     sale.phase = Phase::Active;
     transfer::share_object(sale);
+    vault.share();
     event::emit(SaleActivated<SaleCoin, PaymentCoin> {
         sale_id,
         activated_at_ms,

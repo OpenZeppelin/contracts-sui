@@ -76,8 +76,7 @@ fun setup_vesting_sale_with(test: &mut Scenario, clk: &Clock, params: VParams) {
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
-    sale.share_and_activate(ticket, clk);
-    refund_vault::share(vault);
+    sale.share_and_activate(vault, ticket, clk);
     transfer::public_transfer(cap, u::admin());
 }
 

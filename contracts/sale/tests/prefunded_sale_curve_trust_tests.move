@@ -49,8 +49,7 @@ fun activate_bad(
         BadCurve {},
         required_inventory,
     );
-    sale.share_and_activate(ticket, clk);
-    refund_vault::share(vault);
+    sale.share_and_activate(vault, ticket, clk);
     transfer::public_transfer(cap, u::admin());
 }
 

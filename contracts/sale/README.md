@@ -109,7 +109,7 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
   enable_allowlist           │   All setup happens here.
   pair_refund_vault          │
                              │
-  share_and_activate ────────┴──▶  Active phase - sale is SHARED.
+  share_and_activate ────────┴──▶  Active phase - sale AND vault are SHARED.
                                        │
                                    purchase ×N   (within [opens_at_ms, closes_at_ms])
                                        │
@@ -235,12 +235,13 @@ public fun launch(
     // let allow_admin = sale.enable_allowlist(ctx);  // for a strategic round
     // sale.set_vesting_schedule_params(vesting_wallet_linear::params(...));
 
-    // 4. Pair a fresh, empty, Active vault, then activate, then share the vault.
+    // 4. Pair a fresh, empty, Active vault, then activate. share_and_activate takes
+    //    the vault by value and shares it together with the sale, so the
+    //    permissionless refund paths can never be bricked by a forgotten share step.
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
-    sale.share_and_activate(ticket, clock);   // consumes + shares the sale
-    refund_vault::share(vault);
+    sale.share_and_activate(vault, ticket, clock);   // consumes + shares sale AND vault
 
     // 5. Park the admin cap somewhere recoverable (RBAC / multisig / governance).
     transfer::public_transfer(admin_cap, ctx.sender());

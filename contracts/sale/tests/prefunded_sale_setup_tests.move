@@ -517,9 +517,48 @@ fun activate_without_vault_aborts() {
         ctx,
     );
     sale.deposit(u::sale_balance(1_000));
+    // A vault exists but was never paired, so the cap is absent.
+    let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
-    sale.share_and_activate(ticket, &clk); // aborts: no vault paired
+    sale.share_and_activate(vault, ticket, &clk); // aborts: no vault paired
     destroy(cap);
+    destroy(vault_cap);
+    destroy(clk);
+    test.end();
+}
+
+// Activation rejects a vault that is not the one paired with the sale: the sale pairs
+// vault A but activation is handed a different vault B.
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+fun activate_with_wrong_vault_aborts() {
+    let mut test = ts::begin(u::admin());
+    let mut clk = clock::create_for_testing(test.ctx());
+    clk.set_for_testing(u::opens());
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        ctx,
+    );
+    sale.deposit(u::sale_balance(1_000));
+    let (vault_a, vault_cap_a) = refund_vault::new<USDC>(ctx);
+    sale.pair_refund_vault(&vault_a, vault_cap_a); // pairs A
+    let (vault_b, vault_cap_b) = refund_vault::new<USDC>(ctx); // a different vault
+    let ticket = fixed_rate_curve::activation_ticket(&sale);
+    sale.share_and_activate(vault_b, ticket, &clk); // aborts: EWrongVault (B != A)
+    destroy(cap);
+    destroy(vault_a);
+    destroy(vault_cap_b);
     destroy(clk);
     test.end();
 }
@@ -550,9 +589,8 @@ fun activate_insufficient_inventory_aborts() {
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
-    sale.share_and_activate(ticket, &clk); // aborts
+    sale.share_and_activate(vault, ticket, &clk); // aborts
     destroy(cap);
-    destroy(vault);
     destroy(clk);
     test.end();
 }
@@ -599,9 +637,8 @@ fun activate_after_close_aborts() {
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
-    sale.share_and_activate(ticket, &clk); // aborts
+    sale.share_and_activate(vault, ticket, &clk); // aborts
     destroy(cap);
-    destroy(vault);
     destroy(clk);
     test.end();
 }
@@ -654,11 +691,10 @@ fun activate_with_foreign_ticket_aborts() {
     );
     let foreign_ticket = fixed_rate_curve::activation_ticket(&sale_b);
 
-    sale_a.share_and_activate(foreign_ticket, &clk); // aborts: ETicketSaleMismatch
+    sale_a.share_and_activate(vault_a, foreign_ticket, &clk); // aborts: ETicketSaleMismatch
     destroy(cap_a);
     destroy(cap_b);
     destroy(sale_b);
-    destroy(vault_a);
     destroy(clk);
     test.end();
 }
@@ -762,8 +798,7 @@ fun share_and_activate_emits_pairing_and_activation_events() {
     sale.pair_refund_vault(&vault, vault_cap);
     let sale_id = object::id(&sale);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
-    sale.share_and_activate(ticket, &clk);
-    refund_vault::share(vault);
+    sale.share_and_activate(vault, ticket, &clk);
 
     let paired = event::events_by_type<prefunded_sale::RefundVaultPaired<SALE, USDC>>();
     assert_eq!(paired.length(), 1);
