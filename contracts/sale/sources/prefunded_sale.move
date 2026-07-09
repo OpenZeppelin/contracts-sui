@@ -2214,7 +2214,7 @@ public fun is_open<
     >,
     clock: &Clock,
 ): bool {
-    if (sale.phase != Phase::Active) { return false };
+    if (!sale.phase.is_active()) { return false };
     let now = clock.timestamp_ms();
     now >= sale.opens_at_ms && now <= sale.closes_at_ms
 }

@@ -66,6 +66,8 @@ public struct Params has copy, drop, store {
     rate: u64,
 }
 
+// === Public Functions ===
+
 // === Constructors ===
 
 /// Build a validated `Params`. The only way to obtain a `Params` outside this
@@ -157,7 +159,7 @@ public fun quote<
     sale.mint_quote(FixedRateCurve {}, balance, rate)
 }
 
-// === Views ===
+// === View helpers ===
 
 /// The configured fixed rate: sale tokens allocated per 1 payment-coin unit.
 ///
