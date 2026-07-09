@@ -568,7 +568,7 @@ public macro fun add<$K, $V>($map: &mut SortedMap<$K, $V>, $key: $K, $value: $V)
 /// is taken by value: on a fresh insert it is moved into storage; on a replace the previously
 /// stored key is dropped and this `key` is stored in its place (last-write-wins for the key bytes -
 /// observable only under a coarse comparator). The displaced VALUE is returned - never dropped - so
-/// a resource `V` is safe; `K` must be `copy + drop`.
+/// a resource `V` is safe; `K` must be `drop` (only because the displaced key is dropped on replace).
 ///
 /// Deliberate divergence from `sui::vec_map::insert`, which aborts on a duplicate key: this
 /// is a total upsert, matching `sorted_set`'s divergence from `vec_set`. For abort-on-duplicate,

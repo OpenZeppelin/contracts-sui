@@ -124,9 +124,13 @@ fun value_at_reads_and_writes() {
 //   let _c = copy m;                  // E05001: 'copy' not satisfied
 //   // (m also cannot be implicitly dropped - it must be drained + destroy_empty'd)
 //
-// A store-only key is rejected:
-//   public struct BadKey has store {}
-//   let _m = sm::new<BadKey, u64>();  // K: copy + drop + store not satisfied
+// Key abilities are demanded per-operation, not by the map itself: a store-only key
+// (no `copy`/`drop`) constructs and drains fine -
+//   public struct SKey has store { id: u64 }
+//   let m = sm::new<SKey, u64>();      // OK - new/singleton/pop_*/destroy_empty need nothing of K
+// - but the key-copying and key-dropping ops constrain K at their expansion site:
+//   sm::keys(&m);                      // E05001: keys/head/tail copy keys out -> need K: copy
+//   sm::upsert!(&mut m, SKey{id:1}, 0);// E05001: upsert/remove drop the key -> need K: drop
 //
 // Entry fields are private; key cannot be read or mutated in place:
 //   let e = sm::new_entry(1u64, 2u64);
