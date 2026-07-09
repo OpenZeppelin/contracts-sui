@@ -79,15 +79,15 @@ public fun create(ctx: &mut TxContext): (ID, OrganizerCap) {
 }
 
 /// Fund the prize at `rank` with `coin` (one coin per rank). Ranks are 1-based (1 = champion).
-/// The `ERankAlreadyFunded` guard keeps `fund` clean: without it a re-fund would make `upsert`
-/// return `some(old_coin)`, and the follow-up `destroy_none()` would abort with the opaque
-/// foreign `std::option::EOPTION_IS_SET`. On the guarded fresh slot `upsert` returns `none`,
-/// which `destroy_none()` consumes (a resource map's `upsert` return cannot be ignored).
+/// On the guarded fresh slot `upsert` returns `none`, which `destroy_none()` consumes (a
+/// resource map's `upsert` return cannot be ignored).
 ///
 /// #### Aborts
 /// - `EWrongVault` if `cap` does not authorize `vault`.
 /// - `EInvalidRank` if `rank` is 0.
 /// - `ERankAlreadyFunded` if `rank` already holds a prize.
+/// - `std::option::EOPTION_IS_SET` from `destroy_none` (guarded by `ERankAlreadyFunded`;
+///   unreachable in normal operation).
 public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, coin: Coin<SUI>, rank: u64) {
     assert_cap(vault, cap);
     assert!(rank >= 1, EInvalidRank);
@@ -105,13 +105,13 @@ public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>
     vault.prizes.pop_front()
 }
 
-/// Pay a specific `rank`, returning its coin. `remove!` aborts with the library's opaque
-/// `sorted_map::EKeyNotFound` on an absent rank, so we guard with `contains!` first and surface
-/// our own domain error - mirroring `fund`'s `ERankAlreadyFunded` guard.
+/// Pay a specific `rank`, returning its coin.
 ///
 /// #### Aborts
 /// - `EWrongVault` if `cap` does not authorize `vault`.
 /// - `ENoSuchRank` if no prize rests at `rank`.
+/// - `sorted_map::EKeyNotFound` from `remove!` (guarded by `ENoSuchRank`; unreachable in
+///   normal operation).
 public fun pay_rank(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64): Coin<SUI> {
     assert_cap(vault, cap);
     assert!(vault.prizes.contains!(&rank), ENoSuchRank);

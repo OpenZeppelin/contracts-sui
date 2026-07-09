@@ -66,6 +66,9 @@ public fun schedule(q: &mut UnlockQueue, deadline: u64): bool {
 }
 
 /// Cancel `deadline`.
+///
+/// #### Aborts
+/// - `sorted_map::EKeyNotFound` if `deadline` is not scheduled.
 public fun cancel(q: &mut UnlockQueue, deadline: u64) {
     q.deadlines.remove!(&deadline)
 }

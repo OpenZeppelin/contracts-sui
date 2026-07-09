@@ -61,7 +61,10 @@ public fun add_tick(reg: &mut TickRegistry, tick: u64, liquidity_net: u64, fee_g
     old.is_some()
 }
 
-/// Deactivate a tick.
+/// Deactivate a tick, returning its stored state.
+///
+/// #### Aborts
+/// - `sorted_map::EKeyNotFound` if `tick` is inactive - gate with `contains_tick` first.
 public fun remove_tick(reg: &mut TickRegistry, tick: u64): TickInfo {
     let info = reg.ticks.remove!(&tick);
     info
@@ -91,37 +94,46 @@ public fun accrue_fees(reg: &mut TickRegistry, tick: u64, delta: u128) {
     info.fee_growth = info.fee_growth + delta;
 }
 
-/// Lowest / highest active tick (positional - no comparator).
+/// Lowest active tick, or `none` if empty (positional - no comparator).
 public fun min_tick(reg: &TickRegistry): Option<u64> { reg.ticks.head() }
 
+/// Highest active tick, or `none` if empty (positional - no comparator).
 public fun max_tick(reg: &TickRegistry): Option<u64> { reg.ticks.tail() }
 
-/// Next active tick strictly above / below `tick` - price crossing up / down. At the
-/// ends these return `none`, the signal to stop walking.
+/// Next active tick strictly above `tick` (price crossing up), or `none` at the top end -
+/// the signal to stop walking.
 public fun tick_above(reg: &TickRegistry, tick: u64): Option<u64> {
     reg.ticks.next_key!(&tick)
 }
 
+/// Next active tick strictly below `tick` (price crossing down), or `none` at the bottom
+/// end - the signal to stop walking.
 public fun tick_below(reg: &TickRegistry, tick: u64): Option<u64> {
     reg.ticks.prev_key!(&tick)
 }
 
-/// Nearest active tick at-or-above / at-or-below `target` (inclusive). `target` need
-/// not itself be an active tick - this is exactly what a hash map cannot answer.
+/// Nearest active tick at-or-above `target` (inclusive), or `none` if none exists. `target`
+/// need not itself be an active tick - this is exactly what a hash map cannot answer.
 public fun ceiling_tick(reg: &TickRegistry, target: u64): Option<u64> {
     reg.ticks.find_next!(&target, true)
 }
 
+/// Nearest active tick at-or-below `target` (inclusive), or `none` if none exists. `target`
+/// need not itself be an active tick.
 public fun floor_tick(reg: &TickRegistry, target: u64): Option<u64> {
     reg.ticks.find_prev!(&target, true)
 }
 
+/// Number of active ticks.
 public fun length(reg: &TickRegistry): u64 { reg.ticks.length() }
 
+/// True iff no ticks are active.
 public fun is_empty(reg: &TickRegistry): bool { reg.ticks.is_empty() }
 
+/// Net liquidity added when the pool price crosses into this tick.
 public fun liquidity_net(info: &TickInfo): u64 { info.liquidity_net }
 
+/// Cumulative fee growth recorded at this tick.
 public fun fee_growth(info: &TickInfo): u128 { info.fee_growth }
 
 // === Test-Only Helpers ===

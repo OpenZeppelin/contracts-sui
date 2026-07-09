@@ -68,7 +68,7 @@ fun nonstrict_comparator_duplicates() {
 // === Footgun (b): mixing `<` (build) and `>` (remove) strands a present key ===
 
 #[test, expected_failure(abort_code = sm::EKeyNotFound)]
-fun remove_with_mixed_comparator_abortss() {
+fun remove_with_mixed_comparator_aborts() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1); // ascending build under `<`
     u::ins(&mut m, 20, 2);

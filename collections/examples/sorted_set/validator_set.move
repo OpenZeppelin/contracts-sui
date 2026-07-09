@@ -106,6 +106,10 @@ public fun top(vs: &ValidatorSet): Option<Validator> {
 /// whole `(stake, addr)`, so one address can hold two entries). The re-rank is atomic: on the
 /// collision the just-removed `old` is restored, so a `false` return never means a validator was
 /// dropped.
+///
+/// #### Aborts
+/// - `sorted_map::EKeyNotFound` from `deregister` (guarded by the `is_registered` check;
+///   unreachable in normal operation).
 public fun restake(vs: &mut ValidatorSet, old: Validator, new_stake: u64): bool {
     if (!is_registered(vs, &old)) return false; // guard: deregister would abort on an absent key
     deregister(vs, &old);

@@ -65,6 +65,8 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
 ///
 /// #### Aborts
 /// - Arithmetic overflow if merging `size` into an existing level exceeds `u64`.
+/// - `sorted_map::EKeyNotFound` from `borrow_mut!` (guarded by the `contains!` branch;
+///   unreachable in normal operation).
 public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
     if (book.asks.contains!(&price)) {
         let lvl = book.asks.borrow_mut!(&price);
@@ -79,6 +81,8 @@ public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
 ///
 /// #### Aborts
 /// - Arithmetic overflow if merging `size` into an existing level exceeds `u64`.
+/// - `sorted_map::EKeyNotFound` from `borrow_mut_by!` (guarded by the `contains_by!` branch;
+///   unreachable in normal operation).
 public fun place_bid(book: &mut OrderBook, price: u64, size: u64) {
     if (book.bids.contains_by!(&price, |a, b| outbids(a, b))) {
         let lvl = book.bids.borrow_mut_by!(&price, |a, b| outbids(a, b));
