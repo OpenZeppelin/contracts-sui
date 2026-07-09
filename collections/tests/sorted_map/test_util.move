@@ -37,6 +37,27 @@ public fun nd_unwrap(w: NoDrop): u64 {
     id
 }
 
+/// Non-droppable KEY witness: `copy` + `store` but NOT `drop`, ordered on `id` ALONE (two
+/// byte-distinct keys with the same `id` but different `tag` compare equal). Storing this as K
+/// proves the map never implicitly disposes a key: `add`/`upsert` copy the incoming key into
+/// storage on a fresh insert and reuse the FIRST-seen stored key on a replace, so no `K` is ever
+/// dropped, and a key leaves only via a `remove`/`pop` return path. A struct key has no built-in
+/// `<`, so only the `_by` macros apply. Any test that fails to thread every key back out will
+/// not compile.
+public struct NoDropKey has copy, store { id: u64, tag: u64 }
+
+public fun ndk(id: u64, tag: u64): NoDropKey { NoDropKey { id, tag } }
+
+public fun ndk_id(k: &NoDropKey): u64 { k.id }
+
+public fun ndk_tag(k: &NoDropKey): u64 { k.tag }
+
+/// Consume a `NoDropKey`, returning its id. The only way to dispose of one (it has no `drop`).
+public fun ndk_unwrap(k: NoDropKey): u64 {
+    let NoDropKey { id, tag: _ } = k;
+    id
+}
+
 /// A "coarse" key ordered on `id` ALONE: two byte-distinct keys (same `id`,
 /// different `tag`) compare equal under the comparator. Also serves as the generic
 /// non-integer (struct) key for the `_by` demonstrations when ids are distinct.
@@ -221,6 +242,40 @@ public fun head_ck_tag(m: &SortedMap<CoarseKey, u64>): u64 {
 
 public fun wf_ck(m: &SortedMap<CoarseKey, u64>): bool {
     m.is_well_formed_by!(|a, b| a.id < b.id)
+}
+
+// === Thin wrappers - SortedMap<NoDropKey, u64> ordered on `id` (non-drop KEY conservation) ===
+
+/// Strict insert; `k` is moved into storage on a fresh insert, or discarded by the unwind on a
+/// duplicate. Aborts `EKeyAlreadyExists` on a duplicate id.
+public fun add_ndk(m: &mut SortedMap<NoDropKey, u64>, k: NoDropKey, v: u64) {
+    m.add_by!(k, v, |a, b| a.id < b.id)
+}
+
+/// Upsert; the passed key is consumed here. `upsert_by` copies `*k` into storage on a fresh
+/// insert and reuses the stored key on a replace - either way the incoming `k` is disposed
+/// explicitly (unwrapped), never dropped.
+public fun upsert_ndk(m: &mut SortedMap<NoDropKey, u64>, k: NoDropKey, v: u64): Option<u64> {
+    let old = m.upsert_by!(&k, v, |a, b| a.id < b.id);
+    ndk_unwrap(k);
+    old
+}
+
+public fun has_ndk(m: &SortedMap<NoDropKey, u64>, id: u64): bool {
+    let probe = NoDropKey { id, tag: 0 };
+    let found = m.contains_by!(&probe, |a, b| a.id < b.id);
+    ndk_unwrap(probe); // the lookup probe has no `drop` - consume it
+    found
+}
+
+/// Remove by id, returning the STORED (key, value) pair - both lack `drop` handling here and
+/// must be consumed by the caller. The returned key is the stored one, distinct from the
+/// lookup probe.
+public fun rm_ndk(m: &mut SortedMap<NoDropKey, u64>, id: u64): (NoDropKey, u64) {
+    let probe = NoDropKey { id, tag: 0 };
+    let (k, v) = m.remove_by!(&probe, |a, b| a.id < b.id);
+    ndk_unwrap(probe); // consume the lookup probe (distinct from the stored key `k`)
+    (k, v)
 }
 
 // === Thin wrappers - distinct instantiations coexist ===
