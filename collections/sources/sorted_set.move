@@ -234,9 +234,7 @@ public fun destroy_empty<K>(set: SortedSet<K>) {
 /// - A set of the distinct keys, in comparator order.
 public macro fun from_keys_by<$K>($keys: vector<$K>, $lt: |&$K, &$K| -> bool): SortedSet<$K> {
     let keys = $keys;
-    let mut set = new();
-    keys.do!(|k| { set.upsert_by!(k, $lt); });
-    set
+    keys.fold!(new(), |mut set, k| { set.upsert_by!(k, $lt); set })
 }
 
 /// `from_keys_by` with the built-in integer `<`. De-duplicates - see `from_keys_by`.
