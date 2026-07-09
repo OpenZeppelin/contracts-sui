@@ -227,8 +227,13 @@ public fun new_entry<K: copy + drop + store, V: store>(key: K, value: V): Entry<
     Entry { key, value }
 }
 
-/// Insert `e` at index `i`, shifting later entries right. Order-corruption surface: a
-/// non-sorted `i` leaves the vector unsorted.
+/// Insert `e` at index `i`, shifting later entries right.
+///
+/// > **Warning:** low-level primitive intended solely for use by this module's macro API
+/// > (`insert!`, ...), which computes `i` from a sorted search. It performs no ordering
+/// > check: passing an `i` that breaks sorted order silently corrupts the map and
+/// > invalidates every lookup, insertion, and removal thereafter. Do not call it directly -
+/// > use the macro API.
 ///
 /// #### Parameters
 /// - `i`: Insertion index.
