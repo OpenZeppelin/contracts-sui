@@ -242,7 +242,7 @@ public macro fun from_keys<$K: copy + drop + store>($keys: vector<$K>): SortedSe
 /// - A set of the distinct keys, in comparator order.
 ///
 /// #### Aborts
-/// - `EKeysNotSorted` if `keys` has a strictly decreasing adjacent pair (not sorted under `lt`).
+/// - `EKeysNotSorted` if `keys` has an adjacent pair not sorted under `lt`.
 public macro fun from_sorted_keys_by<$K: copy + drop + store>(
     $keys: vector<$K>,
     $lt: |&$K, &$K| -> bool,
