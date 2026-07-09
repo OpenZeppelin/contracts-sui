@@ -88,7 +88,7 @@ fun insert_at_wrong_index_corrupts() {
     u::ins(&mut m, 20, 2);
     u::ins(&mut m, 30, 3);
     // Misuse: jam a large key at index 0 (out of sorted position).
-    m.insert_at(0, sm::make_entry(999, 9));
+    m.insert_at(0, sm::new_entry(999, 9));
     assert_eq!(m.length(), 4);
     assert!(!u::wf(&m)); // the well-formedness check catches what production never re-checks
 }
@@ -113,7 +113,7 @@ fun remove_at_misuse_returns_value() {
 fun insert_at_oob_aborts_in_vector() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
-    m.insert_at(5, sm::make_entry(99, 9)); // index 5 on a length-1 map
+    m.insert_at(5, sm::new_entry(99, 9)); // index 5 on a length-1 map
 }
 
 // The `remove_at` companion: an out-of-bounds index aborts inside std::vector, not the library.

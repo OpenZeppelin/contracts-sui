@@ -184,7 +184,7 @@ public fun new<K: copy + drop + store>(): SortedSet<K> {
 /// - A one-element set.
 public fun singleton<K: copy + drop + store>(key: K): SortedSet<K> {
     let mut set = new();
-    set.inner.insert_at(0, sorted_map::make_entry(key, unit()));
+    set.inner.insert_at(0, sorted_map::new_entry(key, unit()));
     set
 }
 
@@ -254,7 +254,7 @@ public macro fun from_sorted_keys_by<$K: copy + drop + store>(
     while (i < n) {
         let cur = *keys.borrow(i);
         if (i == 0) {
-            set.inner_mut().insert_at(0, sorted_map::make_entry(cur, unit()));
+            set.inner_mut().insert_at(0, sorted_map::new_entry(cur, unit()));
         } else {
             let prev = keys.borrow(i - 1);
             // Input MUST be sorted: reject a strictly decreasing pair (`cur` < `prev`).
@@ -262,13 +262,13 @@ public macro fun from_sorted_keys_by<$K: copy + drop + store>(
             if ($lt(prev, &cur)) {
                 // Strictly greater than `prev` - a new distinct key; append at the back (O(1)).
                 let at = set.length();
-                set.inner_mut().insert_at(at, sorted_map::make_entry(cur, unit()));
+                set.inner_mut().insert_at(at, sorted_map::new_entry(cur, unit()));
             } else {
                 // Compare-equal to `prev` - a duplicate. Refresh the back entry's key bytes to
                 // `cur`, so a coarse comparator keeps the LAST key, exactly like `from_keys!`.
                 let back = set.length() - 1;
                 set.inner_mut().remove_at(back);
-                set.inner_mut().insert_at(back, sorted_map::make_entry(cur, unit()));
+                set.inner_mut().insert_at(back, sorted_map::new_entry(cur, unit()));
             };
         };
         i = i + 1;

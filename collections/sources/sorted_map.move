@@ -58,7 +58,7 @@
 /// # Forced-public internals
 ///
 /// Move 2024 macro hygiene requires every symbol a macro body references to be `public` at the
-/// consumer's expansion site, so `search!`, `insert_at`, `remove_at`, `make_entry`, `entry_key`,
+/// consumer's expansion site, so `search!`, `insert_at`, `remove_at`, `new_entry`, `entry_key`,
 /// and similar are `public`. They are not a supported mutation API: `insert_at` / `remove_at`
 /// write at a caller-given position with no order check, so calling them directly can corrupt
 /// sorted order. Use the macro API.
@@ -101,7 +101,7 @@ const EUnequalLengths: vector<u8> = "Keys and values differ in length";
 /// One key-value pair, stored inline in the map's vector.
 ///
 /// The fields are module-private: outside this module an `Entry` is read only via
-/// `entry_key`/`entry_value` and built only via `make_entry`. No `&mut Entry` is ever
+/// `entry_key`/`entry_value` and built only via `new_entry`. No `&mut Entry` is ever
 /// exposed, so a key cannot be mutated in place and can never desync from its sorted
 /// position.
 ///
@@ -225,7 +225,7 @@ public fun entry_value<K: copy + drop + store, V: store>(e: &Entry<K, V>): &V {
 
 /// Construct an entry, consuming `key` and `value` by move (no copy, no implicit drop).
 /// Harmless until fed to `insert_at`.
-public fun make_entry<K: copy + drop + store, V: store>(key: K, value: V): Entry<K, V> {
+public fun new_entry<K: copy + drop + store, V: store>(key: K, value: V): Entry<K, V> {
     Entry { key, value }
 }
 
@@ -398,7 +398,7 @@ public macro fun from_sorted_keys_values_by<$K: copy + drop + store, $V: store>(
         let k = keys.pop_back();
         let v = values.pop_back();
         let at = map.length();
-        map.insert_at(at, make_entry(k, v));
+        map.insert_at(at, new_entry(k, v));
     };
     keys.destroy_empty();
     values.destroy_empty();
@@ -558,10 +558,10 @@ public macro fun insert_by<$K: copy + drop + store, $V: store>(
         // Extract-then-reinsert, deliberately NOT `*map.value_at_mut(..) = value`: overwriting
         // in place would drop the old value (requiring `V: drop`) and silently destroy a `Coin`.
         let old = map.remove_at(idx);
-        map.insert_at(idx, make_entry(key, value));
+        map.insert_at(idx, new_entry(key, value));
         option::some(old)
     } else {
-        map.insert_at(idx, make_entry(key, value));
+        map.insert_at(idx, new_entry(key, value));
         option::none()
     }
 }

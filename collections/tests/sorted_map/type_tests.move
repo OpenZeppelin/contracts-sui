@@ -129,7 +129,7 @@ fun value_at_reads_and_writes() {
 //   let _m = sm::new<BadKey, u64>();  // K: copy + drop + store not satisfied
 //
 // Entry fields are private; key cannot be read or mutated in place:
-//   let e = sm::make_entry(1u64, 2u64);
+//   let e = sm::new_entry(1u64, 2u64);
 //   let _k = e.key;                   // field `key` is private to sorted_map
 //   // borrow_mut! yields &mut V, never &mut Entry - no &mut to the key exists
 //
