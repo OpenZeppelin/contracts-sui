@@ -945,6 +945,9 @@ public fun is_open_executor(self: &Timelock): bool { self.open_executor }
 /// Upper bound on the configured `min_delay_ms` and `grace_period_ms`.
 public fun max_delay_ms(): u64 { MAX_DELAY_MS }
 
+/// Domain separation tag prefixed to every operation-id preimage.
+public fun domain_tag(): vector<u8> { DOMAIN_TAG }
+
 /// The role type bound for scheduling.
 public fun proposer_role(self: &Timelock): TypeName { self.proposer_role }
 
