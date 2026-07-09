@@ -9,8 +9,8 @@
 ///    dynamic field keyed by the operation id; the id is
 ///    `keccak256(DOMAIN_TAG || bcs(IdInput { action, payload_digest, predecessor, salt, timelock_id }))`
 ///    where `payload_digest = keccak256(bcs(params))`. The id is deterministic and
-///    reproducible off-chain, so predecessors can be wired before the predecessor op
-///    is even scheduled.
+///    reproducible off-chain (`hash_operation` documents the byte-exact encoding), so
+///    predecessors can be wired before the predecessor op is even scheduled.
 /// 2. After the per-op delay elapses and before the grace window closes, a holder of
 ///    the executor role calls `execute<Role, Action, Params>` with the operation id
 ///    (returned by `schedule`) - or anyone, if `open_executor == true`, via
@@ -99,7 +99,9 @@ const EPredecessorNotDone: vector<u8> = "Predecessor operation is not yet execut
 #[error(code = 9)]
 const EPredecessorUnset: vector<u8> = "Predecessor operation is not in the timelock";
 
-/// An operation cannot be its own predecessor.
+/// An operation cannot be its own predecessor. Defense in depth: the id is the keccak256 of
+/// a preimage that includes `predecessor`, so a match would require a hash fixed point -
+/// unreachable in practice.
 #[error(code = 10)]
 const EPredecessorIsSelf: vector<u8> = "Operation cannot be its own predecessor";
 
@@ -140,7 +142,11 @@ const EInvalidPredecessor: vector<u8> = "Predecessor must be empty or a 32-byte 
 /// Value: 60 days in milliseconds. Does NOT bound the per-call `delay_ms`.
 const MAX_DELAY_MS: u64 = 60 * 24 * 60 * 60 * 1_000;
 
-/// Domain separation tag, hashed into every operation id. Locked at publication.
+/// Domain separation tag prefixed to every operation-id preimage. ASCII
+/// `OZ_Timelock_1_Sui`: `OZ_Timelock` names the primitive, `1` versions the preimage
+/// format (a layout change would re-key every operation id, so it changes only with a
+/// deliberate format break), `Sui` pins the chain. Locked at publication; exposed via
+/// `domain_tag`.
 const DOMAIN_TAG: vector<u8> = b"OZ_Timelock_1_Sui";
 
 // === Structs ===
@@ -176,8 +182,8 @@ public enum OpTimestamp has drop, store {
 
 /// Deferred authorization for one typed operation, carrying the scheduled params.
 /// Hot potato - NO abilities, so it must be consumed in the same transaction it is
-/// minted. Minted only by `execute` / `execute_open`; destroyed only by
-/// `consume` (or in-module for self-admin ops).
+/// minted. Minted by `execute` / `execute_open` (or in-module for self-admin ops);
+/// destroyed only by `consume` (or in-module for self-admin ops).
 public struct ExecutionTicket<phantom Action, Params> {
     timelock_id: ID,
     id: vector<u8>,
@@ -235,8 +241,10 @@ public struct TimelockCreated has copy, drop {
     admin_role: TypeName,
 }
 
-/// Emitted by `schedule` when an operation is committed. `payload_digest` is
-/// `keccak256(bcs(params))`; the params themselves are not emitted.
+/// Emitted when an operation is committed - by `schedule` and by the self-administered
+/// `schedule_update_min_delay` / `schedule_update_grace_period` /
+/// `schedule_set_open_executor` (whose `proposer` is an admin-role holder).
+/// `payload_digest` is `keccak256(bcs(params))`; the params themselves are not emitted.
 public struct OperationScheduled has copy, drop {
     id: vector<u8>,
     action: TypeName,
@@ -248,8 +256,10 @@ public struct OperationScheduled has copy, drop {
     proposer: address,
 }
 
-/// Emitted by `execute` / `execute_open` when an operation is executed and its ticket
-/// minted.
+/// Emitted when an operation is executed and its ticket minted - by `execute` /
+/// `execute_open` and by the self-administered `execute_update_min_delay` /
+/// `execute_update_grace_period` / `execute_set_open_executor`, which emit it alongside
+/// the corresponding `*Changed` event in the same call.
 public struct OperationExecuted has copy, drop {
     id: vector<u8>,
     action: TypeName,
@@ -366,6 +376,23 @@ public fun share(self: Timelock) {
 /// Pure operation-id derivation from a payload digest. Off-chain tooling computes
 /// `payload_digest = keccak256(bcs(params))` and reproduces the id from there.
 ///
+/// The id is `keccak256(DOMAIN_TAG || bcs(IdInput))`, byte-exact:
+/// - `DOMAIN_TAG` is the ASCII string `OZ_Timelock_1_Sui` (readable via `domain_tag`).
+///   It is not length-prefixed: the preimage starts with its raw 17 bytes.
+/// - `IdInput` fields are BCS-encoded in declaration order: `action`, `payload_digest`,
+///   `predecessor`, `salt`, `timelock_id`.
+/// - `action` is `type_name::with_original_ids<Action>()`: the fully-qualified type
+///   string (`<address-hex>::<module>::<name>`, 64 lowercase hex chars, no `0x`
+///   prefix, type arguments included), resolved with the ORIGINAL package address so
+///   ids stay stable across package upgrades. Its BCS is a ULEB128 length prefix
+///   followed by those ASCII bytes.
+/// - `payload_digest`, `predecessor`, and `salt` are ULEB128-length-prefixed byte
+///   vectors (an empty `predecessor` encodes as the single byte `0x00`);
+///   `timelock_id` is the raw 32 address bytes, unprefixed.
+///
+/// Cross-check any off-chain implementation against this function before relying on
+/// predicted ids.
+///
 /// #### Parameters
 /// - `timelock_id`: id of the target `Timelock`; domain-separates ids across instances.
 /// - `payload_digest`: `keccak256(bcs(params))` of the operation params.
@@ -411,8 +438,11 @@ public fun hash_operation<Action>(
 /// - `EDelayTooShort` if `delay_ms < min_delay_ms`.
 /// - `EScheduleOverflow` if `now + delay_ms` (or that sum `+ grace_period_ms`) overflows u64.
 /// - `EInvalidPredecessor` if `predecessor` is non-empty and not a 32-byte id.
-/// - `EPredecessorIsSelf` if `predecessor` equals the computed id.
+/// - `EPredecessorIsSelf` if `predecessor` equals the computed id (defense in depth;
+///   unreachable in practice - the id hashes over `predecessor`).
 /// - `EOperationAlreadyExists` if the id is already scheduled.
+/// - `sui::dynamic_field::EFieldAlreadyExists` from the internal table and params-field adds
+///   (guarded by the `EOperationAlreadyExists` check above; unreachable in normal operation).
 public fun schedule<Role, Action, Params: store + drop>(
     self: &mut Timelock,
     _proposer_auth: &Auth<Role>,
@@ -441,10 +471,19 @@ public fun schedule<Role, Action, Params: store + drop>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `executor_role`.
+/// - `EOperationUnset` if no operation with this id exists.
+/// - `EOperationAlreadyDone` if the operation has already been executed.
+/// - `EDelayNotElapsed` if the operation's delay has not elapsed yet.
+/// - `EOperationExpired` if the operation's grace window has closed.
+/// - `EPredecessorUnset` if the operation names a predecessor that is not in the timelock.
+/// - `EPredecessorNotDone` if the operation names a predecessor that is not yet executed.
 /// - `EWrongAction` if `Action` does not match the type the operation was scheduled with.
 /// - `EWrongParams` if `Params` does not match the type the operation was scheduled with.
-/// - `EOperationUnset`, `EOperationAlreadyDone`, `EDelayNotElapsed`,
-///   `EOperationExpired`, `EPredecessorUnset`, `EPredecessorNotDone`.
+/// - `sui::dynamic_field::EFieldDoesNotExist` from the internal table reads and params removal
+///   (guarded by the `EOperationUnset`, `EPredecessorUnset`, and `EWrongParams` checks above;
+///   unreachable in normal operation).
+/// - `sui::dynamic_field::EFieldTypeMismatch` from the internal params removal (guarded by the
+///   `EWrongParams` check above; unreachable in normal operation).
 public fun execute<Role, Action, Params: store + drop>(
     self: &mut Timelock,
     _executor_auth: &Auth<Role>,
@@ -523,6 +562,11 @@ public fun consume<Action: drop, Params>(
 /// - `EOperationUnset` if no such operation.
 /// - `EOperationAlreadyDone` if the operation was already executed.
 /// - `EWrongParams` if `Params` does not match the type the operation was scheduled with.
+/// - `sui::dynamic_field::EFieldDoesNotExist` from the internal table and params-field
+///   removals (guarded by the `EOperationUnset` and `EWrongParams` checks above; unreachable
+///   in normal operation).
+/// - `sui::dynamic_field::EFieldTypeMismatch` from the internal params removal (guarded by the
+///   `EWrongParams` check above; unreachable in normal operation).
 public fun cancel<Role, Params: store + drop>(
     self: &mut Timelock,
     _canceller_auth: &Auth<Role>,
@@ -635,8 +679,7 @@ public fun execute_with<Role, Action, Params: store + drop>(
 ///
 /// #### Aborts
 /// - `EWrongTimelock` if `cap` is not bound to `self`.
-/// - `EOpenExecutorDisabled` if open-executor mode is disabled.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the same aborts as `execute_open`.
 public fun execute_open_with<Action, Params: store + drop>(
     self: &mut Timelock,
     cap: &OperationCap<Action, Params>,
@@ -684,7 +727,8 @@ public fun cancel_with<Role, Action, Params: store + drop>(
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - `EInvalidConfig` if `new_min_delay_ms > MAX_DELAY_MS`.
 /// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+///   `EInvalidPredecessor`, `EPredecessorIsSelf` (unreachable in practice),
+///   `EOperationAlreadyExists`).
 public fun schedule_update_min_delay<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -715,7 +759,9 @@ public fun schedule_update_min_delay<Role>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the aborts of `execute`, apart from its role check.
+/// - `EInvalidConfig` if the stored `new_min_delay_ms` exceeds `MAX_DELAY_MS`. The bound is
+///   re-asserted at apply time because the op can be staged through the generic `schedule`.
 public fun execute_update_min_delay<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -754,7 +800,8 @@ public fun execute_update_min_delay<Role>(
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - `EInvalidConfig` if `new_grace_period_ms` is zero or `> MAX_DELAY_MS`.
 /// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+///   `EInvalidPredecessor`, `EPredecessorIsSelf` (unreachable in practice),
+///   `EOperationAlreadyExists`).
 public fun schedule_update_grace_period<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -785,7 +832,10 @@ public fun schedule_update_grace_period<Role>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the aborts of `execute`, apart from its role check.
+/// - `EInvalidConfig` if the stored `new_grace_period_ms` is zero or exceeds `MAX_DELAY_MS`.
+///   The bound is re-asserted at apply time because the op can be staged through the generic
+///   `schedule`.
 public fun execute_update_grace_period<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -821,7 +871,8 @@ public fun execute_update_grace_period<Role>(
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - Plus the scheduling aborts of `schedule` (`EDelayTooShort`, `EScheduleOverflow`,
-///   `EInvalidPredecessor`, `EPredecessorIsSelf`, `EOperationAlreadyExists`).
+///   `EInvalidPredecessor`, `EPredecessorIsSelf` (unreachable in practice),
+///   `EOperationAlreadyExists`).
 public fun schedule_set_open_executor<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -851,7 +902,7 @@ public fun schedule_set_open_executor<Role>(
 ///
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
-/// - Plus the same operation-state aborts as `execute`.
+/// - Plus the aborts of `execute`, apart from its role check.
 public fun execute_set_open_executor<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
@@ -995,7 +1046,10 @@ public fun operation_state(self: &Timelock, id: vector<u8>, clock: &Clock): Oper
 /// - A reference to the operation's stored `Params`.
 ///
 /// #### Aborts
-/// - A `sui::dynamic_field` abort if the id has no stored `Params` (Unset or already Done).
+/// - `sui::dynamic_field::EFieldDoesNotExist` if the id has no stored params (Unset or
+///   already Done).
+/// - `sui::dynamic_field::EFieldTypeMismatch` if `Params` does not match the type the
+///   operation was scheduled with.
 public fun operation_params<Params: store>(self: &Timelock, id: vector<u8>): &Params {
     df::borrow<vector<u8>, Params>(&self.id, id)
 }

@@ -36,7 +36,7 @@
 /// not be deployed as-is.
 module openzeppelin_finance::example_vesting_quadratic;
 
-use openzeppelin_finance::vesting_wallet::{VestingWallet, VestedAmount, DestroyReceipt};
+use openzeppelin_finance::vesting_wallet::{VestingWallet, VestedAmount, DestroyReceipt, DestroyCap};
 use openzeppelin_math::rounding;
 use openzeppelin_math::u64::mul_div;
 use sui::clock::Clock;
@@ -54,10 +54,6 @@ const EScheduleOverflow: vector<u8> = "Schedule end (start + duration) would ove
 /// `destroy` was called before the schedule's end (`start_ms + duration_ms`).
 #[error(code = 2)]
 const ENotEnded: vector<u8> = "Schedule has not ended yet";
-
-/// `destroy` was called by an address other than the wallet's beneficiary.
-#[error(code = 3)]
-const ENotBeneficiary: vector<u8> = "Only the beneficiary may destroy the wallet";
 
 // === Structs ===
 
@@ -108,29 +104,28 @@ public fun releasable<C>(wallet: &VestingWallet<Quadratic, Params, C>, clock: &C
 }
 
 /// Finalize teardown of a drained quadratic wallet by consuming the `DestroyReceipt`
-/// that `vesting_wallet::destroy_empty` returns. `destroy_empty` is the permissionless
-/// half (it reclaims the storage rebate); this is the witness-gated other half - only
-/// this module holds `Quadratic`, so only it can unwrap the receipt - and it
-/// additionally requires the schedule to have ended and the caller to be the
-/// beneficiary. Because the receipt is a hot potato consumed in the same PTB that
-/// produced it, a failed gate here aborts and reverts the whole teardown, including the
-/// `destroy_empty` call.
+/// that `vesting_wallet::destroy_empty` returns, together with the wallet's
+/// `DestroyCap`. `destroy_empty` is the permissionless half (it reclaims the storage
+/// rebate); this is the gated other half - only this module holds `Quadratic`, so only
+/// it can unwrap the receipt - and it additionally requires the schedule to have ended.
+/// Because the receipt is a hot potato consumed in the same PTB that produced it, a
+/// failed gate here (or in the core cap check) aborts and reverts the whole teardown,
+/// including the `destroy_empty` call.
 ///
-/// Both extra gates guard against stranding an in-flight deposit. The ended gate stops a
-/// wallet being torn down ahead of a deposit intended to arrive later. The beneficiary
-/// gate addresses the residual case: a coin `public_transfer`'d to the wallet's address
-/// but not yet `receive_and_deposit`'d is invisible to `destroy_empty`'s empty check, so -
-/// since `destroy_empty` is permissionless - an arbitrary actor could otherwise strand
-/// such a deposit and pocket the storage rebate. Restricting this final step to the
-/// beneficiary keeps both the strand risk and the rebate with the only party harmed by it.
+/// Teardown authority is the `DestroyCap`, not the caller's address - this is the core
+/// primitive's gate, so this curve does not (and must not) re-implement it as a
+/// `ctx.sender() == beneficiary` check, which could never be satisfied for a wallet
+/// whose beneficiary is an object address. The cap holder bears the strand risk for any
+/// coin sent to the wallet's address but not yet `receive_and_deposit`'d, and must
+/// sweep settled address-balance funds before `destroy_empty` accepts the teardown. The
+/// ended gate stops a teardown ahead of a deposit intended to arrive later.
 ///
 /// #### Aborts
+/// - `EWrongCap` if `cap` was minted for a different wallet.
 /// - `ENotEnded` if called before the schedule's end (`start_ms + duration_ms`).
-/// - `ENotBeneficiary` if the caller is not the wallet's beneficiary.
-public fun destroy(receipt: DestroyReceipt<Quadratic, Params>, clock: &Clock, ctx: &mut TxContext) {
-    let (beneficiary, params) = receipt.consume_receipt(Quadratic {});
+public fun destroy(receipt: DestroyReceipt<Quadratic, Params>, cap: DestroyCap, clock: &Clock) {
+    let params = receipt.consume_receipt(cap, Quadratic {});
     assert!(clock.timestamp_ms() >= params.calculate_end(), ENotEnded);
-    assert!(ctx.sender() == beneficiary, ENotBeneficiary);
 }
 
 // === View helpers ===
