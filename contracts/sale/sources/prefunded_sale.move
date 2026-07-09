@@ -369,7 +369,7 @@ public struct PrefundedSale<
     CurveParams: copy + drop + store,
     phantom SaleCoin,
     phantom PaymentCoin,
-    VestingScheduleParams: copy,
+    VestingScheduleParams: copy + drop + store, // abilities required by `VestingWallet`
 > has key {
     id: UID,
     /// Pre-funded sale tokens, drawn down as buyers claim.
