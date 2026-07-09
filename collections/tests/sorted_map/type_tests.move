@@ -94,7 +94,7 @@ fun entries_ref_read_only() {
     let es = m.entries_ref();
     assert_eq!(es.length(), 2);
     assert_eq!(*es.borrow(0).key(), 1);
-    assert_eq!(*es.borrow(0).entry_value(), 10);
+    assert_eq!(*es.borrow(0).value(), 10);
     assert_eq!(*es.borrow(1).key(), 2);
 }
 

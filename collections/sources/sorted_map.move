@@ -101,7 +101,7 @@ const EUnequalLengths: vector<u8> = "Keys and values differ in length";
 /// One key-value pair, stored inline in the map's vector.
 ///
 /// The fields are module-private: outside this module an `Entry` is read only via
-/// `key`/`entry_value` and built only via `new_entry`. No `&mut Entry` is ever
+/// `key`/`value` and built only via `new_entry`. No `&mut Entry` is ever
 /// exposed, so a key cannot be mutated in place and can never desync from its sorted
 /// position.
 ///
@@ -197,7 +197,7 @@ public fun tail<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): Option
 //
 // Everything in this section is `public` because Move 2024 macro hygiene requires every
 // symbol a macro body references to be public at the consumer's expansion site (plus
-// `entry_value`, which completes the `entries_ref` read surface). In particular
+// `value`, which completes the `entries_ref` read surface). In particular
 // `insert_at`/`remove_at` write at a caller-given index with no ordering check, so calling
 // them directly can corrupt sorted order. Use the macro API (`insert!`, `remove!`, ...) instead.
 
@@ -219,7 +219,7 @@ public fun key<K: copy + drop + store, V: store>(e: &Entry<K, V>): &K {
 /// Borrow an entry's value. Unlike its neighbors in this section, no macro body references
 /// it - it is public as the value-reading complement to `key`, completing the read
 /// surface of `entries_ref` (the `Entry` fields are private).
-public fun entry_value<K: copy + drop + store, V: store>(e: &Entry<K, V>): &V {
+public fun value<K: copy + drop + store, V: store>(e: &Entry<K, V>): &V {
     &e.value
 }
 
