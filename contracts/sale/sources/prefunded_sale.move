@@ -133,10 +133,9 @@ use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
 use openzeppelin_sale::phase::{Self, Phase};
 use openzeppelin_sale::receipt::{Self, Receipt};
-use openzeppelin_sale::refund_vault::{Self, RefundVault, RefundVaultCap};
+use openzeppelin_sale::refund_vault::{RefundVault, RefundVaultCap};
 use sui::balance::{Self, Balance};
-use sui::clock::{Self, Clock};
-use sui::coin;
+use sui::clock::Clock;
 use sui::event;
 use sui::table::{Self, Table};
 
@@ -334,7 +333,7 @@ const EClaimRequiresVesting: vector<u8> =
 const ENoVestingScheduleAttached: vector<u8> =
     "This sale does not use vesting; claim the tokens directly";
 
-// === Types ===
+// === Structs ===
 
 /// A fixed-price, pre-funded token sale. Generic over a pricing `Curve` (and its
 /// `CurveParams`), the `SaleCoin` being sold, the `PaymentCoin` collected, and the
@@ -397,6 +396,58 @@ public struct SaleAdminCap<phantom SaleCoin, phantom PaymentCoin> has key, store
     id: UID,
     /// Id of the sale this cap controls.
     sale_id: ID,
+}
+
+/// Witness-gated, single-use carrier for `share_and_activate`. Has no abilities, so
+/// it must be minted and consumed in the same PTB. It pins `sale_id` and the curve's
+/// committed `required_inventory`.
+public struct ActivationTicket<phantom Curve: drop> {
+    /// Id of the sale this ticket authorizes activation for.
+    sale_id: ID,
+    /// Inventory backing the curve commits to; checked at activation.
+    required_inventory: u64,
+}
+
+// A `Quote<C>` is the only way to drive `purchase` on a
+// `PrefundedSale<C, _, _, _, _>`. The hot-potato has no abilities, so:
+//
+// - It can only be produced by `mint_quote`, which requires a value
+//   of type `C: drop`. Since `C`'s constructor is private to the curve
+//   module that declares it, only that module can mint quotes for `C`.
+// - It cannot be stored, copied, or replayed across transactions.
+// - It cannot be transferred to another address.
+// - It cannot be discarded silently. The sale's `purchase` is the
+//   single legal consumer.
+//
+// The carrier pins `sale_id` so a quote minted for sale A cannot be
+// spent on sale B, and it carries the payment balance itself, so the
+// `allocation` and the funds it was priced for stay bound together
+// through to `purchase`.
+//
+// The sale does NOT independently bound `allocation` against any
+// sale-held rate - there is no `max_rate` field, and `purchase` accepts
+// the curve's `allocation` verbatim. The curve is a trusted, first-party
+// component: the witness gate (only the module declaring `C` can mint a
+// `Quote` for a `PrefundedSale<C, ..>`) is the security boundary. The
+// sale's only independent protections are inventory backing
+// (`allocation <= inventory - total_allocated`) and u128 overflow guards.
+
+/// Hot-potato carrying a curve-priced quote for a single purchase.
+public struct Quote<phantom PaymentCoin> {
+    /// Id of the sale this quote may be spent on.
+    sale_id: ID,
+    /// The buyer's payment, carried through to `purchase`.
+    payment: Balance<PaymentCoin>,
+    /// Curve-computed sale-token allocation for this payment.
+    allocation: u64,
+}
+
+/// The reason a sale was cancelled, carried by `SaleCancelled`.
+public enum CancelReason has copy, drop, store {
+    /// The window closed below the minimum raise (`cancel_after_close`).
+    SoftCapMissed,
+    /// An admin cancelled while the sale was still open (`cancel_emergency`).
+    AdminEmergency,
 }
 
 // === Events ===
@@ -470,14 +521,6 @@ public struct SaleFinalized<phantom SaleCoin, phantom PaymentCoin> has copy, dro
     closed_at_ms: u64,
 }
 
-/// The reason a sale was cancelled, carried by `SaleCancelled`.
-public enum CancelReason has copy, drop, store {
-    /// The window closed below the minimum raise (`cancel_after_close`).
-    SoftCapMissed,
-    /// An admin cancelled while the sale was still open (`cancel_emergency`).
-    AdminEmergency,
-}
-
 /// Emitted by `cancel_after_close` and `cancel_emergency` when the sale is cancelled.
 public struct SaleCancelled<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
@@ -515,6 +558,8 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
     sale_id: ID,
     amount: u64,
 }
+
+// === Public Functions ===
 
 // === Setup (Phase: Init) ===
 
@@ -785,16 +830,6 @@ public fun enable_allowlist<
     admin
 }
 
-/// Witness-gated, single-use carrier for `share_and_activate`. Has no abilities, so
-/// it must be minted and consumed in the same PTB. It pins `sale_id` and the curve's
-/// committed `required_inventory`.
-public struct ActivationTicket<phantom Curve: drop> {
-    /// Id of the sale this ticket authorizes activation for.
-    sale_id: ID,
-    /// Inventory backing the curve commits to; checked at activation.
-    required_inventory: u64,
-}
-
 /// Mint an `ActivationTicket<Curve>` for `sale`. Witness-gated: requires a value of
 /// type `Curve`, whose constructor is private to the declaring curve module, so only
 /// that module can mint a ticket for a `PrefundedSale<Curve, ..>`. Curve modules wrap
@@ -862,7 +897,7 @@ public fun share_and_activate<
     sale.phase.assert_init();
     assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
 
-    let activated_at_ms = clock::timestamp_ms(clock);
+    let activated_at_ms = clock.timestamp_ms();
     assert!(activated_at_ms < sale.closes_at_ms, EActivationAfterClose);
 
     assert!(sale.inventory.value() >= required_inventory, EInsufficientInventoryAtActivate);
@@ -943,7 +978,7 @@ public fun purchase<
 
     assert!(quote_sale_id == sale_id, EQuoteSaleMismatch);
 
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     assert!(now >= sale.opens_at_ms && now <= sale.closes_at_ms, ESaleWindowClosed);
 
     let buyer = ctx.sender();
@@ -1039,7 +1074,7 @@ public fun finalize<
     clock: &Clock,
 ) {
     sale.phase.assert_active();
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     let window_closed = now > sale.closes_at_ms;
     let hard_cap_reached = sale.raised >= sale.hard_cap;
     assert!(window_closed || hard_cap_reached, ESaleWindowStillOpen);
@@ -1098,7 +1133,7 @@ public fun cancel_after_close<
     clock: &Clock,
 ) {
     sale.phase.assert_active();
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     assert!(now > sale.closes_at_ms, ESaleWindowStillOpen);
     assert!(sale.soft_cap > 0 && sale.raised < sale.soft_cap, ESoftCapMet);
 
@@ -1148,46 +1183,12 @@ public fun cancel_emergency<
 ) {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
     sale.phase.assert_active();
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     assert!(now <= sale.closes_at_ms, EEmergencyCancelAfterClose);
     assert!(sale.raised < sale.hard_cap, ESaleAlreadyComplete);
     assert!(sale.soft_cap == 0 || sale.raised < sale.soft_cap, ESoftCapMet);
 
     sale.do_cancel(vault, CancelReason::AdminEmergency, now);
-}
-
-/// Shared body of `cancel_after_close` and `cancel_emergency`.
-fun do_cancel<
-    Curve: drop,
-    CurveParams: copy + drop + store,
-    SaleCoin,
-    PaymentCoin,
-    VestingScheduleParams: copy + drop + store,
->(
-    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
-    vault: &mut RefundVault<PaymentCoin>,
-    reason: CancelReason,
-    now: u64,
-) {
-    let paired_id = *sale.refund_vault_id.borrow();
-    assert!(object::id(vault) == paired_id, EWrongVault);
-
-    let amount = sale.proceeds.value();
-    let proceeds_balance = sale.proceeds.split(amount);
-    {
-        let cap_ref = sale.refund_vault_cap.borrow();
-        vault.deposit(cap_ref, proceeds_balance);
-        vault.flip_to_refunding(cap_ref);
-    };
-
-    sale.phase.cancel();
-
-    event::emit(SaleCancelled<SaleCoin, PaymentCoin> {
-        sale_id: object::id(sale),
-        raised: sale.raised,
-        reason,
-        closed_at_ms: now,
-    });
 }
 
 // === Success path (Finalized) ===
@@ -1505,7 +1506,47 @@ public fun refund<
     payment
 }
 
-// === Views ===
+// === Quote ===
+
+/// Witness-gated quote constructor. The curve module declaring `Curve` calls this
+/// from its `quote(..)` function after running whatever pricing math it owns. The
+/// witness is taken by value (`_w: Curve`), so a caller cannot mint a quote without
+/// the declaring curve module's cooperation.
+///
+/// #### Parameters
+/// - `sale`: The sale the quote is bound to (by id).
+/// - `_w`: The curve witness `Curve`; proves the caller is the declaring curve
+///   module.
+/// - `payment`: The buyer's payment, moved into the returned `Quote`.
+/// - `rate`: Sale tokens allocated per payment unit, supplied by the curve; the
+///   allocation is `payment.value() * rate`.
+///
+/// #### Returns
+/// - A single-use `Quote<PaymentCoin>` pinned to this sale, carrying `payment` and
+///   the computed allocation.
+///
+/// #### Aborts
+/// - `EZeroPayment` if `payment` has zero value.
+/// - `EAllocationOverflow` if `payment.value() * rate` would exceed `u64::MAX`.
+public fun mint_quote<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    _w: Curve,
+    payment: Balance<PaymentCoin>,
+    rate: u64,
+): Quote<PaymentCoin> {
+    assert!(payment.value() > 0, EZeroPayment);
+    let allocation = (payment.value() as u128) * (rate as u128);
+    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
+    Quote { sale_id: object::id(sale), payment, allocation: allocation as u64 }
+}
+
+// === View helpers ===
 
 /// The sale's current lifecycle phase.
 ///
@@ -1774,7 +1815,7 @@ public fun is_open<
     clock: &Clock,
 ): bool {
     if (!sale.phase.is_active()) { return false };
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     now >= sale.opens_at_ms && now <= sale.closes_at_ms
 }
 
@@ -1828,80 +1869,6 @@ public fun cap_sale_id<SaleCoin, PaymentCoin>(c: &SaleAdminCap<SaleCoin, Payment
     c.sale_id
 }
 
-// === Quote<C> - witness-gated pricing carrier ===
-//
-// A `Quote<C>` is the only way to drive `purchase` on a
-// `PrefundedSale<C, _, _, _, _>`. The hot-potato has no abilities, so:
-//
-// - It can only be produced by `mint_quote`, which requires a value
-//   of type `C: drop`. Since `C`'s constructor is private to the curve
-//   module that declares it, only that module can mint quotes for `C`.
-// - It cannot be stored, copied, or replayed across transactions.
-// - It cannot be transferred to another address.
-// - It cannot be discarded silently. The sale's `purchase` is the
-//   single legal consumer.
-//
-// The carrier pins `sale_id` so a quote minted for sale A cannot be
-// spent on sale B, and it carries the payment balance itself, so the
-// `allocation` and the funds it was priced for stay bound together
-// through to `purchase`.
-//
-// The sale does NOT independently bound `allocation` against any
-// sale-held rate - there is no `max_rate` field, and `purchase` accepts
-// the curve's `allocation` verbatim. The curve is a trusted, first-party
-// component: the witness gate (only the module declaring `C` can mint a
-// `Quote` for a `PrefundedSale<C, ..>`) is the security boundary. The
-// sale's only independent protections are inventory backing
-// (`allocation <= inventory - total_allocated`) and u128 overflow guards.
-
-/// Hot-potato carrying a curve-priced quote for a single purchase.
-public struct Quote<phantom PaymentCoin> {
-    /// Id of the sale this quote may be spent on.
-    sale_id: ID,
-    /// The buyer's payment, carried through to `purchase`.
-    payment: Balance<PaymentCoin>,
-    /// Curve-computed sale-token allocation for this payment.
-    allocation: u64,
-}
-
-/// Witness-gated quote constructor. The curve module declaring `Curve` calls this
-/// from its `quote(..)` function after running whatever pricing math it owns. The
-/// witness is taken by value (`_w: Curve`), so a caller cannot mint a quote without
-/// the declaring curve module's cooperation.
-///
-/// #### Parameters
-/// - `sale`: The sale the quote is bound to (by id).
-/// - `_w`: The curve witness `Curve`; proves the caller is the declaring curve
-///   module.
-/// - `payment`: The buyer's payment, moved into the returned `Quote`.
-/// - `rate`: Sale tokens allocated per payment unit, supplied by the curve; the
-///   allocation is `payment.value() * rate`.
-///
-/// #### Returns
-/// - A single-use `Quote<PaymentCoin>` pinned to this sale, carrying `payment` and
-///   the computed allocation.
-///
-/// #### Aborts
-/// - `EZeroPayment` if `payment` has zero value.
-/// - `EAllocationOverflow` if `payment.value() * rate` would exceed `u64::MAX`.
-public fun mint_quote<
-    Curve: drop,
-    CurveParams: copy + drop + store,
-    SaleCoin,
-    PaymentCoin,
-    VestingScheduleParams: copy + drop + store,
->(
-    sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
-    _w: Curve,
-    payment: Balance<PaymentCoin>,
-    rate: u64,
-): Quote<PaymentCoin> {
-    assert!(payment.value() > 0, EZeroPayment);
-    let allocation = (payment.value() as u128) * (rate as u128);
-    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
-    Quote { sale_id: object::id(sale), payment, allocation: allocation as u64 }
-}
-
 /// The id of the sale this quote was minted for.
 ///
 /// #### Parameters
@@ -1928,6 +1895,42 @@ public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> {
 /// #### Returns
 /// - The allocation in `SaleCoin`'s smallest units.
 public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
+
+// === Private Functions ===
+
+/// Shared body of `cancel_after_close` and `cancel_emergency`.
+fun do_cancel<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
+    vault: &mut RefundVault<PaymentCoin>,
+    reason: CancelReason,
+    now: u64,
+) {
+    let paired_id = *sale.refund_vault_id.borrow();
+    assert!(object::id(vault) == paired_id, EWrongVault);
+
+    let amount = sale.proceeds.value();
+    let proceeds_balance = sale.proceeds.split(amount);
+    {
+        let cap_ref = sale.refund_vault_cap.borrow();
+        vault.deposit(cap_ref, proceeds_balance);
+        vault.flip_to_refunding(cap_ref);
+    };
+
+    sale.phase.cancel();
+
+    event::emit(SaleCancelled<SaleCoin, PaymentCoin> {
+        sale_id: object::id(sale),
+        raised: sale.raised,
+        reason,
+        closed_at_ms: now,
+    });
+}
 
 fun claim_internal<
     Curve: drop,
@@ -1981,7 +1984,7 @@ fun claim_all_internal<
     total
 }
 
-// === Test-only event constructors ===
+// === Test-Only Helpers ===
 //
 // Event struct fields are module-private, so tests in other modules cannot build
 // an expected event to compare against `event::events_by_type`. These mirror the
@@ -2026,11 +2029,12 @@ public fun test_new_vesting_schedule_params_set<
     SaleCoin,
     PaymentCoin,
     VestingScheduleParams: copy + drop,
->(sale_id: ID, params: VestingScheduleParams): VestingScheduleParamsSet<
-    SaleCoin,
-    PaymentCoin,
-    VestingScheduleParams,
-> { VestingScheduleParamsSet { sale_id, params } }
+>(
+    sale_id: ID,
+    params: VestingScheduleParams,
+): VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
+    VestingScheduleParamsSet { sale_id, params }
+}
 
 /// Build a `RefundVaultPaired` event value for asserting against `event::events_by_type`.
 #[test_only]

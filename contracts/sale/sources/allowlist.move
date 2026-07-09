@@ -61,7 +61,7 @@ const EWrongSaleId: vector<u8> = "This allowlist entry was issued for a differen
 #[error(code = 1)]
 const EWrongBuyer: vector<u8> = "This allowlist entry was issued for a different buyer";
 
-// === Types ===
+// === Structs ===
 
 /// Single-use compliance ticket. No abilities - must be created and
 /// consumed in the same transaction.
@@ -87,26 +87,7 @@ public struct AllowlistAdmin<phantom S> has key, store {
     sale_id: ID,
 }
 
-// === Package-internal: admin issuance ===
-//
-// Only the sale flavor's `enable_allowlist` calls this. Issuing an
-// admin commits the sale to allowlist mode (`requires_allowlist = true`)
-// and is idempotent on the sale side.
-
-/// Issue the single `AllowlistAdmin<S>` for a sale. Called once by the sale flavor's
-/// `enable_allowlist`.
-///
-/// #### Parameters
-/// - `sale_id`: Id of the sale the admin gates entries for.
-/// - `ctx`: Transaction context, used to allocate the admin's `UID`.
-///
-/// #### Returns
-/// - A fresh `AllowlistAdmin<S>` bound to `sale_id`.
-public(package) fun new_admin<S>(sale_id: ID, ctx: &mut TxContext): AllowlistAdmin<S> {
-    AllowlistAdmin<S> { id: object::new(ctx), sale_id }
-}
-
-// === Public: compliance module mints entries ===
+// === Public Functions ===
 
 /// Mint a fresh allow entry. The compliance module calls this after running
 /// whatever verification it requires.
@@ -133,7 +114,39 @@ public fun new_entry<S>(admin: &AllowlistAdmin<S>, buyer: address, max_amount: u
     }
 }
 
-// === Package-internal: sale consumes entries ===
+// === View helpers ===
+
+/// The id of the sale this admin gates entries for.
+///
+/// #### Parameters
+/// - `admin`: The allowlist admin to read.
+///
+/// #### Returns
+/// - The bound sale's id.
+public fun admin_sale_id<S>(admin: &AllowlistAdmin<S>): ID { admin.sale_id }
+
+// === Package Functions ===
+
+// === Admin issuance ===
+//
+// Only the sale flavor's `enable_allowlist` calls this. Issuing an
+// admin commits the sale to allowlist mode (`requires_allowlist = true`)
+// and is idempotent on the sale side.
+
+/// Issue the single `AllowlistAdmin<S>` for a sale. Called once by the sale flavor's
+/// `enable_allowlist`.
+///
+/// #### Parameters
+/// - `sale_id`: Id of the sale the admin gates entries for.
+/// - `ctx`: Transaction context, used to allocate the admin's `UID`.
+///
+/// #### Returns
+/// - A fresh `AllowlistAdmin<S>` bound to `sale_id`.
+public(package) fun new_admin<S>(sale_id: ID, ctx: &mut TxContext): AllowlistAdmin<S> {
+    AllowlistAdmin<S> { id: object::new(ctx), sale_id }
+}
+
+// === Sale consumes entries ===
 
 /// Consume an entry, asserting it was issued for this sale and for this buyer. The
 /// sale flavor's `purchase` calls this.
@@ -160,14 +173,3 @@ public(package) fun consume<S>(
     assert!(buyer == expected_buyer, EWrongBuyer);
     max_amount
 }
-
-// === Views ===
-
-/// The id of the sale this admin gates entries for.
-///
-/// #### Parameters
-/// - `admin`: The allowlist admin to read.
-///
-/// #### Returns
-/// - The bound sale's id.
-public fun admin_sale_id<S>(admin: &AllowlistAdmin<S>): ID { admin.sale_id }

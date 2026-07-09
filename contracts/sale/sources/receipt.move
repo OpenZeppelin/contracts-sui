@@ -39,7 +39,7 @@
 /// compliance checks of their choosing.
 module openzeppelin_sale::receipt;
 
-// === Receipt ===
+// === Structs ===
 
 /// Per-buyer claim ticket. One receipt per purchase. Non-transferable (see module
 /// doc).
@@ -58,7 +58,7 @@ public struct Receipt<phantom S> has key {
     purchased_at_ms: u64,
 }
 
-// === Receipt views ===
+// === View helpers ===
 
 /// The id of the sale that issued this receipt.
 ///
@@ -107,7 +107,7 @@ public fun allocation<S>(r: &Receipt<S>): u64 { r.allocation }
 /// - The purchase timestamp in milliseconds.
 public fun purchased_at_ms<S>(r: &Receipt<S>): u64 { r.purchased_at_ms }
 
-// === Package-internal helpers ===
+// === Package Functions ===
 //
 // Receipt construction, delivery, and consumption are package-internal.
 // Sale flavors (`prefunded_sale`, future `minting_sale`) call into these

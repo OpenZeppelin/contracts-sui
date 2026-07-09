@@ -1,5 +1,7 @@
 module openzeppelin_sale::phase;
 
+// === Errors ===
+
 /// A phase-gated operation required the `Init` phase but the sale was past it.
 #[error(code = 0)]
 const ENotInit: vector<u8> = "The sale must be in the setup phase";
@@ -27,6 +29,8 @@ const ENotTerminal: vector<u8> = "The sale must have ended";
 #[error(code = 5)]
 const EAlreadyCancelled: vector<u8> = "The sale has already been cancelled";
 
+// === Structs ===
+
 /// Lifecycle phases shared by every sale flavor.
 ///
 /// Transitions:
@@ -51,6 +55,65 @@ public enum Phase has copy, drop, store {
     /// Admin can withdraw unallocated inventory.
     Cancelled,
 }
+
+// === Public Functions ===
+
+/// Assert the phase is `Init`.
+///
+/// #### Parameters
+/// - `p`: The phase to check.
+///
+/// #### Aborts
+/// - `ENotInit` if `p` is not `Init`.
+public fun assert_init(p: &Phase) {
+    assert!(p.is_init(), ENotInit);
+}
+
+/// Assert the phase is `Active`.
+///
+/// #### Parameters
+/// - `p`: The phase to check.
+///
+/// #### Aborts
+/// - `ENotActive` if `p` is not `Active`.
+public fun assert_active(p: &Phase) {
+    assert!(p.is_active(), ENotActive);
+}
+
+/// Assert the phase is `Finalized`.
+///
+/// #### Parameters
+/// - `p`: The phase to check.
+///
+/// #### Aborts
+/// - `ENotFinalized` if `p` is not `Finalized`.
+public fun assert_finalized(p: &Phase) {
+    assert!(p.is_finalized(), ENotFinalized);
+}
+
+/// Assert the phase is `Cancelled`.
+///
+/// #### Parameters
+/// - `p`: The phase to check.
+///
+/// #### Aborts
+/// - `ENotCancelled` if `p` is not `Cancelled`.
+public fun assert_cancelled(p: &Phase) {
+    assert!(p.is_cancelled(), ENotCancelled);
+}
+
+/// Assert the phase is terminal (`Finalized` or `Cancelled`).
+///
+/// #### Parameters
+/// - `p`: The phase to check.
+///
+/// #### Aborts
+/// - `ENotTerminal` if `p` is neither `Finalized` nor `Cancelled`.
+public fun assert_terminal(p: &Phase) {
+    assert!(p.is_finalized() || p.is_cancelled(), ENotTerminal);
+}
+
+// === Package Functions ===
 
 /// Construct the initial `Init` phase. Called once by a sale flavor's `create_sale`.
 ///
@@ -125,59 +188,4 @@ public(package) fun is_cancelled(p: &Phase): bool {
         Phase::Cancelled => true,
         _ => false,
     }
-}
-
-/// Assert the phase is `Init`.
-///
-/// #### Parameters
-/// - `p`: The phase to check.
-///
-/// #### Aborts
-/// - `ENotInit` if `p` is not `Init`.
-public fun assert_init(p: &Phase) {
-    assert!(p.is_init(), ENotInit);
-}
-
-/// Assert the phase is `Active`.
-///
-/// #### Parameters
-/// - `p`: The phase to check.
-///
-/// #### Aborts
-/// - `ENotActive` if `p` is not `Active`.
-public fun assert_active(p: &Phase) {
-    assert!(p.is_active(), ENotActive);
-}
-
-/// Assert the phase is `Finalized`.
-///
-/// #### Parameters
-/// - `p`: The phase to check.
-///
-/// #### Aborts
-/// - `ENotFinalized` if `p` is not `Finalized`.
-public fun assert_finalized(p: &Phase) {
-    assert!(p.is_finalized(), ENotFinalized);
-}
-
-/// Assert the phase is `Cancelled`.
-///
-/// #### Parameters
-/// - `p`: The phase to check.
-///
-/// #### Aborts
-/// - `ENotCancelled` if `p` is not `Cancelled`.
-public fun assert_cancelled(p: &Phase) {
-    assert!(p.is_cancelled(), ENotCancelled);
-}
-
-/// Assert the phase is terminal (`Finalized` or `Cancelled`).
-///
-/// #### Parameters
-/// - `p`: The phase to check.
-///
-/// #### Aborts
-/// - `ENotTerminal` if `p` is neither `Finalized` nor `Cancelled`.
-public fun assert_terminal(p: &Phase) {
-    assert!(p.is_finalized() || p.is_cancelled(), ENotTerminal);
 }

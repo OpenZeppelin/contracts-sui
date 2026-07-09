@@ -61,7 +61,7 @@ const EWrongVaultCap: vector<u8> = "This capability does not control this refund
 #[error(code = 20)]
 const EInsufficientLocked: vector<u8> = "The requested amount exceeds the funds held in the vault";
 
-// === State ===
+// === Structs ===
 
 /// The refund vault's lifecycle state. Transitions are one-way:
 /// `Active -> Refunding` or `Active -> Closed`.
@@ -123,6 +123,8 @@ public struct VaultRelease<phantom P> has copy, drop {
     /// Locked balance remaining after this release.
     locked_after: u64,
 }
+
+// === Public Functions ===
 
 // === Construction ===
 
@@ -286,7 +288,7 @@ public fun withdraw_all<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>):
     part
 }
 
-// === Views ===
+// === View helpers ===
 
 /// The vault's current state (`Active`, `Refunding`, or `Closed`).
 ///
@@ -342,7 +344,7 @@ public fun is_refunding<P>(vault: &RefundVault<P>): bool { vault.state.is_refund
 /// - Whether the vault is `Closed`.
 public fun is_closed<P>(vault: &RefundVault<P>): bool { vault.state.is_closed_state() }
 
-// === Internal helpers ===
+// === Private Functions ===
 
 fun assert_cap<P>(vault: &RefundVault<P>, cap: &RefundVaultCap<P>) {
     assert!(cap.vault_id == object::id(vault), EWrongVaultCap);
@@ -369,7 +371,7 @@ fun is_closed_state(s: &VaultState): bool {
     }
 }
 
-// === Test-only event constructors ===
+// === Test-Only Helpers ===
 //
 // Event struct fields and the `VaultState` variants are module-private, so tests in
 // other modules cannot build an expected event to compare against

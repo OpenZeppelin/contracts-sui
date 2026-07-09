@@ -36,7 +36,7 @@
 /// ```
 module openzeppelin_sale::fixed_rate_curve;
 
-use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale, SaleAdminCap, ActivationTicket, Quote};
+use openzeppelin_sale::prefunded_sale::{PrefundedSale, ActivationTicket, Quote};
 use sui::balance::Balance;
 
 // === Errors ===
