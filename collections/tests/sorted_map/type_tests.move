@@ -2,7 +2,7 @@
 ///
 /// Most of these properties are enforced by Move's type system, so "the test is that it
 /// compiles": ability witnesses, value/store embedding, distinct
-/// instantiations coexisting, the read-only `entries_ref` surface, and two
+/// instantiations coexisting, the read-only `entries` surface, and two
 /// independent maps. The NEGATIVE half (a resource-V map cannot be copied/dropped,
 /// `e.key` cannot be read, `entries_mut` does not exist, a bare macro rejects `address`,
 /// a bare `SortedMap` cannot be transferred) is a build-time fact - documented as the
@@ -83,7 +83,7 @@ fun two_maps_independent() {
 }
 
 #[test]
-fun entries_ref_read_only() {
+fun entries_read_only() {
     // The only bulk view is an immutable &vector<Entry>; entries are read via accessors.
     // This pins the positive read path only; the no-mutable-escape-hatch half (no
     // `entries_mut`/`into_entries`, and `&vector` cannot coerce to `&mut vector`) is
@@ -91,7 +91,7 @@ fun entries_ref_read_only() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 1, 10);
     u::ins(&mut m, 2, 20);
-    let es = m.entries_ref();
+    let es = m.entries();
     assert_eq!(es.length(), 2);
     assert_eq!(*es.borrow(0).key(), 1);
     assert_eq!(*es.borrow(0).value(), 10);
@@ -136,7 +136,7 @@ fun value_at_reads_and_writes() {
 // No bulk mutable / owning escape hatch:
 //   let mut m = sm::new<u64, u64>();
 //   sm::entries_mut(&mut m);          // no such function
-//   std::vector::reverse(sm::entries_ref(&m)); // &vector cannot coerce to &mut vector
+//   std::vector::reverse(sm::entries(&m)); // &vector cannot coerce to &mut vector
 //
 // A bare macro on a non-integer key is a hard compile error:
 //   let mut m = sm::new<address, u64>();

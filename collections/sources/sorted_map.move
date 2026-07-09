@@ -197,16 +197,14 @@ public fun tail<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): Option
 //
 // Everything in this section is `public` because Move 2024 macro hygiene requires every
 // symbol a macro body references to be public at the consumer's expansion site (plus
-// `value`, which completes the `entries_ref` read surface). In particular
+// `value`, which completes the `entries` read surface). In particular
 // `insert_at`/`remove_at` write at a caller-given index with no ordering check, so calling
 // them directly can corrupt sorted order. Use the macro API (`insert!`, `remove!`, ...) instead.
 
 /// Immutable view of the backing vector. There is deliberately no `&mut`/owning
 /// counterpart, so bulk reordering or bulk value-destruction is unrepresentable through
 /// this surface.
-public fun entries_ref<K: copy + drop + store, V: store>(
-    map: &SortedMap<K, V>,
-): &vector<Entry<K, V>> {
+public fun entries<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): &vector<Entry<K, V>> {
     &map.entries
 }
 
@@ -218,7 +216,7 @@ public fun key<K: copy + drop + store, V: store>(e: &Entry<K, V>): &K {
 
 /// Borrow an entry's value. Unlike its neighbors in this section, no macro body references
 /// it - it is public as the value-reading complement to `key`, completing the read
-/// surface of `entries_ref` (the `Entry` fields are private).
+/// surface of `entries` (the `Entry` fields are private).
 public fun value<K: copy + drop + store, V: store>(e: &Entry<K, V>): &V {
     &e.value
 }
@@ -327,7 +325,7 @@ public macro fun search<$K: copy + drop + store, $V: store>(
 ): (bool, u64) {
     let map = $map;
     let target = $target;
-    let es = map.entries_ref();
+    let es = map.entries();
     let n = es.length();
     let mut lo = 0;
     let mut hi = n;
@@ -637,7 +635,7 @@ public macro fun find_next_by<$K: copy + drop + store, $V: store>(
     let map = $map;
     let include = $include;
     let (found, idx) = search!(map, $key, $lt);
-    let es = map.entries_ref();
+    let es = map.entries();
     let n = es.length();
     if (found) {
         if (include) {
@@ -688,7 +686,7 @@ public macro fun find_prev_by<$K: copy + drop + store, $V: store>(
     let map = $map;
     let include = $include;
     let (found, idx) = search!(map, $key, $lt);
-    let es = map.entries_ref();
+    let es = map.entries();
     if (found) {
         if (include) {
             option::some(*es.borrow(idx).key())
@@ -811,7 +809,7 @@ public macro fun keys_from_by<$K: copy + drop + store, $V: store>(
     // boundary is exclusive. On a miss `idx` is already the first key > from (the
     // ceiling), so `include` does not shift it.
     let start = if (found && !include) idx + 1 else idx;
-    let es = map.entries_ref();
+    let es = map.entries();
     let n = es.length();
     let mut out = vector[];
     let mut i = start;
@@ -906,7 +904,7 @@ public macro fun is_well_formed_by<$K: copy + drop + store, $V: store>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let map = $map;
-    let es = map.entries_ref();
+    let es = map.entries();
     let n = es.length();
     let mut ok = true;
     let mut i = 1;

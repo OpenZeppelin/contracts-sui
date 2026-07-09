@@ -233,7 +233,7 @@ fun from_keys_macro_depth_compiles() {
 // into_entries / keys_mut. A bulk reverse is therefore unrepresentable:
 //     ss::entries_mut(&mut s);                          // E03003: no `entries_mut` on the set
 //     ss::into_entries(s);                              // E03003: no `into_entries` on the set
-//     ss::inner(&s).entries_ref().reverse();        // E: entries_ref yields &vector; reverse needs &mut
+//     ss::inner(&s).entries().reverse();        // E: entries yields &vector; reverse needs &mut
 //
 // Instantiations are nominal; cannot mix a u64 key into an address set:
 //     let mut sa = ss::new<address>();
