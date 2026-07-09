@@ -45,6 +45,16 @@ fun droppable_key_set_drops_no_destroy_empty() {
 }
 
 #[test]
+fun destroy_empty_on_empty_droppable_set() {
+    // destroy_empty also accepts a droppable-key set - redundant with letting it fall out of scope,
+    // but a valid explicit terminal. Covers a fresh new() and a singleton drained back to empty.
+    ss::new<u64>().destroy_empty();
+    let mut s = ss::singleton<u64>(7);
+    let _ = s.pop_front();
+    s.destroy_empty(); // drained to empty -> ok
+}
+
+#[test]
 fun store_only_key_drain_then_destroy_empty() {
     // A store-only key makes SortedSet<NoDropKey> itself store-only - it CANNOT fall out of scope,
     // so it must be drained then explicitly torn down. Keys leave only via pop_* (each consumed by
@@ -243,6 +253,17 @@ fun from_keys_macro_depth_compiles() {
 // store_only_key_drain_then_destroy_empty); it is a NON-drop set that has no live negative. But an
 // ability the KEY lacks is still forbidden on the set - a store-only-key set is not `drop`:
 //     u::needs_drop<SortedSet<u::NoDropKey>>();       // E05001: SortedSet<NoDropKey> lacks `drop`
+//
+// A non-`drop` key forecloses every op that would drop a key, leaving new/singleton/add! + pop_*
+// (and destroy_empty) as the only usable surface. upsert/upsert_by drop the displaced key,
+// remove!/remove_by! drop the stored key, and from_keys!/from_keys_by! are built on upsert_by! -
+// each needs `K: drop`. A non-`copy` key additionally forecloses keys/head/tail (they copy out):
+//     let mut s = ss::new<u::NoDropKey>();
+//     ss::upsert!(&mut s, u::ndk(1));                                    // E05001: needs `drop`
+//     ss::remove_by!(&mut s, &u::ndk(1), |a, b| a.id < b.id);           // E05001: needs `drop`
+//     let _ = ss::from_keys_by!(vector[u::ndk(1)], |a, b| a.id < b.id); // E05001: needs `drop`
+//     let _ = s.keys();                                                 // E05001: needs `copy`
+//     let _ = s.head();                                                 // E05001: needs `copy`
 //
 // A bare macro on a non-integer key fails (no built-in `<`); use the _by form:
 //     let mut s = ss::new<address>();
