@@ -132,47 +132,6 @@ public struct SortedSet<K> has copy, drop, store {
 
 // === Public Functions ===
 
-// === Macro-internal accessors (forced-public; NOT a supported API) ===
-//
-// These items are `public` ONLY because Move 2024 macro hygiene requires every
-// symbol a macro body references to be public at the consumer's expansion site. They are
-// NOT a supported mutation API. `inner_mut` in particular lets a caller drive the wrapped
-// map directly with an inconsistent comparator or a wrong index and desort this set -
-// order-only corruption, local to that one set, no value ever lost. Use the macro API
-// (`upsert`, `remove!`, ...) instead.
-
-/// Immutable view of the wrapped map - what read macros (`contains!`, `find_*!`,
-/// `keys_from!`) expand against. Read-only: cannot be upgraded to `&mut`. Also the test
-/// order-check handle: `sorted_map::is_well_formed!(inner(&set))`.
-public fun inner<K>(set: &SortedSet<K>): &SortedMap<K, Unit> {
-    &set.inner
-}
-
-/// Mutable view of the wrapped map - what write macros (`upsert`, `remove!`) expand
-/// against. Order-corruption surface: see the module header. Obtaining it requires
-/// `&mut SortedSet` (hence `&mut` on the enclosing object), so the consumer's reference
-/// discipline still gates every write.
-public fun inner_mut<K>(set: &mut SortedSet<K>): &mut SortedMap<K, Unit> {
-    &mut set.inner
-}
-
-/// Construct the membership marker. Forced public because set macros build it at the
-/// consumer's expansion site (`Unit {}` won't compile at a foreign site). The returned
-/// `Unit` is inert - there is no set op that accepts a value, so a consumer-held `Unit`
-/// can never be threaded into a set.
-public fun unit(): Unit {
-    Unit {}
-}
-
-/// Abort `EKeysNotSorted` if `sorted` is false. Routed through this regular fun so the sorted
-/// constructor's abort fires at this module's location, not the consumer's inlined macro body.
-///
-/// #### Aborts
-/// - `EKeysNotSorted` if `sorted` is false.
-public fun assert_sorted(sorted: bool) {
-    assert!(sorted, EKeysNotSorted);
-}
-
 // === Lifecycle ===
 
 /// Create a new, empty set. Takes no `&mut TxContext`: a `SortedSet` is a value, not an
@@ -194,9 +153,7 @@ public fun new<K>(): SortedSet<K> {
 /// #### Returns
 /// - A one-element set.
 public fun singleton<K>(key: K): SortedSet<K> {
-    let mut set = new();
-    set.inner.insert_at(0, sorted_map::new_entry(key, unit()));
-    set
+    SortedSet { inner: sorted_map::singleton(key, Unit {}) }
 }
 
 /// Destroy an empty set.
@@ -213,6 +170,50 @@ public fun destroy_empty<K>(set: SortedSet<K>) {
     assert!(set.is_empty(), ENotEmpty);
     let SortedSet { inner } = set;
     inner.destroy_empty();
+}
+
+// === Macro-internal accessors (forced-public; NOT a supported API) ===
+//
+// These items are `public` ONLY because Move 2024 macro hygiene requires every
+// symbol a macro body references to be public at the consumer's expansion site. They are
+// NOT a supported mutation API. `inner_mut` in particular lets a caller drive the wrapped
+// map directly with an inconsistent comparator or a wrong index and desort this set -
+// order-only corruption, local to that one set, no value ever lost. Use the macro API
+// (`upsert`, `remove!`, ...) instead.
+
+/// Immutable view of the wrapped map - what read macros (`contains!`, `find_*!`,
+/// `keys_from!`) expand against. Read-only: cannot be upgraded to `&mut`.
+public fun inner<K>(set: &SortedSet<K>): &SortedMap<K, Unit> {
+    &set.inner
+}
+
+/// Mutable view of the wrapped map - what write macros (`upsert`, `remove!`) expand
+/// against.
+///
+/// > **Warning:** order-corruption surface. Mutating the map directly (rather than through
+/// > the macro API) can break sorted order and invalidate every lookup, insertion, and
+/// > removal thereafter; see the module header. Obtaining this reference requires
+/// > `&mut SortedSet` (hence `&mut` on the enclosing object), so the consumer's reference
+/// > discipline still gates every write.
+public fun inner_mut<K>(set: &mut SortedSet<K>): &mut SortedMap<K, Unit> {
+    &mut set.inner
+}
+
+/// Construct the membership marker. Forced public because set macros build it at the
+/// consumer's expansion site (`Unit {}` won't compile at a foreign site). The returned
+/// `Unit` is inert - there is no set op that accepts a value, so a consumer-held `Unit`
+/// can never be threaded into a set.
+public fun unit(): Unit {
+    Unit {}
+}
+
+/// Abort `EKeysNotSorted` if `sorted` is false. Routed through this regular fun so the sorted
+/// constructor's abort fires at this module's location, not the consumer's inlined macro body.
+///
+/// #### Aborts
+/// - `EKeysNotSorted` if `sorted` is false.
+public fun assert_sorted(sorted: bool) {
+    assert!(sorted, EKeysNotSorted);
 }
 
 /// Build a set from a vector of keys by idempotent insertion, under `$lt`. Duplicates are
