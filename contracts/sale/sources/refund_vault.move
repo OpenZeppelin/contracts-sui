@@ -2,8 +2,8 @@
 ///
 /// The vault is a standalone primitive. It can be used outside the
 /// sales context as a generic refundable-escrow building block, though
-/// in this library it is paired with `PrefundedSale<_, P>` and the
-/// sale's lifecycle drives the vault's state.
+/// in this library it is paired with a `PrefundedSale` whose payment coin is
+/// `P`, and the sale's lifecycle drives the vault's state.
 ///
 /// ### State machine
 ///

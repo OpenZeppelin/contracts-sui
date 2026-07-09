@@ -1,11 +1,9 @@
-/// `PrefundedSale<SaleCoin, PaymentCoin>` - fixed-price token sale, v1 flavor.
+/// Fixed-price token sale.
 ///
 /// The issuer pre-mints (or pre-acquires) the sale tokens and deposits
 /// them as `Balance<SaleCoin>` inventory before activation. The sale draws
 /// from that fixed inventory at `claim` time and never holds a
-/// `TreasuryCap<SaleCoin>`. v2's `MintingSale<SaleCoin, PaymentCoin>` will be a sibling type
-/// that holds a `TreasuryCap<SaleCoin>` instead - same `Receipt<SaleCoin>`, same
-/// `Phase`, separate audit boundary.
+/// `TreasuryCap<SaleCoin>`.
 ///
 /// ### Lifecycle
 ///
