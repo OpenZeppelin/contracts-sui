@@ -61,9 +61,9 @@ public fun add_tick(reg: &mut TickRegistry, tick: u64, liquidity_net: u64, fee_g
     old.is_some()
 }
 
-/// Deactivate a tick. Returns true if it was active.
-public fun remove_tick(reg: &mut TickRegistry, tick: u64): bool {
-    reg.ticks.remove!(&tick).is_some()
+/// Deactivate a tick.
+public fun remove_tick(reg: &mut TickRegistry, tick: u64): TickInfo {
+    reg.ticks.remove!(&tick)
 }
 
 /// True iff `tick` is currently active in the registry.
@@ -129,4 +129,12 @@ public fun fee_growth(info: &TickInfo): u128 { info.fee_growth }
 #[test_only]
 public fun ticks_well_formed(reg: &TickRegistry): bool {
     reg.ticks.is_well_formed!()
+}
+
+#[test_only]
+public fun new_tick(liquidity_net: u64, fee_growth: u128): TickInfo {
+    TickInfo {
+        liquidity_net,
+        fee_growth,
+    }
 }

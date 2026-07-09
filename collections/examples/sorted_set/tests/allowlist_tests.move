@@ -1,5 +1,6 @@
 module openzeppelin_collections::sorted_set_allowlist_tests;
 
+use openzeppelin_collections::sorted_map as sm;
 use openzeppelin_collections::sorted_set_allowlist::{
     Self as allowlist,
     Allowlist,
@@ -17,10 +18,11 @@ const BOB: address = @0x0B;
 //
 // Teaches the canonical set integration. An owned `Allowlist` is seeded with a DUPLICATE id
 // (de-duplicated by `from_keys!`), then driven through approve / re-approve / revoke. The proof
-// that `insert!`/`remove!`'s bool gates side effects correctly is the per-transaction EVENT
-// count: a first-time approval emits exactly one `Approved`; a re-approval of the same id emits
-// NONE (the polarity is `insert! == newly-added`, not the inverse). Finally ALICE hands the
-// owned object to BOB, who sees the same membership - the embedded set travels inline.
+// that `insert!`'s bool gates side effects correctly is the per-transaction EVENT count: a
+// first-time approval emits exactly one `Approved`; a re-approval of the same id emits NONE (the
+// polarity is `insert! == newly-added`, not the inverse). `revoke` of a present id emits `Revoked`
+// (revoking an absent id aborts - see `revoke_absent_aborts`). Finally ALICE hands the owned object
+// to BOB, who sees the same membership - the embedded set travels inline.
 #[test]
 fun membership_lifecycle() {
     let mut scenario = ts::begin(ALICE);
@@ -51,8 +53,7 @@ fun membership_lifecycle() {
         assert_eq!(event::events_by_type<Approved>().length(), 0); // polarity: no emit on re-add
         assert_eq!(list.count(), 3); // unchanged
 
-        let revoked = list.revoke(3);
-        assert!(revoked); // was present -> true
+        list.revoke(3); // was present -> succeeds and emits
         assert_eq!(event::events_by_type<Revoked>().length(), 1);
         assert!(!list.is_approved(3));
         assert!(list.members_well_formed()); // order oracle: still sorted
@@ -60,18 +61,37 @@ fun membership_lifecycle() {
         list.transfer_to(BOB); // hand the owned object to BOB
     };
 
-    // Tx4 - BOB: now owns the list, sees the same membership; revoking an absent id is total.
+    // Tx4 - BOB: now owns the list and sees the same membership - the embedded set travels inline.
     scenario.next_tx(BOB);
     {
-        let mut list = scenario.take_from_sender<Allowlist>();
+        let list = scenario.take_from_sender<Allowlist>();
         assert!(list.is_approved(5) && list.is_approved(7));
         assert!(!list.is_approved(3));
-
-        let r = list.revoke(99);
-        assert!(!r); // absent -> false, no abort
-        assert_eq!(event::events_by_type<Revoked>().length(), 0);
         assert_eq!(list.count(), 2);
         scenario.return_to_sender(list);
+    };
+
+    scenario.end();
+}
+
+// === Scenario 1b - revoking an absent id aborts ===
+//
+// `revoke` delegates to the set's `remove!`, which ABORTS on an absent key (matching
+// `vec_set::remove`). The abort fires in `openzeppelin_collections::sorted_map`, so
+// `#[expected_failure]` pins the code and location THERE, not in this consumer module.
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun revoke_absent_aborts() {
+    let mut scenario = ts::begin(ALICE);
+
+    // Tx1 - ALICE: seed an allowlist with {1, 2}.
+    allowlist::create_and_keep(vector[1, 2], scenario.ctx());
+
+    // Tx2 - ALICE: revoke an id that was never approved - aborts EKeyNotFound.
+    scenario.next_tx(ALICE);
+    {
+        let mut list = scenario.take_from_sender<Allowlist>();
+        list.revoke(99); // aborts here: 99 is not approved
+        scenario.return_to_sender(list); // unreachable; satisfies the type checker
     };
 
     scenario.end();

@@ -65,9 +65,8 @@ public fun schedule(q: &mut UnlockQueue, deadline: u64): bool {
     q.deadlines.insert!(deadline)
 }
 
-/// Cancel `deadline`. Returns `true` iff it WAS scheduled (cancelling an absent one returns
-/// `false`, no abort).
-public fun cancel(q: &mut UnlockQueue, deadline: u64): bool {
+/// Cancel `deadline`.
+public fun cancel(q: &mut UnlockQueue, deadline: u64) {
     q.deadlines.remove!(&deadline)
 }
 

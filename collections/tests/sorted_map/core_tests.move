@@ -133,25 +133,40 @@ fun remove_head_tail_middle() {
     u::ins(&mut m, 20, 2);
     u::ins(&mut m, 30, 3);
     u::ins(&mut m, 40, 4);
-    assert_eq!(u::rm(&mut m, 10), option::some(1)); // head
-    assert_eq!(u::rm(&mut m, 40), option::some(4)); // tail
-    assert_eq!(u::rm(&mut m, 20), option::some(2)); // middle
+    assert_eq!(u::rm(&mut m, 10), 1); // head
+    assert_eq!(u::rm(&mut m, 40), 4); // tail
+    assert_eq!(u::rm(&mut m, 20), 2); // middle
     assert_eq!(m.length(), 1);
     assert!(u::wf(&m)); // shift kept order
     assert_eq!(m.head(), option::some(30));
     assert!(!u::has(&m, 20));
 }
 
-#[test]
-fun remove_absent_none() {
+#[test, expected_failure(abort_code = sm::EKeyNotFound)]
+fun remove_below_head_aborts() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
     u::ins(&mut m, 30, 3);
-    assert_eq!(u::rm(&mut m, 5), option::none()); // below head
-    assert_eq!(u::rm(&mut m, 35), option::none()); // above tail
-    assert_eq!(u::rm(&mut m, 20), option::none()); // interior gap
-    assert_eq!(m.length(), 2); // unchanged
-    assert!(u::wf(&m));
+    u::rm(&mut m, 5);
+    abort
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound)]
+fun remove_above_tail_aborts() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 30, 3);
+    u::rm(&mut m, 35);
+    abort
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound)]
+fun remove_interior_gap_aborts() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 30, 3);
+    u::rm(&mut m, 20);
+    abort
 }
 
 #[test]
@@ -159,7 +174,7 @@ fun remove_reinsert_roundtrip() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
     u::ins(&mut m, 20, 2);
-    assert_eq!(u::rm(&mut m, 10), option::some(1));
+    assert_eq!(u::rm(&mut m, 10), 1);
     assert!(!u::has(&m, 10));
     assert_eq!(u::ins(&mut m, 10, 11), option::none()); // reinserts fresh
     assert_eq!(u::get(&m, 10), 11);
@@ -399,8 +414,6 @@ fun length_delta_per_op() {
     assert_eq!(m.length(), 1); // fresh: +1
     u::ins(&mut m, 10, 2);
     assert_eq!(m.length(), 1); // upsert: 0
-    u::rm(&mut m, 99);
-    assert_eq!(m.length(), 1); // absent remove: 0
     u::rm(&mut m, 10);
     assert_eq!(m.length(), 0); // remove: -1
 }

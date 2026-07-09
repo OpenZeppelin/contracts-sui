@@ -77,7 +77,7 @@ fun struct_key_ranking() {
         );
 
         // Deregister the leader; VAL_A is promoted to top.
-        assert!(vs.deregister(&validator_set::validator(300, VAL_B)));
+        vs.deregister(&validator_set::validator(300, VAL_B));
         assert_eq!(vs.count(), 2);
         assert_eq!(vs.top(), option::some(validator_set::validator(250, VAL_A)));
         assert!(vs.validators_well_formed());

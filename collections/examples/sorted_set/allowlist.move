@@ -7,14 +7,18 @@
 /// (contrast the shared `unlock_queue` / `validator_set` modules).
 ///
 /// # The bool return earns its keep
-/// `sui::vec_set::insert` ABORTS on a duplicate and `remove` ABORTS on an absent key. This
-/// set instead returns `bool` and never aborts: `insert! -> true` iff the id was NEWLY added,
-/// `remove! -> true` iff it WAS present. That lets us gate a side effect on a genuine state
-/// change - we `event::emit` only when the membership actually flipped - and keeps the calls
-/// composable mid-PTB (a benign re-approval does not roll back the whole transaction).
+/// `sui::vec_set::insert` ABORTS on a duplicate. This set's `insert!` instead returns `bool` and
+/// never aborts: `insert! -> true` iff the id was NEWLY added. That lets us gate a side effect on a
+/// genuine state change - we `event::emit` `Approved` only when the membership actually flipped -
+/// and keeps the call composable mid-PTB (a benign re-approval does not roll back the whole
+/// transaction).
 ///
 /// If you want vec_set's abort-on-duplicate, layer it back on in one line:
 /// `assert!(insert!(&mut s, k), E)` - that is exactly what `approve_strict` does.
+///
+/// `remove!`, by contrast, ABORTS on an absent key (matching `vec_set::remove`), so `revoke` aborts
+/// rather than reporting a miss; there is no membership to gate on, and it emits `Revoked` on every
+/// success.
 ///
 /// # De-duplicating bulk build
 /// `from_keys!` performs idempotent inserts, so it DE-DUPLICATES its input (vec_set's
@@ -60,7 +64,7 @@ public struct Allowlist has key {
 /// Emitted only on a genuine first-time approval (gated on `insert!`'s `true`).
 public struct Approved has copy, drop { id: u64 }
 
-/// Emitted only when an id that WAS present is revoked (gated on `remove!`'s `true`).
+/// Emitted on every successful revocation (`remove!` aborts if the id was absent).
 public struct Revoked has copy, drop { id: u64 }
 
 // === Public Functions ===
@@ -100,12 +104,14 @@ public fun approve_strict(list: &mut Allowlist, id: u64) {
     event::emit(Approved { id });
 }
 
-/// Revoke `id`. Returns `true` iff it WAS approved; revoking an absent id returns `false` and
-/// does NOT abort (total). Emits `Revoked` only on the `true` case.
-public fun revoke(list: &mut Allowlist, id: u64): bool {
-    let removed = list.members.remove!(&id);
-    if (removed) event::emit(Revoked { id });
-    removed
+/// Revoke `id`, aborting if it is not approved (the set's `remove!` aborts on an absent key).
+/// Emits `Revoked` on success.
+///
+/// #### Aborts
+/// - `sorted_map::EKeyNotFound` if `id` is not approved.
+public fun revoke(list: &mut Allowlist, id: u64) {
+    list.members.remove!(&id);
+    event::emit(Revoked { id });
 }
 
 /// True iff `id` is currently approved. Routes through the same search the writes use, so

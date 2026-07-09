@@ -82,7 +82,7 @@ fun tick_navigation_walkthrough() {
     scenario.next_tx(BOB);
     {
         let mut reg = scenario.take_shared<TickRegistry>();
-        assert!(reg.remove_tick(1000));
+        assert_eq!(reg.remove_tick(1000), tick_registry::new_tick(999, 999));
         assert!(!reg.contains_tick(1000));
         assert_eq!(reg.min_tick(), option::some(2000));
         ts::return_shared(reg);

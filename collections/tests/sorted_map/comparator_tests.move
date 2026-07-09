@@ -25,7 +25,7 @@ fun by_forms_struct_keys() {
     assert!(u::wf_ck(&m)); // ordered by id under the supplied comparator
     assert!(u::has_ck(&m, 20) && u::get_ck(&m, 20) == 200);
     assert!(!u::has_ck(&m, 25));
-    assert_eq!(u::rm_ck(&mut m, 10), option::some(100));
+    assert_eq!(u::rm_ck(&mut m, 10), 100);
     assert!(u::wf_ck(&m));
 }
 
@@ -44,9 +44,9 @@ fun reverse_comparator_consistent() {
     assert!(!u::wf(&m)); // ... but NOT under `<` (it is genuinely reversed)
     assert!(u::has_rev(&m, 20) && u::get_rev(&m, 20) == 2);
     // every value conserved
-    assert_eq!(u::rm_rev(&mut m, 30), option::some(3));
-    assert_eq!(u::rm_rev(&mut m, 10), option::some(1));
-    assert_eq!(u::rm_rev(&mut m, 20), option::some(2));
+    assert_eq!(u::rm_rev(&mut m, 30), 3);
+    assert_eq!(u::rm_rev(&mut m, 10), 1);
+    assert_eq!(u::rm_rev(&mut m, 20), 2);
     m.destroy_empty();
 }
 
@@ -67,18 +67,16 @@ fun nonstrict_comparator_duplicates() {
 
 // === Footgun (b): mixing `<` (build) and `>` (remove) strands a present key ===
 
-#[test]
-fun mixed_comparator_strands() {
+#[test, expected_failure(abort_code = sm::EKeyNotFound)]
+fun remove_with_mixed_comparator_abortss() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1); // ascending build under `<`
     u::ins(&mut m, 20, 2);
     u::ins(&mut m, 30, 3);
     // remove a PRESENT key under `>`: the descending search reads ascending data, walks
-    // the wrong way, and reports not-found -> nothing removed, value stranded.
-    assert_eq!(u::rm_gt(&mut m, 10), option::none());
-    assert_eq!(m.length(), 3); // unchanged
-    assert!(u::wf(&m)); // still well-formed under the original `<`
-    assert!(u::has(&m, 10)); // 10 still reachable under `<`
+    // the wrong way, and aborts due to not finding the key.
+    u::rm_gt(&mut m, 10);
+    abort
 }
 
 // === Public-but-unchecked surface: insert_at at a wrong index corrupts order ===

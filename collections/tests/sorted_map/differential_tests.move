@@ -39,7 +39,9 @@ fun differential_1200_ops() {
             vseq = vseq + 1;
             assert_eq!(u::ins(&mut m, k, v), u::ref_insert(&mut r, k, v));
         } else if (op == 2) {
-            assert_eq!(u::rm(&mut m, k), u::ref_remove(&mut r, k));
+            // remove aborts on an absent key, so only remove keys the reference model holds; when
+            // present, the returned value must equal the reference model's.
+            if (u::ref_contains(&r, k)) assert_eq!(u::rm(&mut m, k), u::ref_remove(&mut r, k));
         } else if (op == 3) {
             assert_eq!(u::has(&m, k), u::ref_contains(&r, k));
             if (u::has(&m, k)) assert_eq!(u::get(&m, k), u::ref_get(&r, k));

@@ -79,9 +79,12 @@ public fun register(vs: &mut ValidatorSet, v: Validator): bool {
     vs.validators.insert_by!(v, |a, b| outranks(a, b))
 }
 
-/// Deregister `v`. Returns `true` iff it WAS registered (total). Same comparator as `register`.
-public fun deregister(vs: &mut ValidatorSet, v: &Validator): bool {
-    vs.validators.remove_by!(v, |a, b| outranks(a, b))
+/// Deregister `v`, aborting if it is not registered. Same comparator as `register`.
+///
+/// #### Aborts
+/// - `sorted_map::EKeyNotFound` if `v` is not registered.
+public fun deregister(vs: &mut ValidatorSet, v: &Validator) {
+    vs.validators.remove_by!(v, |a, b| outranks(a, b));
 }
 
 /// True iff `v` is currently registered (under the `outranks` comparator).
@@ -104,7 +107,8 @@ public fun top(vs: &ValidatorSet): Option<Validator> {
 /// collision the just-removed `old` is restored, so a `false` return never means a validator was
 /// dropped.
 public fun restake(vs: &mut ValidatorSet, old: Validator, new_stake: u64): bool {
-    if (!deregister(vs, &old)) return false;
+    if (!is_registered(vs, &old)) return false; // guard: deregister would abort on an absent key
+    deregister(vs, &old);
     if (register(vs, validator(new_stake, old.addr))) return true;
     // Collision: `(new_stake, old.addr)` is already registered as a separate entry, so the
     // re-insert is a no-op. Restore the just-removed `old` (this re-insert necessarily succeeds)

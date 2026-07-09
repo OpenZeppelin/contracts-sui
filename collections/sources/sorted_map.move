@@ -578,34 +578,40 @@ public macro fun insert<$K: copy + drop + store, $V: store>(
     insert_by!($map, $key, $value, |a, b| *a < *b)
 }
 
-/// Remove `key`'s entry, under `$lt`. Total - never aborts. Uses a shifting
-/// `vector::remove`, never `swap_remove`, which would break strict order.
+/// Remove and return `key`'s entry, under `$lt` (length - 1, order preserved). Uses a
+/// shifting `vector::remove`, never `swap_remove`, which would break strict order.
 ///
 /// #### Parameters
 /// - `key`: Key to remove.
 /// - `lt`: Strict less-than comparator.
 ///
 /// #### Returns
-/// - `some(value)` if present (length - 1, order preserved), `none` if absent (map
-///   unchanged).
+/// - The removed value.
+///
+/// #### Aborts
+/// - `EKeyNotFound` if `key` is absent.
 public macro fun remove_by<$K: copy + drop + store, $V: store>(
     $map: &mut SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
-): Option<$V> {
+): $V {
     let map = $map;
     let (found, idx) = search!(map, $key, $lt);
-    if (found) option::some(map.remove_at(idx)) else option::none()
+    assert_key_found(found);
+    map.remove_at(idx)
 }
 
 /// `remove_by` with the built-in integer `<`.
 ///
 /// #### Returns
-/// - `some(value)` if present, `none` if absent.
+/// - The removed value.
+///
+/// #### Aborts
+/// - `EKeyNotFound` if `key` is absent.
 public macro fun remove<$K: copy + drop + store, $V: store>(
     $map: &mut SortedMap<$K, $V>,
     $key: &$K,
-): Option<$V> {
+): $V {
     remove_by!($map, $key, |a, b| *a < *b)
 }
 

@@ -72,7 +72,7 @@ public fun get(m: &SortedMap<u64, u64>, k: u64): u64 { *m.borrow!(&k) }
 /// Overwrite the value at `k` in place via `borrow_mut!` (aborts `EKeyNotFound` if absent).
 public fun set(m: &mut SortedMap<u64, u64>, k: u64, v: u64) { *m.borrow_mut!(&k) = v; }
 
-public fun rm(m: &mut SortedMap<u64, u64>, k: u64): Option<u64> { m.remove!(&k) }
+public fun rm(m: &mut SortedMap<u64, u64>, k: u64): u64 { m.remove!(&k) }
 
 public fun fnext(m: &SortedMap<u64, u64>, k: u64, inc: bool): Option<u64> {
     m.find_next!(&k, inc)
@@ -105,7 +105,7 @@ public fun has_rev(m: &SortedMap<u64, u64>, k: u64): bool {
 
 public fun get_rev(m: &SortedMap<u64, u64>, k: u64): u64 { *m.borrow_by!(&k, |a, b| *a > *b) }
 
-public fun rm_rev(m: &mut SortedMap<u64, u64>, k: u64): Option<u64> {
+public fun rm_rev(m: &mut SortedMap<u64, u64>, k: u64): u64 {
     m.remove_by!(&k, |a, b| *a > *b)
 }
 
@@ -148,7 +148,7 @@ public fun ins_le(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
 
 /// Remove under `>` against a map built with `<`: the descending search reads ascending
 /// data and returns `found=false` -> the value is stranded. Demonstrates footgun (b).
-public fun rm_gt(m: &mut SortedMap<u64, u64>, k: u64): Option<u64> {
+public fun rm_gt(m: &mut SortedMap<u64, u64>, k: u64): u64 {
     m.remove_by!(&k, |a, b| *a > *b)
 }
 
@@ -162,7 +162,7 @@ public fun has_nd(m: &SortedMap<u64, NoDrop>, k: u64): bool { m.contains!(&k) }
 
 public fun nd_value_id(m: &SortedMap<u64, NoDrop>, k: u64): u64 { m.borrow!(&k).nd_id() }
 
-public fun rm_nd(m: &mut SortedMap<u64, NoDrop>, k: u64): Option<NoDrop> { m.remove!(&k) }
+public fun rm_nd(m: &mut SortedMap<u64, NoDrop>, k: u64): NoDrop { m.remove!(&k) }
 
 // === Thin wrappers - SortedMap<CoarseKey, u64> ordered on `id` ===
 
@@ -178,7 +178,7 @@ public fun get_ck(m: &SortedMap<CoarseKey, u64>, id: u64): u64 {
     *m.borrow_by!(&CoarseKey { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
-public fun rm_ck(m: &mut SortedMap<CoarseKey, u64>, id: u64): Option<u64> {
+public fun rm_ck(m: &mut SortedMap<CoarseKey, u64>, id: u64): u64 {
     m.remove_by!(&CoarseKey { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
@@ -264,18 +264,18 @@ public fun ref_insert(r: &mut Ref, k: u64, v: u64): Option<u64> {
     option::none()
 }
 
-public fun ref_remove(r: &mut Ref, k: u64): Option<u64> {
+public fun ref_remove(r: &mut Ref, k: u64): u64 {
     let n = r.keys.length();
     let mut i = 0;
     while (i < n) {
         if (*r.keys.borrow(i) == k) {
             r.keys.remove(i);
             let v = r.vals.remove(i);
-            return option::some(v)
+            return v
         };
         i = i + 1;
     };
-    option::none()
+    abort EKeyNotFound
 }
 
 public fun ref_contains(r: &Ref, k: u64): bool {

@@ -21,7 +21,7 @@ use openzeppelin_collections::sorted_set::{Self as ss, SortedSet};
 
 public fun ins(s: &mut SortedSet<u64>, k: u64): bool { s.insert!(k) }
 
-public fun rem(s: &mut SortedSet<u64>, k: u64): bool { s.remove!(&k) }
+public fun rem(s: &mut SortedSet<u64>, k: u64) { s.remove!(&k) }
 
 public fun has(s: &SortedSet<u64>, k: u64): bool { s.contains!(&k) }
 
@@ -49,7 +49,7 @@ public fun wf(s: &SortedSet<u64>): bool { s.inner_ref().is_well_formed!() }
 
 public fun ins_rev(s: &mut SortedSet<u64>, k: u64): bool { s.insert_by!(k, |a, b| *a > *b) }
 
-public fun rem_rev(s: &mut SortedSet<u64>, k: u64): bool { s.remove_by!(&k, |a, b| *a > *b) }
+public fun rem_rev(s: &mut SortedSet<u64>, k: u64) { s.remove_by!(&k, |a, b| *a > *b); }
 
 public fun has_rev(s: &SortedSet<u64>, k: u64): bool { s.contains_by!(&k, |a, b| *a > *b) }
 
@@ -104,11 +104,13 @@ public fun ins_le(s: &mut SortedSet<u64>, k: u64): bool { s.insert_by!(k, |a, b|
 /// equal-comparing key is MISSED (returns false) even though it is present (the "miss" half).
 public fun has_le(s: &SortedSet<u64>, k: u64): bool { s.contains_by!(&k, |a, b| *a <= *b) }
 
-public fun rem_le(s: &mut SortedSet<u64>, k: u64): bool { s.remove_by!(&k, |a, b| *a <= *b) }
+/// Remove under the non-strict `<=`: `search!` never derives equality, so an equal-comparing key
+/// is MISSED - `remove_by!` then ABORTS `EKeyNotFound` even though the key is present.
+public fun rem_le(s: &mut SortedSet<u64>, k: u64) { s.remove_by!(&k, |a, b| *a <= *b); }
 
 /// Remove under `>` against a set built with `<`: the descending search reads ascending data,
-/// returns found=false, so the bool is wrong (a no-op).
-public fun rem_gt(s: &mut SortedSet<u64>, k: u64): bool { s.remove_by!(&k, |a, b| *a > *b) }
+/// returns found=false, so `remove_by!` ABORTS `EKeyNotFound` though the key is present.
+public fun rem_gt(s: &mut SortedSet<u64>, k: u64) { s.remove_by!(&k, |a, b| *a > *b); }
 
 /// Insert under `>` against a set built with `<`: lands a key under the wrong order, desorting
 /// the set (visible to the `<` well-formedness check).
@@ -162,7 +164,7 @@ public fun key_id(k: &Key): u64 { k.id }
 
 public fun ins_k(s: &mut SortedSet<Key>, k: Key): bool { s.insert_by!(k, |a, b| a.id < b.id) }
 
-public fun rem_k(s: &mut SortedSet<Key>, id: u64): bool {
+public fun rem_k(s: &mut SortedSet<Key>, id: u64) {
     s.remove_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
@@ -230,7 +232,12 @@ public fun build_scrambled(n: u64): SortedSet<u64> {
 //
 // Plain, obviously-correct O(n) code. The differential test drives this and the real
 // `SortedSet` through identical op streams and asserts they agree at every step,
-// including the insert!/remove! booleans and membership conservation.
+// including the insert! boolean and membership conservation. Like the set's `remove!`, the
+// model's `rs_remove` ABORTS on an absent key, so the differential only removes present keys.
+
+/// The reference model was asked to remove an absent key (mirrors `remove!`'s abort).
+#[error(code = 0)]
+const EKeyNotFound: vector<u8> = "Reference model queried for an absent key";
 
 public struct RefSet has drop { keys: vector<u64> }
 
@@ -253,18 +260,18 @@ public fun rs_insert(r: &mut RefSet, k: u64): bool {
     true
 }
 
-/// Remove. Returns `true` iff the key WAS present (mirrors `remove!`).
-public fun rs_remove(r: &mut RefSet, k: u64): bool {
+/// Remove `k`, aborting `EKeyNotFound` if absent (mirrors `remove!`).
+public fun rs_remove(r: &mut RefSet, k: u64) {
     let n = r.keys.length();
     let mut i = 0u64;
     while (i < n) {
         if (*r.keys.borrow(i) == k) {
             r.keys.remove(i);
-            return true
+            return
         };
         i = i + 1;
     };
-    false
+    abort EKeyNotFound
 }
 
 public fun rs_contains(r: &RefSet, k: u64): bool {

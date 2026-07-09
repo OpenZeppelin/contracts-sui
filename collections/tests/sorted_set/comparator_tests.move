@@ -9,6 +9,7 @@
 /// `sorted_map::is_well_formed[_by]!(inner_ref(&set))` turns each violation into a red test.
 module openzeppelin_collections::sorted_set_comparator_tests;
 
+use openzeppelin_collections::sorted_map as sm;
 use openzeppelin_collections::sorted_set as ss;
 use openzeppelin_collections::sorted_set_test_util as u;
 use std::unit_test::assert_eq;
@@ -49,20 +50,18 @@ fun nonstrict_comparator_creates_duplicates() {
     assert!(!u::wf(&s)); // adjacent equal pair -> not strictly increasing under `<`
 }
 
-// === mixing comparators returns a wrong bool / desorts - no value lost ===
+// === mixing comparators aborts on a present key / desorts - no value lost ===
 
-#[test]
-fun mixed_comparator_wrong_bool_no_value_lost() {
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun removing_with_wrong_comparator_aborts() {
     // Build ascending with `<`, then remove the HEAD under `>`: the descending search reads
-    // ascending data and walks away from 10, returning found=false -> remove! reports FALSE
-    // though 10 is present (a wrong bool / no-op). The key is NOT stranded - it is still there.
+    // ascending data and walks away from 10, reporting not-found -> remove! ABORTS EKeyNotFound
+    // though 10 is present. The abort unwinds the removal, so no value is lost.
     // (A key sitting exactly at a search midpoint, e.g. 20 here, would be found by luck; the head
     // is the robust miss.)
     let mut s = u::fromk(vector[10u64, 20, 30]);
-    assert!(!u::rem_gt(&mut s, 10)); // wrong bool: reports "absent"
-    assert!(u::has(&s, 10)); // but 10 is still present under `<`
-    assert_eq!(s.length(), 3);
-    assert!(u::wf(&s)); // a no-op did not desort
+    u::rem_gt(&mut s, 10);
+    abort
 }
 
 #[test]
@@ -137,7 +136,7 @@ fun coarse_contains_remove_match_any_byte_variant() {
     let mut s = ss::new<u::Key>();
     u::ins_k(&mut s, u::mk(7, 111));
     assert!(u::has_k(&s, 7)); // probe Key{7,0} matches stored Key{7,111} under id-order
-    assert!(u::rem_k(&mut s, 7)); // removes it (was-present)
+    u::rem_k(&mut s, 7); // removes it (was-present)
     assert!(!u::has_k(&s, 7));
     assert_eq!(u::len_k(&s), 0);
 }
@@ -237,7 +236,7 @@ fun reverse_comparator_membership_polarity_pop() {
     assert_eq!(s.length(), 3);
     assert!(u::has_rev(&s, 20)); // contains_by present under reverse
     assert!(!u::has_rev(&s, 99)); // contains_by absent under reverse
-    assert!(u::rem_rev(&mut s, 20)); // remove_by present under reverse -> true (removes middle)
+    u::rem_rev(&mut s, 20); // remove_by present under reverse (removes middle)
     assert!(!u::has_rev(&s, 20));
     assert!(u::wf_rev(&s)); // still well-formed under the reverse order it was built with
     // pop_front/pop_back read the PHYSICAL endpoints of the stored [30,10]:
@@ -321,7 +320,7 @@ fun keys_from_by_struct_keys() {
 
 // === the MISS half - under `<=`, contains/remove miss the equal-comparing key ===
 
-#[test]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun nonstrict_comparator_misses_equal_key() {
     // `<=` never derives equality, so two 5s both land (the "duplicate" half is tested elsewhere)
     // AND a probe for 5 under `<=` MISSES it (the previously-untested miss half): search!
@@ -331,8 +330,8 @@ fun nonstrict_comparator_misses_equal_key() {
     u::ins_le(&mut s, 5);
     assert_eq!(s.length(), 2); // two equal-comparing keys landed
     assert!(!u::has_le(&s, 5)); // ...yet contains_by under `<=` MISSES the present key
-    assert!(!u::rem_le(&mut s, 5)); // remove_by under `<=` also reports false (a no-op)
-    assert_eq!(s.length(), 2); // nothing removed
+    u::rem_le(&mut s, 5); // remove_by under `<=` aborts;
+    abort
 }
 
 // === from_keys_by BULK builder threads a reverse comparator ===
@@ -355,7 +354,7 @@ fun from_keys_by_reverse_integer() {
 #[test, expected_failure(abort_code = EAbortingComparator)]
 fun aborting_comparator_propagates() {
     // An aborting comparator aborts the set op at the comparator's location (this module).
-    // `insert`/`remove`/`contains` totality is library-semantic only; a consumer-supplied
+    // `insert`/`contains` totality is library-semantic only; a consumer-supplied
     // abort is the caller's, not the library's.
     let mut s = u::fromk(vector[1u64, 2, 3]);
     s.insert_by!(5, |a, b| aborting_lt(a, b));

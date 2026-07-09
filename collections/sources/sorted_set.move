@@ -16,12 +16,13 @@
 ///   inherited from the map.
 /// - **One comparator, threaded to every call.** Same rule as the map (see its header for why the
 ///   order isn't stored). A different or non-strict comparator silently desorts the set.
-/// - **`insert!` / `remove!` return `bool` and never abort** on a duplicate or absent key, unlike
-///   `sui::vec_set`, whose versions abort.
+/// - **`insert!` returns `bool` and never aborts** on a duplicate key, unlike `sui::vec_set`.
+///   `remove!` aborts on an absent key, matching `sui::vec_set`.
 /// - **Always `copy + drop + store`.** The value is always `Unit`, so there is no resource set and
 ///   no `destroy_empty`; a set just falls out of scope.
-/// - **Two aborts only:** `pop_front` / `pop_back` on an empty set (`EEmpty`), and
-///   `from_sorted_keys!` on unsorted input (`EKeysNotSorted`); every other op is total.
+/// - **Three aborts:** `pop_front` / `pop_back` on an empty set (`EEmpty`), `remove!` on an absent
+///   key (`sorted_map::EKeyNotFound`), and `from_sorted_keys!` on unsorted input
+///   (`EKeysNotSorted`); every other op is total.
 ///
 /// # The comparator
 ///
@@ -37,12 +38,13 @@
 /// `insert!` is well-defined only under an injective comparator. In tests, call
 /// `sorted_map::is_well_formed_by!(inner_ref(&set), lt)` after a `_by` sequence.
 ///
-/// # `insert` / `remove` return `bool`, not an abort
+/// # `insert` returns `bool`, not an abort
 ///
-/// A deliberate divergence from `sui::vec_set`, whose `insert` / `remove` abort. `insert! -> true`
-/// iff the key was newly added; `remove! -> true` iff it was present. This matches the wrapped
-/// map's total upsert, stays composable mid-PTB, and is strictly more general: for vec_set's
-/// abort-on-duplicate, write `assert!(insert!(&mut s, k), E)`. `from_keys` likewise de-duplicates;
+/// A deliberate divergence from `sui::vec_set`, whose `insert` aborts on a duplicate. `insert! ->
+/// true` iff the key was newly added; this matches the wrapped map's total upsert, stays composable
+/// mid-PTB, and is strictly more general: for vec_set's abort-on-duplicate, write
+/// `assert!(insert!(&mut s, k), E)`. `remove!`, by contrast, aborts on an absent key like
+/// `sui::vec_set::remove`. `from_keys` likewise de-duplicates;
 /// to reject duplicates instead, build then `assert!(length(&s) == n, E)`. `from_sorted_keys!`
 /// de-duplicates the same way but needs pre-sorted input and runs in O(N) (see Complexity).
 ///
@@ -422,34 +424,29 @@ public macro fun insert<$K: copy + drop + store>($set: &mut SortedSet<$K>, $key:
     insert_by!($set, $key, |a, b| *a < *b)
 }
 
-/// Remove `key`, under `$lt`. Total, never aborts. On a hit: length - 1 and
-/// `contains!(key)` flips true -> false. Diverges from `vec_set::remove` (which aborts when
-/// absent); for that behavior write `assert!(remove!(&mut s, k), E)`.
-///
-/// The returned bool is `remove_by!(...).is_some()` - the inner remove returns `some(Unit)`
-/// on a hit. This is the opposite projection from `insert!`'s `.is_none()`. The extracted
-/// marker is dropped.
+/// Remove `key`, under `$lt`. On success: length - 1 and `contains!(key)` flips
+/// true -> false. Matches `vec_set::remove`, which also aborts when the key is absent.
 ///
 /// #### Parameters
 /// - `key`: Key to remove.
 /// - `lt`: Strict less-than comparator.
 ///
-/// #### Returns
-/// - `true` iff the key was present, `false` if it was absent.
+/// #### Aborts
+/// - `sorted_map::EKeyNotFound` if `key` is absent.
 public macro fun remove_by<$K: copy + drop + store>(
     $set: &mut SortedSet<$K>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
-): bool {
+) {
     let set = $set;
-    set.inner_mut().remove_by!($key, $lt).is_some()
+    set.inner_mut().remove_by!($key, $lt);
 }
 
 /// `remove_by` with the built-in integer `<`.
 ///
-/// #### Returns
-/// - `true` iff the key was present.
-public macro fun remove<$K: copy + drop + store>($set: &mut SortedSet<$K>, $key: &$K): bool {
+/// #### Aborts
+/// - `sorted_map::EKeyNotFound` if `key` is absent.
+public macro fun remove<$K: copy + drop + store>($set: &mut SortedSet<$K>, $key: &$K) {
     remove_by!($set, $key, |a, b| *a < *b)
 }
 

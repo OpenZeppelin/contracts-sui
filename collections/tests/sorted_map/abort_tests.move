@@ -83,39 +83,18 @@ fun pop_back_empty() {
     let (_k, _v) = m.pop_back(); // n-1 underflow guarded by the empty check
 }
 
-// === Total API: every non-carve-out op returns none/false/empty, never aborts ===
-
-#[test]
-fun total_api_no_abort_on_miss() {
-    // empty map
-    let mut m = sm::new<u64, u64>();
-    assert!(!u::has(&m, 7));
-    assert_eq!(u::rm(&mut m, 7), option::none());
-    assert_eq!(u::fnext(&m, 7, true), option::none());
-    assert_eq!(u::fprev(&m, 7, true), option::none());
-    assert_eq!(u::nxt(&m, 7), option::none());
-    assert_eq!(u::prv(&m, 7), option::none());
-    assert_eq!(u::kfrom(&m, 7, true, 10), vector[]);
-    assert!(m.head() == option::none() && m.tail() == option::none());
-    assert!(m.length() == 0 && m.is_empty());
-    assert_eq!(u::ins(&mut m, 7, 70), option::none());
-    // populated, miss on an interior gap
-    u::ins(&mut m, 9, 90);
-    assert!(!u::has(&m, 8));
-    assert_eq!(u::rm(&mut m, 8), option::none());
-    assert_eq!(u::fnext(&m, 100, true), option::none());
-}
-
 #[test]
 fun ptb_chain_no_abort() {
-    // A PTB-style chain (contains -> find_next -> remove -> insert -> keys_from) must run
-    // end to end with no abort, on both an empty and a populated map.
+    // A PTB-style chain (contains -> find_next -> insert -> remove -> keys_from) must run
+    // end to end with no abort. `remove` aborts on an absent key, so each remove here targets a
+    // key the chain just inserted; the point is that no command unwinds an earlier one.
     let mut m = sm::new<u64, u64>();
     let _ = u::has(&m, 1);
     let _ = u::fnext(&m, 1, true);
-    let _ = u::rm(&mut m, 1);
     let _ = u::ins(&mut m, 1, 10);
+    let _ = u::rm(&mut m, 1); // remove the key just inserted
     let _ = u::kfrom(&m, 0, true, 5);
+    u::ins(&mut m, 1, 10);
     u::ins(&mut m, 2, 20);
     u::ins(&mut m, 3, 30);
     let _ = u::has(&m, 2);

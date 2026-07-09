@@ -1,11 +1,13 @@
-/// The abort surface: two library aborts - `EEmpty` (pop on an empty set) and `EKeysNotSorted`
-/// (`from_sorted_keys!` on unsorted input) - each asserted at THIS module's location/code, plus
-/// the affirmative total-API contract for mid-PTB chaining. Every other op is total.
+/// The abort surface: two set-owned library aborts - `EEmpty` (pop on an empty set) and
+/// `EKeysNotSorted` (`from_sorted_keys!` on unsorted input) - each asserted at THIS module's
+/// location/code; a third, `remove!` on an absent key, is DELEGATED and surfaces at the wrapped
+/// MAP (`sorted_map::EKeyNotFound`). The rest is the affirmative total-API contract for mid-PTB
+/// chaining: every op except `remove!` and the pops is total.
 ///
 /// Every set-owned `#[expected_failure]` pins BOTH `abort_code = ...sorted_set::E*` AND
-/// `location = openzeppelin_collections::sorted_set` - the SET's location. The bypass
-/// test proves the caveat: a direct `sorted_map::pop_front(inner_mut(set))` leaks the
-/// MAP's abort instead.
+/// `location = openzeppelin_collections::sorted_set` - the SET's location. The bypass and
+/// remove-absent tests prove the caveat: a `sorted_map` op reached through `inner_mut` (or
+/// delegated to, as `remove!` does) leaks the MAP's abort instead.
 module openzeppelin_collections::sorted_set_abort_tests;
 
 use openzeppelin_collections::sorted_map as sm;
@@ -76,13 +78,23 @@ fun inner_mut_direct_pop_back_empty_aborts_at_map() {
     u::misuse_pop_back_inner(&mut s);
 }
 
-// === affirmative total API: every non-pop op returns none/false/empty, never aborts ===
+// === remove! on an absent key aborts, DELEGATED to the map's location/code ===
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun remove_absent_aborts_at_map() {
+    // remove! delegates to the wrapped map's remove_by!, which aborts EKeyNotFound on an absent
+    // key. Unlike the set's OWN EEmpty, this abort surfaces at the MAP's location - the set never
+    // re-checks membership itself.
+    let mut s = u::fromk(vector[9u64, 11]);
+    u::rem(&mut s, 10); // interior gap -> aborts at the map
+}
+
+// === affirmative total API: every op except remove!/pop returns none/false/empty, never aborts ===
 
 #[test]
 fun total_api_no_abort_on_empty() {
     let mut s = ss::new<u64>();
     assert!(!u::has(&s, 7));
-    assert!(!u::rem(&mut s, 7)); // remove absent -> false, no abort
     assert_eq!(u::fnext(&s, 7, true), option::none());
     assert_eq!(u::fprev(&s, 7, true), option::none());
     assert_eq!(u::nkey(&s, 7), option::none());
@@ -97,29 +109,30 @@ fun total_api_no_abort_on_empty() {
 #[test]
 fun total_api_no_abort_on_miss() {
     // populated set, miss on an interior gap and past the tail.
-    let mut s = u::fromk(vector[9u64, 11]);
+    let s = u::fromk(vector[9u64, 11]);
     assert!(!u::has(&s, 10));
-    assert!(!u::rem(&mut s, 10));
     assert_eq!(u::fnext(&s, 100, true), option::none());
     assert_eq!(u::fprev(&s, 0, true), option::none());
 }
 
 #[test]
 fun ptb_shaped_chain_no_abort() {
-    // A PTB-style chain (contains -> find_next -> remove -> insert -> keys_from) must run end to
-    // end with no abort, on both an empty and a populated set - nothing unwinds an earlier
-    // command. Routed through helpers so the chain expands no macros.
+    // A PTB-style chain (contains -> find_next -> insert -> remove -> keys_from) must run end to
+    // end with no abort - nothing unwinds an earlier command. `remove!` aborts on an absent key,
+    // so each remove here targets a key the chain just inserted. Routed through helpers so the
+    // chain expands no macros.
     let mut s = ss::new<u64>();
     let _ = u::has(&s, 1);
     let _ = u::fnext(&s, 1, true);
-    let _ = u::rem(&mut s, 1);
     let _ = u::ins(&mut s, 1);
+    u::rem(&mut s, 1); // remove the key just inserted
     let _ = u::page(&s, 0, true, 5);
+    u::ins(&mut s, 1);
     u::ins(&mut s, 2);
     u::ins(&mut s, 3);
     let _ = u::has(&s, 2);
     let _ = u::fnext(&s, 2, false);
-    let _ = u::rem(&mut s, 2);
-    let _ = u::ins(&mut s, 2);
+    u::rem(&mut s, 2);
+    u::ins(&mut s, 2);
     assert_eq!(u::page(&s, 0, true, 5), vector[1u64, 2, 3]);
 }

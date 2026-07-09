@@ -45,7 +45,7 @@ fun drain_earliest_first() {
         assert_eq!(q.pending(), 2); // {25, 30}
         assert_eq!(q.next_deadline(), option::some(25));
 
-        assert!(q.cancel(30)); // remove the tail
+        q.cancel(30); // remove the tail
         assert_eq!(q.pending(), 1); // {25}
         assert_eq!(q.process_latest(), 25); // pop_back: largest (now only)
 

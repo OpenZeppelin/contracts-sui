@@ -2,7 +2,7 @@
 ///
 /// Drives the real `SortedSet` and a keys-only sorted-vector REFERENCE MODEL (`test_util::RefSet`)
 /// through an identical stream of deterministic-pseudorandom ops, asserting they agree at every
-/// step - including the `insert!`/`remove!` BOOLEANS and `contains!` - and re-checks
+/// step - including the `insert!` BOOLEAN and `contains!` - and re-checks
 /// `is_well_formed!` after EVERY op. None of this has a runtime guard in production; the
 /// differential is where it is actually pinned. Membership conservation is the cross-cutting
 /// consequence: a key the reference model holds is never reported absent unless a
@@ -35,8 +35,12 @@ fun differential_1200_ops() {
             // model's newly-added verdict exactly.
             assert_eq!(u::ins(&mut s, k), u::rs_insert(&mut r, k));
         } else if (op == 2) {
-            // remove BOOL must match the reference model's was-present verdict.
-            assert_eq!(u::rem(&mut s, k), u::rs_remove(&mut r, k));
+            // remove! aborts on an absent key, so only remove keys the reference model holds; the
+            // removal's correctness is pinned by the contains!/length/walk checks that follow.
+            if (u::rs_contains(&r, k)) {
+                u::rem(&mut s, k);
+                u::rs_remove(&mut r, k);
+            };
         } else if (op == 3) {
             // contains! agrees with the reference model - no silent membership drift.
             assert_eq!(u::has(&s, k), u::rs_contains(&r, k));
@@ -95,7 +99,7 @@ fun membership_conservation() {
         seed = (seed * 6364136223846793005 + 1442695040888963407) & MASK;
         let ck = ((seed as u64) >> 33) % 200; // low band 0..199
         u::ins(&mut s, ck);
-        u::rem(&mut s, ck + 1);
+        if (u::has(&s, ck + 1)) u::rem(&mut s, ck + 1); // remove! aborts if ck+1 is absent
         // every member still present - no churn ever evicts one.
         let mut j = 0;
         while (j < members.length()) {
@@ -108,7 +112,7 @@ fun membership_conservation() {
     let mut ri = 0;
     while (ri < members.length()) {
         assert!(u::has(&s, members[ri])); // present right up until removal
-        assert!(u::rem(&mut s, members[ri]));
+        u::rem(&mut s, members[ri]);
         assert!(!u::has(&s, members[ri])); // gone immediately after
         ri = ri + 1;
     };

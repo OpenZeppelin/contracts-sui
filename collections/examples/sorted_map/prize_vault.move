@@ -7,9 +7,9 @@
 /// - A `SortedMap<u64, Coin<SUI>>` is itself not droppable - it cannot fall out of
 ///   scope; it must be drained and then `destroy_empty`'d.
 /// - Every op that could displace a value hands it back instead of dropping it
-///   (`insert!` and `remove!` return `Option<Coin>`, `pop_front` returns `(rank, Coin)`),
-///   and for a resource the compiler forces you to consume what you get back - so value
-///   cannot silently leak.
+///   (`insert!` returns `Option<Coin>`, `remove!` returns the `Coin` (aborting if the rank
+///   is absent), `pop_front` returns `(rank, Coin)`), and for a resource the compiler forces
+///   you to consume what you get back - so value cannot silently leak.
 /// - `destroy_empty` aborts `ENotEmpty` if any prize is unclaimed - the safety net that
 ///   stops you discarding a vault that still holds funds.
 ///
@@ -40,14 +40,11 @@ use sui::sui::SUI;
 /// The provided capability does not authorize this vault.
 #[error(code = 0)]
 const EWrongVault: vector<u8> = "Capability does not authorize this vault";
-/// `pay_rank` was asked for a rank that holds no prize.
-#[error(code = 1)]
-const ENoSuchRank: vector<u8> = "No prize at this rank";
 /// `fund` was called for a rank that already holds a prize (one coin per rank).
-#[error(code = 2)]
+#[error(code = 1)]
 const ERankAlreadyFunded: vector<u8> = "Rank already funded";
 /// `fund` was called with rank 0; ranks are 1-based (1 = champion).
-#[error(code = 3)]
+#[error(code = 2)]
 const EInvalidRank: vector<u8> = "Rank must be >= 1";
 
 // === Structs ===
@@ -113,9 +110,7 @@ public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>
 /// - `ENoSuchRank` if no prize rests at `rank`.
 public fun pay_rank(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64): Coin<SUI> {
     assert_cap(vault, cap);
-    let prize = vault.prizes.remove!(&rank);
-    assert!(prize.is_some(), ENoSuchRank);
-    prize.destroy_some()
+    vault.prizes.remove!(&rank)
 }
 
 /// Number of unclaimed prizes still resting in the vault.

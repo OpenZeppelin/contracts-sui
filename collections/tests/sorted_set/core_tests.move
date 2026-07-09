@@ -207,7 +207,7 @@ fun from_sorted_then_mutate_is_normal_set() {
     let mut s = u::from_sorted(vector[10u64, 20, 30, 40]);
     assert!(u::ins(&mut s, 25)); // insert into the interior
     assert!(!u::ins(&mut s, 30)); // duplicate -> false
-    assert!(u::rem(&mut s, 20)); // remove a present key
+    u::rem(&mut s, 20); // remove a present key
     assert!(u::has(&s, 25) && !u::has(&s, 20));
     assert_eq!(s.keys(), vector[10u64, 25, 30, 40]);
     assert_eq!(u::fnext(&s, 10, false), option::some(25)); // navigation intact
@@ -288,8 +288,6 @@ fun length_is_empty_track() {
     u::ins(&mut s, 2); // no-op
     assert!(s.length() == 2 && !s.is_empty());
     u::rem(&mut s, 1);
-    assert_eq!(s.length(), 1);
-    u::rem(&mut s, 99); // absent no-op
     assert_eq!(s.length(), 1);
 }
 

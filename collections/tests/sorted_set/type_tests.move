@@ -136,7 +136,7 @@ fun non_integer_key_by_roundtrip() {
     assert!(u::ins_k(&mut s, u::mk(2, 0)));
     assert_eq!(u::len_k(&s), 3);
     assert!(u::has_k(&s, 2));
-    assert!(u::rem_k(&mut s, 2));
+    u::rem_k(&mut s, 2);
     assert!(!u::has_k(&s, 2));
     assert!(u::wf_k(&s));
     // pop_front returns the bare struct K (the inner (Key, Unit)'s Unit is dropped) - proven for
@@ -177,7 +177,7 @@ fun macro_inlining_headroom() {
     s.insert!(3);
     s.insert!(1);
     let _ = s.contains!(&1);
-    let _ = s.remove!(&3);
+    s.remove!(&3);
     let _ = s.find_next!(&0, true);
     let _ = s.keys_from!(&0, true, 10);
     assert_eq!(s.length(), 1); // only key 1 remains

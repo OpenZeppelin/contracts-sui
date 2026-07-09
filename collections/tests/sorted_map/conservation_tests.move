@@ -36,7 +36,7 @@ fun conservation_drain_nodrop() {
     let mut k = 0;
     while (k < n) {
         if (k % 2 == 0) {
-            let id = u::rm_nd(&mut m, k).destroy_some().nd_unwrap();
+            let id = u::rm_nd(&mut m, k).nd_unwrap();
             assert_eq!(id, k * 7 + 1); // remove(k) returned key k's OWN value
             cnt_out = cnt_out + 1;
         };
@@ -74,7 +74,7 @@ fun upsert_returns_old_nodrop() {
     assert_eq!(old.nd_unwrap(), 100);
     assert_eq!(m.length(), 1);
     assert_eq!(u::nd_value_id(&m, 5), 200); // new value present
-    let w = u::rm_nd(&mut m, 5).destroy_some();
+    let w = u::rm_nd(&mut m, 5);
     w.nd_unwrap();
     m.destroy_empty();
 }
@@ -96,9 +96,9 @@ fun read_path_conservative_nodrop() {
     assert_eq!(m.length(), len0);
     assert!(u::nd_value_id(&m, 1) == 10 && u::nd_value_id(&m, 3) == 30); // values intact
     // drain
-    u::rm_nd(&mut m, 1).destroy_some().nd_unwrap();
-    u::rm_nd(&mut m, 2).destroy_some().nd_unwrap();
-    u::rm_nd(&mut m, 3).destroy_some().nd_unwrap();
+    u::rm_nd(&mut m, 1).nd_unwrap();
+    u::rm_nd(&mut m, 2).nd_unwrap();
+    u::rm_nd(&mut m, 3).nd_unwrap();
     m.destroy_empty();
 }
 
@@ -117,7 +117,7 @@ fun coin_value_roundtrip() {
     old.burn_for_testing();
     assert_eq!(m.borrow!(&1).value(), 999);
     // remove returns the coin
-    let r1 = m.remove!(&1).destroy_some();
+    let r1 = m.remove!(&1);
     assert_eq!(r1.value(), 999);
     r1.burn_for_testing();
     // pop the remaining coin
@@ -148,8 +148,8 @@ fun store_only_map_wrapped_shared() {
     sc.next_tx(admin);
     {
         let mut w = sc.take_shared<Wrapper>();
-        let a = u::rm_nd(&mut w.m, 1).destroy_some().nd_unwrap();
-        let b = u::rm_nd(&mut w.m, 2).destroy_some().nd_unwrap();
+        let a = u::rm_nd(&mut w.m, 1).nd_unwrap();
+        let b = u::rm_nd(&mut w.m, 2).nd_unwrap();
         assert_eq!(a + b, 33);
         ts::return_shared(w);
     };

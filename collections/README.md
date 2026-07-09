@@ -19,7 +19,7 @@ Consumers write `use openzeppelin_collections::sorted_map;` (or `::sorted_set`) 
 | Module | Summary |
 |--------|---------|
 | `sorted_map` | An ordered `SortedMap<K, V>` over one sorted vector: O(log N) lookup, bare and `_by` comparator macros, and exactly one stored-object access per operation. |
-| `sorted_set` | An ordered `SortedSet<K>` wrapping `SortedMap<K, Unit>`: `bool`-returning `insert`/`remove` (no abort-on-duplicate), nearest-neighbour navigation, and a single-object footprint. |
+| `sorted_set` | An ordered `SortedSet<K>` wrapping `SortedMap<K, Unit>`: `bool`-returning `insert` (no abort-on-duplicate) and abort-on-absent `remove`, nearest-neighbour navigation, and a single-object footprint. |
 
 ---
 
@@ -104,7 +104,7 @@ Complete integration examples live in [`examples/sorted_map/`](examples/sorted_m
 ### Lifecycle
 
 1. **Construct** - `new()` / `singleton(k)` / `from_keys!(keys)` (any order, de-duplicates, never aborts) / `from_sorted_keys!(keys)` (pre-sorted input, O(N), de-duplicates; aborts `EKeysNotSorted` otherwise). Takes no `TxContext`; embed the result as a field.
-2. **Membership** - `insert!`/`remove!` return `bool` (`true` = the set changed); `contains!` tests presence. Bare macros for integer keys, `_by` macros with a consistent comparator otherwise.
+2. **Membership** - `insert!` returns `bool` (`true` = newly added, never aborts); `remove!` aborts `EKeyNotFound` on an absent key; `contains!` tests presence. Bare macros for integer keys, `_by` macros with a consistent comparator otherwise.
 3. **Iterate** - `head`/`tail`, `next_key!`/`prev_key!`, `find_next!`/`find_prev!`, `keys_from!` pages, `pop_front`/`pop_back`. A set is always droppable, so there is no `destroy_empty`.
 
 ### Usage
@@ -143,7 +143,7 @@ For non-integer keys, or to sort descending, use the `_by` macros with a consist
 
 Complete integration examples live in [`examples/sorted_set/`](examples/sorted_set):
 
-- [`allowlist`](examples/sorted_set/allowlist.move) - the canonical embed and the headline `vec_set` divergence: `insert!`/`remove!` return `bool` (never abort), side effects gated on a real state change, `from_keys!` de-dup.
+- [`allowlist`](examples/sorted_set/allowlist.move) - the canonical embed and the headline `vec_set` divergence: `insert!` returns `bool` (never aborts on a duplicate), a side effect gated on a real state change, `from_keys!` de-dup; `remove!` aborts on an absent key.
 - [`validator_set`](examples/sorted_set/validator_set.move) - the `_by` struct-key story and the comparator footgun: a coarse (non-injective) comparator silently collapses byte-distinct keys, shown with a red test.
 - [`unlock_queue`](examples/sorted_set/unlock_queue.move) - ordered drain / priority queue (head/tail peek, pop extremes) and the set's `EEmpty` abort pinned to `openzeppelin_collections::sorted_set`.
 
@@ -153,7 +153,7 @@ The comparator footgun applies to both modules and is stated once at the top of 
 
 ### SortedMap
 
-- **Aborts, all at the library's location.** Only these abort: `borrow`/`borrow_mut` -> `EKeyNotFound`; `destroy_empty` on a non-empty map -> `ENotEmpty`; `pop_front`/`pop_back` on an empty map -> `EEmpty`; `from_sorted_keys_values`/`_by` -> `EUnequalLengths` or `EKeysNotStrictlyIncreasing` on invalid input. Everything else is total (returns `Option`/`bool`/`vector`). Consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_map`.
+- **Aborts, all at the library's location.** Only these abort: `borrow`/`borrow_mut`/`remove`/`remove_by` -> `EKeyNotFound`; `destroy_empty` on a non-empty map -> `ENotEmpty`; `pop_front`/`pop_back` on an empty map -> `EEmpty`; `from_sorted_keys_values`/`_by` -> `EUnequalLengths` or `EKeysNotStrictlyIncreasing` on invalid input. Everything else is total (returns `Option`/`bool`/`vector`). Consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_map`.
 - **Resource-`V` conservation.** `insert`'s upsert returns the displaced value (`some(old)`) rather than dropping it; `remove`/`pop_*` move values out; `destroy_empty` refuses a non-empty map. A store-only `V` like `Coin<T>` is never silently burned.
 - **Forced-public internals are not an API.** Macro hygiene forces `search!`, `insert_at`, `remove_at`, `make_entry` to be `public`. `insert_at`/`remove_at` write at a caller-given position with no order check - calling them directly can corrupt order. They exist only to serve the macro bodies; use the macro API.
 - **No events.** A UID-less value has no on-chain identity; emit events yourself at your entry functions. Embedding in a shared object serializes writers per object, not per key - shard into multiple maps or use an owned object for hot paths.
@@ -163,8 +163,8 @@ The comparator footgun applies to both modules and is stated once at the top of 
 ### SortedSet
 
 - **The worst case is order-only - no key is ever lost.** Unlike the map (which can strand a `Coin` on misuse), the set's value is the trivial `Unit`, so a comparator violation gives wrong membership *answers* on a desorted set, but every key is still physically present and recoverable via `keys()`. This is the decisive simplification over the map. In tests, call `sorted_map::is_well_formed_by!(sorted_set::inner_ref(&s), lt)` after `_by` sequences.
-- **`insert`/`remove` return `bool` and do not abort.** `insert! -> true` iff newly added; `remove! -> true` iff was present. `from_keys!` de-duplicates. Diverges from `vec_set`; recover the abort with one `assert!`.
-- **Two aborts.** `pop_front`/`pop_back` on an empty set abort `EEmpty`; `from_sorted_keys!`/`_by` on unsorted input abort `EKeysNotSorted`. Both at this module's location, so consumer `#[expected_failure]` tests must pin `location = openzeppelin_collections::sorted_set`. Every other operation is total.
+- **`insert` returns `bool` and does not abort; `remove` aborts on an absent key.** `insert! -> true` iff newly added (diverges from `vec_set`'s abort-on-duplicate; recover it with one `assert!`). `remove!` aborts `EKeyNotFound` on an absent key, matching `vec_set::remove`. `from_keys!` de-duplicates.
+- **Three aborts.** `pop_front`/`pop_back` on an empty set abort `EEmpty` and `from_sorted_keys!`/`_by` on unsorted input abort `EKeysNotSorted`, both at this module's location. `remove!` on an absent key is DELEGATED to the wrapped map and aborts `sorted_map::EKeyNotFound` at the *map's* location. Consumer `#[expected_failure]` tests must pin `location` accordingly (`openzeppelin_collections::sorted_set` for the first two, `::sorted_map` for the remove abort). Every other operation is total.
 - **Forced-public internals are not an API.** `inner_ref`, `inner_mut`, and `unit` are `public` only for macro hygiene. Driving the wrapped map through `inner_mut` with an inconsistent comparator can desort the set (order-only, local to that set). Use the macro API.
 - **No capabilities, `Clock`, `Random`, global state, or events.** The library never checks the caller; gate your own entry functions and emit your own events.
 - **Capacity.** Every operation loads exactly one stored object, so the set is structurally immune to Sui's per-transaction dynamic-field-access cap; byte size is the only ceiling. Illustratively, measured on localnet (Sui 1.74.1), the ceiling is 28,440 `u64` keys (≈1.78× the map's 15,997 `u64`/`u64` entries - each set entry is 9 bytes: an 8-byte key plus the 1-byte `Unit`); treat it as a guide, not a guarantee. Past it, `insert` self-limits via `MoveObjectTooBig` (no capacity guard); the set is never soft-bricked.
