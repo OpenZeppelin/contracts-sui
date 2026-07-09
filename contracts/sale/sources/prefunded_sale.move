@@ -939,8 +939,10 @@ public fun purchase<
     // Phase + time
     sale.phase.assert_active();
 
+    let sale_id = object::id(sale);
     let Quote { sale_id: quote_sale_id, payment, allocation } = quote;
-    assert!(quote_sale_id == object::id(sale), EQuoteSaleMismatch);
+
+    assert!(quote_sale_id == sale_id, EQuoteSaleMismatch);
 
     let now = clock::timestamp_ms(clock);
     assert!(now >= sale.opens_at_ms && now <= sale.closes_at_ms, ESaleWindowClosed);
@@ -950,7 +952,7 @@ public fun purchase<
     let entry_max = if (sale.requires_allowlist) {
         assert!(allow.is_some(), EAllowlistRequired);
         let entry = allow.destroy_some();
-        entry.consume(object::id(sale), buyer)
+        entry.consume(sale_id, buyer)
     } else {
         assert!(allow.is_none(), EAllowlistNotRequired);
         allow.destroy_none();
@@ -991,7 +993,6 @@ public fun purchase<
     sale.proceeds.join(payment);
 
     // Mint and deliver receipt
-    let sale_id = object::id(sale);
     let receipt = receipt::new_receipt<SaleCoin>(sale_id, buyer, paid, allocation, now, ctx);
     let receipt_id = object::id(&receipt);
     receipt.deliver(buyer);
