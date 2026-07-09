@@ -315,7 +315,11 @@ fun claim_all_into_vesting_sums_into_one_wallet() {
 fun vesting_lockup_holds_through_pinned_witness() {
     let (mut test, mut clk) = u::setup();
     // Cliff one full period long: nothing vests until start(=OPENS) + 100_000.
-    setup_vesting_sale_with(&mut test, &clk, vesting_wallet_linear::params(u::opens(), 100_000, 100_000, 1));
+    setup_vesting_sale_with(
+        &mut test,
+        &clk,
+        vesting_wallet_linear::params(u::opens(), 100_000, 100_000, 1),
+    );
     buy_once(&mut test, &clk, 100); // rate 1 -> alloc 100
     finalize_now(&mut test, &mut clk); // clk -> 5_001, still far below the cliff
 

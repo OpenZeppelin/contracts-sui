@@ -21,7 +21,14 @@ use sui::test_scenario as ts;
 #[test, expected_failure(abort_code = prefunded_sale::EHardCapZero)]
 fun create_sale_rejects_zero_hard_cap() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
+    let (sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         0,
         0,
@@ -37,7 +44,14 @@ fun create_sale_rejects_zero_hard_cap() {
 #[test, expected_failure(abort_code = prefunded_sale::EInvalidCapsOrdering)]
 fun create_sale_rejects_soft_cap_above_hard() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
+    let (sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         100,
         101,
@@ -53,7 +67,14 @@ fun create_sale_rejects_soft_cap_above_hard() {
 #[test, expected_failure(abort_code = prefunded_sale::EInvalidTimeRange)]
 fun create_sale_rejects_inverted_time_range() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
+    let (sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         100,
         0,
@@ -70,7 +91,14 @@ fun create_sale_rejects_inverted_time_range() {
 #[test]
 fun create_sale_initializes_in_init_phase() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>(
+    let (sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
         fixed_rate_curve::params(2),
         1_000,
         500,

@@ -135,7 +135,9 @@ public fun take_sale(
 }
 
 /// Return the shared sale.
-public fun return_sale(sale: PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>) {
+public fun return_sale(
+    sale: PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>,
+) {
     ts::return_shared(sale);
 }
 
