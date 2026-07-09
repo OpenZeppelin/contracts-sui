@@ -13,7 +13,7 @@ use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
 use openzeppelin_sale::refund_vault;
 use openzeppelin_sale::test_utils::{Self as u, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
-use sui::clock::{Self, Clock};
+use sui::clock::Clock;
 use sui::test_scenario::{Self as ts, Scenario};
 
 // A dishonest/arbitrary curve declared inside the test module, so the test can
@@ -22,13 +22,6 @@ use sui::test_scenario::{Self as ts, Scenario};
 public struct BadCurve has drop {}
 
 // === Test-Only Helpers ===
-
-fun setup(): (Scenario, Clock) {
-    let mut test = ts::begin(u::admin());
-    let mut clk = clock::create_for_testing(test.ctx());
-    clk.set_for_testing(u::opens());
-    (test, clk)
-}
 
 // Create + activate a BadCurve sale, minting the activation ticket with an
 // arbitrary `required_inventory` (the sale trusts it).
@@ -72,7 +65,7 @@ fun take_bad_sale(test: &Scenario): PrefundedSale<BadCurve, u64, SALE, USDC, u64
 // independent backing check - this is the documented, intentional trust.
 #[test]
 fun activation_trusts_undersized_required_inventory() {
-    let (mut test, clk) = setup();
+    let (mut test, clk) = u::setup();
     activate_bad(&mut test, &clk, 1_000, 10, 10);
 
     test.next_tx(u::admin());
@@ -92,7 +85,7 @@ fun activation_trusts_undersized_required_inventory() {
 // curve-trust boundary).
 #[test, expected_failure(abort_code = prefunded_sale::EInsufficientInventory)]
 fun overallocating_quote_beyond_inventory_aborts() {
-    let (mut test, clk) = setup();
+    let (mut test, clk) = u::setup();
     activate_bad(&mut test, &clk, 1_000, 10, 10); // only 10 inventory
 
     test.next_tx(u::buyer());
@@ -115,7 +108,7 @@ fun overallocating_quote_beyond_inventory_aborts() {
 // hard-cap). This pins the residual trust - the sale does not re-derive price.
 #[test]
 fun overallocating_quote_within_inventory_is_accepted() {
-    let (mut test, clk) = setup();
+    let (mut test, clk) = u::setup();
     activate_bad(&mut test, &clk, 1_000, 1_000, 1_000);
 
     test.next_tx(u::buyer());
@@ -144,7 +137,7 @@ fun overallocating_quote_within_inventory_is_accepted() {
 // any further non-zero payment overflows.
 #[test, expected_failure(abort_code = prefunded_sale::ERaisedOverflow)]
 fun purchase_raised_overflow_aborts() {
-    let (mut test, clk) = setup();
+    let (mut test, clk) = u::setup();
     let max = 18_446_744_073_709_551_615;
     activate_bad(&mut test, &clk, max, 10, 10); // hard_cap = u64::MAX, tiny inventory
 
