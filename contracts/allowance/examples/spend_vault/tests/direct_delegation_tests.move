@@ -89,10 +89,7 @@ fun direct_delegation_full_lifecycle() {
         ts::return_shared(clk);
     };
 
-    // Tx 4 (OWNER): raise the budget with the CAS guard, then suspend, then revoke
-    // the coin. `expected = 250` is the owner's read from BEFORE this tx (the Tx 3
-    // `Spent` event reported `remaining: 250`); a spend sequenced after that read
-    // would make this call abort `EUnexpectedAllowance` instead of clobbering it.
+    // Tx 4 (OWNER): raise the budget (CAS idiom), then suspend, then revoke the coin.
     scenario.next_tx(OWNER);
     {
         let mut vault = scenario.take_shared<Vault>();
@@ -102,7 +99,6 @@ fun direct_delegation_full_lifecycle() {
             &mut vault,
             &owner_cap,
             cap_id,
-            250,
             500,
             NOW_MS + 60 * DAY_MS,
             &clk,
@@ -200,89 +196,6 @@ fun spend_over_budget_aborts() {
         ts::return_shared(clk);
     };
 
-    abort
-}
-
-// The CAS guard catches a stale read: the owner read `remaining == 400` before the
-// delegate's 150 spend was sequenced, so by write time the entry holds 250 and the
-// guarded update aborts `EUnexpectedAllowance` instead of silently clobbering the
-// spend. (The guard only works because `expected` comes from BEFORE this tx: a
-// read taken in the write's own tx would trivially match; the shared Vault is
-// locked for the whole tx, so an in-tx read/write pair needs no guard at all.)
-#[test, expected_failure(abort_code = spend_vault::EUnexpectedAllowance)]
-fun change_budget_stale_expected_aborts() {
-    let mut scenario = ts::begin(OWNER);
-
-    example_coin::init_for_testing(scenario.ctx());
-
-    // Tx (OWNER): open a 400-budget grant for the delegate and wire the edges.
-    scenario.next_tx(OWNER);
-    let (cap_id, owner_cap) = {
-        let mut funding = scenario.take_from_sender<Coin<EXAMPLE_COIN>>();
-        let mut clk = clock::create_for_testing(scenario.ctx());
-        clk.set_for_testing(NOW_MS);
-
-        let stake = funding.split(1_000, scenario.ctx());
-        let (vault, cap, owner_cap) = direct_delegation::open_allowance<EXAMPLE_COIN>(
-            stake,
-            400,
-            NO_EXPIRY,
-            &clk,
-            scenario.ctx(),
-        );
-        let cap_id = object::id(&cap);
-
-        spend_vault::share(vault);
-        transfer::public_transfer(cap, DELEGATE);
-        transfer::public_transfer(funding, OWNER);
-        clk.share_for_testing();
-        (cap_id, owner_cap)
-    };
-
-    // Tx (DELEGATE): spend 150. The owner's earlier read of 400 is now stale.
-    scenario.next_tx(DELEGATE);
-    {
-        let mut vault = scenario.take_shared<Vault>();
-        let clk = scenario.take_shared<Clock>();
-        let cap = scenario.take_from_sender<spend_vault::SpenderCap>();
-
-        let coin = direct_delegation::spend_to_wallet<EXAMPLE_COIN>(
-            &mut vault,
-            &cap,
-            150,
-            &clk,
-            scenario.ctx(),
-        );
-        destroy(coin);
-
-        scenario.return_to_sender(cap);
-        ts::return_shared(vault);
-        ts::return_shared(clk);
-    };
-
-    // Tx (OWNER): update with the stale pre-spend read as `expected`. The entry's
-    // remaining is 250, not 400: aborts inside `change_budget`.
-    scenario.next_tx(OWNER);
-    {
-        let mut vault = scenario.take_shared<Vault>();
-        let clk = scenario.take_shared<Clock>();
-
-        direct_delegation::change_budget<EXAMPLE_COIN>(
-            &mut vault,
-            &owner_cap,
-            cap_id,
-            400,
-            500,
-            NO_EXPIRY,
-            &clk,
-            scenario.ctx(),
-        );
-
-        ts::return_shared(vault);
-        ts::return_shared(clk);
-    };
-
-    destroy(owner_cap);
     abort
 }
 

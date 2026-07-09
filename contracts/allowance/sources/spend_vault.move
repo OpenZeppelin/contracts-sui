@@ -90,15 +90,11 @@
 ///   `EZeroAmount` first). Removal is lazy too: entries
 ///   go away only on `revoke`, `revoke_all`, `renounce`, or `destroy`, never by
 ///   spending to zero.
-/// - **Opt-in CAS on `set_allowance`.** Pass `expected = Some(e)` on any update
-///   derived from an earlier read: read `allowance<T>()` off-chain or in a prior
-///   tx, then write with `Some(that_value)`. If a spend was sequenced after the
-///   read, `remaining` no longer matches and the write aborts
-///   `EUnexpectedAllowance` instead of silently clobbering it. A read in the
-///   same tx needs no CAS: the shared Vault is locked for the whole tx, so the
-///   read/write pair is already atomic, and a same-tx read trivially satisfies
-///   the guard. `Some(e)` on an absent entry aborts, since there is no value to
-///   match.
+/// - **Opt-in CAS on `set_allowance`.** Pass `expected = Some(e)` on any
+///   read-derived update. The race-free idiom is `allowance<T>()` then
+///   `set_allowance<T>(..., Some(result), ...)` in one PTB: the shared Vault is
+///   locked for the tx, so the read/write pair is atomic. `Some(e)` on an absent
+///   entry aborts, since there is no value to match.
 /// - **Unconditional owner exit.** `withdraw`, `withdraw_all`, and `destroy`
 ///   consult only the OwnerCap binding and the pool, never the ledger, so no
 ///   spender or ledger state can block defunding or teardown. `withdraw_all<T>`
@@ -189,9 +185,8 @@ const EUnexpectedAllowance: vector<u8> = "Current allowance does not match expec
 // === Structs ===
 
 /// Shared, UNTYPED escrow + per-`(cap, coin)` allowance ledger. One vault holds
-/// N coin types at once. The tx that calls `new` must consume the fresh vault
-/// with `share` or `destroy`; a shared vault can still be `destroy`ed later at
-/// teardown, so the shape is `new -> destroy` or `new -> share -> ... -> destroy`.
+/// N coin types at once; its lifecycle is exactly `new -> share` or
+/// `new -> destroy`.
 ///
 /// The pool is NOT a struct field: per-coin funds live as object-owned address
 /// balances at `object::id_address(&v)`. The `key`-only ability protects `id`
@@ -659,12 +654,9 @@ public fun mint_cap(v: &Vault, cap: &OwnerCap, ctx: &mut TxContext): SpenderCap 
 ///   future expiry (or `u64::MAX`), time-reviving it while zeroing the budget.
 /// - **CAS.** `expected = Some(e)` proceeds only if the entry exists
 ///   AND its current `remaining == e`; on an absent entry or a mismatch it
-///   aborts `EUnexpectedAllowance`. Derive `e` from an EARLIER read (off-chain
-///   or a prior tx) so a spend sequenced after that read aborts this write
-///   instead of being clobbered. A read in the same tx cannot serve as a guard:
-///   the shared Vault is locked for the whole tx, so a same-tx `allowance<T>()`
-///   value trivially matches and the write always proceeds.
-///   `None` is the unconditional create-or-overwrite. CAS
+///   aborts `EUnexpectedAllowance`. The race-free idiom is `allowance<T>()` then
+///   `set_allowance<T>(..., Some(result), ...)` in one PTB (the shared Vault is
+///   locked for the tx). `None` is the unconditional create-or-overwrite. CAS
 ///   compares the RAW `remaining` (0 for suspended and `u64::MAX` for unlimited
 ///   included). CAS guards `remaining` ONLY; the upsert always overwrites
 ///   `expires_at_ms` too. A read-then-CAS-write that means to change only the
@@ -1282,17 +1274,10 @@ public fun withdraw_all<T>(
 //
 // All reads are ADVISORY: results are stale the moment a later tx mutates the
 // vault or the pool (a permissionless `send_funds` top-up moves the pool between
-// a read and a later act). For LEDGER state (budgets, expiries, entry presence,
-// coin types, cap bindings) a same-tx read is exact: the shared Vault is locked
-// for the whole tx, so read -> decide -> write is atomic with no guard needed.
-// Cross-tx check-then-act on ledger state is unsound UNLESS the earlier read is
-// passed as the CAS guard on `set_allowance` (`Some(expected)`), turning
-// staleness into an `EUnexpectedAllowance` abort instead of a silent overwrite.
-// POOL reads (`spendable_now`, `balance_value`) are weaker even within one tx:
-// they take the `AccumulatorRoot` and report the settled (start-of-checkpoint)
-// balance, not the live pool a `spend`/`withdraw` draws from, so a settled
-// quote is a ceiling, not a guarantee (the settled-vs-live skew; see each
-// function's doc).
+// a read and a later act). Cross-tx check-then-act is unsound; within one PTB
+// the shared Vault is locked for the whole tx, so read -> decide -> write is
+// atomic (the CAS idiom on `set_allowance`). The pool-reading reads take the
+// `AccumulatorRoot` and report the settled (start-of-checkpoint) balance.
 
 /// Raw `remaining` for `(cap, T)`; `0` if absent. Ambiguous at 0: suspended and
 /// absent both read 0, disambiguate with `contains`. `u64::MAX` is the

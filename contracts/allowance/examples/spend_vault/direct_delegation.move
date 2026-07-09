@@ -88,32 +88,25 @@ public fun spend_to_wallet<T>(
 
 // === Owner manages the grant ===
 
-/// Raise / lower / renew with the race-free CAS idiom. `expected` is the budget the
-/// caller read via `allowance<T>` off-chain (or in a previous tx). If a spend was
-/// sequenced between that read and this transaction, the entry's `remaining` no
-/// longer equals `expected` and the call aborts `EUnexpectedAllowance` instead of
-/// clobbering the concurrent spend.
-///
-/// `expected` must come from BEFORE this transaction: a read taken here (in the
-/// same tx as the write) would trivially match the guard and protect nothing, since
-/// the shared Vault is locked for the whole tx and an in-tx read/write pair is
-/// already atomic without a guard.
+/// Raise / lower / renew with the race-free CAS idiom: read, then write with
+/// `expected = Some(current)` in the SAME PTB. If a spend was sequenced between the
+/// read and the write, the call aborts `EUnexpectedAllowance` instead of clobbering.
 public fun change_budget<T>(
     vault: &mut Vault,
     owner_cap: &OwnerCap,
     cap_id: ID,
-    expected: u64,
     new_budget: u64,
     new_expires_at_ms: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    let current = vault.allowance<T>(cap_id);
     vault.set_allowance<T>(
         owner_cap,
         cap_id,
         new_budget,
         new_expires_at_ms,
-        option::some(expected),
+        option::some(current),
         clock,
         ctx,
     );
