@@ -10,6 +10,7 @@ module openzeppelin_sale::prefunded_sale_lifecycle_tests;
 use openzeppelin_finance::vesting_wallet_linear::Params as VParams;
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
+use openzeppelin_sale::refund_vault;
 use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::Clock;
@@ -318,6 +319,77 @@ fun cancel_emergency_soft_cap_met_aborts() {
     tu::return_sale(sale);
     tu::return_vault(vault);
     tu::return_cap(cap);
+    destroy(clk);
+    test.end();
+}
+
+// === Wrong-vault guards on close paths ===
+//
+// finalize / cancel_after_close / cancel_emergency each re-assert that the passed
+// vault is the one paired with the sale, so a caller cannot substitute a
+// valid-but-unpaired vault at close time. Each test drives the sale to the point
+// where the vault check is reached, then passes a foreign vault.
+
+// finalize rejects a vault that is not the paired one (reached after the
+// window/soft-cap guards pass).
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+fun finalize_wrong_vault_aborts() {
+    let (mut test, mut clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 500); // soft cap met
+    clk.set_for_testing(5_001); // window closed
+
+    test.next_tx(tu::admin());
+    let mut sale = tu::take_sale(&test);
+    let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    sale.finalize(&mut foreign_vault, &clk); // aborts: EWrongVault
+
+    destroy(foreign_vault);
+    destroy(foreign_cap);
+    tu::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
+// cancel_after_close rejects a vault that is not the paired one (reached after the
+// window/soft-cap guards pass).
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+fun cancel_after_close_wrong_vault_aborts() {
+    let (mut test, mut clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    clk.set_for_testing(5_001); // window closed
+
+    test.next_tx(tu::buyer());
+    let mut sale = tu::take_sale(&test);
+    let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    sale.cancel_after_close(&mut foreign_vault, &clk); // aborts: EWrongVault
+
+    destroy(foreign_vault);
+    destroy(foreign_cap);
+    tu::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
+// cancel_emergency rejects a vault that is not the paired one (reached after the
+// cap/phase/window/cap-guard checks pass).
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+fun cancel_emergency_wrong_vault_aborts() {
+    let (mut test, clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 100); // in-window, below hard cap, no soft cap
+
+    test.next_tx(tu::admin());
+    let mut sale = tu::take_sale(&test);
+    let cap = tu::take_cap(&test);
+    let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    sale.cancel_emergency(&cap, &mut foreign_vault, &clk); // aborts: EWrongVault
+
+    destroy(foreign_vault);
+    destroy(foreign_cap);
+    tu::return_cap(cap);
+    tu::return_sale(sale);
     destroy(clk);
     test.end();
 }

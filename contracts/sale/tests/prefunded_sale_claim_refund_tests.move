@@ -356,6 +356,28 @@ fun refund_before_cancel_aborts() {
     test.end();
 }
 
+// refund rejects a vault that is not the paired one (reached after the phase /
+// receipt-sale / buyer checks pass).
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+fun refund_wrong_vault_aborts() {
+    let (mut test, mut clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(tu::buyer());
+    let mut sale = tu::take_sale(&test);
+    let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    let r = test.take_from_address<Receipt<SALE>>(tu::buyer());
+    let payment = sale.refund(&mut foreign_vault, r, test.ctx()); // aborts: EWrongVault
+    destroy(payment);
+    destroy(foreign_vault);
+    destroy(foreign_cap);
+    tu::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
 // === withdraw_proceeds ===
 
 #[test]
