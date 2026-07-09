@@ -939,8 +939,7 @@ public fun purchase<
     // Phase + time
     sale.phase.assert_active();
 
-    // Unpack the quote and bind it to this sale.
-    let (quote_sale_id, payment, allocation) = quote.unpack();
+    let Quote { sale_id: quote_sale_id, payment, allocation } = quote;
     assert!(quote_sale_id == object::id(sale), EQuoteSaleMismatch);
 
     let now = clock::timestamp_ms(clock);
@@ -1845,7 +1844,7 @@ public fun cap_sale_id<SaleCoin, PaymentCoin>(c: &SaleAdminCap<SaleCoin, Payment
 // - It cannot be stored, copied, or replayed across transactions.
 // - It cannot be transferred to another address.
 // - It cannot be discarded silently. The sale's `purchase` is the
-//   single legal consumer (`unpack`).
+//   single legal consumer.
 //
 // The carrier pins `sale_id` so a quote minted for sale A cannot be
 // spent on sale B, and it carries the payment balance itself, so the
@@ -1906,14 +1905,6 @@ public fun mint_quote<
     let allocation = (payment.value() as u128) * (rate as u128);
     assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
     Quote { sale_id: object::id(sale), payment, allocation: allocation as u64 }
-}
-
-/// Destructively read a quote. Library-internal: only sibling library
-/// modules (the sale flavor's `purchase`) unpack quotes. Returns
-/// `(sale_id, paid, allocation)`.
-fun unpack<PaymentCoin>(q: Quote<PaymentCoin>): (ID, Balance<PaymentCoin>, u64) {
-    let Quote { sale_id, payment, allocation } = q;
-    (sale_id, payment, allocation)
 }
 
 /// The id of the sale this quote was minted for.
