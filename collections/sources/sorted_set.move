@@ -114,7 +114,7 @@ public struct Unit has copy, drop, store {}
 ///
 /// Across every public operation, by delegation to the inner map, the keys are strictly
 /// increasing under the (consistently supplied) comparator: sorted, no duplicates.
-public struct SortedSet<K: copy + drop + store> has copy, drop, store {
+public struct SortedSet<K: copy + drop> has copy, drop, store {
     /// Backing map: every key is a set member; every value is the inert `Unit` marker.
     inner: SortedMap<K, Unit>,
 }
@@ -133,7 +133,7 @@ public struct SortedSet<K: copy + drop + store> has copy, drop, store {
 /// Immutable view of the wrapped map - what read macros (`contains!`, `find_*!`,
 /// `keys_from!`) expand against. Read-only: cannot be upgraded to `&mut`. Also the test
 /// order-check handle: `sorted_map::is_well_formed!(inner(&set))`.
-public fun inner<K: copy + drop + store>(set: &SortedSet<K>): &SortedMap<K, Unit> {
+public fun inner<K: copy + drop>(set: &SortedSet<K>): &SortedMap<K, Unit> {
     &set.inner
 }
 
@@ -141,7 +141,7 @@ public fun inner<K: copy + drop + store>(set: &SortedSet<K>): &SortedMap<K, Unit
 /// against. Order-corruption surface: see the module header. Obtaining it requires
 /// `&mut SortedSet` (hence `&mut` on the enclosing object), so the consumer's reference
 /// discipline still gates every write.
-public fun inner_mut<K: copy + drop + store>(set: &mut SortedSet<K>): &mut SortedMap<K, Unit> {
+public fun inner_mut<K: copy + drop>(set: &mut SortedSet<K>): &mut SortedMap<K, Unit> {
     &mut set.inner
 }
 
@@ -169,7 +169,7 @@ public fun assert_sorted(sorted: bool) {
 ///
 /// #### Returns
 /// - An empty set.
-public fun new<K: copy + drop + store>(): SortedSet<K> {
+public fun new<K: copy + drop>(): SortedSet<K> {
     SortedSet { inner: sorted_map::new() }
 }
 
@@ -182,7 +182,7 @@ public fun new<K: copy + drop + store>(): SortedSet<K> {
 ///
 /// #### Returns
 /// - A one-element set.
-public fun singleton<K: copy + drop + store>(key: K): SortedSet<K> {
+public fun singleton<K: copy + drop>(key: K): SortedSet<K> {
     let mut set = new();
     set.inner.insert_at(0, sorted_map::new_entry(key, unit()));
     set
@@ -204,7 +204,7 @@ public fun singleton<K: copy + drop + store>(key: K): SortedSet<K> {
 ///
 /// #### Returns
 /// - A set of the distinct keys, in comparator order.
-public macro fun from_keys_by<$K: copy + drop + store>(
+public macro fun from_keys_by<$K: copy + drop>(
     $keys: vector<$K>,
     $lt: |&$K, &$K| -> bool,
 ): SortedSet<$K> {
@@ -218,7 +218,7 @@ public macro fun from_keys_by<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - A set of the distinct keys, in ascending order.
-public macro fun from_keys<$K: copy + drop + store>($keys: vector<$K>): SortedSet<$K> {
+public macro fun from_keys<$K: copy + drop>($keys: vector<$K>): SortedSet<$K> {
     from_keys_by!($keys, |a, b| *a < *b)
 }
 
@@ -243,7 +243,7 @@ public macro fun from_keys<$K: copy + drop + store>($keys: vector<$K>): SortedSe
 ///
 /// #### Aborts
 /// - `EKeysNotSorted` if `keys` has an adjacent pair not sorted under `lt`.
-public macro fun from_sorted_keys_by<$K: copy + drop + store>(
+public macro fun from_sorted_keys_by<$K: copy + drop>(
     $keys: vector<$K>,
     $lt: |&$K, &$K| -> bool,
 ): SortedSet<$K> {
@@ -283,30 +283,30 @@ public macro fun from_sorted_keys_by<$K: copy + drop + store>(
 ///
 /// #### Aborts
 /// - `EKeysNotSorted` if `keys` is not ascending.
-public macro fun from_sorted_keys<$K: copy + drop + store>($keys: vector<$K>): SortedSet<$K> {
+public macro fun from_sorted_keys<$K: copy + drop>($keys: vector<$K>): SortedSet<$K> {
     from_sorted_keys_by!($keys, |a, b| *a < *b)
 }
 
 // === Size and bounds (regular funs, no comparator) ===
 
 /// Number of distinct keys.
-public fun length<K: copy + drop + store>(set: &SortedSet<K>): u64 {
+public fun length<K: copy + drop>(set: &SortedSet<K>): u64 {
     set.inner.length()
 }
 
 /// True iff the set holds no keys.
-public fun is_empty<K: copy + drop + store>(set: &SortedSet<K>): bool {
+public fun is_empty<K: copy + drop>(set: &SortedSet<K>): bool {
     set.inner.is_empty()
 }
 
 /// Smallest key under the comparator, or `none` if empty. O(1). With a reverse comparator
 /// this is the largest numeric key.
-public fun head<K: copy + drop + store>(set: &SortedSet<K>): Option<K> {
+public fun head<K: copy + drop>(set: &SortedSet<K>): Option<K> {
     set.inner.head()
 }
 
 /// Largest key under the comparator, or `none` if empty. O(1).
-public fun tail<K: copy + drop + store>(set: &SortedSet<K>): Option<K> {
+public fun tail<K: copy + drop>(set: &SortedSet<K>): Option<K> {
     set.inner.tail()
 }
 
@@ -326,7 +326,7 @@ public fun tail<K: copy + drop + store>(set: &SortedSet<K>): Option<K> {
 /// - `EEmpty` if the set is empty.
 /// - `sorted_map::EEmpty` (guarded by the prior `is_empty` check; unreachable in normal
 ///   operation).
-public fun pop_front<K: copy + drop + store>(set: &mut SortedSet<K>): K {
+public fun pop_front<K: copy + drop>(set: &mut SortedSet<K>): K {
     assert!(!set.is_empty(), EEmpty);
     let (key, _unit) = set.inner.pop_front();
     key
@@ -342,7 +342,7 @@ public fun pop_front<K: copy + drop + store>(set: &mut SortedSet<K>): K {
 /// - `EEmpty` if the set is empty.
 /// - `sorted_map::EEmpty` (guarded by the prior `is_empty` check; unreachable in normal
 ///   operation).
-public fun pop_back<K: copy + drop + store>(set: &mut SortedSet<K>): K {
+public fun pop_back<K: copy + drop>(set: &mut SortedSet<K>): K {
     assert!(!set.is_empty(), EEmpty);
     let (key, _unit) = set.inner.pop_back();
     key
@@ -359,7 +359,7 @@ public fun pop_back<K: copy + drop + store>(set: &mut SortedSet<K>): K {
 ///
 /// #### Returns
 /// - Every key, in ascending comparator order.
-public fun keys<K: copy + drop + store>(set: &SortedSet<K>): vector<K> {
+public fun keys<K: copy + drop>(set: &SortedSet<K>): vector<K> {
     set.inner.keys()
 }
 
@@ -375,7 +375,7 @@ public fun keys<K: copy + drop + store>(set: &SortedSet<K>): vector<K> {
 ///
 /// #### Returns
 /// - `true` iff `key` is present.
-public macro fun contains_by<$K: copy + drop + store>(
+public macro fun contains_by<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -388,7 +388,7 @@ public macro fun contains_by<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - `true` iff `key` is present.
-public macro fun contains<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &$K): bool {
+public macro fun contains<$K: copy + drop>($set: &SortedSet<$K>, $key: &$K): bool {
     contains_by!($set, $key, |a, b| *a < *b)
 }
 
@@ -407,7 +407,7 @@ public macro fun contains<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &
 ///
 /// #### Returns
 /// - `true` iff the key was newly added, `false` if it was already present.
-public macro fun insert_by<$K: copy + drop + store>(
+public macro fun insert_by<$K: copy + drop>(
     $set: &mut SortedSet<$K>,
     $key: $K,
     $lt: |&$K, &$K| -> bool,
@@ -420,7 +420,7 @@ public macro fun insert_by<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - `true` iff the key was newly added.
-public macro fun insert<$K: copy + drop + store>($set: &mut SortedSet<$K>, $key: $K): bool {
+public macro fun insert<$K: copy + drop>($set: &mut SortedSet<$K>, $key: $K): bool {
     insert_by!($set, $key, |a, b| *a < *b)
 }
 
@@ -433,7 +433,7 @@ public macro fun insert<$K: copy + drop + store>($set: &mut SortedSet<$K>, $key:
 ///
 /// #### Aborts
 /// - `sorted_map::EKeyNotFound` if `key` is absent.
-public macro fun remove_by<$K: copy + drop + store>(
+public macro fun remove_by<$K: copy + drop>(
     $set: &mut SortedSet<$K>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -446,7 +446,7 @@ public macro fun remove_by<$K: copy + drop + store>(
 ///
 /// #### Aborts
 /// - `sorted_map::EKeyNotFound` if `key` is absent.
-public macro fun remove<$K: copy + drop + store>($set: &mut SortedSet<$K>, $key: &$K) {
+public macro fun remove<$K: copy + drop>($set: &mut SortedSet<$K>, $key: &$K) {
     remove_by!($set, $key, |a, b| *a < *b)
 }
 
@@ -463,7 +463,7 @@ public macro fun remove<$K: copy + drop + store>($set: &mut SortedSet<$K>, $key:
 ///
 /// #### Returns
 /// - The ceiling/strict-next key, or `none`.
-public macro fun find_next_by<$K: copy + drop + store>(
+public macro fun find_next_by<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $include: bool,
@@ -477,7 +477,7 @@ public macro fun find_next_by<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - The ceiling/strict-next key, or `none`.
-public macro fun find_next<$K: copy + drop + store>(
+public macro fun find_next<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $include: bool,
@@ -495,7 +495,7 @@ public macro fun find_next<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - The floor/strict-prev key, or `none`.
-public macro fun find_prev_by<$K: copy + drop + store>(
+public macro fun find_prev_by<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $include: bool,
@@ -509,7 +509,7 @@ public macro fun find_prev_by<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - The floor/strict-prev key, or `none`.
-public macro fun find_prev<$K: copy + drop + store>(
+public macro fun find_prev<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $include: bool,
@@ -526,7 +526,7 @@ public macro fun find_prev<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - The strict-next key, or `none`.
-public macro fun next_key_by<$K: copy + drop + store>(
+public macro fun next_key_by<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -538,7 +538,7 @@ public macro fun next_key_by<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - The strict-next key, or `none`.
-public macro fun next_key<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
+public macro fun next_key<$K: copy + drop>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
     find_next_by!($set, $key, false, |a, b| *a < *b)
 }
 
@@ -551,7 +551,7 @@ public macro fun next_key<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &
 ///
 /// #### Returns
 /// - The strict-prev key, or `none`.
-public macro fun prev_key_by<$K: copy + drop + store>(
+public macro fun prev_key_by<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -563,7 +563,7 @@ public macro fun prev_key_by<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - The strict-prev key, or `none`.
-public macro fun prev_key<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
+public macro fun prev_key<$K: copy + drop>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
     find_prev_by!($set, $key, false, |a, b| *a < *b)
 }
 
@@ -583,7 +583,7 @@ public macro fun prev_key<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &
 ///
 /// #### Returns
 /// - Up to `limit` keys in ascending order.
-public macro fun keys_from_by<$K: copy + drop + store>(
+public macro fun keys_from_by<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $from: &$K,
     $include: bool,
@@ -598,7 +598,7 @@ public macro fun keys_from_by<$K: copy + drop + store>(
 ///
 /// #### Returns
 /// - Up to `limit` keys in ascending order.
-public macro fun keys_from<$K: copy + drop + store>(
+public macro fun keys_from<$K: copy + drop>(
     $set: &SortedSet<$K>,
     $from: &$K,
     $include: bool,
