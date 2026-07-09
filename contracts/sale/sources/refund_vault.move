@@ -163,6 +163,9 @@ public fun share<P>(vault: RefundVault<P>) {
 
 /// Deposit funds into the locked balance. Vault must be in `Active` state.
 ///
+/// A deposit of a zero-value balance is a no-op: the balance is consumed but no
+/// `VaultDeposit` event is emitted.
+///
 /// #### Parameters
 /// - `vault`: The vault to deposit into.
 /// - `cap`: The vault's controller cap.

@@ -936,7 +936,6 @@ public fun purchase<
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Phase + time
     sale.phase.assert_active();
 
     let sale_id = object::id(sale);
@@ -947,7 +946,6 @@ public fun purchase<
     let now = clock::timestamp_ms(clock);
     assert!(now >= sale.opens_at_ms && now <= sale.closes_at_ms, ESaleWindowClosed);
 
-    // Allowlist gate
     let buyer = ctx.sender();
     let entry_max = if (sale.requires_allowlist) {
         assert!(allow.is_some(), EAllowlistRequired);
@@ -959,19 +957,18 @@ public fun purchase<
         0
     };
 
-    // already ensured that the value is > 0, see `mint_quote`
+    // `mint_quote` already guaranteed the payment is non-zero.
     let paid = payment.value();
     let u64_max = std::u64::max_value!();
 
-    // Hard cap
     assert!(u64_max - paid >= sale.raised, ERaisedOverflow);
     let new_raised = sale.raised + paid;
     assert!(new_raised <= sale.hard_cap, EHardCapExceeded);
 
-    // Per-entry cap
     assert!(entry_max == 0 || paid <= entry_max, EPerEntryCapExceeded);
 
-    // Per-buyer cap
+    // `contributions[buyer]` holds the buyer's *remaining* allowance: seeded at the
+    // cap on first purchase, then counted down.
     if (sale.per_buyer_cap.is_some()) {
         let contributions = sale.contributions.borrow_mut();
         if (!contributions.contains(buyer)) {
@@ -983,16 +980,13 @@ public fun purchase<
         *cap = *cap - paid;
     };
 
-    // Inventory backing.
     let unallocated = sale.inventory.value() - sale.total_allocated;
     assert!(allocation <= unallocated, EInsufficientInventory);
 
-    // State mutations
     sale.total_allocated = sale.total_allocated + allocation;
     sale.raised = new_raised;
     sale.proceeds.join(payment);
 
-    // Mint and deliver receipt
     let receipt = receipt::new_receipt<SaleCoin>(sale_id, buyer, paid, allocation, now, ctx);
     let receipt_id = object::id(&receipt);
     receipt.deliver(buyer);
@@ -1985,4 +1979,165 @@ fun claim_all_internal<
     };
     receipts.destroy_empty();
     total
+}
+
+// === Test-only event constructors ===
+//
+// Event struct fields are module-private, so tests in other modules cannot build
+// an expected event to compare against `event::events_by_type`. These mirror the
+// `test_new_*` seam used by `openzeppelin_finance::vesting_wallet`.
+
+/// Build a `SaleCreated` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_sale_created<CurveParams: copy + drop, SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    hard_cap: u64,
+    soft_cap: u64,
+    opens_at_ms: u64,
+    closes_at_ms: u64,
+    curve_params: CurveParams,
+): SaleCreated<CurveParams, SaleCoin, PaymentCoin> {
+    SaleCreated { sale_id, hard_cap, soft_cap, opens_at_ms, closes_at_ms, curve_params }
+}
+
+/// Build an `InventoryDeposited` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_inventory_deposited<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    amount: u64,
+    new_inventory: u64,
+): InventoryDeposited<SaleCoin, PaymentCoin> {
+    InventoryDeposited { sale_id, amount, new_inventory }
+}
+
+/// Build a `PerBuyerCapSet` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_per_buyer_cap_set<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    cap: u64,
+): PerBuyerCapSet<SaleCoin, PaymentCoin> {
+    PerBuyerCapSet { sale_id, cap }
+}
+
+/// Build a `VestingScheduleParamsSet` event value for asserting against
+/// `event::events_by_type`.
+#[test_only]
+public fun test_new_vesting_schedule_params_set<
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams: copy + drop,
+>(sale_id: ID, params: VestingScheduleParams): VestingScheduleParamsSet<
+    SaleCoin,
+    PaymentCoin,
+    VestingScheduleParams,
+> { VestingScheduleParamsSet { sale_id, params } }
+
+/// Build a `RefundVaultPaired` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_refund_vault_paired<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    vault_id: ID,
+): RefundVaultPaired<SaleCoin, PaymentCoin> {
+    RefundVaultPaired { sale_id, vault_id }
+}
+
+/// Build an `AllowlistEnabled` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_allowlist_enabled<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    allowlist_admin_id: ID,
+): AllowlistEnabled<SaleCoin, PaymentCoin> {
+    AllowlistEnabled { sale_id, allowlist_admin_id }
+}
+
+/// Build a `SaleActivated` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_sale_activated<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    activated_at_ms: u64,
+): SaleActivated<SaleCoin, PaymentCoin> {
+    SaleActivated { sale_id, activated_at_ms }
+}
+
+/// Build a `Purchased` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_purchased<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    buyer: address,
+    receipt_id: ID,
+    paid: u64,
+    allocation: u64,
+    raised_after: u64,
+    purchased_at_ms: u64,
+): Purchased<SaleCoin, PaymentCoin> {
+    Purchased { sale_id, buyer, receipt_id, paid, allocation, raised_after, purchased_at_ms }
+}
+
+/// Build a `SaleFinalized` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_sale_finalized<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    raised: u64,
+    closed_at_ms: u64,
+): SaleFinalized<SaleCoin, PaymentCoin> {
+    SaleFinalized { sale_id, raised, closed_at_ms }
+}
+
+/// The `SoftCapMissed` cancel reason, for asserting `SaleCancelled` events.
+#[test_only]
+public fun test_cancel_reason_soft_cap_missed(): CancelReason { CancelReason::SoftCapMissed }
+
+/// The `AdminEmergency` cancel reason, for asserting `SaleCancelled` events.
+#[test_only]
+public fun test_cancel_reason_admin_emergency(): CancelReason { CancelReason::AdminEmergency }
+
+/// Build a `SaleCancelled` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_sale_cancelled<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    raised: u64,
+    reason: CancelReason,
+    closed_at_ms: u64,
+): SaleCancelled<SaleCoin, PaymentCoin> {
+    SaleCancelled { sale_id, raised, reason, closed_at_ms }
+}
+
+/// Build a `Claimed` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_claimed<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    buyer: address,
+    receipt_id: ID,
+    amount: u64,
+): Claimed<SaleCoin, PaymentCoin> {
+    Claimed { sale_id, buyer, receipt_id, amount }
+}
+
+/// Build a `Refunded` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_refunded<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    buyer: address,
+    receipt_id: ID,
+    amount: u64,
+): Refunded<SaleCoin, PaymentCoin> {
+    Refunded { sale_id, buyer, receipt_id, amount }
+}
+
+/// Build a `ProceedsWithdrawn` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_proceeds_withdrawn<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    amount: u64,
+): ProceedsWithdrawn<SaleCoin, PaymentCoin> {
+    ProceedsWithdrawn { sale_id, amount }
+}
+
+/// Build an `InventoryWithdrawn` event value for asserting against `event::events_by_type`.
+#[test_only]
+public fun test_new_inventory_withdrawn<SaleCoin, PaymentCoin>(
+    sale_id: ID,
+    amount: u64,
+): InventoryWithdrawn<SaleCoin, PaymentCoin> {
+    InventoryWithdrawn { sale_id, amount }
 }

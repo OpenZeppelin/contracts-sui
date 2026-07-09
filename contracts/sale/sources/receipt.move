@@ -1,14 +1,11 @@
-/// Shared types used across the sales library's family of sale flavors.
+/// The per-buyer claim ticket (`Receipt<S>`) issued by every sale flavor.
 ///
-/// Includes the lifecycle enum, the per-buyer claim ticket, and the
-/// optional `VestingSchedule` policy that a sale flavor may attach
-/// to make distribution gradual. The schedule is issuer-defined and
-/// fixed at sale construction - buyers never supply or override it.
-///
-/// This module owns the lifecycle enum and the per-buyer claim ticket
-/// that every sale flavor reuses. Sale flavors (the v1 `prefunded_sale`,
-/// the future `minting_sale`) compose these types; integrator code only
-/// observes them through the flavor module's public API.
+/// A `Receipt<S>` records one purchase - the issuing sale, the buyer, the amount
+/// paid, the token allocation, and the purchase time - and is the object the buyer
+/// later redeems via `claim` or `refund`. Sale flavors (the v1 `prefunded_sale`,
+/// the future `minting_sale`) mint and consume it through the package-internal
+/// helpers below; integrator code only observes it through the flavor module's
+/// public API.
 ///
 /// ### `Receipt<S>` is non-transferable
 ///
