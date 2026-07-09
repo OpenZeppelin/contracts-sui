@@ -485,3 +485,52 @@ fun withdraw_unsold_wrong_cap_aborts() {
     destroy(clk);
     test.end();
 }
+
+// withdraw_unsold_inventory is valid in the Cancelled terminal phase (not only
+// Finalized), and the admin recovers freed inventory as buyers refund: each refund
+// releases the receipt's allocation back into the withdrawable slack.
+#[test]
+fun withdraw_unsold_in_cancelled_recovers_freed_inventory() {
+    let (mut test, mut clk) = tu::setup();
+    tu::create_and_activate(&mut test, &clk, 2, 1_000, 500, 2_000);
+    buy_once(&mut test, &clk, 300); // alloc = 600; raised 300 < soft cap 500
+    cancel_now(&mut test, &mut clk);
+
+    // Admin withdraws only the truly-unsold slack; the outstanding receipt stays backed.
+    test.next_tx(tu::admin());
+    let mut sale = tu::take_sale(&test);
+    let cap = tu::take_cap(&test);
+    let slack = sale.withdraw_unsold_inventory(&cap);
+    assert_eq!(slack.value(), 1_400); // 2_000 - 600 allocated
+    assert_eq!(sale.total_allocated(), 600);
+    assert_eq!(sale.inventory_remaining(), 0);
+    destroy(slack);
+    tu::return_sale(sale);
+    tu::return_cap(cap);
+
+    // Buyer refunds: the allocation is released back into inventory slack.
+    test.next_tx(tu::buyer());
+    let mut sale = tu::take_sale(&test);
+    let mut vault = tu::take_vault(&test);
+    let r = test.take_from_address<Receipt<SALE>>(tu::buyer());
+    let payment = sale.refund(&mut vault, r, test.ctx());
+    assert_eq!(payment.value(), 300);
+    assert_eq!(sale.total_allocated(), 0);
+    destroy(payment);
+    tu::return_sale(sale);
+    tu::return_vault(vault);
+
+    // Admin can now recover the freed allocation.
+    test.next_tx(tu::admin());
+    let mut sale = tu::take_sale(&test);
+    let cap = tu::take_cap(&test);
+    let freed = sale.withdraw_unsold_inventory(&cap);
+    assert_eq!(freed.value(), 600);
+    assert_eq!(sale.inventory_total(), 0);
+    destroy(freed);
+    tu::return_sale(sale);
+    tu::return_cap(cap);
+
+    destroy(clk);
+    test.end();
+}
