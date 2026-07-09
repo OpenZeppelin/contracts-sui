@@ -55,7 +55,7 @@ are supporting types you will see in signatures.
 `PrefundedSale` is generic over a **curve witness**:
 
 ```move
-PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>
+PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams>
 ```
 
 | Type param | Meaning | Fixed-rate example |
@@ -64,6 +64,7 @@ PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>
 | `CurveParams` | The curve's stored config, opaque to the sale. | `fixed_rate_curve::Params` |
 | `SaleCoin` | The token being sold. | your project coin |
 | `PaymentCoin` | The coin collected as proceeds. | `USDC`, `SUI`, … |
+| `VestingWitness` | The vesting schedule's witness (the `drop`-only type that owns `VestingScheduleParams`). Fixes which schedule `claim_into_vesting` builds. Instantiated even for a non-vesting sale. | `vesting_wallet_linear::Linear` |
 | `VestingScheduleParams` | The vesting params type. Filled only if you attach a schedule, but the slot must always be instantiated. | `vesting_wallet_linear::Params` |
 
 The sale never prices a purchase itself. It accepts a `Quote` - carrying a
@@ -188,7 +189,7 @@ or fair launch - those have different mechanics and belong in separate standards
 ## Usage
 
 The examples below use `SALE` as the sale token, `USDC` as the payment coin, and
-`vesting_wallet_linear::Params` for the (unused, non-vesting) vesting slot.
+`vesting_wallet_linear::{Linear, Params}` for the (unused, non-vesting) vesting slot.
 
 ### Issuer: create, fund, and activate
 
@@ -199,7 +200,7 @@ implicit - the sale is an owned value, so only its holder can pass it by `&mut`.
 use openzeppelin_sale::prefunded_sale;
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::refund_vault;
-use openzeppelin_finance::vesting_wallet_linear::Params as VParams;
+use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
 use sui::clock::Clock;
 use sui::coin::Coin;
 
@@ -217,7 +218,7 @@ public fun launch(
 ) {
     // 1. Create the sale (Init). Returns the owned sale + its admin cap.
     let (mut sale, admin_cap) = prefunded_sale::create_sale<
-        FixedRateCurve, FrcParams, SALE, USDC, VParams,
+        FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams,
     >(
         fixed_rate_curve::params(rate),
         hard_cap,
@@ -256,7 +257,7 @@ non-allowlist sale, pass `option::none()` for the entry.
 
 ```move
 public fun buy(
-    sale: &mut PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, VParams>,
+    sale: &mut PrefundedSale<FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams>,
     payment: Coin<USDC>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -299,9 +300,11 @@ transfer::public_transfer(coin::from_balance(money_back, ctx), ctx.sender());
 ### Redeem into vesting
 
 For a sale created with `set_vesting_schedule_params`, redemption must go through
-`claim_into_vesting`. It needs the vesting curve's witness as the final type argument
-(here `vesting_wallet_linear::Linear`); the rest are inferred from the sale but Move
-requires the full list:
+`claim_into_vesting`. The vesting schedule - both its `VestingWitness` (here
+`vesting_wallet_linear::Linear`) and its `VestingScheduleParams` - is fixed at
+`create_sale`, so `claim_into_vesting` infers **every** type argument from the `sale`
+it takes by `&mut`. The turbofish below is written out only to name the wallet's type;
+you can drop it entirely and let inference fill it in:
 
 ```move
 use openzeppelin_finance::vesting_wallet::{VestingWallet, DestroyCap};
@@ -309,9 +312,7 @@ use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
 
 // Returns the funded wallet plus its DestroyCap (teardown authority).
 let (wallet, cap): (VestingWallet<Linear, VParams, SALE>, DestroyCap) =
-    prefunded_sale::claim_into_vesting<
-        FixedRateCurve, FrcParams, SALE, USDC, VParams, Linear,
-    >(&mut sale, receipt, ctx);
+    prefunded_sale::claim_into_vesting(&mut sale, receipt, ctx);
 
 transfer::public_share_object(wallet);        // shared: anyone can poke `release`; funds land in the buyer's address balance
 transfer::public_transfer(cap, ctx.sender()); // hold the cap to reclaim the drained wallet's storage later
@@ -329,6 +330,7 @@ import { Transaction } from '@mysten/sui/transactions';
 const PKG = '0x…';                 // openzeppelin_sale package id
 const SALE = `${PROJECT_PKG}::coin::SALE`;
 const USDC = '0x…::usdc::USDC';
+const VWITNESS = `${FINANCE_PKG}::vesting_wallet_linear::Linear`;
 const VPARAMS = `${FINANCE_PKG}::vesting_wallet_linear::Params`;
 const CURVE = `${PKG}::fixed_rate_curve::FixedRateCurve`;
 const FRC_PARAMS = `${PKG}::fixed_rate_curve::Params`;
@@ -342,10 +344,10 @@ const payBalance = tx.moveCall({
   arguments: [tx.object(usdcCoinId)],
 });
 
-// 2. Mint the Quote from the curve module. (quote: <SaleCoin, PaymentCoin, VestingScheduleParams>)
+// 2. Mint the Quote from the curve module. (quote: <SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams>)
 const quote = tx.moveCall({
   target: `${PKG}::fixed_rate_curve::quote`,
-  typeArguments: [SALE, USDC, VPARAMS],
+  typeArguments: [SALE, USDC, VWITNESS, VPARAMS],
   arguments: [tx.object(SALE_ID), payBalance],
 });
 
@@ -356,10 +358,10 @@ const noEntry = tx.moveCall({
   arguments: [],
 });
 
-// 4. Purchase. (purchase: <Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>)
+// 4. Purchase. (purchase: <Curve, CurveParams, SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams>)
 tx.moveCall({
   target: `${PKG}::prefunded_sale::purchase`,
-  typeArguments: [CURVE, FRC_PARAMS, SALE, USDC, VPARAMS],
+  typeArguments: [CURVE, FRC_PARAMS, SALE, USDC, VWITNESS, VPARAMS],
   arguments: [tx.object(SALE_ID), quote, noEntry, tx.object('0x6')], // 0x6 = Clock
 });
 ```
