@@ -19,6 +19,23 @@
 /// The upshot: a package can only be upgraded after a mandatory public delay, giving
 /// users a window to exit before a privileged code change takes effect.
 ///
+/// # One-way doors
+///
+/// Two properties of this design are deliberate and irreversible - integrators copying
+/// the pattern should carry them knowingly:
+///
+/// - **Wrapping the cap is permanent.** `wrap` consumes the `UpgradeCap` into a shared
+///   vault with no unwrap and no `make_immutable` path, so every future upgrade goes
+///   through the timelock forever - and the package can never be frozen. That permanence
+///   is the credible commitment the vault exists to provide. A production variant that
+///   wants an end state would add a timelocked `make_immutable` operation.
+/// - **Superseded upgrades must be cancelled explicitly.** `commit_upgrade` updates only
+///   the stored cap; it never touches the timelock's operation store. An upgrade
+///   scheduled earlier survives an intermediate upgrade and, once its delay elapses,
+///   remains executable against the updated cap with no fresh delay. When plans change,
+///   a canceller must `cancel_upgrade` the stale operation - scheduling a replacement is
+///   not enough.
+///
 /// # Disclaimer
 ///
 /// This module is an **unaudited example**, provided purely to illustrate ways the
