@@ -145,5 +145,5 @@ fun outranks(a: &Validator, b: &Validator): bool {
 /// `_by` oracle, threading the very same comparator the writes use.
 #[test_only]
 public fun validators_well_formed(vs: &ValidatorSet): bool {
-    vs.validators.inner_ref().is_well_formed_by!(|a, b| outranks(a, b))
+    vs.validators.inner().is_well_formed_by!(|a, b| outranks(a, b))
 }

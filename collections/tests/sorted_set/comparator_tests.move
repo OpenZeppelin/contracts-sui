@@ -6,7 +6,7 @@
 /// The defining set property proved here: every corruption is ORDER-ONLY - the keys are always
 /// still PRESENT (the value is the trivial `Unit`), so a desorted set is recoverable by rebuilding
 /// under a consistent comparator; NO value is ever lost. The well-formedness check
-/// `sorted_map::is_well_formed[_by]!(inner_ref(&set))` turns each violation into a red test.
+/// `sorted_map::is_well_formed[_by]!(inner(&set))` turns each violation into a red test.
 module openzeppelin_collections::sorted_set_comparator_tests;
 
 use openzeppelin_collections::sorted_map as sm;
@@ -188,11 +188,11 @@ fun nondeterministic_comparator_corrupts() {
     assert_eq!(s.length(), 4); // 5 was inserted (at the wrong slot), not dropped
 }
 
-// === the map's well-formedness check is reusable cross-package via inner_ref ===
+// === the map's well-formedness check is reusable cross-package via inner ===
 
 #[test]
 fun well_formedness_check_reuse_cross_package() {
-    // sorted_map::is_well_formed[_by]!(ss::inner_ref(&set)) is callable from the SET package's
+    // sorted_map::is_well_formed[_by]!(ss::inner(&set)) is callable from the SET package's
     // tests - positive on a clean set, negative on a corrupted one. (A *production* call fails to
     // compile - #[test_only]; see the commented snippet in type_tests.)
     let clean = u::fromk(vector[3u64, 1, 2]);

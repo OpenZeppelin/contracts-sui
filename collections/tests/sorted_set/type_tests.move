@@ -228,12 +228,12 @@ fun from_keys_macro_depth_compiles() {
 //     let _km: &mut u64 = sorted_map::value_at_mut(ss::inner_mut(&mut s), 0); // &mut Unit, NOT &mut K
 //     // ...there is no key_at_mut / entry_mut on the set OR the map - no symbol yields &mut K
 //
-// No raw &mut vector / bulk escape hatch on the set surface. Only inner_ref (&) and
+// No raw &mut vector / bulk escape hatch on the set surface. Only inner (&) and
 // inner_mut (&mut SortedMap) exist - neither a &mut vector - and there is no entries_mut /
 // into_entries / keys_mut. A bulk reverse is therefore unrepresentable:
 //     ss::entries_mut(&mut s);                          // E03003: no `entries_mut` on the set
 //     ss::into_entries(s);                              // E03003: no `into_entries` on the set
-//     ss::inner_ref(&s).entries_ref().reverse();        // E: entries_ref yields &vector; reverse needs &mut
+//     ss::inner(&s).entries_ref().reverse();        // E: entries_ref yields &vector; reverse needs &mut
 //
 // Instantiations are nominal; cannot mix a u64 key into an address set:
 //     let mut sa = ss::new<address>();
@@ -246,7 +246,7 @@ fun from_keys_macro_depth_compiles() {
 // The well-formedness check is #[test_only]; a PRODUCTION call does not compile:
 //     // in a non-test module:
 //     public fun check(s: &SortedSet<u64>): bool {
-//         sorted_map::is_well_formed!(ss::inner_ref(s))   // E: test-only used in non-test code
+//         sorted_map::is_well_formed!(ss::inner(s))   // E: test-only used in non-test code
 //     }
 //
 // Mutation-reentrancy is foreclosed by the borrow checker; a comparator that tries to

@@ -43,7 +43,7 @@ public fun from_sorted(ks: vector<u64>): SortedSet<u64> { ss::from_sorted_keys!(
 
 /// Well-formedness check under the bare integer `<` - REUSED from the map across the package
 /// boundary. No separate set checker exists.
-public fun wf(s: &SortedSet<u64>): bool { s.inner_ref().is_well_formed!() }
+public fun wf(s: &SortedSet<u64>): bool { s.inner().is_well_formed!() }
 
 // === Thin wrappers - u64, reverse comparator `>` used CONSISTENTLY (legit case) ===
 
@@ -56,7 +56,7 @@ public fun has_rev(s: &SortedSet<u64>, k: u64): bool { s.contains_by!(&k, |a, b|
 /// Well-formedness check under the reverse comparator: a consistently-reversed set is well-formed
 /// under `>` even though it is NOT under `<`.
 public fun wf_rev(s: &SortedSet<u64>): bool {
-    s.inner_ref().is_well_formed_by!(|a, b| *a > *b)
+    s.inner().is_well_formed_by!(|a, b| *a > *b)
 }
 
 /// Reverse-comparator navigation/pagination wrappers (one macro per helper). The `>`
@@ -184,7 +184,7 @@ public fun from_sorted_k(ks: vector<Key>): SortedSet<Key> {
 }
 
 public fun wf_k(s: &SortedSet<Key>): bool {
-    s.inner_ref().is_well_formed_by!(|a, b| a.id < b.id)
+    s.inner().is_well_formed_by!(|a, b| a.id < b.id)
 }
 
 /// Struct-key navigation/pagination via the `_by` forms - the ONLY admissible path for a

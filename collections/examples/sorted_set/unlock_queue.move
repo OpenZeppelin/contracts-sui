@@ -114,8 +114,8 @@ public fun process_latest(q: &mut UnlockQueue): u64 {
 
 // === Test-Only Helpers ===
 
-/// True iff the embedded set is correctly ordered (reaches the map oracle via `inner_ref`).
+/// True iff the embedded set is correctly ordered (reaches the map oracle via `inner`).
 #[test_only]
 public fun deadlines_well_formed(q: &UnlockQueue): bool {
-    q.deadlines.inner_ref().is_well_formed!()
+    q.deadlines.inner().is_well_formed!()
 }

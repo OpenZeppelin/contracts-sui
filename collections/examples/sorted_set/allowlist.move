@@ -133,8 +133,8 @@ public fun members(list: &Allowlist): vector<u64> {
 // === Test-Only Helpers ===
 
 /// True iff the embedded set is correctly ordered. The set delegates ordering to the wrapped
-/// map, so the check reaches the map's `is_well_formed!` oracle through `inner_ref`.
+/// map, so the check reaches the map's `is_well_formed!` oracle through `inner`.
 #[test_only]
 public fun members_well_formed(list: &Allowlist): bool {
-    list.members.inner_ref().is_well_formed!()
+    list.members.inner().is_well_formed!()
 }

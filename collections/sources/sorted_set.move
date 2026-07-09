@@ -36,7 +36,7 @@
 /// A coarse (non-injective) comparator reports two byte-distinct keys as equal, collapsing them
 /// to one element. On that collision the last-inserted key's bytes win, so first-seen gating on
 /// `insert!` is well-defined only under an injective comparator. In tests, call
-/// `sorted_map::is_well_formed_by!(inner_ref(&set), lt)` after a `_by` sequence.
+/// `sorted_map::is_well_formed_by!(inner(&set), lt)` after a `_by` sequence.
 ///
 /// # `insert` returns `bool`, not an abort
 ///
@@ -62,7 +62,7 @@
 /// # Forced-public internals
 ///
 /// Move 2024 macro hygiene requires every symbol a macro body references to be `public` at the
-/// consumer's expansion site, so `inner_ref`, `inner_mut`, and `unit` are `public`. They are not a
+/// consumer's expansion site, so `inner`, `inner_mut`, and `unit` are `public`. They are not a
 /// supported API. In particular `inner_mut` hands out `&mut SortedMap<K, Unit>`: driving map ops on
 /// it with an inconsistent comparator (or `insert_at` / `remove_at` at a wrong index) can desort
 /// the set. Use the macro API. The corruption is order-only and local to that one set - no value
@@ -132,8 +132,8 @@ public struct SortedSet<K: copy + drop + store> has copy, drop, store {
 
 /// Immutable view of the wrapped map - what read macros (`contains!`, `find_*!`,
 /// `keys_from!`) expand against. Read-only: cannot be upgraded to `&mut`. Also the test
-/// order-check handle: `sorted_map::is_well_formed!(inner_ref(&set))`.
-public fun inner_ref<K: copy + drop + store>(set: &SortedSet<K>): &SortedMap<K, Unit> {
+/// order-check handle: `sorted_map::is_well_formed!(inner(&set))`.
+public fun inner<K: copy + drop + store>(set: &SortedSet<K>): &SortedMap<K, Unit> {
     &set.inner
 }
 
@@ -381,7 +381,7 @@ public macro fun contains_by<$K: copy + drop + store>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let set = $set;
-    set.inner_ref().contains_by!($key, $lt)
+    set.inner().contains_by!($key, $lt)
 }
 
 /// `contains_by` with the built-in integer `<`.
@@ -470,7 +470,7 @@ public macro fun find_next_by<$K: copy + drop + store>(
     $lt: |&$K, &$K| -> bool,
 ): Option<$K> {
     let set = $set;
-    set.inner_ref().find_next_by!($key, $include, $lt)
+    set.inner().find_next_by!($key, $include, $lt)
 }
 
 /// `find_next_by` with the built-in integer `<`.
@@ -502,7 +502,7 @@ public macro fun find_prev_by<$K: copy + drop + store>(
     $lt: |&$K, &$K| -> bool,
 ): Option<$K> {
     let set = $set;
-    set.inner_ref().find_prev_by!($key, $include, $lt)
+    set.inner().find_prev_by!($key, $include, $lt)
 }
 
 /// `find_prev_by` with the built-in integer `<`.
@@ -591,7 +591,7 @@ public macro fun keys_from_by<$K: copy + drop + store>(
     $lt: |&$K, &$K| -> bool,
 ): vector<$K> {
     let set = $set;
-    set.inner_ref().keys_from_by!($from, $include, $limit, $lt)
+    set.inner().keys_from_by!($from, $include, $limit, $lt)
 }
 
 /// `keys_from_by` with the built-in integer `<`.
