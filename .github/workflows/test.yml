@@ -160,8 +160,41 @@ jobs:
         run: sui move test --trace --rand-num-iters 1
         working-directory: ./${{ matrix.package }}
 
-      - name: Generate Codecov report
-        run: sui move coverage lcov > lcov.info
+  # Coverage runs separately because `sui move test --trace` (required by
+  # `sui move coverage lcov`) traces every VM instruction and is orders of
+  # magnitude slower than a plain test run - the randomized sort/median tests in
+  # `math/core` alone emit multi-gigabyte traces. Keeping it out of the gate
+  # means regressions surface fast in `test`, and a slow trace never blocks a
+  # merge (`continue-on-error`). It only runs once `test` is green.
+  coverage:
+    name: Coverage ${{ matrix.package }}
+    # `setup` is needed for the package matrix below; `test` gates this on a
+    # green fast run so we never trace a broken build.
+    needs: [setup, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.setup.outputs.packages) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restore Sui CLI
+        uses: ./.github/actions/restore-sui
+        with:
+          version: ${{ env.SUI_VERSION }}
+
+      - name: Run tests with tracing
+        # `--rand-num-iters 1`: coverage only needs each line executed once. The
+        # full randomized property iterations run in the `test` job above, so a
+        # single iteration here keeps trace volume down without losing coverage.
+        run: sui move test --trace --rand-num-iters 1
         working-directory: ./${{ matrix.package }}
 
       - name: Upload coverage to Codecov

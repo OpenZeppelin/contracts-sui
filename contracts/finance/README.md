@@ -8,13 +8,6 @@ conservation of funds; the curve - linear, stepped, cliff, or a custom shape you
 write - is a separate, swappable concern. Use it for token grants, team and investor
 vesting, payroll streams, and emission schedules.
 
-## Install
-
-```toml
-[dependencies]
-openzeppelin_finance = { r.mvr = "@openzeppelin-move/finance" }
-```
-
 ## Modules
 
 | Module | Use it when |
@@ -292,7 +285,7 @@ inert attestation; no funds move without `&mut`, which the wrapper keeps private
 
 ## Examples
 
-> [!Warning]
+> [!WARNING]
 > These are **unaudited illustrations** of how the primitive can be integrated, not production-ready code.
 
 Complete integration examples live in [`examples/vesting_wallet/`](examples/vesting_wallet),
