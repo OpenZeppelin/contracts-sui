@@ -4,13 +4,41 @@ project: prefunded-sale
 mode: extension
 extends: contracts/sale/sources
 status: draft
-timestamp: 2026-06-26
+revision: 2
+revision_trigger: upstream (release-v1.4 vesting-wallet merge)
+timestamp: 2026-07-09
 author: nenad
 previous_stage: contracts/sale/artifacts/tests.md
 tags: [sale, presale, fixed-price, prefunded, refund-vault, allowlist, vesting, docs]
 ---
 
 # Prefunded Sale - Documentation
+
+## Revision Log
+
+**Revision 2 (2026-07-09) - vesting-wallet address-balance merge.** `release-v1.4` was
+merged into this branch, changing `openzeppelin_finance::vesting_wallet`: `new` now
+mints a `DestroyCap` alongside the wallet (so `claim_into_vesting` /
+`claim_all_into_vesting` return `(VestingWallet, DestroyCap)`, not a bare wallet), and
+`release` pays into the beneficiary's **address balance** via `balance::send_funds`
+rather than returning a `Coin`. The sale *implementation* needed no changes (it only
+calls the unchanged `new` + `deposit`; all 89 tests still pass), but the docs written in
+Revision 1 still described a single-wallet return. This pass aligns docs + comments only:
+
+- `README.md` - "Optional vesting" prose now notes the returned `DestroyCap` and the
+  address-balance release; the "Redeem into vesting" example destructures
+  `(wallet, cap)`, imports `DestroyCap`, and routes the cap (`public_transfer` to the
+  buyer) alongside sharing the wallet.
+- `prefunded_sale.move` - `#### Returns` on `claim_into_vesting` and
+  `claim_all_into_vesting` now list the `DestroyCap`; `claim_into_vesting`'s description
+  explains the cap (teardown authority, decoupled from `beneficiary`) and the
+  address-balance payout; the `vesting_schedule_params` field doc and
+  `set_vesting_schedule_params` doc mention the cap.
+
+No abort codes, signatures, or behavior changed. `sui move build --doc` succeeds;
+89/89 tests pass. Everything else the sale docs assert about vesting (forced
+beneficiary, fixed issuer schedule, permissionless `release`, linear `Params`/`Linear`)
+remained accurate and was left untouched.
 
 ## Summary
 

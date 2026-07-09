@@ -386,8 +386,9 @@ public struct PrefundedSale<
     /// per-buyer cap is set.
     contributions: Option<Table<address, u64>>,
     /// Optional issuer-defined vesting policy. When `Some`, redemption is via
-    /// `claim_into_vesting` (which returns a funded `VestingWallet`) rather than
-    /// `claim`. Fixed at construction; the buyer cannot influence it.
+    /// `claim_into_vesting` (which returns a funded `VestingWallet` and its
+    /// `DestroyCap`) rather than `claim`. Fixed at construction; the buyer cannot
+    /// influence it.
     vesting_schedule_params: Option<VestingScheduleParams>,
 }
 
@@ -670,10 +671,10 @@ public fun set_per_buyer_cap<
 /// Configure the sale's vesting policy. One-shot, Init-phase only.
 ///
 /// Once a schedule is attached, the plain `claim` path aborts and buyers must redeem
-/// through `claim_into_vesting`, which returns a funded `VestingWallet`. The library
-/// enforces this so a buyer cannot trivially bypass the schedule. The schedule is
-/// **issuer-defined**: the buyer is the caller of the redemption path and cannot
-/// supply or override these values.
+/// through `claim_into_vesting`, which returns a funded `VestingWallet` and its
+/// `DestroyCap`. The library enforces this so a buyer cannot trivially bypass the
+/// schedule. The schedule is **issuer-defined**: the buyer is the caller of the
+/// redemption path and cannot supply or override these values.
 ///
 /// #### Parameters
 /// - `sale`: The sale to configure, in `Init` phase.
@@ -1279,6 +1280,13 @@ public fun claim_all<
 /// that interprets the sale's `VestingScheduleParams`, or the returned wallet cannot
 /// be released.
 ///
+/// Alongside the wallet, `vesting_wallet::new` mints a `DestroyCap` bound to it - the
+/// teardown authority, deliberately decoupled from `beneficiary`. This call returns
+/// that cap to the buyer to route as they see fit; it is required later to tear the
+/// drained wallet down. The wallet's `release` pays into the beneficiary's address
+/// balance (no `Coin` object is minted), so the buyer never needs to hold the wallet
+/// to receive funds.
+///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Finalized` phase, with a vesting schedule attached.
 /// - `receipt`: The buyer's receipt. Consumed.
@@ -1288,6 +1296,8 @@ public fun claim_all<
 /// #### Returns
 /// - A `VestingWallet<Witness, VestingScheduleParams, SaleCoin>` funded with the
 ///   receipt's `allocation`.
+/// - The wallet's `vesting_wallet::DestroyCap` - the authority to tear the wallet
+///   down once it is drained.
 ///
 /// #### Aborts
 /// - `ENoVestingScheduleAttached` if the sale has no vesting schedule (use `claim`).
@@ -1335,6 +1345,8 @@ public fun claim_into_vesting<
 /// #### Returns
 /// - A single `VestingWallet<Witness, VestingScheduleParams, SaleCoin>` funded with
 ///   the summed allocations.
+/// - The wallet's `vesting_wallet::DestroyCap` - the authority to tear the wallet
+///   down once it is drained.
 ///
 /// #### Aborts
 /// - `ENoVestingScheduleAttached` if the sale has no vesting schedule (use

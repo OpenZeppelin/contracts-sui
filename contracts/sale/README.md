@@ -155,9 +155,11 @@ directly from the vault; this never depends on admin liveness.
 Attach an issuer-defined schedule with `set_vesting_schedule_params` during `Init`.
 When set, the plain `claim` path aborts and the only redemption route is
 `claim_into_vesting`, which returns a funded
-[`VestingWallet`](../finance) (from `openzeppelin_finance`) with `beneficiary` forced
-to the buyer and the sale's fixed schedule params. The buyer cannot influence or
-bypass the schedule.
+[`VestingWallet`](../finance) (from `openzeppelin_finance`) - with `beneficiary` forced
+to the buyer and the sale's fixed schedule params - plus the wallet's `DestroyCap`
+(teardown authority). The buyer cannot influence or bypass the schedule. Releases pay
+into the beneficiary's address balance, so the buyer receives funds without holding
+the wallet.
 
 ## Choosing a sale shape
 
@@ -301,13 +303,17 @@ For a sale created with `set_vesting_schedule_params`, redemption must go throug
 requires the full list:
 
 ```move
-use openzeppelin_finance::vesting_wallet::VestingWallet;
+use openzeppelin_finance::vesting_wallet::{VestingWallet, DestroyCap};
 use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
 
-let wallet: VestingWallet<Linear, VParams, SALE> = prefunded_sale::claim_into_vesting<
-    FixedRateCurve, FrcParams, SALE, USDC, VParams, Linear,
->(&mut sale, receipt, ctx);
-transfer::public_share_object(wallet); // anyone can later poke `release`; funds go to the buyer
+// Returns the funded wallet plus its DestroyCap (teardown authority).
+let (wallet, cap): (VestingWallet<Linear, VParams, SALE>, DestroyCap) =
+    prefunded_sale::claim_into_vesting<
+        FixedRateCurve, FrcParams, SALE, USDC, VParams, Linear,
+    >(&mut sale, receipt, ctx);
+
+transfer::public_share_object(wallet);        // shared: anyone can poke `release`; funds land in the buyer's address balance
+transfer::public_transfer(cap, ctx.sender()); // hold the cap to reclaim the drained wallet's storage later
 ```
 
 ## PTB / TypeScript integration
