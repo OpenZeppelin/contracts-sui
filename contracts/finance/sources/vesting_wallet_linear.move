@@ -373,12 +373,17 @@ public fun releasable<C>(wallet: &VestingWallet<Linear, Params, C>, clock: &Cloc
 /// The cap holder bears the strand risk the old beneficiary gate guarded. A coin
 /// `public_transfer`'d to the wallet's address but not yet `receive_and_deposit`'d is
 /// invisible to the held-balance check, and settled address-balance funds must be swept
-/// before `destroy_empty` accepts the teardown. Route the cap to the party that should
-/// own that decision (commonly the beneficiary or its controller). Destruction is an
-/// operational step rather than a guaranteed one-shot: halt upstream emissions first,
-/// claim any transferred coins that already target the wallet, sweep settled funds,
-/// and allow at least one checkpoint for in-flight emissions to settle before retrying
-/// teardown.
+/// before `destroy_empty` accepts the teardown. Newly settled third-party funds can make
+/// `destroy_empty` abort with `EUnsweptFunds`, so teardown should be treated as
+/// retryable: sweep and retry.
+///
+/// Route the cap to the party that should own that decision (commonly the beneficiary or
+/// its controller). Destruction is an operational step rather than a guaranteed one-shot:
+/// halt upstream emissions first, claim any transferred coins that already target the
+/// wallet, sweep settled funds, and allow at least one full checkpoint for in-flight
+/// emissions to become visible before retrying teardown. Funds sent in the same
+/// checkpoint as teardown may be invisible to `destroy_empty`; if the wallet `UID` is
+/// deleted before they settle, they can be permanently stranded.
 ///
 /// The ended gate is retained: it stops a wallet being torn down ahead of a scheduled
 /// future deposit, front-running funding intended to arrive later. It cannot detect
