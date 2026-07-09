@@ -236,7 +236,7 @@ public fun new_entry<K: copy, V>(key: K, value: V): Entry<K, V> {
 /// > **Warning:** low-level primitive intended solely for use by this module's macro API
 /// > (`upsert`, ...), which computes `i` from a sorted search. It performs no ordering
 /// > check: passing an `i` that breaks sorted order silently corrupts the map and
-/// > invalidates every lookup, insertion, and removal thereafter. Do not call it directly -
+/// > invalidates every lookup, insertion, and removal thereafter. Avoid calling it directly -
 /// > use the macro API.
 ///
 /// #### Parameters

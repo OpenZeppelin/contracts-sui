@@ -1,8 +1,9 @@
 /// The abort surface: two set-owned library aborts - `EEmpty` (pop on an empty set) and
 /// `EKeysNotSorted` (`from_sorted_keys!` on unsorted input) - each asserted at THIS module's
-/// location/code; a third, `remove!` on an absent key, is DELEGATED and surfaces at the wrapped
-/// MAP (`sorted_map::EKeyNotFound`). The rest is the affirmative total-API contract for mid-PTB
-/// chaining: every op except `remove!` and the pops is total.
+/// location/code; two more are DELEGATED and surface at the wrapped MAP - `remove!` on an absent
+/// key (`sorted_map::EKeyNotFound`) and `add!` / `add_by!` on a duplicate key
+/// (`sorted_map::EKeyAlreadyExists`). The rest is the affirmative total-API contract for mid-PTB
+/// chaining: every op except `remove!`, `add!` / `add_by!`, and the pops is total.
 ///
 /// Every set-owned `#[expected_failure]` pins BOTH `abort_code = ...sorted_set::E*` AND
 /// `location = openzeppelin_collections::sorted_set` - the SET's location. The bypass and
@@ -87,6 +88,34 @@ fun remove_absent_aborts_at_map() {
     // re-checks membership itself.
     let mut s = u::fromk(vector[9u64, 11]);
     u::rem(&mut s, 10); // interior gap -> aborts at the map
+}
+
+// === add / add_by on a present key -> DELEGATED sorted_map::EKeyAlreadyExists at the MAP ===
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_duplicate_aborts_at_map() {
+    // add! delegates to the wrapped map's add_by!, which aborts EKeyAlreadyExists on a duplicate.
+    // Like remove!, this abort surfaces at the MAP's location, not the set's.
+    let mut s = ss::new<u64>();
+    u::add(&mut s, 5);
+    u::add(&mut s, 5);
+}
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_by_duplicate_aborts_at_map() {
+    // Same delegated abort under a custom comparator (reverse `>`).
+    let mut s = ss::new<u64>();
+    u::add_rev(&mut s, 5);
+    u::add_rev(&mut s, 5);
+}
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_coarse_equal_key_aborts_at_map() {
+    // A COMPARE-EQUAL key is a duplicate: same id, different tag compares equal under id-order,
+    // so the second add aborts even though the key bytes differ.
+    let mut s = ss::new<u::Key>();
+    u::add_k(&mut s, u::mk(1, 100));
+    u::add_k(&mut s, u::mk(1, 200)); // id=1 already present -> EKeyAlreadyExists at the map
 }
 
 // === affirmative total API: every op except remove!/pop returns none/false/empty, never aborts ===

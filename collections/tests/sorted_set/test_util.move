@@ -21,6 +21,10 @@ use openzeppelin_collections::sorted_set::{Self as ss, SortedSet};
 
 public fun ins(s: &mut SortedSet<u64>, k: u64): bool { s.upsert!(&k) }
 
+/// Strict insert (aborts, delegated to `sorted_map::EKeyAlreadyExists`, on a duplicate). Takes
+/// the key by value; returns nothing.
+public fun add(s: &mut SortedSet<u64>, k: u64) { s.add!(k) }
+
 public fun rem(s: &mut SortedSet<u64>, k: u64) { s.remove!(&k) }
 
 public fun has(s: &SortedSet<u64>, k: u64): bool { s.contains!(&k) }
@@ -48,6 +52,9 @@ public fun wf(s: &SortedSet<u64>): bool { s.inner().is_well_formed!() }
 // === Thin wrappers - u64, reverse comparator `>` used CONSISTENTLY (legit case) ===
 
 public fun ins_rev(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(&k, |a, b| *a > *b) }
+
+/// Strict insert under the reverse comparator (aborts on a duplicate).
+public fun add_rev(s: &mut SortedSet<u64>, k: u64) { s.add_by!(k, |a, b| *a > *b) }
 
 public fun rem_rev(s: &mut SortedSet<u64>, k: u64) { s.remove_by!(&k, |a, b| *a > *b); }
 
@@ -163,6 +170,10 @@ public fun key_tag(k: &Key): u64 { k.tag }
 public fun key_id(k: &Key): u64 { k.id }
 
 public fun ins_k(s: &mut SortedSet<Key>, k: Key): bool { s.upsert_by!(&k, |a, b| a.id < b.id) }
+
+/// Strict insert ordered on `id` alone (aborts when a stored key compares equal, i.e. shares the
+/// `id`, regardless of `tag`).
+public fun add_k(s: &mut SortedSet<Key>, k: Key) { s.add_by!(k, |a, b| a.id < b.id) }
 
 public fun rem_k(s: &mut SortedSet<Key>, id: u64) {
     s.remove_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id)

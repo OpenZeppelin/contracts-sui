@@ -36,6 +36,22 @@ fun reverse_comparator_consistent() {
     assert_eq!(s.keys(), vector[30u64, 20, 10]); // stored descending-numeric
 }
 
+// === add_by threads a reverse comparator: strict fresh inserts stay well-formed under `>` ===
+
+#[test]
+fun add_by_reverse_comparator() {
+    // Strict insert of distinct keys in arbitrary order under `>`: consistently reversed, so
+    // well-formed under `>` and NOT under `<`. The strict-insert counterpart to
+    // `reverse_comparator_consistent` (which builds via the total `upsert`).
+    let mut s = ss::new<u64>();
+    u::add_rev(&mut s, 10);
+    u::add_rev(&mut s, 30);
+    u::add_rev(&mut s, 20);
+    assert!(u::wf_rev(&s));
+    assert!(!u::wf(&s));
+    assert_eq!(s.keys(), vector[30u64, 20, 10]); // stored descending-numeric
+}
+
 // === a non-strict `<=` never derives equality -> duplicates land ===
 
 #[test]

@@ -61,6 +61,22 @@ fun singleton_reinsert_same_key() {
     assert!(u::wf(&s));
 }
 
+// === add: strict insert (fresh only); the duplicate-aborts side lives in abort_tests ===
+
+#[test]
+fun add_fresh_grows() {
+    // add takes the key by value and returns nothing; each fresh key grows the set by 1 and
+    // lands in sorted position regardless of insertion order.
+    let mut s = ss::new<u64>();
+    u::add(&mut s, 20);
+    u::add(&mut s, 10);
+    u::add(&mut s, 30);
+    assert_eq!(s.length(), 3);
+    assert!(u::has(&s, 20));
+    assert_eq!(s.keys(), vector[10u64, 20, 30]); // strictly ascending
+    assert!(u::wf(&s));
+}
+
 #[test]
 fun singleton_non_integer_key() {
     // Singleton needs NO comparator, so it works for a struct key too (index 0).

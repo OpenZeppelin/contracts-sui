@@ -16,12 +16,14 @@
 ///   inherited from the map.
 /// - **One comparator, threaded to every call.** Same rule as the map (see its header for why the
 ///   order isn't stored). A different or non-strict comparator silently desorts the set.
-/// - **`upsert` returns `bool` and never aborts** on a duplicate key, unlike `sui::vec_set`.
+/// - **`upsert` returns `bool` and never aborts** on a duplicate key, unlike `sui::vec_set`;
+///   `add!` is the strict counterpart that aborts on a duplicate, matching `sui::vec_set::insert`.
 ///   `remove!` aborts on an absent key, matching `sui::vec_set`.
 /// - **Always `copy + drop + store`.** The value is always `Unit`, so there is no resource set and
 ///   no `destroy_empty`; a set just falls out of scope.
-/// - **Three aborts:** `pop_front` / `pop_back` on an empty set (`EEmpty`), `remove!` on an absent
-///   key (`sorted_map::EKeyNotFound`), and `from_sorted_keys!` on unsorted input
+/// - **Four aborts:** `pop_front` / `pop_back` on an empty set (`EEmpty`), `remove!` on an absent
+///   key (`sorted_map::EKeyNotFound`), `add!` / `add_by!` on a duplicate key
+///   (`sorted_map::EKeyAlreadyExists`), and `from_sorted_keys!` on unsorted input
 ///   (`EKeysNotSorted`); every other op is total.
 ///
 /// # The comparator
@@ -43,9 +45,9 @@
 ///
 /// A deliberate divergence from `sui::vec_set`, whose `upsert` aborts on a duplicate. `upsert ->
 /// true` iff the key was newly added; this matches the wrapped map's total upsert, stays composable
-/// mid-PTB, and is strictly more general: for vec_set's abort-on-duplicate, write
-/// `assert!(s.upsert!(&k), E)`. `remove!`, by contrast, aborts on an absent key like
-/// `sui::vec_set::remove`. `from_keys` likewise de-duplicates;
+/// mid-PTB, and is strictly more general: for vec_set's abort-on-duplicate, call `add!` (the
+/// strict insert) directly, or write `assert!(s.upsert!(&k), E)`. `remove!`, by contrast, aborts
+/// on an absent key like `sui::vec_set::remove`. `from_keys` likewise de-duplicates;
 /// to reject duplicates instead, build then `assert!(length(&s) == n, E)`. `from_sorted_keys!`
 /// de-duplicates the same way but needs pre-sorted input and runs in O(N) (see Complexity).
 ///
@@ -388,6 +390,38 @@ public macro fun contains_by<$K: copy + drop>(
 /// - `true` iff `key` is present.
 public macro fun contains<$K: copy + drop>($set: &SortedSet<$K>, $key: &$K): bool {
     contains_by!($set, $key, |a, b| *a < *b)
+}
+
+/// Insert `key`, under `$lt`, aborting if it is already present (length + 1, `contains!(key)`
+/// flips false -> true). Nothing is returned. The strict counterpart to the total `upsert`:
+/// this matches `sui::vec_set::insert`, which also aborts on a duplicate, so a duplicate is a
+/// caller bug rather than a silent no-op. Use `upsert`/`upsert_by` when a duplicate should be
+/// absorbed silently (and reported via the returned bool) instead of aborting.
+///
+/// The abort delegates to the wrapped map's `add_by!`, so it fires at `sorted_map`'s location
+/// with `sorted_map::EKeyAlreadyExists` (there is no set-level abort code for this).
+///
+/// #### Parameters
+/// - `key`: Key to insert; must not already be present.
+/// - `lt`: Strict less-than comparator.
+///
+/// #### Aborts
+/// - `sorted_map::EKeyAlreadyExists` if `key` is already present.
+public macro fun add_by<$K: copy + drop>(
+    $set: &mut SortedSet<$K>,
+    $key: $K,
+    $lt: |&$K, &$K| -> bool,
+) {
+    let set = $set;
+    set.inner_mut().add_by!($key, unit(), $lt);
+}
+
+/// `add_by` with the built-in integer `<`.
+///
+/// #### Aborts
+/// - `sorted_map::EKeyAlreadyExists` if `key` is already present.
+public macro fun add<$K: copy + drop>($set: &mut SortedSet<$K>, $key: $K) {
+    add_by!($set, $key, |a, b| *a < *b)
 }
 
 /// Insert `key`, under `$lt`. Idempotent and total (never aborts). On a fresh insert:
