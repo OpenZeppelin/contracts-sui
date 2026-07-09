@@ -1,9 +1,11 @@
-/// A generic, ordered key->value map backed by a single sorted `vector<Entry<K, V>>`.
+/// A generic, ordered key->value map with O(log N) lookup and ordered navigation. Every operation
+/// loads exactly one stored object, so capacity is bounded by object size, not a per-transaction
+/// dynamic-field cap.
 ///
 /// `SortedMap` is a UID-less value: no identity of its own, no dynamic fields. Every entry
 /// lives inline in one vector, shaped like `sui::vec_map::VecMap`. A bare map is not `key`, so
 /// embed it in your own `has key` object for owned or shared semantics:
-/// ```
+/// ```move
 /// public struct AskBook has key { id: UID, asks: SortedMap<u64, Level> }
 /// ```
 ///
@@ -110,7 +112,9 @@ public struct Entry<K: copy + drop + store, V: store> has copy, drop, store {
     value: V,
 }
 
-/// A map kept sorted by key, backed by one contiguous `vector<Entry<K, V>>`.
+/// A map kept sorted by key. Every operation loads exactly one stored object, so it is bounded
+/// by object size (~250 KB), not by any per-transaction dynamic-field cap; lookup is O(log N)
+/// and writes are O(N).
 ///
 /// A pure value - no `UID`, no dynamic fields - so it embeds directly in an integrator's
 /// object, exactly like `sui::vec_map::VecMap`. `copy`/`drop` materialize only when both
@@ -130,12 +134,22 @@ public struct SortedMap<K: copy + drop + store, V: store> has copy, drop, store 
 
 /// Create a new, empty map. Takes no `&mut TxContext`: a `SortedMap` is a value, not an
 /// object.
+///
+/// #### Returns
+/// - An empty map.
 public fun new<K: copy + drop + store, V: store>(): SortedMap<K, V> {
     SortedMap { entries: vector[] }
 }
 
 /// A map holding a single `key`/`value` entry. O(1); needs no comparator, since one entry is
 /// trivially sorted. For more than one entry from pre-sorted data, use `from_sorted_keys_values!`.
+///
+/// #### Parameters
+/// - `key`: The sole entry's key.
+/// - `value`: The sole entry's value.
+///
+/// #### Returns
+/// - A one-entry map.
 public fun singleton<K: copy + drop + store, V: store>(key: K, value: V): SortedMap<K, V> {
     SortedMap { entries: vector[Entry { key, value }] }
 }
@@ -427,6 +441,9 @@ public macro fun contains_by<$K: copy + drop + store, $V: store>(
 }
 
 /// `contains_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - `true` iff `key` is present.
 public macro fun contains<$K: copy + drop + store, $V: store>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
@@ -459,6 +476,9 @@ public macro fun borrow_by<$K: copy + drop + store, $V: store>(
 }
 
 /// `borrow_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - Reference to `key`'s value.
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
@@ -493,6 +513,9 @@ public macro fun borrow_mut_by<$K: copy + drop + store, $V: store>(
 }
 
 /// `borrow_mut_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - Mutable reference to `key`'s value.
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
@@ -692,6 +715,13 @@ public macro fun find_prev<$K: copy + drop + store, $V: store>(
 /// Smallest key strictly greater than `key`, or `none`. Sugar for
 /// `find_next_by(.., false)`. `next_key(tail) == none` is the forward-cursor termination
 /// signal.
+///
+/// #### Parameters
+/// - `key`: Reference key.
+/// - `lt`: Strict less-than comparator.
+///
+/// #### Returns
+/// - The strict-next key, or `none`.
 public macro fun next_key_by<$K: copy + drop + store, $V: store>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
@@ -701,6 +731,9 @@ public macro fun next_key_by<$K: copy + drop + store, $V: store>(
 }
 
 /// `next_key_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - The strict-next key, or `none`.
 public macro fun next_key<$K: copy + drop + store, $V: store>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
@@ -711,6 +744,13 @@ public macro fun next_key<$K: copy + drop + store, $V: store>(
 /// Largest key strictly less than `key`, or `none`. Sugar for
 /// `find_prev_by(.., false)`. `prev_key(head) == none` is the backward-cursor termination
 /// signal.
+///
+/// #### Parameters
+/// - `key`: Reference key.
+/// - `lt`: Strict less-than comparator.
+///
+/// #### Returns
+/// - The strict-prev key, or `none`.
 public macro fun prev_key_by<$K: copy + drop + store, $V: store>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
@@ -720,6 +760,9 @@ public macro fun prev_key_by<$K: copy + drop + store, $V: store>(
 }
 
 /// `prev_key_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - The strict-prev key, or `none`.
 public macro fun prev_key<$K: copy + drop + store, $V: store>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
@@ -824,6 +867,9 @@ public fun pop_back<K: copy + drop + store, V: store>(map: &mut SortedMap<K, V>)
 /// All keys in ascending comparator order as an owned `vector<K>`. O(N) in output size with no
 /// `limit`; for large or near-ceiling maps prefer the paged `keys_from!`. Loads exactly one
 /// stored object regardless of N.
+///
+/// #### Returns
+/// - Every key, in ascending comparator order.
 public fun keys<K: copy + drop + store, V: store>(map: &SortedMap<K, V>): vector<K> {
     let es = &map.entries;
     vector::tabulate!(es.length(), |i| es.borrow(i).key)

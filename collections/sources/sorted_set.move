@@ -6,7 +6,7 @@
 /// in Rust. Like `sui::vec_set::VecSet` it is a UID-less value - no identity, no dynamic fields,
 /// every key inline in one vector. A bare set is not `key`, so embed it in your own `has key`
 /// object:
-/// ```
+/// ```move
 /// public struct Watchlist has key { id: UID, ids: SortedSet<u64> }
 /// ```
 ///
@@ -164,6 +164,9 @@ public fun assert_sorted(sorted: bool) {
 
 /// Create a new, empty set. Takes no `&mut TxContext`: a `SortedSet` is a value, not an
 /// object. `length` is 0 and `is_empty` is true.
+///
+/// #### Returns
+/// - An empty set.
 public fun new<K: copy + drop + store>(): SortedSet<K> {
     SortedSet { inner: sorted_map::new() }
 }
@@ -380,6 +383,9 @@ public macro fun contains_by<$K: copy + drop + store>(
 }
 
 /// `contains_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - `true` iff `key` is present.
 public macro fun contains<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &$K): bool {
     contains_by!($set, $key, |a, b| *a < *b)
 }
@@ -516,6 +522,13 @@ public macro fun find_prev<$K: copy + drop + store>(
 
 /// Smallest key strictly greater than `key`, or `none`. Sugar for `find_next_by(.., false)`.
 /// `next_key!(tail) == none` is the forward-cursor termination signal.
+///
+/// #### Parameters
+/// - `key`: Reference key.
+/// - `lt`: Strict less-than comparator.
+///
+/// #### Returns
+/// - The strict-next key, or `none`.
 public macro fun next_key_by<$K: copy + drop + store>(
     $set: &SortedSet<$K>,
     $key: &$K,
@@ -525,12 +538,22 @@ public macro fun next_key_by<$K: copy + drop + store>(
 }
 
 /// `next_key_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - The strict-next key, or `none`.
 public macro fun next_key<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
     find_next_by!($set, $key, false, |a, b| *a < *b)
 }
 
 /// Largest key strictly less than `key`, or `none`. Sugar for `find_prev_by(.., false)`.
 /// `prev_key!(head) == none` is the backward-cursor termination signal.
+///
+/// #### Parameters
+/// - `key`: Reference key.
+/// - `lt`: Strict less-than comparator.
+///
+/// #### Returns
+/// - The strict-prev key, or `none`.
 public macro fun prev_key_by<$K: copy + drop + store>(
     $set: &SortedSet<$K>,
     $key: &$K,
@@ -540,6 +563,9 @@ public macro fun prev_key_by<$K: copy + drop + store>(
 }
 
 /// `prev_key_by` with the built-in integer `<`.
+///
+/// #### Returns
+/// - The strict-prev key, or `none`.
 public macro fun prev_key<$K: copy + drop + store>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
     find_prev_by!($set, $key, false, |a, b| *a < *b)
 }
