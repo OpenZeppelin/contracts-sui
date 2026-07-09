@@ -131,6 +131,18 @@
 ///      `Refunding` indefinitely; `withdraw_all` requires `Closed`,
 ///      which `Cancelled` cannot reach. Buyer's tokens and payment
 ///      both stay locked until they call `refund`.
+///
+/// 7. **No teardown path; the sale object is permanent.** Once shared,
+///    the `PrefundedSale` is never deleted - there is no `destroy` and
+///    a terminal phase is not a delete. Even a fully-redeemed sale (all
+///    receipts claimed/refunded, proceeds and unsold inventory
+///    withdrawn) remains a shared object forever, and its
+///    `contributions` table (when a per-buyer cap was set) persists with
+///    one entry per buyer. This is the same buyer-protective stance as
+///    footgun 6: the sale cannot self-destruct because doing so safely
+///    would require proving no receipt is still outstanding, which it
+///    never tracks. Integrators should not expect storage rebates from
+///    winding a sale down.
 module openzeppelin_sale::prefunded_sale;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
