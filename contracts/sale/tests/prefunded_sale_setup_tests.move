@@ -150,7 +150,7 @@ fun deposit_accumulates_inventory() {
 }
 
 // deposit is Init-only: it aborts once the sale is Active.
-#[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotInit)]
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
 fun deposit_after_activate_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
@@ -212,6 +212,20 @@ fun set_per_buyer_cap_twice_aborts() {
     destroy(cap);
 }
 
+// set_per_buyer_cap is Init-only: it aborts once the sale is Active.
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
+fun set_per_buyer_cap_after_activate_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    sale.set_per_buyer_cap(100, test.ctx()); // aborts: ENotInit
+    u::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
 // === set_vesting_schedule_params ===
 
 // Setting a schedule fills the Option; one-shot guard rejects a second call.
@@ -235,7 +249,9 @@ fun set_vesting_schedule_params_fills_option() {
     sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4));
     assert_eq!(sale.vesting_schedule_params().is_some(), true);
 
-    let set = event::events_by_type<prefunded_sale::VestingScheduleParamsSet<SALE, USDC, VParams>>();
+    let set = event::events_by_type<
+        prefunded_sale::VestingScheduleParamsSet<SALE, USDC, VParams>,
+    >();
     assert_eq!(set.length(), 1);
     assert_eq!(
         set[0],
@@ -270,6 +286,20 @@ fun set_vesting_schedule_params_twice_aborts() {
     sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 8)); // aborts
     destroy(sale);
     destroy(cap);
+}
+
+// set_vesting_schedule_params is Init-only: it aborts once the sale is Active.
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
+fun set_vesting_schedule_params_after_activate_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4)); // aborts: ENotInit
+    u::return_sale(sale);
+    destroy(clk);
+    test.end();
 }
 
 // === pair_refund_vault ===
@@ -390,6 +420,22 @@ fun pair_twice_aborts() {
     test.end();
 }
 
+// pair_refund_vault is Init-only: it aborts once the sale is Active.
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
+fun pair_refund_vault_after_activate_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let (vault, vault_cap) = refund_vault::new<USDC>(test.ctx());
+    sale.pair_refund_vault(&vault, vault_cap); // aborts: ENotInit
+    u::return_sale(sale);
+    destroy(vault);
+    destroy(clk);
+    test.end();
+}
+
 // === enable_allowlist ===
 
 // enable_allowlist is one-shot: a second call aborts.
@@ -418,6 +464,21 @@ fun enable_allowlist_twice_aborts() {
     destroy(cap);
     destroy(admin1);
     destroy(admin2);
+    test.end();
+}
+
+// enable_allowlist is Init-only: it aborts once the sale is Active.
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
+fun enable_allowlist_after_activate_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let admin = sale.enable_allowlist(test.ctx()); // aborts: ENotInit
+    destroy(admin);
+    u::return_sale(sale);
+    destroy(clk);
     test.end();
 }
 
@@ -594,7 +655,13 @@ fun activate_with_foreign_ticket_aborts() {
 #[test]
 fun set_per_buyer_cap_emits_event() {
     let mut ctx = tx_context::dummy();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -618,7 +685,13 @@ fun set_per_buyer_cap_emits_event() {
 #[test]
 fun enable_allowlist_emits_event() {
     let mut ctx = tx_context::dummy();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,
@@ -651,7 +724,13 @@ fun share_and_activate_emits_pairing_and_activation_events() {
     let mut clk = clock::create_for_testing(test.ctx());
     clk.set_for_testing(u::opens());
     let ctx = test.ctx();
-    let (mut sale, cap) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,

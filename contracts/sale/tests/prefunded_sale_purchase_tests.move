@@ -117,6 +117,33 @@ fun purchase_at_exact_hard_cap_ok() {
     test.end();
 }
 
+// === Phase gate ===
+
+// purchase requires Active: it aborts once the sale has been finalized (the
+// phase guard sits ahead of the window check).
+#[test, expected_failure(abort_code = prefunded_sale::ENotActive)]
+fun purchase_after_finalize_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    clk.set_for_testing(5_001);
+
+    test.next_tx(u::admin());
+    {
+        let mut sale = u::take_sale(&test);
+        let mut vault = u::take_vault(&test);
+        sale.finalize(&mut vault, &clk);
+        u::return_sale(sale);
+        u::return_vault(vault);
+    };
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 100, &clk, test.ctx()); // aborts: ENotActive
+    u::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
 // === Window gate ===
 
 // A purchase before opens_at_ms is rejected.
@@ -330,7 +357,13 @@ fun purchase_with_foreign_quote_aborts() {
     test.next_tx(u::buyer());
     let mut sale_a = u::take_sale(&test);
     // Sale B - same type, never activated; its quote pins B's id, not A's.
-    let (sale_b, cap_b) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
+    let (sale_b, cap_b) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        VParams,
+    >(
         fixed_rate_curve::params(1),
         1_000,
         0,

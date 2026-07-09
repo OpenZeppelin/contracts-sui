@@ -131,7 +131,6 @@ module openzeppelin_sale::prefunded_sale;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
-use openzeppelin_sale::phase::{Self, Phase};
 use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{RefundVault, RefundVaultCap};
 use sui::balance::{Self, Balance};
@@ -333,6 +332,31 @@ const EClaimRequiresVesting: vector<u8> =
 const ENoVestingScheduleAttached: vector<u8> =
     "This sale does not use vesting; claim the tokens directly";
 
+// Phase
+
+/// A phase-gated operation required the `Init` phase but the sale was past it.
+#[error(code = 90)]
+const ENotInit: vector<u8> = "The sale must be in the setup phase";
+
+/// A phase-gated operation required the `Active` phase: the sale was not yet
+/// activated, or has already closed.
+#[error(code = 91)]
+const ENotActive: vector<u8> = "The sale must be open";
+
+/// A phase-gated operation required the `Finalized` phase, e.g. a claim before the
+/// sale was finalized.
+#[error(code = 92)]
+const ENotFinalized: vector<u8> = "The sale must have closed successfully first";
+
+/// A phase-gated operation required the `Cancelled` phase, e.g. a refund before the
+/// sale was cancelled.
+#[error(code = 93)]
+const ENotCancelled: vector<u8> = "The sale must have been cancelled";
+
+/// A phase-gated operation required a terminal phase (`Finalized` or `Cancelled`).
+#[error(code = 94)]
+const ENotTerminal: vector<u8> = "The sale must have ended";
+
 // === Structs ===
 
 /// A fixed-price, pre-funded token sale. Generic over a pricing `Curve` (and its
@@ -387,6 +411,31 @@ public struct PrefundedSale<
     /// `DestroyCap`) rather than `claim`. Fixed at construction; the buyer cannot
     /// influence it.
     vesting_schedule_params: Option<VestingScheduleParams>,
+}
+
+/// Lifecycle phases shared by every sale flavor.
+///
+/// Transitions:
+///   - `Init      -> Active`                  via the flavor's `share_and_activate`
+///   - `Active    -> Finalized`               via the flavor's `finalize`
+///   - `Active    -> Cancelled`               via the flavor's `cancel_*`
+///
+/// `Finalized` and `Cancelled` are terminal.
+public enum Phase has copy, drop, store {
+    /// Sale exists but is not yet shared. Setup functions (deposit
+    /// inventory, configure caps, pair vault, enable allowlist) run
+    /// in this phase. Authority is implicit: holding the sale value
+    /// by `&mut`.
+    Init,
+    /// Sale is shared. Purchases are accepted within
+    /// `[opens_at_ms, closes_at_ms]`.
+    Active,
+    /// Successful close. Buyers can `claim`. Admin can withdraw
+    /// proceeds and any unallocated inventory.
+    Finalized,
+    /// Failed close. Buyers can `refund` from the paired vault.
+    /// Admin can withdraw unallocated inventory.
+    Cancelled,
 }
 
 /// Admin capability for a single sale. Gates emergency cancellation and the proceeds
@@ -622,7 +671,7 @@ public fun create_sale<
         raised: 0,
         opens_at_ms,
         closes_at_ms,
-        phase: phase::phase_init(),
+        phase: Phase::Init,
         requires_allowlist: false,
         refund_vault_id: option::none(),
         refund_vault_cap: option::none(),
@@ -666,7 +715,7 @@ public fun deposit<
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     inventory: Balance<SaleCoin>,
 ) {
-    sale.phase.assert_init();
+    assert!(sale.phase.is_init(), ENotInit);
     let amount = inventory.value();
     sale.inventory.join(inventory);
     event::emit(InventoryDeposited<SaleCoin, PaymentCoin> {
@@ -700,7 +749,7 @@ public fun set_per_buyer_cap<
     per_buyer_cap: u64,
     ctx: &mut TxContext,
 ) {
-    sale.phase.assert_init();
+    assert!(sale.phase.is_init(), ENotInit);
     assert!(sale.per_buyer_cap.is_none(), EPerBuyerCapAlreadySet);
     assert!(per_buyer_cap > 0, EPerBuyerCapZero);
     sale.per_buyer_cap.fill(per_buyer_cap);
@@ -736,7 +785,7 @@ public fun set_vesting_schedule_params<
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     params: VestingScheduleParams,
 ) {
-    sale.phase.assert_init();
+    assert!(sale.phase.is_init(), ENotInit);
     assert!(sale.vesting_schedule_params.is_none(), EVestingScheduleAlreadySet);
     sale.vesting_schedule_params.fill(params);
     event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
@@ -775,7 +824,7 @@ public fun pair_refund_vault<
     vault: &RefundVault<PaymentCoin>,
     vault_cap: RefundVaultCap<PaymentCoin>,
 ) {
-    sale.phase.assert_init();
+    assert!(sale.phase.is_init(), ENotInit);
     assert!(sale.refund_vault_cap.is_none(), EVaultAlreadyPaired);
     assert!(vault_cap.cap_vault_id() == object::id(vault), EWrongVault);
     assert!(vault.is_active(), EVaultNotActive);
@@ -818,7 +867,7 @@ public fun enable_allowlist<
     sale: &mut PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     ctx: &mut TxContext,
 ): AllowlistAdmin<SaleCoin> {
-    sale.phase.assert_init();
+    assert!(sale.phase.is_init(), ENotInit);
     assert!(!sale.requires_allowlist, EAllowlistAlreadyEnabled);
     sale.requires_allowlist = true;
     let sale_id = object::id(sale);
@@ -894,7 +943,9 @@ public fun share_and_activate<
 
     assert!(sale_id == ticket_sale_id, ETicketSaleMismatch);
 
-    sale.phase.assert_init();
+    // The only way to hold a `PrefundedSale` by value is straight out of `create_sale`,
+    // so this is a purely defensive check.
+    assert!(sale.phase.is_init(), ENotInit);
     assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
 
     let activated_at_ms = clock.timestamp_ms();
@@ -902,7 +953,7 @@ public fun share_and_activate<
 
     assert!(sale.inventory.value() >= required_inventory, EInsufficientInventoryAtActivate);
 
-    sale.phase.activate();
+    sale.phase = Phase::Active;
     transfer::share_object(sale);
     event::emit(SaleActivated<SaleCoin, PaymentCoin> {
         sale_id,
@@ -971,7 +1022,7 @@ public fun purchase<
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    sale.phase.assert_active();
+    assert!(sale.phase.is_active(), ENotActive);
 
     let sale_id = object::id(sale);
     let Quote { sale_id: quote_sale_id, payment, allocation } = quote;
@@ -1073,7 +1124,7 @@ public fun finalize<
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
-    sale.phase.assert_active();
+    assert!(sale.phase.is_active(), ENotActive);
     let now = clock.timestamp_ms();
     let window_closed = now > sale.closes_at_ms;
     let hard_cap_reached = sale.raised >= sale.hard_cap;
@@ -1089,7 +1140,7 @@ public fun finalize<
         vault.flip_to_closed(cap_ref);
     };
 
-    sale.phase.finalize();
+    sale.phase = Phase::Finalized;
     event::emit(SaleFinalized<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         raised: sale.raised,
@@ -1132,7 +1183,7 @@ public fun cancel_after_close<
     vault: &mut RefundVault<PaymentCoin>,
     clock: &Clock,
 ) {
-    sale.phase.assert_active();
+    assert!(sale.phase.is_active(), ENotActive);
     let now = clock.timestamp_ms();
     assert!(now > sale.closes_at_ms, ESaleWindowStillOpen);
     assert!(sale.soft_cap > 0 && sale.raised < sale.soft_cap, ESoftCapMet);
@@ -1182,7 +1233,7 @@ public fun cancel_emergency<
     clock: &Clock,
 ) {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
-    sale.phase.assert_active();
+    assert!(sale.phase.is_active(), ENotActive);
     let now = clock.timestamp_ms();
     assert!(now <= sale.closes_at_ms, EEmergencyCancelAfterClose);
     assert!(sale.raised < sale.hard_cap, ESaleAlreadyComplete);
@@ -1398,7 +1449,7 @@ public fun withdraw_proceeds<
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
 ): Balance<PaymentCoin> {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
-    sale.phase.assert_finalized();
+    assert!(sale.phase.is_finalized(), ENotFinalized);
     let amount = sale.proceeds.value();
     let part = sale.proceeds.split(amount);
     event::emit(ProceedsWithdrawn<SaleCoin, PaymentCoin> {
@@ -1421,7 +1472,7 @@ public fun withdraw_proceeds<
 ///
 /// #### Aborts
 /// - `EWrongAdminCap` if `cap` was issued for a different sale.
-/// - `ENotTerminal` if the sale is not in a terminal phase.
+/// - `ENotTerminal` if the sale is neither in the `Finalized` nor `Cancelled` phase.
 public fun withdraw_unsold_inventory<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1433,7 +1484,7 @@ public fun withdraw_unsold_inventory<
     cap: &SaleAdminCap<SaleCoin, PaymentCoin>,
 ): Balance<SaleCoin> {
     assert!(cap.sale_id == object::id(sale), EWrongAdminCap);
-    sale.phase.assert_terminal();
+    assert!(sale.phase.is_finalized() || sale.phase.is_cancelled(), ENotTerminal);
     let unallocated = sale.inventory.value() - sale.total_allocated;
     let part = sale.inventory.split(unallocated);
     event::emit(InventoryWithdrawn<SaleCoin, PaymentCoin> {
@@ -1480,7 +1531,7 @@ public fun refund<
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): Balance<PaymentCoin> {
-    sale.phase.assert_cancelled();
+    assert!(sale.phase.is_cancelled(), ENotCancelled);
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
     assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
     let paired_vault_id = *sale.refund_vault_id.borrow();
@@ -1814,7 +1865,7 @@ public fun is_open<
     sale: &PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingScheduleParams>,
     clock: &Clock,
 ): bool {
-    if (!sale.phase.is_active()) { return false };
+    if (sale.phase != Phase::Active) { return false };
     let now = clock.timestamp_ms();
     now >= sale.opens_at_ms && now <= sale.closes_at_ms
 }
@@ -1896,6 +1947,40 @@ public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> {
 /// - The allocation in `SaleCoin`'s smallest units.
 public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
 
+// === Package Functions ===
+
+/// True if the phase is `Init`.
+public(package) fun is_init(p: &Phase): bool {
+    match (p) {
+        Phase::Init => true,
+        _ => false,
+    }
+}
+
+/// True if the phase is `Active`.
+public(package) fun is_active(p: &Phase): bool {
+    match (p) {
+        Phase::Active => true,
+        _ => false,
+    }
+}
+
+/// True if the phase is `Finalized`.
+public(package) fun is_finalized(p: &Phase): bool {
+    match (p) {
+        Phase::Finalized => true,
+        _ => false,
+    }
+}
+
+/// True if the phase is `Cancelled`.
+public(package) fun is_cancelled(p: &Phase): bool {
+    match (p) {
+        Phase::Cancelled => true,
+        _ => false,
+    }
+}
+
 // === Private Functions ===
 
 /// Shared body of `cancel_after_close` and `cancel_emergency`.
@@ -1922,7 +2007,7 @@ fun do_cancel<
         vault.flip_to_refunding(cap_ref);
     };
 
-    sale.phase.cancel();
+    sale.phase = Phase::Cancelled;
 
     event::emit(SaleCancelled<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
@@ -1943,7 +2028,7 @@ fun claim_internal<
     receipt: Receipt<SaleCoin>,
     ctx: &TxContext,
 ): Balance<SaleCoin> {
-    sale.phase.assert_finalized();
+    assert!(sale.phase.is_finalized(), ENotFinalized);
     assert!(receipt.sale_id() == object::id(sale), EReceiptSaleMismatch);
     assert!(receipt.buyer() == ctx.sender(), EBuyerOnly);
 
@@ -1974,7 +2059,7 @@ fun claim_all_internal<
     mut receipts: vector<Receipt<SaleCoin>>,
     ctx: &TxContext,
 ): Balance<SaleCoin> {
-    sale.phase.assert_finalized();
+    assert!(sale.phase.is_finalized(), ENotFinalized);
     let mut total = balance::zero<SaleCoin>();
     while (!receipts.is_empty()) {
         let r = receipts.pop_back();

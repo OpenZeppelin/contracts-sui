@@ -125,7 +125,7 @@ fun finalize_soft_cap_not_met_aborts() {
 }
 
 // Finalized is terminal: a second finalize aborts on the phase guard.
-#[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotActive)]
+#[test, expected_failure(abort_code = prefunded_sale::ENotActive)]
 fun finalize_twice_aborts() {
     let (mut test, mut clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
@@ -227,6 +227,25 @@ fun cancel_after_close_window_open_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk); // aborts
+    u::return_sale(sale);
+    u::return_vault(vault);
+    destroy(clk);
+    test.end();
+}
+
+// cancel_after_close requires Active: it aborts once the sale is Finalized.
+#[test, expected_failure(abort_code = prefunded_sale::ENotActive)]
+fun cancel_after_close_when_finalized_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 500);
+    clk.set_for_testing(5_001);
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    sale.finalize(&mut vault, &clk);
+    sale.cancel_after_close(&mut vault, &clk); // aborts: ENotActive
     u::return_sale(sale);
     u::return_vault(vault);
     destroy(clk);
@@ -395,6 +414,28 @@ fun cancel_emergency_soft_cap_met_aborts() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk); // aborts
+    u::return_sale(sale);
+    u::return_vault(vault);
+    u::return_cap(cap);
+    destroy(clk);
+    test.end();
+}
+
+// cancel_emergency requires Active: with a valid cap it still aborts once the
+// sale is Finalized (the phase guard sits after the cap check).
+#[test, expected_failure(abort_code = prefunded_sale::ENotActive)]
+fun cancel_emergency_when_finalized_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 500);
+    clk.set_for_testing(5_001);
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let cap = u::take_cap(&test);
+    sale.finalize(&mut vault, &clk);
+    sale.cancel_emergency(&cap, &mut vault, &clk); // aborts: ENotActive
     u::return_sale(sale);
     u::return_vault(vault);
     u::return_cap(cap);

@@ -183,7 +183,7 @@ fun claim_foreign_receipt_aborts() {
 }
 
 // claim before the sale is finalized is rejected.
-#[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotFinalized)]
+#[test, expected_failure(abort_code = prefunded_sale::ENotFinalized)]
 fun claim_before_finalize_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
@@ -193,6 +193,24 @@ fun claim_before_finalize_aborts() {
     let mut sale = u::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
     let payout = sale.claim(r, test.ctx()); // aborts: ENotFinalized
+    destroy(payout);
+    u::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
+// claim_all before the sale is finalized is rejected (the batch guard in
+// claim_all_internal, ahead of the per-receipt claim_internal guard).
+#[test, expected_failure(abort_code = prefunded_sale::ENotFinalized)]
+fun claim_all_before_finalize_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 100);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let payout = sale.claim_all(vector[r], test.ctx()); // aborts: ENotFinalized
     destroy(payout);
     u::return_sale(sale);
     destroy(clk);
@@ -369,7 +387,7 @@ fun refund_wrong_buyer_aborts() {
 }
 
 // refund is rejected unless the sale is Cancelled.
-#[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotCancelled)]
+#[test, expected_failure(abort_code = prefunded_sale::ENotCancelled)]
 fun refund_before_cancel_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
@@ -472,7 +490,7 @@ fun withdraw_proceeds_wrong_cap_aborts() {
 }
 
 // withdraw_proceeds requires Finalized (not Active).
-#[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotFinalized)]
+#[test, expected_failure(abort_code = prefunded_sale::ENotFinalized)]
 fun withdraw_proceeds_before_finalize_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
@@ -605,7 +623,7 @@ fun withdraw_unsold_in_cancelled_recovers_freed_inventory() {
 // withdraw_unsold_inventory is phase-gated to terminal states; calling it while the
 // sale is still Active aborts (ENotTerminal) - the sibling of withdraw_proceeds's
 // ENotFinalized guard, which was the only terminal-gate failure previously tested.
-#[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotTerminal)]
+#[test, expected_failure(abort_code = prefunded_sale::ENotTerminal)]
 fun withdraw_unsold_before_terminal_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
