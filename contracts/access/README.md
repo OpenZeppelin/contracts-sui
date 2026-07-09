@@ -78,6 +78,17 @@ Docs:
 - [Delayed Transfer guide](https://docs.openzeppelin.com/contracts-sui/1.x/delayed-transfer)
 - [`delayed_transfer` API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/access#delayed_transfer)
 
+## Examples
+
+> [!Warning]
+> These are **unaudited illustrations** of how the primitives can be integrated, not production-ready code.
+
+Complete integration examples live in [`examples/`](examples), one per module:
+
+- [`access_control`](examples/access_control/reward_treasury.move) - a shared reward treasury governed entirely by roles. The protocol's One-Time Witness is the root role, `set_role_admin` delegates pauser management to a guardian role, and privileged actions take an unforgeable `Auth<Role>` witness instead of a hand-rolled admin check. The tests also drive the timelocked root-admin handoff (transfer and renounce).
+- [`two_step_transfer`](examples/two_step_transfer/operator_handoff.move) - safe custody of an irreplaceable operator capability. The cap is wrapped so handing it to a new operator is an explicit initiate -> accept handshake, with cancel-and-reclaim and borrow-while-pending paths; the cap stays usable in place through `borrow`.
+- [`delayed_transfer`](examples/delayed_transfer/timelocked_treasury.move) - a treasury whose withdrawal key only changes hands, or is reclaimed, after a mandatory and visible delay: schedule -> wait -> execute for both transfers and unwraps, plus cancel. Day-to-day withdrawals borrow the key and never wait on the timelock.
+
 ## Security Notes
 
 - `access_control` root-role changes use delayed flows. Do not try to grant, revoke, or renounce the root role with ordinary role-management calls.
@@ -89,4 +100,5 @@ Docs:
 
 - [Access package overview](https://docs.openzeppelin.com/contracts-sui/1.x/access)
 - [Access API reference](https://docs.openzeppelin.com/contracts-sui/1.x/api/access)
+- [`llms.txt`](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/llms.txt): discovery entry point for AI integrators
 - [OpenZeppelin Contracts for Sui](https://docs.openzeppelin.com/contracts-sui)
