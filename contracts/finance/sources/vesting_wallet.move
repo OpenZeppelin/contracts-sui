@@ -437,8 +437,8 @@ public fun deposit<S: drop, P: copy + drop + store, C>(
 ///   `deposit`).
 /// - `sui::funds_accumulator::EObjectFundsWithdrawNotEnabled` if object funds
 ///   withdrawal is not enabled by protocol configuration.
-/// - The `sui::funds_accumulator` redemption can abort if the withdrawal cannot be
-///   redeemed for the settled funds observed at the wallet's object address.
+/// - `sui::balance::redeem_funds` can abort if the withdrawal cannot be redeemed for the
+///   settled funds observed at the wallet's object address.
 public fun sweep_settled<S: drop, P: copy + drop + store, C>(
     wallet: &mut VestingWallet<S, P, C>,
     root: &AccumulatorRoot,
