@@ -61,7 +61,7 @@ use sui::table::{Self, Table};
 
 /// The `&Auth<Role>` role type does not match the role bound for this action.
 #[error(code = 0)]
-const EWrongRole: vector<u8> = "Auth role does not match the bound role for this action";
+const EWrongRole: vector<u8> = "Provided role does not match the role bound for this action";
 
 /// `min_delay_ms` or `grace_period_ms` is outside the permitted bounds.
 #[error(code = 1)]
@@ -69,7 +69,7 @@ const EInvalidConfig: vector<u8> = "Delay configuration is out of bounds";
 
 /// `schedule` called with `delay_ms` below the configured `min_delay_ms`.
 #[error(code = 2)]
-const EDelayTooShort: vector<u8> = "Scheduled delay is shorter than min_delay_ms";
+const EDelayTooShort: vector<u8> = "Scheduled delay is shorter than the configured minimum";
 
 /// An operation with this id is already scheduled.
 #[error(code = 3)]
@@ -114,20 +114,20 @@ const EWrongTimelock: vector<u8> = "Ticket does not belong to this timelock";
 /// Scheduling this operation would overflow the u64 deadline arithmetic (`now + delay_ms`,
 /// or that sum `+ grace_period_ms`).
 #[error(code = 13)]
-const EScheduleOverflow: vector<u8> = "Scheduled deadline (now + delay_ms) would overflow u64";
+const EScheduleOverflow: vector<u8> = "Operation deadline or expiry would overflow";
 
 /// The supplied `Params` type does not match the type the operation was scheduled with.
 /// Reachable on either path: the raw `&Auth` path takes `Params` explicitly, and the
 /// `*_with` (cap) path pins it via the `OperationCap` - but supplying a cap for a different
 /// `(Action, Params)` than the op was scheduled with still mismatches.
 #[error(code = 14)]
-const EWrongParams: vector<u8> = "Params type does not match the operation's stored params";
+const EWrongParams: vector<u8> = "Parameters are not the type the operation was scheduled with";
 
 /// The supplied `Action` type does not match the type the operation was scheduled with.
 /// The `Action` is hashed into the operation id, but `execute` takes the id directly, so
 /// the binding is re-checked at execute time against the stored `Action`.
 #[error(code = 15)]
-const EWrongAction: vector<u8> = "Action type does not match the operation's scheduled action";
+const EWrongAction: vector<u8> = "The action is not the type the operation was scheduled with";
 
 /// `predecessor` is non-empty but not a 32-byte operation id, so it could never match a
 /// scheduled op. Rejected at schedule time rather than leaving a silently un-executable op.
