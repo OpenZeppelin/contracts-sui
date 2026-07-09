@@ -1440,6 +1440,9 @@ public fun claim_all_into_vesting<
 
 /// Withdraw the collected proceeds. **Admin-only.** Phase must be `Finalized`.
 ///
+/// Idempotent: a second call (or one against zero proceeds) returns an empty balance
+/// and emits no `ProceedsWithdrawn` event.
+///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Finalized` phase.
 /// - `cap`: The sale's admin cap.
@@ -1464,16 +1467,21 @@ public fun withdraw_proceeds<
     assert!(sale.phase.is_finalized(), ENotFinalized);
     let amount = sale.proceeds.value();
     let part = sale.proceeds.split(amount);
-    event::emit(ProceedsWithdrawn<SaleCoin, PaymentCoin> {
-        sale_id: object::id(sale),
-        amount,
-    });
+    if (amount > 0) {
+        event::emit(ProceedsWithdrawn<SaleCoin, PaymentCoin> {
+            sale_id: object::id(sale),
+            amount,
+        });
+    };
     part
 }
 
 /// Withdraw unallocated inventory. **Admin-only.** Valid in `Finalized` or
 /// `Cancelled`. Returns strictly the unreserved portion
 /// (`inventory - total_allocated`); inventory backing outstanding receipts stays put.
+///
+/// Idempotent: a second call (or one with nothing unallocated) returns an empty
+/// balance and emits no `InventoryWithdrawn` event.
 ///
 /// #### Parameters
 /// - `sale`: The shared sale, in a terminal (`Finalized` or `Cancelled`) phase.
@@ -1499,10 +1507,12 @@ public fun withdraw_unsold_inventory<
     assert!(sale.phase.is_finalized() || sale.phase.is_cancelled(), ENotTerminal);
     let unallocated = sale.inventory.value() - sale.total_allocated;
     let part = sale.inventory.split(unallocated);
-    event::emit(InventoryWithdrawn<SaleCoin, PaymentCoin> {
-        sale_id: object::id(sale),
-        amount: unallocated,
-    });
+    if (unallocated > 0) {
+        event::emit(InventoryWithdrawn<SaleCoin, PaymentCoin> {
+            sale_id: object::id(sale),
+            amount: unallocated,
+        });
+    };
     part
 }
 

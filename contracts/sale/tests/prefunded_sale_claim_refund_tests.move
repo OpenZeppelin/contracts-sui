@@ -457,6 +457,35 @@ fun withdraw_proceeds_returns_raised() {
     test.end();
 }
 
+// A second withdrawal (proceeds already drained) is a no-op: returns an empty
+// balance and emits no additional ProceedsWithdrawn event.
+#[test]
+fun withdraw_proceeds_twice_second_is_noop() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 400);
+    finalize_now(&mut test, &mut clk);
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let cap = u::take_cap(&test);
+    let first = sale.withdraw_proceeds(&cap);
+    let second = sale.withdraw_proceeds(&cap);
+    assert_eq!(first.value(), 400);
+    assert_eq!(second.value(), 0);
+
+    // Only the first (non-zero) withdrawal emitted an event.
+    let withdrawn = event::events_by_type<prefunded_sale::ProceedsWithdrawn<SALE, USDC>>();
+    assert_eq!(withdrawn.length(), 1);
+
+    destroy(first);
+    destroy(second);
+    u::return_sale(sale);
+    u::return_cap(cap);
+    destroy(clk);
+    test.end();
+}
+
 #[test, expected_failure(abort_code = prefunded_sale::EWrongAdminCap)]
 fun withdraw_proceeds_wrong_cap_aborts() {
     let (mut test, mut clk) = u::setup();
@@ -535,6 +564,35 @@ fun withdraw_unsold_returns_only_slack() {
     u::return_sale(sale);
     u::return_cap(cap);
 
+    destroy(clk);
+    test.end();
+}
+
+// A second withdrawal (slack already drained) is a no-op: returns an empty balance
+// and emits no additional InventoryWithdrawn event.
+#[test]
+fun withdraw_unsold_twice_second_is_noop() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 2, 1_000, 0, 2_000);
+    buy_once(&mut test, &clk, 100); // alloc 200
+    finalize_now(&mut test, &mut clk);
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let cap = u::take_cap(&test);
+    let first = sale.withdraw_unsold_inventory(&cap);
+    let second = sale.withdraw_unsold_inventory(&cap);
+    assert_eq!(first.value(), 1_800);
+    assert_eq!(second.value(), 0);
+
+    // Only the first (non-zero) withdrawal emitted an event.
+    let withdrawn = event::events_by_type<prefunded_sale::InventoryWithdrawn<SALE, USDC>>();
+    assert_eq!(withdrawn.length(), 1);
+
+    destroy(first);
+    destroy(second);
+    u::return_sale(sale);
+    u::return_cap(cap);
     destroy(clk);
     test.end();
 }
