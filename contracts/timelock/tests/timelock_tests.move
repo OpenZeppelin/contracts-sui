@@ -252,7 +252,10 @@ fun cancel_happy() {
 
     let cancelled = event::events_by_type<timelock::OperationCancelled>();
     assert_eq!(cancelled.length(), 1);
-    assert_eq!(cancelled[0], timelock::test_new_operation_cancelled(id, DEPLOYER));
+    assert_eq!(
+        cancelled[0],
+        timelock::test_new_operation_cancelled(id, with_original_ids<TestAction>(), DEPLOYER),
+    );
 
     clock::destroy_for_testing(clk);
     test_scenario::return_shared(tl);
