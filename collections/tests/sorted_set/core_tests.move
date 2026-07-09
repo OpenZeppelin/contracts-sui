@@ -149,14 +149,14 @@ fun from_sorted_by_reverse_comparator() {
 }
 
 #[test]
-fun from_sorted_coarse_keeps_first_bytes() {
-    // Under a coarse (id-only) comparator, a compare-equal run collapses keeping the FIRST key's
-    // bytes - identical to from_keys!'s upsert-first-wins rule (later equal keys are skipped).
+fun from_sorted_coarse_keeps_last_bytes() {
+    // Under a coarse (id-only) comparator, a compare-equal run collapses keeping the LAST key's
+    // bytes - identical to from_keys!'s upsert-last-wins rule (each later equal key overwrites).
     let s = u::from_sorted_k(vector[u::mk(1, 100), u::mk(1, 200), u::mk(2, 9)]);
     assert_eq!(u::len_k(&s), 2);
     let ks = u::keys_k(&s);
     assert_eq!(u::key_id(ks.borrow(0)), 1);
-    assert_eq!(u::key_tag(ks.borrow(0)), 100); // the FIRST of the id==1 run won
+    assert_eq!(u::key_tag(ks.borrow(0)), 200); // the LAST of the id==1 run won
     assert!(u::wf_k(&s));
 }
 
@@ -253,14 +253,14 @@ fun from_sorted_leading_equal_run_then_append() {
 }
 
 #[test]
-fun from_sorted_coarse_trailing_dedup_keeps_first_bytes() {
-    // Coarse first-wins even when the trailing keys are the ones skipped: the index-0 insert holds
-    // the first key's bytes and every later compare-equal key is skipped.
+fun from_sorted_coarse_trailing_dedup_keeps_last_bytes() {
+    // Coarse last-wins across a trailing run: each later compare-equal key overwrites the stored
+    // one, so the LAST key's bytes survive.
     let s = u::from_sorted_k(vector[u::mk(7, 1), u::mk(7, 2), u::mk(7, 3)]);
     assert_eq!(u::len_k(&s), 1);
     let ks = u::keys_k(&s);
     assert_eq!(u::key_id(ks.borrow(0)), 7);
-    assert_eq!(u::key_tag(ks.borrow(0)), 1); // the FIRST of the run won; the rest were skipped
+    assert_eq!(u::key_tag(ks.borrow(0)), 3); // the LAST of the run won; each earlier one overwritten
     assert!(u::wf_k(&s));
 }
 

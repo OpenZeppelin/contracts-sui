@@ -36,9 +36,9 @@
 /// largest numeric key.
 ///
 /// A coarse (non-injective) comparator reports two byte-distinct keys as equal, collapsing them
-/// to one element. On that collision the first-inserted key's bytes win (upsert reuses the stored
-/// key), so first-seen gating on `upsert` is well-defined only under an injective comparator. In
-/// tests, call
+/// to one element. On that collision the last-written key's bytes win (upsert overwrites the stored
+/// key with the incoming one), so which byte-variant is retained is well-defined only under an
+/// injective comparator. In tests, call
 /// `sorted_map::is_well_formed_by!(inner(&set), lt)` after a `_by` sequence.
 ///
 /// # `upsert` returns `bool`, not an abort
@@ -46,7 +46,7 @@
 /// A deliberate divergence from `sui::vec_set`, whose `upsert` aborts on a duplicate. `upsert ->
 /// true` iff the key was newly added; this matches the wrapped map's total upsert, stays composable
 /// mid-PTB, and is strictly more general: for vec_set's abort-on-duplicate, call `add!` (the
-/// strict insert) directly, or write `assert!(s.upsert!(&k), E)`. `remove!`, by contrast, aborts
+/// strict insert) directly, or write `assert!(s.upsert!(k), E)`. `remove!`, by contrast, aborts
 /// on an absent key like `sui::vec_set::remove`. `from_keys` likewise de-duplicates;
 /// to reject duplicates instead, build then `assert!(length(&s) == n, E)`. `from_sorted_keys!`
 /// de-duplicates the same way but needs pre-sorted input and runs in O(N) (see Complexity).
@@ -198,8 +198,9 @@ public fun singleton<K: copy + drop>(key: K): SortedSet<K> {
 /// instead, build then `assert!(length(&s) == keys.length(), E)`.
 ///
 /// Under a coarse `_by` comparator, byte-distinct compare-equal keys collapse to one
-/// element keeping the first one's bytes. Drives the inserts via a `do!` loop body (one
-/// reused expansion), never a straight-line sequence, to stay under Move's locals limit.
+/// element keeping the last one's bytes (each re-insert is a last-write-wins upsert). Drives the
+/// inserts via a `do!` loop body (one reused expansion), never a straight-line sequence, to stay
+/// under Move's locals limit.
 ///
 /// #### Parameters
 /// - `keys`: Keys to insert; duplicates are collapsed.
@@ -213,7 +214,7 @@ public macro fun from_keys_by<$K: copy + drop>(
 ): SortedSet<$K> {
     let keys = $keys;
     let mut set = new();
-    keys.do!(|k| { upsert_by!(&mut set, &k, $lt); });
+    keys.do!(|k| { upsert_by!(&mut set, k, $lt); });
     set
 }
 
@@ -230,16 +231,16 @@ public macro fun from_keys<$K: copy + drop>($keys: vector<$K>): SortedSet<$K> {
 /// `from_keys!` (which is O(N^2)) when the input is pre-sorted.
 ///
 /// De-duplicates exactly like `from_keys!`: a run of compare-equal keys collapses to one element,
-/// keeping the FIRST key's bytes (observable only under a coarse, non-injective comparator) - it
-/// skips every later compare-equal key, matching `upsert!`'s reuse-the-stored-key rule. A set has
-/// no value to lose, so a duplicate collapses rather than aborts - the divergence from the map's
-/// `from_sorted_keys_values!`, which aborts on a duplicate to conserve values. The only rejection
-/// is genuinely unsorted input.
+/// keeping the LAST key's bytes (observable only under a coarse, non-injective comparator) - it
+/// overwrites the stored key with each later compare-equal one, matching `upsert!`'s
+/// last-write-wins rule. A set has no value to lose, so a duplicate collapses rather than aborts -
+/// the divergence from the map's `from_sorted_keys_values!`, which aborts on a duplicate to
+/// conserve values. The only rejection is genuinely unsorted input.
 ///
 /// If your keys are not yet ordered, use `from_keys!` (any order, O(N^2)) or sort them first.
 ///
 /// #### Parameters
-/// - `keys`: Keys sorted (non-decreasing) under `lt`; compare-equal runs are collapsed to the first.
+/// - `keys`: Keys sorted (non-decreasing) under `lt`; compare-equal runs are collapsed to the last.
 /// - `lt`: Strict less-than comparator.
 ///
 /// #### Returns
@@ -267,9 +268,14 @@ public macro fun from_sorted_keys_by<$K: copy + drop>(
                 // Strictly greater than `prev` - a new distinct key; append at the back (O(1)).
                 let at = set.length();
                 set.inner_mut().insert_at(at, sorted_map::new_entry(cur, unit()));
+            } else {
+                // Compare-equal to `prev` - the same element; overwrite the last stored key with
+                // `cur` so the LAST bytes of the run win, matching `upsert!`/`from_keys!`. The
+                // stored key is at the back, so remove+re-append is O(1) (no interior shift).
+                let at = set.length() - 1;
+                let (_, _) = set.inner_mut().remove_at(at);
+                set.inner_mut().insert_at(at, sorted_map::new_entry(cur, unit()));
             };
-            // Else compare-equal to `prev` - a duplicate; skip it, keeping the FIRST key's bytes,
-            // exactly like `upsert!`/`from_keys!`.
         };
         i = i + 1;
     };
@@ -424,24 +430,26 @@ public macro fun add<$K: copy + drop>($set: &mut SortedSet<$K>, $key: $K) {
     add_by!($set, $key, |a, b| *a < *b)
 }
 
-/// Insert `key`, under `$lt`. Idempotent and total (never aborts). On a fresh insert:
-/// length + 1 and `contains!(key)` flips false -> true. On a duplicate: length unchanged,
-/// key stays present. Diverges from `vec_set::insert` (which aborts on a duplicate); for
-/// that behavior write `assert!(s.upsert!(&k), E)`.
+/// Insert `key`, under `$lt`. Idempotent and total (never aborts). `key` is taken by value
+/// (mirroring the wrapped map's `upsert`). On a fresh insert: length + 1 and `contains!(key)`
+/// flips false -> true. On a duplicate: length unchanged, but the stored key is overwritten with
+/// this one (last-write-wins for the key bytes, observable only under a coarse comparator).
+/// Diverges from `vec_set::insert` (which aborts on a duplicate); for that behavior call `add!`,
+/// or write `assert!(s.upsert!(k), E)`.
 ///
 /// The returned bool is `upsert_by!(...).is_none()` - the inner upsert returns `none`
 /// exactly on a fresh insert. This is the opposite projection from `remove!`'s
 /// `.is_some()`. The displaced marker (`some(Unit)` on a replace) is dropped.
 ///
 /// #### Parameters
-/// - `key`: Key to insert.
+/// - `key`: Key to insert (taken by value).
 /// - `lt`: Strict less-than comparator.
 ///
 /// #### Returns
 /// - `true` iff the key was newly added, `false` if it was already present.
 public macro fun upsert_by<$K: copy + drop>(
     $set: &mut SortedSet<$K>,
-    $key: &$K,
+    $key: $K,
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let set = $set;
@@ -452,7 +460,7 @@ public macro fun upsert_by<$K: copy + drop>(
 ///
 /// #### Returns
 /// - `true` iff the key was newly added.
-public macro fun upsert<$K: copy + drop>($set: &mut SortedSet<$K>, $key: &$K): bool {
+public macro fun upsert<$K: copy + drop>($set: &mut SortedSet<$K>, $key: $K): bool {
     upsert_by!($set, $key, |a, b| *a < *b)
 }
 
@@ -471,9 +479,9 @@ public macro fun remove_by<$K: copy + drop>(
     $lt: |&$K, &$K| -> bool,
 ) {
     let set = $set;
-    // The map's `remove_by!` now hands back `(key, Unit)`; a set drops both (its `K: drop`
-    // and `Unit: drop`), so `remove!` stays a `()`-returning, `vec_set`-shaped op.
-    let (_, _) = set.inner_mut().remove_by!($key, $lt);
+    // The map's `remove_by!` returns just the value (`Unit` for a set), which is dropped here, so
+    // `remove!` stays a `()`-returning, `vec_set`-shaped op.
+    let _ = set.inner_mut().remove_by!($key, $lt);
 }
 
 /// `remove_by` with the built-in integer `<`.

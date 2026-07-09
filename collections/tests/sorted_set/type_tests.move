@@ -174,8 +174,8 @@ fun macro_inlining_headroom() {
     // negative (12+ -> compiler panic) cannot be a live #[test] (it fails to compile), so it is
     // recorded above as a measured fact.
     let mut s = ss::new<u64>();
-    s.upsert!(&3);
-    s.upsert!(&1);
+    s.upsert!(3);
+    s.upsert!(1);
     let _ = s.contains!(&1);
     s.remove!(&3);
     let _ = s.find_next!(&0, true);
@@ -220,7 +220,7 @@ fun from_keys_macro_depth_compiles() {
 //
 // A bare macro on a non-integer key fails (no built-in `<`); use the _by form:
 //     let mut s = ss::new<address>();
-//     ss::upsert!(&mut s, &@0x1);                    // E04003: `<` not defined for address
+//     ss::upsert!(&mut s, @0x1);                     // E04003: `<` not defined for address
 //
 // No accessor yields &mut K or &mut Entry<K, Unit>; a stored key is reachable only as
 // &K. The strongest mutable handle reachable through inner_mut is &mut Unit (the value), never
@@ -237,7 +237,7 @@ fun from_keys_macro_depth_compiles() {
 //
 // Instantiations are nominal; cannot mix a u64 key into an address set:
 //     let mut sa = ss::new<address>();
-//     ss::upsert!(&mut sa, &1u64);                   // E: expected address, found u64
+//     ss::upsert!(&mut sa, 1u64);                    // E: expected address, found u64
 //
 // A bare SortedSet is NOT `key`, so it cannot be transferred/shared directly; it must
 // be wrapped in a consumer's own `has key` object (as `Watch` is above):
@@ -251,4 +251,4 @@ fun from_keys_macro_depth_compiles() {
 //
 // Mutation-reentrancy is foreclosed by the borrow checker; a comparator that tries to
 // mutate the set mid-search cannot type-check (the set is already borrowed &mut for the op):
-//     ss::upsert_by!(&mut s, &k, |a, b| { ss::upsert!(&mut s, &0); *a < *b });  // E: borrow conflict
+//     ss::upsert_by!(&mut s, k, |a, b| { ss::upsert!(&mut s, 0); *a < *b });  // E: borrow conflict

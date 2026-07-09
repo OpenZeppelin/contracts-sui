@@ -125,24 +125,24 @@ fun inner_mut_inconsistent_comparator_desorts_no_value_lost() {
 // === membership is under-the-comparator, not byte-identity (coarse comparator) ===
 
 #[test]
-fun coarse_comparator_first_bytes_win() {
+fun coarse_comparator_last_bytes_win() {
     // Key ordered on `id` ALONE: Key{1,100} and Key{1,200} compare EQUAL.
     let mut s = ss::new<u::Key>();
     assert!(u::ins_k(&mut s, u::mk(1, 100))); // newly added
     assert!(!u::ins_k(&mut s, u::mk(1, 200))); // compare-equal -> "already present" (FALSE)
     assert_eq!(u::len_k(&s), 1); // collapsed to ONE element
     let ks = u::keys_k(&s);
-    assert_eq!(u::key_tag(&ks[0]), 100); // ...AND the FIRST inserted key's bytes survive (reuse)
+    assert_eq!(u::key_tag(&ks[0]), 200); // ...AND the LAST inserted key's bytes survive (overwrite)
     assert!(u::wf_k(&s)); // a coarse-but-consistent comparator keeps the set well-formed
 }
 
 #[test]
-fun coarse_from_keys_keeps_first() {
-    // from_keys over compare-equal variants keeps the FIRST in input order (upsert reuses stored).
+fun coarse_from_keys_keeps_last() {
+    // from_keys over compare-equal variants keeps the LAST in input order (upsert overwrites stored).
     let s = u::fromk_k(vector[u::mk(1, 10), u::mk(2, 20), u::mk(1, 30)]);
     assert_eq!(u::len_k(&s), 2); // ids {1,2} -> 2 distinct
     let ks = u::keys_k(&s); // sorted by id: [Key{1,_}, Key{2,_}]
-    assert_eq!(u::key_tag(&ks[0]), 10); // id=1 kept the FIRST (tag 10), not the last (tag 30)
+    assert_eq!(u::key_tag(&ks[0]), 30); // id=1 kept the LAST (tag 30), not the first (tag 10)
     assert_eq!(u::key_tag(&ks[1]), 20);
 }
 
@@ -199,7 +199,7 @@ fun nondeterministic_comparator_corrupts() {
     // type_tests.)
     let mut s = u::fromk(vector[10u64, 20, 30]);
     let mut calls = 0u64;
-    s.upsert_by!(&5, |_a, _b| { calls = calls + 1; calls % 2 == 1 });
+    s.upsert_by!(5, |_a, _b| { calls = calls + 1; calls % 2 == 1 });
     assert!(!u::wf(&s)); // a non-deterministic lt produced a non-well-formed set
     assert_eq!(s.length(), 4); // 5 was inserted (at the wrong slot), not dropped
 }
@@ -326,11 +326,11 @@ fun keys_from_by_struct_keys() {
     assert_eq!(u::page_k(&s, 4, false, 10), vector[u::mk(5, 0)]); // fewer than limit at the tail
 
     // A COARSE comparator collapses compare-equal keys; pagination emits ONE key
-    // per equivalence class (carrying the FIRST inserted bytes), never a duplicate page.
+    // per equivalence class (carrying the LAST inserted bytes), never a duplicate page.
     let c = u::fromk_k(vector[u::mk(1, 10), u::mk(1, 20), u::mk(2, 30)]); // ids collapse to {1,2}
     let pg = u::page_k(&c, 1, true, 10);
     assert_eq!(pg.length(), 2); // one entry per id-equivalence class, no dup page
-    assert_eq!(u::key_tag(&pg[0]), 10); // id=1 kept the FIRST inserted bytes (tag 10)
+    assert_eq!(u::key_tag(&pg[0]), 20); // id=1 kept the LAST inserted bytes (tag 20)
     assert_eq!(u::key_id(&pg[1]), 2);
 }
 
@@ -373,5 +373,5 @@ fun aborting_comparator_propagates() {
     // `upsert`/`contains` totality is library-semantic only; a consumer-supplied
     // abort is the caller's, not the library's.
     let mut s = u::fromk(vector[1u64, 2, 3]);
-    s.upsert_by!(&5, |a, b| aborting_lt(a, b));
+    s.upsert_by!(5, |a, b| aborting_lt(a, b));
 }

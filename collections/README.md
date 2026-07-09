@@ -67,7 +67,7 @@ public fun place(book: &mut PriceBook, price: u64, size: u64) {
         let cur = sorted_map::borrow_mut!(&mut book.levels, &price);
         *cur = *cur + size;
     } else {
-        sorted_map::upsert!(&mut book.levels, &price, size);
+        sorted_map::upsert!(&mut book.levels, price, size);
     };
 }
 
@@ -83,7 +83,7 @@ public fun levels_from(book: &PriceBook, from: u64, include: bool, limit: u64): 
 }
 ```
 
-For non-integer keys, or to sort descending, pass a comparator with the `_by` macros (threaded consistently): `sorted_map::upsert_by!(&mut bids, &price, size, |a, b| *a > *b)`.
+For non-integer keys, or to sort descending, pass a comparator with the `_by` macros (threaded consistently): `sorted_map::upsert_by!(&mut bids, price, size, |a, b| *a > *b)`.
 
 Complete integration examples live in [`examples/sorted_map/`](examples/sorted_map):
 
@@ -127,7 +127,7 @@ public fun new(ctx: &mut TxContext): Watchlist {
 
 /// Add a token id; emit only the FIRST time it is watched - the `bool` return earns its keep.
 public fun watch(w: &mut Watchlist, id: u64) {
-    if (sorted_set::upsert!(&mut w.ids, &id)) {
+    if (sorted_set::upsert!(&mut w.ids, id)) {
         event::emit(Added { id });
     }
 }
@@ -139,7 +139,7 @@ public fun page(w: &Watchlist, from: u64, include: bool, limit: u64): vector<u64
 }
 ```
 
-For non-integer keys, or to sort descending, use the `_by` macros with a consistently threaded comparator. To recover `vec_set`'s abort-on-duplicate, wrap the bool: `assert!(sorted_set::upsert!(&mut s, &k), EAlreadyThere)`.
+For non-integer keys, or to sort descending, use the `_by` macros with a consistently threaded comparator. To recover `vec_set`'s abort-on-duplicate, wrap the bool: `assert!(sorted_set::upsert!(&mut s, k), EAlreadyThere)`.
 
 Complete integration examples live in [`examples/sorted_set/`](examples/sorted_set):
 

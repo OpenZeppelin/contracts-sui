@@ -8,7 +8,7 @@
 module openzeppelin_collections::sorted_map_conservation_tests;
 
 use openzeppelin_collections::sorted_map::{Self as sm, SortedMap};
-use openzeppelin_collections::sorted_map_test_util::{Self as u, NoDrop, NoDropKey};
+use openzeppelin_collections::sorted_map_test_util::{Self as u, NoDrop};
 use std::unit_test::assert_eq;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
@@ -79,65 +79,6 @@ fun upsert_returns_old_nodrop() {
     m.destroy_empty();
 }
 
-// === Non-droppable KEY: add_by / upsert_by never implicitly drop a K ===
-//
-// K = NoDropKey (copy, no drop). A struct key has no built-in `<`, so only the `_by` macros
-// apply. Any path that failed to thread a stored key back out - or that dropped a key on insert,
-// replace, or teardown - would be a BUILD error, making the "no K: drop" guarantee structural.
-
-#[test]
-fun add_nodrop_key_conserves() {
-    // add_by MOVES each fresh key into storage; keys are inserted out of `id` order.
-    let mut m = sm::new<NoDropKey, u64>();
-    u::add_ndk(&mut m, u::ndk(20, 0), 200);
-    u::add_ndk(&mut m, u::ndk(10, 0), 100);
-    u::add_ndk(&mut m, u::ndk(30, 0), 300);
-    assert_eq!(m.length(), 3);
-    assert!(u::has_ndk(&m, 20));
-    // Drain: every stored key comes back out and MUST be consumed. Asserting the returned key's
-    // id matches the lookup id confirms the STORED key is handed back, not a fabricated probe.
-    let (k10, v10) = u::rm_ndk(&mut m, 10);
-    assert!(u::ndk_id(&k10) == 10 && v10 == 100);
-    u::ndk_unwrap(k10);
-    let (k30, v30) = u::rm_ndk(&mut m, 30);
-    assert!(u::ndk_id(&k30) == 30 && v30 == 300);
-    u::ndk_unwrap(k30);
-    let (k20, _) = m.pop_back(); // pop returns the stored key too
-    u::ndk_unwrap(k20);
-    m.destroy_empty(); // husk consumed: every key left via a return path
-}
-
-#[test]
-fun upsert_nodrop_key_replace_reuses_stored_key() {
-    // upsert_by on a replace keeps the FIRST-seen stored key (never disposes a K) and returns the
-    // displaced VALUE as some(old); the incoming key is consumed by the wrapper, not dropped.
-    let mut m = sm::new<NoDropKey, u64>();
-    assert!(u::upsert_ndk(&mut m, u::ndk(5, 100), 50).is_none()); // fresh: id=5, tag=100
-    // Re-upsert the SAME id with a DIFFERENT tag (compare-equal under id-order).
-    let old = u::upsert_ndk(&mut m, u::ndk(5, 200), 55);
-    assert_eq!(old, option::some(50)); // displaced value returned
-    assert_eq!(m.length(), 1); // no growth
-    // The stored key kept its first-seen tag (100): replace reused it rather than swapping in the
-    // tag=200 key, and did so without ever dropping a K.
-    let (k, v) = u::rm_ndk(&mut m, 5);
-    assert!(u::ndk_id(&k) == 5 && u::ndk_tag(&k) == 100 && v == 55);
-    u::ndk_unwrap(k);
-    m.destroy_empty();
-}
-
-#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
-fun add_nodrop_key_duplicate_aborts() {
-    // The duplicate/abort path also needs no `K: drop`: the incoming key is discarded by the
-    // unwind. The drain below is unreachable at runtime but statically required (the non-drop
-    // husk must be consumed on the fall-through path the compiler still sees).
-    let mut m = sm::new<NoDropKey, u64>();
-    u::add_ndk(&mut m, u::ndk(1, 0), 10);
-    u::add_ndk(&mut m, u::ndk(1, 0), 20); // duplicate id -> EKeyAlreadyExists
-    let (k, _) = u::rm_ndk(&mut m, 1);
-    u::ndk_unwrap(k);
-    m.destroy_empty();
-}
-
 // === Read paths conserve the multiset / length ===
 
 #[test]
@@ -167,16 +108,16 @@ fun read_path_conservative_nodrop() {
 fun coin_value_roundtrip() {
     let mut ctx = tx_context::dummy();
     let mut m = sm::new<u64, Coin<SUI>>();
-    m.upsert!(&1, coin::mint_for_testing<SUI>(100, &mut ctx)).destroy_none();
-    m.upsert!(&2, coin::mint_for_testing<SUI>(250, &mut ctx)).destroy_none();
+    m.upsert!(1, coin::mint_for_testing<SUI>(100, &mut ctx)).destroy_none();
+    m.upsert!(2, coin::mint_for_testing<SUI>(250, &mut ctx)).destroy_none();
     assert_eq!(m.borrow!(&1).value(), 100);
     // upsert returns the displaced coin - it must be burned, not dropped.
-    let old = m.upsert!(&1, coin::mint_for_testing<SUI>(999, &mut ctx)).destroy_some();
+    let old = m.upsert!(1, coin::mint_for_testing<SUI>(999, &mut ctx)).destroy_some();
     assert_eq!(old.value(), 100);
     old.burn_for_testing();
     assert_eq!(m.borrow!(&1).value(), 999);
-    // remove returns the (key, coin)
-    let (_, r1) = m.remove!(&1);
+    // remove returns the value (coin); the key is dropped
+    let r1 = m.remove!(&1);
     assert_eq!(r1.value(), 999);
     r1.burn_for_testing();
     // pop the remaining coin

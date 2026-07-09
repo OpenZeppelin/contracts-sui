@@ -92,7 +92,7 @@ public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, coin: Coin<SUI>, ran
     assert_cap(vault, cap);
     assert!(rank >= 1, EInvalidRank);
     assert!(!vault.prizes.contains!(&rank), ERankAlreadyFunded);
-    vault.prizes.upsert!(&rank, coin).destroy_none();
+    vault.prizes.upsert!(rank, coin).destroy_none();
 }
 
 /// Pay the champion: remove and return the lowest-rank `(rank, coin)` via `pop_front`.
@@ -115,7 +115,7 @@ public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>
 public fun pay_rank(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64): Coin<SUI> {
     assert_cap(vault, cap);
     assert!(vault.prizes.contains!(&rank), ENoSuchRank);
-    let (_, coin) = vault.prizes.remove!(&rank);
+    let coin = vault.prizes.remove!(&rank);
     coin
 }
 

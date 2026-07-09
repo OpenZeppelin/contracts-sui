@@ -37,27 +37,6 @@ public fun nd_unwrap(w: NoDrop): u64 {
     id
 }
 
-/// Non-droppable KEY witness: `copy` + `store` but NOT `drop`, ordered on `id` ALONE (two
-/// byte-distinct keys with the same `id` but different `tag` compare equal). Storing this as K
-/// proves the map never implicitly disposes a key: `add`/`upsert` copy the incoming key into
-/// storage on a fresh insert and reuse the FIRST-seen stored key on a replace, so no `K` is ever
-/// dropped, and a key leaves only via a `remove`/`pop` return path. A struct key has no built-in
-/// `<`, so only the `_by` macros apply. Any test that fails to thread every key back out will
-/// not compile.
-public struct NoDropKey has copy, store { id: u64, tag: u64 }
-
-public fun ndk(id: u64, tag: u64): NoDropKey { NoDropKey { id, tag } }
-
-public fun ndk_id(k: &NoDropKey): u64 { k.id }
-
-public fun ndk_tag(k: &NoDropKey): u64 { k.tag }
-
-/// Consume a `NoDropKey`, returning its id. The only way to dispose of one (it has no `drop`).
-public fun ndk_unwrap(k: NoDropKey): u64 {
-    let NoDropKey { id, tag: _ } = k;
-    id
-}
-
 /// A "coarse" key ordered on `id` ALONE: two byte-distinct keys (same `id`,
 /// different `tag`) compare equal under the comparator. Also serves as the generic
 /// non-integer (struct) key for the `_by` demonstrations when ids are distinct.
@@ -84,7 +63,7 @@ public fun ask_px(a: &Ask): u64 { a.px }
 
 // === Thin wrappers - u64/u64, bare forms (built-in integer `<`) ===
 
-public fun ins(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> { m.upsert!(&k, v) }
+public fun ins(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> { m.upsert!(k, v) }
 
 /// Strict insert (aborts `EKeyAlreadyExists` on a duplicate). Takes the key by value.
 public fun add(m: &mut SortedMap<u64, u64>, k: u64, v: u64) { m.add!(k, v) }
@@ -97,8 +76,7 @@ public fun get(m: &SortedMap<u64, u64>, k: u64): u64 { *m.borrow!(&k) }
 public fun set(m: &mut SortedMap<u64, u64>, k: u64, v: u64) { *m.borrow_mut!(&k) = v; }
 
 public fun rm(m: &mut SortedMap<u64, u64>, k: u64): u64 {
-    let (_, v) = m.remove!(&k);
-    v
+    m.remove!(&k)
 }
 
 public fun fnext(m: &SortedMap<u64, u64>, k: u64, inc: bool): Option<u64> {
@@ -123,7 +101,7 @@ public fun wf(m: &SortedMap<u64, u64>): bool { m.is_well_formed!() }
 // === Thin wrappers - u64/u64, reverse comparator `>` (used CONSISTENTLY: legit case) ===
 
 public fun ins_rev(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
-    m.upsert_by!(&k, v, |a, b| *a > *b)
+    m.upsert_by!(k, v, |a, b| *a > *b)
 }
 
 /// Strict insert under the reverse comparator (aborts `EKeyAlreadyExists` on a duplicate).
@@ -138,7 +116,7 @@ public fun has_rev(m: &SortedMap<u64, u64>, k: u64): bool {
 public fun get_rev(m: &SortedMap<u64, u64>, k: u64): u64 { *m.borrow_by!(&k, |a, b| *a > *b) }
 
 public fun rm_rev(m: &mut SortedMap<u64, u64>, k: u64): u64 {
-    let (_, v) = m.remove_by!(&k, |a, b| *a > *b);
+    let v = m.remove_by!(&k, |a, b| *a > *b);
     v
 }
 
@@ -176,20 +154,19 @@ public fun kfrom_rev(m: &SortedMap<u64, u64>, from: u64, inc: bool, lim: u64): v
 /// Non-strict `<=`: `search!` never derives equality, so equal keys are never detected
 /// (every insert is treated as fresh) -> duplicate keys land. Demonstrates footgun (a).
 public fun ins_le(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
-    m.upsert_by!(&k, v, |a, b| *a <= *b)
+    m.upsert_by!(k, v, |a, b| *a <= *b)
 }
 
 /// Remove under `>` against a map built with `<`: the descending search reads ascending
 /// data and returns `found=false` -> the value is stranded. Demonstrates footgun (b).
 public fun rm_gt(m: &mut SortedMap<u64, u64>, k: u64): u64 {
-    let (_, v) = m.remove_by!(&k, |a, b| *a > *b);
-    v
+    m.remove_by!(&k, |a, b| *a > *b)
 }
 
 // === Thin wrappers - SortedMap<u64, NoDrop> (conservation) ===
 
 public fun ins_nd(m: &mut SortedMap<u64, NoDrop>, k: u64, w: NoDrop): Option<NoDrop> {
-    m.upsert!(&k, w)
+    m.upsert!(k, w)
 }
 
 public fun has_nd(m: &SortedMap<u64, NoDrop>, k: u64): bool { m.contains!(&k) }
@@ -197,14 +174,13 @@ public fun has_nd(m: &SortedMap<u64, NoDrop>, k: u64): bool { m.contains!(&k) }
 public fun nd_value_id(m: &SortedMap<u64, NoDrop>, k: u64): u64 { m.borrow!(&k).nd_id() }
 
 public fun rm_nd(m: &mut SortedMap<u64, NoDrop>, k: u64): NoDrop {
-    let (_, w) = m.remove!(&k);
-    w
+    m.remove!(&k)
 }
 
 // === Thin wrappers - SortedMap<CoarseKey, u64> ordered on `id` ===
 
 public fun ins_ck(m: &mut SortedMap<CoarseKey, u64>, k: CoarseKey, v: u64): Option<u64> {
-    m.upsert_by!(&k, v, |a, b| a.id < b.id)
+    m.upsert_by!(k, v, |a, b| a.id < b.id)
 }
 
 /// Strict insert ordered on `id` alone (aborts `EKeyAlreadyExists` when a stored key
@@ -222,8 +198,7 @@ public fun get_ck(m: &SortedMap<CoarseKey, u64>, id: u64): u64 {
 }
 
 public fun rm_ck(m: &mut SortedMap<CoarseKey, u64>, id: u64): u64 {
-    let (_, v) = m.remove_by!(&CoarseKey { id, tag: 0 }, |a, b| a.id < b.id);
-    v
+    m.remove_by!(&CoarseKey { id, tag: 0 }, |a, b| a.id < b.id)
 }
 
 /// Overwrite the value at `id` via `borrow_mut_by!` under the id-order comparator (aborts
@@ -244,48 +219,14 @@ public fun wf_ck(m: &SortedMap<CoarseKey, u64>): bool {
     m.is_well_formed_by!(|a, b| a.id < b.id)
 }
 
-// === Thin wrappers - SortedMap<NoDropKey, u64> ordered on `id` (non-drop KEY conservation) ===
-
-/// Strict insert; `k` is moved into storage on a fresh insert, or discarded by the unwind on a
-/// duplicate. Aborts `EKeyAlreadyExists` on a duplicate id.
-public fun add_ndk(m: &mut SortedMap<NoDropKey, u64>, k: NoDropKey, v: u64) {
-    m.add_by!(k, v, |a, b| a.id < b.id)
-}
-
-/// Upsert; the passed key is consumed here. `upsert_by` copies `*k` into storage on a fresh
-/// insert and reuses the stored key on a replace - either way the incoming `k` is disposed
-/// explicitly (unwrapped), never dropped.
-public fun upsert_ndk(m: &mut SortedMap<NoDropKey, u64>, k: NoDropKey, v: u64): Option<u64> {
-    let old = m.upsert_by!(&k, v, |a, b| a.id < b.id);
-    ndk_unwrap(k);
-    old
-}
-
-public fun has_ndk(m: &SortedMap<NoDropKey, u64>, id: u64): bool {
-    let probe = NoDropKey { id, tag: 0 };
-    let found = m.contains_by!(&probe, |a, b| a.id < b.id);
-    ndk_unwrap(probe); // the lookup probe has no `drop` - consume it
-    found
-}
-
-/// Remove by id, returning the STORED (key, value) pair - both lack `drop` handling here and
-/// must be consumed by the caller. The returned key is the stored one, distinct from the
-/// lookup probe.
-public fun rm_ndk(m: &mut SortedMap<NoDropKey, u64>, id: u64): (NoDropKey, u64) {
-    let probe = NoDropKey { id, tag: 0 };
-    let (k, v) = m.remove_by!(&probe, |a, b| a.id < b.id);
-    ndk_unwrap(probe); // consume the lookup probe (distinct from the stored key `k`)
-    (k, v)
-}
-
 // === Thin wrappers - distinct instantiations coexist ===
 
 public fun ins_bid(m: &mut SortedMap<u64, Bid>, k: u64, v: Bid): Option<Bid> {
-    m.upsert!(&k, v)
+    m.upsert!(k, v)
 }
 
 public fun ins_ask(m: &mut SortedMap<u64, Ask>, k: u64, v: Ask): Option<Ask> {
-    m.upsert!(&k, v)
+    m.upsert!(k, v)
 }
 
 public fun get_bid_px(m: &SortedMap<u64, Bid>, k: u64): u64 { m.borrow!(&k).bid_px() }

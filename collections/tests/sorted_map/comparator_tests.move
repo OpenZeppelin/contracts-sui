@@ -142,7 +142,7 @@ fun add_by_reverse_comparator() {
     assert_eq!(u::get_rev(&m, 10), 100); // tail under `>`
 }
 
-// === Upsert keeps the FIRST (stored) key bytes, observable under a coarse comparator ===
+// === Upsert overwrites with the LAST (incoming) key bytes, observable under a coarse comparator ===
 
 #[test]
 fun upsert_coarse_comparator_key_bytes() {
@@ -153,7 +153,7 @@ fun upsert_coarse_comparator_key_bytes() {
     assert_eq!(old, option::some(10)); // displaced value returned
     assert_eq!(m.length(), 1); // exactly one entry
     assert_eq!(u::get_ck(&m, 1), 20); // new value won
-    assert_eq!(u::head_ck_tag(&m), 100); // upsert reuses the stored key: the FIRST key bytes survive
+    assert_eq!(u::head_ck_tag(&m), 200); // last-write-wins: the incoming key's bytes replace the stored ones
 }
 
 // === contains == borrow-succeeds under a custom comparator ===
@@ -193,7 +193,7 @@ fun nondeterministic_comparator_corrupts() {
     // computation is fully deterministic, so the honest `<` well-formedness check stably
     // reports NOT well-formed: the library cannot detect the bad lambda.
     while (i < 16) {
-        let _ = m.upsert_by!(&i, i, |_, _| {
+        let _ = m.upsert_by!(i, i, |_, _| {
             ctr = ctr + 1;
             ctr % 2 == 0
         });

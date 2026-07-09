@@ -14,7 +14,7 @@
 /// transaction).
 ///
 /// If you want vec_set's abort-on-duplicate, layer it back on in one line:
-/// `assert!(s.upsert!(&k), E)` - that is exactly what `approve_strict` does.
+/// `assert!(s.upsert!(k), E)` - that is exactly what `approve_strict` does.
 ///
 /// `remove!`, by contrast, ABORTS on an absent key (matching `vec_set::remove`), so `revoke` aborts
 /// rather than reporting a miss; there is no membership to gate on, and it emits `Revoked` on every
@@ -89,7 +89,7 @@ public fun transfer_to(list: Allowlist, recipient: address) {
 /// Approve `id`. Returns `true` iff it was NEWLY approved; a re-approval returns `false` and
 /// does NOT abort (idempotent, total). Emits `Approved` only on the `true` (first-seen) case.
 public fun approve(list: &mut Allowlist, id: u64): bool {
-    let added = list.members.upsert!(&id);
+    let added = list.members.upsert!(id);
     if (added) event::emit(Approved { id });
     added
 }
@@ -100,7 +100,7 @@ public fun approve(list: &mut Allowlist, id: u64): bool {
 /// #### Aborts
 /// - `EAlreadyApproved` if `id` is already present.
 public fun approve_strict(list: &mut Allowlist, id: u64) {
-    assert!(list.members.upsert!(&id), EAlreadyApproved);
+    assert!(list.members.upsert!(id), EAlreadyApproved);
     event::emit(Approved { id });
 }
 

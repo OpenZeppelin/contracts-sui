@@ -76,7 +76,7 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
 /// Register `v`. Struct key, so `upsert_by!` threads the `outranks` comparator. Returns `true`
 /// iff newly registered (a duplicate returns `false`, no abort).
 public fun register(vs: &mut ValidatorSet, v: Validator): bool {
-    vs.validators.upsert_by!(&v, |a, b| outranks(a, b))
+    vs.validators.upsert_by!(v, |a, b| outranks(a, b))
 }
 
 /// Deregister `v`, aborting if it is not registered. Same comparator as `register`.

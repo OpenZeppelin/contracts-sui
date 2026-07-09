@@ -57,13 +57,13 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
 
 /// Activate (or overwrite) a tick. Returns true if an existing tick was replaced.
 public fun add_tick(reg: &mut TickRegistry, tick: u64, liquidity_net: u64, fee_growth: u128): bool {
-    let old = reg.ticks.upsert!(&tick, TickInfo { liquidity_net, fee_growth });
+    let old = reg.ticks.upsert!(tick, TickInfo { liquidity_net, fee_growth });
     old.is_some()
 }
 
 /// Deactivate a tick.
 public fun remove_tick(reg: &mut TickRegistry, tick: u64): TickInfo {
-    let (_, info) = reg.ticks.remove!(&tick);
+    let info = reg.ticks.remove!(&tick);
     info
 }
 

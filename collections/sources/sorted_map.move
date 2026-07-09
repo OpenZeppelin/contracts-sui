@@ -38,8 +38,9 @@
 ///   stranded at unreachable positions.
 ///
 /// A coarse (non-injective) comparator reports two byte-distinct keys as equal, collapsing them
-/// into one entry. On that collision an upsert keeps the first-inserted key's bytes (it reuses the
-/// stored key), so first-seen gating on `upsert` is well-defined only under an injective comparator.
+/// into one entry. On that collision an upsert overwrites the stored key with the incoming one -
+/// last-write-wins: the previously stored key is dropped and the new key is stored - so which
+/// byte-variant is retained is well-defined only under an injective comparator.
 ///
 /// A reverse comparator used consistently is legitimate: it flips the order, so `head` returns
 /// the largest numeric key. In tests, call `is_well_formed_by!(&map, lt)` after a `_by` sequence
@@ -111,7 +112,7 @@ const EKeyAlreadyExists: vector<u8> = "Key already exists";
 ///
 /// Abilities materialize jointly over `K` and `V`: `Entry<u64, u64>` is `copy + drop +
 /// store`, while `Entry<u64, Coin<T>>` is store-only.
-public struct Entry<K: copy, V> has copy, drop, store {
+public struct Entry<K: copy + drop, V> has copy, drop, store {
     key: K,
     value: V,
 }
@@ -124,7 +125,7 @@ public struct Entry<K: copy, V> has copy, drop, store {
 /// object, exactly like `sui::vec_map::VecMap`. `copy`/`drop` materialize only when both
 /// `K` and `V` allow them: `SortedMap<u64, u64>` is `copy + drop + store`;
 /// `SortedMap<u64, Coin<T>>` is store-only and must be drained then `destroy_empty`'d.
-public struct SortedMap<K: copy, V> has copy, drop, store {
+public struct SortedMap<K: copy + drop, V> has copy, drop, store {
     /// The map's entries. Across the supported (macro) API this vector is strictly
     /// increasing under the (consistently supplied) comparator: sorted, with no duplicate
     /// keys. The forced-public position-based writers (`insert_at`/`remove_at`) can break
@@ -141,7 +142,7 @@ public struct SortedMap<K: copy, V> has copy, drop, store {
 ///
 /// #### Returns
 /// - An empty map.
-public fun new<K: copy, V>(): SortedMap<K, V> {
+public fun new<K: copy + drop, V>(): SortedMap<K, V> {
     SortedMap { entries: vector[] }
 }
 
@@ -154,7 +155,7 @@ public fun new<K: copy, V>(): SortedMap<K, V> {
 ///
 /// #### Returns
 /// - A one-entry map.
-public fun singleton<K: copy, V>(key: K, value: V): SortedMap<K, V> {
+public fun singleton<K: copy + drop, V>(key: K, value: V): SortedMap<K, V> {
     SortedMap { entries: vector[Entry { key, value }] }
 }
 
@@ -167,7 +168,7 @@ public fun singleton<K: copy, V>(key: K, value: V): SortedMap<K, V> {
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the map still holds entries.
-public fun destroy_empty<K: copy, V>(map: SortedMap<K, V>) {
+public fun destroy_empty<K: copy + drop, V>(map: SortedMap<K, V>) {
     let SortedMap { entries } = map;
     assert!(entries.is_empty(), ENotEmpty);
     entries.destroy_empty();
@@ -176,23 +177,23 @@ public fun destroy_empty<K: copy, V>(map: SortedMap<K, V>) {
 // === Size and bounds (no comparator) ===
 
 /// Number of entries.
-public fun length<K: copy, V>(map: &SortedMap<K, V>): u64 {
+public fun length<K: copy + drop, V>(map: &SortedMap<K, V>): u64 {
     map.entries.length()
 }
 
 /// True iff the map holds no entries.
-public fun is_empty<K: copy, V>(map: &SortedMap<K, V>): bool {
+public fun is_empty<K: copy + drop, V>(map: &SortedMap<K, V>): bool {
     map.entries.is_empty()
 }
 
 /// Smallest key under the comparator, or `none` if empty. O(1). With a reverse
 /// comparator this returns the largest numeric key.
-public fun head<K: copy, V>(map: &SortedMap<K, V>): Option<K> {
+public fun head<K: copy + drop, V>(map: &SortedMap<K, V>): Option<K> {
     if (map.entries.is_empty()) option::none() else option::some(map.entries.borrow(0).key)
 }
 
 /// Largest key under the comparator, or `none` if empty. O(1).
-public fun tail<K: copy, V>(map: &SortedMap<K, V>): Option<K> {
+public fun tail<K: copy + drop, V>(map: &SortedMap<K, V>): Option<K> {
     let n = map.entries.length();
     if (n == 0) option::none() else option::some(map.entries.borrow(n - 1).key)
 }
@@ -208,26 +209,26 @@ public fun tail<K: copy, V>(map: &SortedMap<K, V>): Option<K> {
 /// Immutable view of the backing vector. There is deliberately no `&mut`/owning
 /// counterpart, so bulk reordering or bulk value-destruction is unrepresentable through
 /// this surface.
-public fun entries<K: copy, V>(map: &SortedMap<K, V>): &vector<Entry<K, V>> {
+public fun entries<K: copy + drop, V>(map: &SortedMap<K, V>): &vector<Entry<K, V>> {
     &map.entries
 }
 
 /// Borrow an entry's key. Macro bodies must read keys through this (not `.key`), since
 /// the field is private at the expansion site.
-public fun key<K: copy, V>(e: &Entry<K, V>): &K {
+public fun key<K: copy + drop, V>(e: &Entry<K, V>): &K {
     &e.key
 }
 
 /// Borrow an entry's value. Unlike its neighbors in this section, no macro body references
 /// it - it is public as the value-reading complement to `key`, completing the read
 /// surface of `entries` (the `Entry` fields are private).
-public fun value<K: copy, V>(e: &Entry<K, V>): &V {
+public fun value<K: copy + drop, V>(e: &Entry<K, V>): &V {
     &e.value
 }
 
 /// Construct an entry, consuming `key` and `value` by move (no copy, no implicit drop).
 /// Harmless until fed to `insert_at`.
-public fun new_entry<K: copy, V>(key: K, value: V): Entry<K, V> {
+public fun new_entry<K: copy + drop, V>(key: K, value: V): Entry<K, V> {
     Entry { key, value }
 }
 
@@ -244,7 +245,7 @@ public fun new_entry<K: copy, V>(key: K, value: V): Entry<K, V> {
 ///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i > length`.
-public fun insert_at<K: copy, V>(map: &mut SortedMap<K, V>, i: u64, e: Entry<K, V>) {
+public fun insert_at<K: copy + drop, V>(map: &mut SortedMap<K, V>, i: u64, e: Entry<K, V>) {
     map.entries.insert(e, i);
 }
 
@@ -256,7 +257,7 @@ public fun insert_at<K: copy, V>(map: &mut SortedMap<K, V>, i: u64, e: Entry<K, 
 ///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
-public fun remove_at<K: copy, V>(map: &mut SortedMap<K, V>, i: u64): (K, V) {
+public fun remove_at<K: copy + drop, V>(map: &mut SortedMap<K, V>, i: u64): (K, V) {
     let Entry { key, value } = map.entries.remove(i);
     (key, value)
 }
@@ -265,7 +266,7 @@ public fun remove_at<K: copy, V>(map: &mut SortedMap<K, V>, i: u64): (K, V) {
 ///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
-public fun value_at<K: copy, V>(map: &SortedMap<K, V>, i: u64): &V {
+public fun value_at<K: copy + drop, V>(map: &SortedMap<K, V>, i: u64): &V {
     &map.entries.borrow(i).value
 }
 
@@ -274,7 +275,7 @@ public fun value_at<K: copy, V>(map: &SortedMap<K, V>, i: u64): &V {
 ///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
-public fun value_at_mut<K: copy, V>(map: &mut SortedMap<K, V>, i: u64): &mut V {
+public fun value_at_mut<K: copy + drop, V>(map: &mut SortedMap<K, V>, i: u64): &mut V {
     &mut map.entries.borrow_mut(i).value
 }
 
@@ -329,7 +330,7 @@ public fun assert_strictly_increasing(increasing: bool) {
 ///   library gives no guarantee which entry is returned (the sorted/unique invariant is broken).
 /// - `(false, idx)` when absent, where `idx` is the lower-bound insertion point - the
 ///   number of keys strictly less than `target`, in `[0, n]`.
-public macro fun search<$K: copy, $V>(
+public macro fun search<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $target: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -384,7 +385,7 @@ public macro fun search<$K: copy, $V>(
 /// #### Aborts
 /// - `EUnequalLengths` if `keys` and `values` differ in length.
 /// - `EKeysNotStrictlyIncreasing` if `keys` is not strictly increasing under `lt`.
-public macro fun from_sorted_keys_values_by<$K: copy, $V>(
+public macro fun from_sorted_keys_values_by<$K: copy + drop, $V>(
     $keys: vector<$K>,
     $values: vector<$V>,
     $lt: |&$K, &$K| -> bool,
@@ -421,7 +422,7 @@ public macro fun from_sorted_keys_values_by<$K: copy, $V>(
 ///
 /// #### Aborts
 /// - `EUnequalLengths` / `EKeysNotStrictlyIncreasing` - see `from_sorted_keys_values_by`.
-public macro fun from_sorted_keys_values<$K: copy, $V>(
+public macro fun from_sorted_keys_values<$K: copy + drop, $V>(
     $keys: vector<$K>,
     $values: vector<$V>,
 ): SortedMap<$K, $V> {
@@ -439,7 +440,7 @@ public macro fun from_sorted_keys_values<$K: copy, $V>(
 ///
 /// #### Returns
 /// - `true` iff `key` is present.
-public macro fun contains_by<$K: copy, $V>(
+public macro fun contains_by<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -453,7 +454,7 @@ public macro fun contains_by<$K: copy, $V>(
 ///
 /// #### Returns
 /// - `true` iff `key` is present.
-public macro fun contains<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): bool {
+public macro fun contains<$K: copy + drop, $V>($map: &SortedMap<$K, $V>, $key: &$K): bool {
     contains_by!($map, $key, |a, b| *a < *b)
 }
 
@@ -470,7 +471,7 @@ public macro fun contains<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): bo
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
-public macro fun borrow_by<$K: copy, $V>(
+public macro fun borrow_by<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -488,7 +489,7 @@ public macro fun borrow_by<$K: copy, $V>(
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
-public macro fun borrow<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): &$V {
+public macro fun borrow<$K: copy + drop, $V>($map: &SortedMap<$K, $V>, $key: &$K): &$V {
     borrow_by!($map, $key, |a, b| *a < *b)
 }
 
@@ -504,7 +505,7 @@ public macro fun borrow<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): &$V 
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
-public macro fun borrow_mut_by<$K: copy, $V>(
+public macro fun borrow_mut_by<$K: copy + drop, $V>(
     $map: &mut SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -522,7 +523,7 @@ public macro fun borrow_mut_by<$K: copy, $V>(
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
-public macro fun borrow_mut<$K: copy, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): &mut $V {
+public macro fun borrow_mut<$K: copy + drop, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): &mut $V {
     borrow_mut_by!($map, $key, |a, b| *a < *b)
 }
 
@@ -541,7 +542,7 @@ public macro fun borrow_mut<$K: copy, $V>($map: &mut SortedMap<$K, $V>, $key: &$
 ///
 /// #### Aborts
 /// - `EKeyAlreadyExists` if `key` is already present.
-public macro fun add_by<$K: copy, $V>(
+public macro fun add_by<$K: copy + drop, $V>(
     $map: &mut SortedMap<$K, $V>,
     $key: $K,
     $value: $V,
@@ -559,58 +560,59 @@ public macro fun add_by<$K: copy, $V>(
 ///
 /// #### Aborts
 /// - `EKeyAlreadyExists` if `key` is already present.
-public macro fun add<$K: copy, $V>($map: &mut SortedMap<$K, $V>, $key: $K, $value: $V) {
+public macro fun add<$K: copy + drop, $V>($map: &mut SortedMap<$K, $V>, $key: $K, $value: $V) {
     add_by!($map, $key, $value, |a, b| *a < *b)
 }
 
-/// Insert `key`/`value`, or replace the value if `key` is already present, under
-/// `$lt`. `key` is taken by reference and only copied into storage on a fresh insert; on
-/// replace the existing stored key is kept (never disposed) and only the value is swapped,
-/// so the displaced value is returned - never dropped, and `K` needs no `drop`.
+/// Insert `key`/`value`, or replace the value if `key` is already present, under `$lt`. `key`
+/// is taken by value: on a fresh insert it is moved into storage; on a replace the previously
+/// stored key is dropped and this `key` is stored in its place (last-write-wins for the key bytes -
+/// observable only under a coarse comparator). The displaced VALUE is returned - never dropped - so
+/// a resource `V` is safe; `K` must be `copy + drop`.
 ///
 /// Deliberate divergence from `sui::vec_map::insert`, which aborts on a duplicate key: this
-/// is a total upsert, matching `sorted_set`'s divergence from `vec_set`. To recover the
-/// abort-on-duplicate behavior when `V: drop`, write:
+/// is a total upsert, matching `sorted_set`'s divergence from `vec_set`. For abort-on-duplicate,
+/// prefer `add!` (a strict insert); or, when `V: drop`, assert on the returned option:
 ///
 /// ```move
-/// assert!(m.upsert!(&k, v).is_none(), E);
+/// assert!(m.upsert!(k, v).is_none(), E);
 /// ```
 /// For a resource `V` (no `drop`) the returned option cannot be dropped, so bind and
 /// consume it instead:
 ///
 /// ```move
-/// let old = m.upsert!(&k, v);
+/// let old = m.upsert!(k, v);
 /// assert!(old.is_none(), E);
 /// old.destroy_none();
 /// ```
 ///
 /// #### Parameters
-/// - `key`: Key to insert or update.
+/// - `key`: Key to insert or update (taken by value).
 /// - `value`: Value to store.
 /// - `lt`: Strict less-than comparator.
 ///
 /// #### Returns
 /// - `some(old_value)` on replace (length unchanged), `none` on a fresh insert (length + 1).
-public macro fun upsert_by<$K: copy, $V>(
+public macro fun upsert_by<$K: copy + drop, $V>(
     $map: &mut SortedMap<$K, $V>,
-    $key: &$K,
+    $key: $K,
     $value: $V,
     $lt: |&$K, &$K| -> bool,
 ): Option<$V> {
     let map = $map;
     let key = $key;
     let value = $value;
-    let (found, idx) = search!(map, key, $lt);
+    let (found, idx) = map.search!(&key, $lt);
     if (found) {
         // Extract-then-reinsert, deliberately NOT `*map.value_at_mut(..) = value`: overwriting
         // in place would drop the old value (requiring `V: drop`) and silently destroy a `Coin`.
-        // The extracted key is reinserted unchanged, so no `K` is ever disposed (no `K: drop`)
-        // and the stored key bytes stay first-seen.
-        let (old_key, old_value) = map.remove_at(idx);
-        map.insert_at(idx, new_entry(old_key, value));
+        // The old key is dropped (`K: drop`) and the incoming `key` stored in its place, so a
+        // coarse-comparator re-insert keeps the LAST key's bytes (last-write-wins).
+        let (_, old_value) = map.remove_at(idx);
+        map.insert_at(idx, new_entry(key, value));
         option::some(old_value)
     } else {
-        map.insert_at(idx, new_entry(*key, value));
+        map.insert_at(idx, new_entry(key, value));
         option::none()
     }
 }
@@ -619,46 +621,47 @@ public macro fun upsert_by<$K: copy, $V>(
 ///
 /// #### Returns
 /// - `some(old)` on replace, `none` on a fresh insert.
-public macro fun upsert<$K: copy, $V>(
+public macro fun upsert<$K: copy + drop, $V>(
     $map: &mut SortedMap<$K, $V>,
-    $key: &$K,
+    $key: $K,
     $value: $V,
 ): Option<$V> {
     upsert_by!($map, $key, $value, |a, b| *a < *b)
 }
 
-/// Remove and return `key`'s entry, under `$lt` (length - 1, order preserved). Uses a
-/// shifting `vector::remove`, never `swap_remove`, which would break strict order.
+/// Remove `key`'s entry and return its value, under `$lt` (length - 1, order preserved). Uses a
+/// shifting `vector::remove`, never `swap_remove`, which would break strict order. The stored key
+/// is dropped (`K: drop`); only the value is returned.
 ///
 /// #### Parameters
 /// - `key`: Key to remove.
 /// - `lt`: Strict less-than comparator.
 ///
 /// #### Returns
-/// - The removed `(key, value)` pair. The key is returned (not dropped) so a `K` without `drop`
-///   is supported; when `K: drop` and you only want the value, bind the key to `_`.
+/// - The removed value.
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
-public macro fun remove_by<$K: copy, $V>(
+public macro fun remove_by<$K: copy + drop, $V>(
     $map: &mut SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
-): ($K, $V) {
+): $V {
     let map = $map;
     let (found, idx) = search!(map, $key, $lt);
     assert_key_found(found);
-    map.remove_at(idx)
+    let (_, value) = map.remove_at(idx);
+    value
 }
 
 /// `remove_by` with the built-in integer `<`.
 ///
 /// #### Returns
-/// - The removed `(key, value)` pair.
+/// - The removed value.
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
-public macro fun remove<$K: copy, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): ($K, $V) {
+public macro fun remove<$K: copy + drop, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): $V {
     remove_by!($map, $key, |a, b| *a < *b)
 }
 
@@ -675,7 +678,7 @@ public macro fun remove<$K: copy, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): 
 ///
 /// #### Returns
 /// - The ceiling/strict-next key, or `none`.
-public macro fun find_next_by<$K: copy, $V>(
+public macro fun find_next_by<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $include: bool,
@@ -707,7 +710,7 @@ public macro fun find_next_by<$K: copy, $V>(
 ///
 /// #### Returns
 /// - The ceiling/strict-next key, or `none`.
-public macro fun find_next<$K: copy, $V>(
+public macro fun find_next<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $include: bool,
@@ -726,7 +729,7 @@ public macro fun find_next<$K: copy, $V>(
 ///
 /// #### Returns
 /// - The floor/strict-prev key, or `none`.
-public macro fun find_prev_by<$K: copy, $V>(
+public macro fun find_prev_by<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $include: bool,
@@ -757,7 +760,7 @@ public macro fun find_prev_by<$K: copy, $V>(
 ///
 /// #### Returns
 /// - The floor/strict-prev key, or `none`.
-public macro fun find_prev<$K: copy, $V>(
+public macro fun find_prev<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $include: bool,
@@ -775,7 +778,7 @@ public macro fun find_prev<$K: copy, $V>(
 ///
 /// #### Returns
 /// - The strict-next key, or `none`.
-public macro fun next_key_by<$K: copy, $V>(
+public macro fun next_key_by<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -787,7 +790,7 @@ public macro fun next_key_by<$K: copy, $V>(
 ///
 /// #### Returns
 /// - The strict-next key, or `none`.
-public macro fun next_key<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$K> {
+public macro fun next_key<$K: copy + drop, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$K> {
     find_next_by!($map, $key, false, |a, b| *a < *b)
 }
 
@@ -801,7 +804,7 @@ public macro fun next_key<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): Op
 ///
 /// #### Returns
 /// - The strict-prev key, or `none`.
-public macro fun prev_key_by<$K: copy, $V>(
+public macro fun prev_key_by<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -813,7 +816,7 @@ public macro fun prev_key_by<$K: copy, $V>(
 ///
 /// #### Returns
 /// - The strict-prev key, or `none`.
-public macro fun prev_key<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$K> {
+public macro fun prev_key<$K: copy + drop, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$K> {
     find_prev_by!($map, $key, false, |a, b| *a < *b)
 }
 
@@ -837,7 +840,7 @@ public macro fun prev_key<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): Op
 ///
 /// #### Returns
 /// - Up to `limit` keys in ascending order.
-public macro fun keys_from_by<$K: copy, $V>(
+public macro fun keys_from_by<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $from: &$K,
     $include: bool,
@@ -867,7 +870,7 @@ public macro fun keys_from_by<$K: copy, $V>(
 ///
 /// #### Returns
 /// - Up to `limit` keys in ascending order.
-public macro fun keys_from<$K: copy, $V>(
+public macro fun keys_from<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $from: &$K,
     $include: bool,
@@ -888,7 +891,7 @@ public macro fun keys_from<$K: copy, $V>(
 ///
 /// #### Aborts
 /// - `EEmpty` if the map is empty.
-public fun pop_front<K: copy, V>(map: &mut SortedMap<K, V>): (K, V) {
+public fun pop_front<K: copy + drop, V>(map: &mut SortedMap<K, V>): (K, V) {
     // Check first: `remove(0)` on an empty vector would abort with a native code, not `EEmpty`.
     assert!(!map.is_empty(), EEmpty);
     let Entry { key, value } = map.entries.remove(0);
@@ -902,7 +905,7 @@ public fun pop_front<K: copy, V>(map: &mut SortedMap<K, V>): (K, V) {
 ///
 /// #### Aborts
 /// - `EEmpty` if the map is empty.
-public fun pop_back<K: copy, V>(map: &mut SortedMap<K, V>): (K, V) {
+public fun pop_back<K: copy + drop, V>(map: &mut SortedMap<K, V>): (K, V) {
     // Check first: `pop_back` on an empty vector would abort with a native code, not `EEmpty`.
     assert!(!map.is_empty(), EEmpty);
     let Entry { key, value } = map.entries.pop_back();
@@ -917,7 +920,7 @@ public fun pop_back<K: copy, V>(map: &mut SortedMap<K, V>): (K, V) {
 ///
 /// #### Returns
 /// - Every key, in ascending comparator order.
-public fun keys<K: copy, V>(map: &SortedMap<K, V>): vector<K> {
+public fun keys<K: copy + drop, V>(map: &SortedMap<K, V>): vector<K> {
     let es = &map.entries;
     vector::tabulate!(es.length(), |i| es.borrow(i).key)
 }
@@ -942,7 +945,7 @@ public fun keys<K: copy, V>(map: &SortedMap<K, V>): vector<K> {
 /// #### Returns
 /// - `true` iff the map is strictly increasing under `lt`.
 #[test_only]
-public macro fun is_well_formed_by<$K: copy, $V>(
+public macro fun is_well_formed_by<$K: copy + drop, $V>(
     $map: &SortedMap<$K, $V>,
     $lt: |&$K, &$K| -> bool,
 ): bool {
@@ -966,6 +969,6 @@ public macro fun is_well_formed_by<$K: copy, $V>(
 /// #### Returns
 /// - `true` iff the map is strictly increasing under the built-in `<`.
 #[test_only]
-public macro fun is_well_formed<$K: copy, $V>($map: &SortedMap<$K, $V>): bool {
+public macro fun is_well_formed<$K: copy + drop, $V>($map: &SortedMap<$K, $V>): bool {
     is_well_formed_by!($map, |a, b| *a < *b)
 }

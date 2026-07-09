@@ -140,13 +140,14 @@ fun coarse_comparator_silently_collapses_distinct_validators() {
     let b = validator_set::validator(100, VAL_B); // distinct addr, SAME stake
 
     // First insert lands.
-    assert!(s.upsert_by!(&a, |x, y| x.stake() > y.stake()));
+    assert!(s.upsert_by!(a, |x, y| x.stake() > y.stake()));
     // Second compares EQUAL under stake-only -> "already present" -> false (NO abort).
-    assert!(!s.upsert_by!(&b, |x, y| x.stake() > y.stake()));
+    assert!(!s.upsert_by!(b, |x, y| x.stake() > y.stake()));
 
-    // Silent collapse: only ONE element, and first-write-wins keeps a's address, ignoring b's.
+    // Silent collapse: only ONE element, and last-write-wins overwrites with b's address (the
+    // second, compare-equal insert replaced the stored key even though it returned false).
     assert_eq!(s.length(), 1);
     let ks = s.keys();
-    assert_eq!(ks.borrow(0).addr(), VAL_A);
+    assert_eq!(ks.borrow(0).addr(), VAL_B);
     // Under the injective `outranks` (tie-broken on addr), BOTH would have landed (length 2).
 }
