@@ -15,7 +15,7 @@ follow the links to the sources of truth.
 
 ## For each package
 
-- **README** - what it does, when to use it, install snippet
+- **README** - what it does, when to use it, usage examples
 - **`examples/`** - compilable, audited-adjacent integration examples (the composition recipes)
 - **API reference** - generated from doc-comments (`sui move build --doc`), published at
   `https://docs.openzeppelin.com/contracts-sui/1.x/api/<package>`
@@ -24,4 +24,4 @@ follow the links to the sources of truth.
 ## Dependencies
 
 Pin stable releases from the Move Registry (MVR):
-`dep = { r.mvr = "@openzeppelin-move/<package>" }` - see each package's README install snippet for the exact name.
+`dep = { r.mvr = "@openzeppelin-move/<package>" }` - see the package's README install snippet for the exact name.
