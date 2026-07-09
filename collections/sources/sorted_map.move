@@ -58,7 +58,7 @@
 /// # Forced-public internals
 ///
 /// Move 2024 macro hygiene requires every symbol a macro body references to be `public` at the
-/// consumer's expansion site, so `search!`, `insert_at`, `remove_at`, `new_entry`, `entry_key`,
+/// consumer's expansion site, so `search!`, `insert_at`, `remove_at`, `new_entry`, `key`,
 /// and similar are `public`. They are not a supported mutation API: `insert_at` / `remove_at`
 /// write at a caller-given position with no order check, so calling them directly can corrupt
 /// sorted order. Use the macro API.
@@ -101,7 +101,7 @@ const EUnequalLengths: vector<u8> = "Keys and values differ in length";
 /// One key-value pair, stored inline in the map's vector.
 ///
 /// The fields are module-private: outside this module an `Entry` is read only via
-/// `entry_key`/`entry_value` and built only via `new_entry`. No `&mut Entry` is ever
+/// `key`/`entry_value` and built only via `new_entry`. No `&mut Entry` is ever
 /// exposed, so a key cannot be mutated in place and can never desync from its sorted
 /// position.
 ///
@@ -212,12 +212,12 @@ public fun entries_ref<K: copy + drop + store, V: store>(
 
 /// Borrow an entry's key. Macro bodies must read keys through this (not `.key`), since
 /// the field is private at the expansion site.
-public fun entry_key<K: copy + drop + store, V: store>(e: &Entry<K, V>): &K {
+public fun key<K: copy + drop + store, V: store>(e: &Entry<K, V>): &K {
     &e.key
 }
 
 /// Borrow an entry's value. Unlike its neighbors in this section, no macro body references
-/// it - it is public as the value-reading complement to `entry_key`, completing the read
+/// it - it is public as the value-reading complement to `key`, completing the read
 /// surface of `entries_ref` (the `Entry` fields are private).
 public fun entry_value<K: copy + drop + store, V: store>(e: &Entry<K, V>): &V {
     &e.value
@@ -335,7 +335,7 @@ public macro fun search<$K: copy + drop + store, $V: store>(
     let mut idx = n;
     while (lo < hi) {
         let mid = lo + (hi - lo) / 2;
-        let mk = es.borrow(mid).entry_key();
+        let mk = es.borrow(mid).key();
         if ($lt(mk, target)) {
             lo = mid + 1;
         } else if ($lt(target, mk)) {
@@ -641,16 +641,16 @@ public macro fun find_next_by<$K: copy + drop + store, $V: store>(
     let n = es.length();
     if (found) {
         if (include) {
-            option::some(*es.borrow(idx).entry_key())
+            option::some(*es.borrow(idx).key())
         } else if (idx + 1 < n) {
-            option::some(*es.borrow(idx + 1).entry_key())
+            option::some(*es.borrow(idx + 1).key())
         } else {
             option::none()
         }
     } else if (idx < n) {
         // miss: idx is the insertion point = first key strictly greater than `key`,
         // which is the ceiling too (key is absent), so `include` doesn't matter here.
-        option::some(*es.borrow(idx).entry_key())
+        option::some(*es.borrow(idx).key())
     } else {
         option::none()
     }
@@ -691,16 +691,16 @@ public macro fun find_prev_by<$K: copy + drop + store, $V: store>(
     let es = map.entries_ref();
     if (found) {
         if (include) {
-            option::some(*es.borrow(idx).entry_key())
+            option::some(*es.borrow(idx).key())
         } else if (idx > 0) {
-            option::some(*es.borrow(idx - 1).entry_key())
+            option::some(*es.borrow(idx - 1).key())
         } else {
             option::none()
         }
     } else if (idx > 0) {
         // miss: idx is the insertion point, so idx-1 is the last key strictly less than
         // `key` - the floor too (key is absent), so `include` doesn't matter here.
-        option::some(*es.borrow(idx - 1).entry_key())
+        option::some(*es.borrow(idx - 1).key())
     } else {
         option::none()
     }
@@ -816,7 +816,7 @@ public macro fun keys_from_by<$K: copy + drop + store, $V: store>(
     let mut out = vector[];
     let mut i = start;
     while (i < n && out.length() < limit) {
-        out.push_back(*es.borrow(i).entry_key());
+        out.push_back(*es.borrow(i).key());
         i = i + 1;
     };
     out
@@ -911,7 +911,7 @@ public macro fun is_well_formed_by<$K: copy + drop + store, $V: store>(
     let mut ok = true;
     let mut i = 1;
     while (i < n) {
-        if (!$lt(es.borrow(i - 1).entry_key(), es.borrow(i).entry_key())) {
+        if (!$lt(es.borrow(i - 1).key(), es.borrow(i).key())) {
             ok = false;
             break
         };

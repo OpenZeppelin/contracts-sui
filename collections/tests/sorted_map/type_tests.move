@@ -93,9 +93,9 @@ fun entries_ref_read_only() {
     u::ins(&mut m, 2, 20);
     let es = m.entries_ref();
     assert_eq!(es.length(), 2);
-    assert_eq!(*es.borrow(0).entry_key(), 1);
+    assert_eq!(*es.borrow(0).key(), 1);
     assert_eq!(*es.borrow(0).entry_value(), 10);
-    assert_eq!(*es.borrow(1).entry_key(), 2);
+    assert_eq!(*es.borrow(1).key(), 2);
 }
 
 // `value_at`/`value_at_mut` are the low-level positional accessors the point-access macros
