@@ -632,7 +632,7 @@ public fun cancel_with<Role, Action, Params: store + drop>(
 /// #### Aborts
 /// - `EWrongRole` if `Role` is not the bound `admin_role`.
 /// - `EInvalidConfig` if `new_min_delay_ms > MAX_DELAY_MS`.
-/// - Plus the aborts of `schedule`, apart from its role check.
+/// - Plus the aborts of `schedule`, apart from the unreachable `EPredecessorIsSelf`.
 public fun schedule_update_min_delay<Role>(
     self: &mut Timelock,
     _admin_auth: &Auth<Role>,
