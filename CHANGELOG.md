@@ -8,19 +8,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
-### `openzeppelin_allowance`
-
-#### Added
-
-- New `spend_vault` module: a shared multi-coin vault that grants capped, expiring, revocable spending allowances to capability holders. (#402)
-
-### `openzeppelin_finance`
-
-#### Added
-
-- New `vesting_wallet` module: a curve-agnostic release-accounting core for authoring custom vesting curves.
-- New `vesting_wallet_linear` module: built-in linear/stepped vesting with an optional cliff, plus a continuous mode.
-
 ### `openzeppelin_timelock`
 
 #### Added
@@ -36,6 +23,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 #### Changed
 
 - `cdf` / `pdf`: raised the internal evaluation precision to `10^36`, making both functions monotone between every pair of adjacent representable inputs, and clamped their domains to the analytic saturation points (`6.109410205` / `6.402729806`). Gas, storage, and the public API are unchanged. (#431)
+
+## 1.4.0 (09-07-2026)
+
+### `openzeppelin_allowance`
+
+#### Added
+
+- New `spend_vault` module: a shared multi-coin vault that grants capped, expiring, revocable spending allowances to capability holders. (#402)
+
+### `openzeppelin_finance`
+
+#### Added
+
+- New `vesting_wallet` module: a curve-agnostic release-accounting core for authoring custom vesting curves.
+- New `vesting_wallet_linear` module: built-in linear/stepped vesting with an optional cliff, plus a continuous mode.
 
 ## 1.3.0 (15-06-2026)
 

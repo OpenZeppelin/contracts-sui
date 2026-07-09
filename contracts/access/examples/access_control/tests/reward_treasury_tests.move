@@ -5,6 +5,7 @@ use openzeppelin_access::example_reward_treasury::{
     Self as treasury,
     RewardTreasury,
     DistributorRole,
+    GuardianRole,
     PauserRole,
     EXAMPLE_REWARD_TREASURY
 };
@@ -184,15 +185,23 @@ fun timelocked_root_admin_handoff() {
     scenario.end();
 }
 
-// Governance retirement: the root admin schedules a renounce, the delay elapses, and the
-// finalized renounce leaves the registry permanently unmanaged (no default admin).
+// Governance retirement, in the right order: re-parent day-to-day roles away from the
+// root FIRST (any role still administered by the root freezes forever once the root is
+// renounced), then schedule the renounce, wait out the delay, and finalize. The root ends
+// permanently vacant while the self-administered guardian committee keeps managing roles.
 #[test]
 fun timelocked_root_admin_renounce() {
     let mut scenario = setup();
     let mut clock = sui::clock::create_for_testing(scenario.ctx());
 
-    // The root admin schedules a renounce of the root role.
     let mut registry = scenario.take_shared<AccessControl<EXAMPLE_REWARD_TREASURY>>();
+    // Retirement prep: guardians administer themselves (a self-sustaining committee), and
+    // distributors move under the guardians. Skipping this would leave both roles frozen
+    // - members permanent, no grants or revocations - the moment the root goes vacant.
+    registry.set_role_admin<_, GuardianRole, GuardianRole>(scenario.ctx());
+    registry.set_role_admin<_, DistributorRole, GuardianRole>(scenario.ctx());
+
+    // The root admin schedules the renounce.
     registry.begin_default_admin_renounce(&clock, scenario.ctx());
     assert!(registry.is_pending_default_admin_renounce());
     ts::return_shared(registry);
@@ -203,6 +212,13 @@ fun timelocked_root_admin_renounce() {
     let mut registry = scenario.take_shared<AccessControl<EXAMPLE_REWARD_TREASURY>>();
     registry.accept_default_admin_renounce(&clock, scenario.ctx());
     assert_eq!(registry.default_admin(), option::none());
+
+    // The root is gone, but role management stays alive: the admin still holds the
+    // guardian role, so it can grant - and, crucially, still revoke - distributors.
+    registry.grant_role<_, DistributorRole>(DISTRIBUTOR, scenario.ctx());
+    assert!(registry.has_role<_, DistributorRole>(DISTRIBUTOR));
+    registry.revoke_role<_, DistributorRole>(DISTRIBUTOR, scenario.ctx());
+    assert!(!registry.has_role<_, DistributorRole>(DISTRIBUTOR));
 
     ts::return_shared(registry);
     destroy(clock);

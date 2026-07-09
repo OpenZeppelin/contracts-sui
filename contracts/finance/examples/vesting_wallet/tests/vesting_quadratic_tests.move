@@ -1,9 +1,9 @@
 module openzeppelin_finance::example_vesting_quadratic_tests;
 
 use openzeppelin_finance::example_vesting_quadratic::{Self as quadratic, Quadratic, Params};
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, Released};
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, DestroyCap, Released};
 use std::unit_test::{assert_eq, destroy};
-use sui::balance::{Self, Balance};
+use sui::balance;
 use sui::event;
 use sui::test_scenario as ts;
 
@@ -22,13 +22,15 @@ const TOTAL: u64 = 1_000_000;
 // `deposit`, or `public_share_object`.
 fun create_and_share(scenario: &mut ts::Scenario) {
     let params = quadratic::params(START_MS, DURATION_MS);
-    let mut wallet = vesting_wallet::new<Quadratic, Params, USDC>(
+    let (mut wallet, cap) = vesting_wallet::new<Quadratic, Params, USDC>(
         params,
         BENEFICIARY,
         scenario.ctx(),
     );
     wallet.deposit(balance::create_for_testing<USDC>(TOTAL));
     transfer::public_share_object(wallet);
+    // Park the teardown cap with the beneficiary; the teardown test takes it from there.
+    transfer::public_transfer(cap, BENEFICIARY);
 }
 
 // Happy path: the integrator drives the full lifecycle across both modules. The curve
@@ -184,13 +186,14 @@ fun compose_destroy_after_drain() {
         vesting_wallet::test_new_released<Quadratic, USDC>(wallet_id, BENEFICIARY, TOTAL),
     );
 
-    // Permissionless half reclaims the storage rebate; the witness-gated half consumes
-    // the receipt and enforces the ended and beneficiary gates (the sender is the
-    // beneficiary here).
+    // Permissionless half reclaims the storage rebate; the gated half consumes the
+    // receipt with the wallet's `DestroyCap` (parked with the beneficiary by
+    // `create_and_share`) and enforces the ended gate.
     // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
     // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
+    let cap = scenario.take_from_sender<DestroyCap>();
     let receipt = wallet.destroy_empty_for_testing();
-    quadratic::destroy(receipt, &clock, scenario.ctx());
+    quadratic::destroy(receipt, cap, &clock);
 
     destroy(clock);
     scenario.end();
@@ -204,40 +207,47 @@ fun destroy_aborts_before_end() {
     let mut clock = sui::clock::create_for_testing(scenario.ctx());
 
     // An unfunded wallet is already empty, so `destroy_empty` succeeds - but the clock
-    // sits before the schedule's end, so `destroy` aborts on the ended gate (the caller
-    // is the beneficiary, so the beneficiary gate cannot fire first).
-    let wallet = vesting_wallet::new<Quadratic, Params, USDC>(
+    // sits before the schedule's end, so `destroy` aborts on the ended gate.
+    let (wallet, cap) = vesting_wallet::new<Quadratic, Params, USDC>(
         quadratic::params(START_MS, DURATION_MS),
         BENEFICIARY,
         scenario.ctx(),
     );
     clock.set_for_testing(START_MS + DURATION_MS - 1);
 
+    // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
+    // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
     let receipt = wallet.destroy_empty_for_testing();
-    quadratic::destroy(receipt, &clock, scenario.ctx());
+    quadratic::destroy(receipt, cap, &clock);
 
     abort
 }
 
-// Only the beneficiary may tear down the wallet; any other caller aborts even on a
-// drained, ended wallet.
-#[test, expected_failure(abort_code = quadratic::ENotBeneficiary)]
-fun destroy_rejects_non_beneficiary() {
+// Teardown is authorized by the matching `DestroyCap`, not the caller's address: a cap
+// minted for a different wallet is rejected even on a drained, ended wallet. (Replaces
+// the old beneficiary-gate test - the curve no longer checks `ctx.sender()`.)
+#[test, expected_failure(abort_code = vesting_wallet::EWrongCap)]
+fun destroy_rejects_wrong_cap() {
     let mut scenario = ts::begin(EMPLOYER);
     let mut clock = sui::clock::create_for_testing(scenario.ctx());
 
-    // An unfunded wallet is already empty; place the clock at the schedule's end so the
-    // ended gate cannot fire - only the beneficiary gate can. The sender is EMPLOYER,
-    // not the wallet's beneficiary.
-    let wallet = vesting_wallet::new<Quadratic, Params, USDC>(
+    let (wallet, _cap) = vesting_wallet::new<Quadratic, Params, USDC>(
         quadratic::params(START_MS, DURATION_MS),
         BENEFICIARY,
         scenario.ctx(),
     );
-    clock.set_for_testing(START_MS + DURATION_MS);
+    // A second, independent wallet's cap is foreign to the first.
+    let (_other, other_cap) = vesting_wallet::new<Quadratic, Params, USDC>(
+        quadratic::params(START_MS, DURATION_MS),
+        BENEFICIARY,
+        scenario.ctx(),
+    );
+    clock.set_for_testing(START_MS + DURATION_MS); // after end, so the ended gate cannot fire first
 
+    // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
+    // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
     let receipt = wallet.destroy_empty_for_testing();
-    quadratic::destroy(receipt, &clock, scenario.ctx());
+    quadratic::destroy(receipt, other_cap, &clock);
 
     abort
 }

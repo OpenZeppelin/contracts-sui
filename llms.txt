@@ -9,13 +9,15 @@ follow the links to the sources of truth.
 
 ## Start here
 
+- [README.md](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/README.md): overview, install, and the pinned Sui CLI version
 - [ARCHITECTURE.md](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/ARCHITECTURE.md): why the library is shaped this way and how to compose it
+- [STYLEGUIDE.md](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/STYLEGUIDE.md): the Sui/Move coding conventions used in this repo, built on the [Sui dev cheat sheet](https://docs.sui.io/getting-started/dev-cheat-sheet)
 - [contracts/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/contracts/README.md) and [math/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/math/README.md): the package catalogs -
   browse for the available packages, their MVR slugs, paths, and docs
 
 ## For each package
 
-- **README** - what it does, when to use it, install snippet
+- **README** - what it does, when to use it, usage examples
 - **`examples/`** - compilable integration examples (composition recipes)
 - **API reference** - generated from doc-comments (`sui move build --doc`), published at
   `https://docs.openzeppelin.com/contracts-sui/1.x/api/<package>`
@@ -24,4 +26,4 @@ follow the links to the sources of truth.
 ## Dependencies
 
 Pin stable releases from the Move Registry (MVR):
-`dep = { r.mvr = "@openzeppelin-move/<package>" }` - see each package's README install snippet for the exact name.
+`dep = { r.mvr = "@openzeppelin-move/<package>" }` - see the package's README install snippet for the exact name.

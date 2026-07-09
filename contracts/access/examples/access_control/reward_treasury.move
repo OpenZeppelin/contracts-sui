@@ -34,6 +34,11 @@
 ///
 /// The tests also exercise the timelocked root-admin handoff (`begin`/`accept` transfer
 /// and renounce), the integration story for rotating or retiring protocol governance.
+/// A renounce only vacates the root role: any role still *administered by* the root
+/// freezes with it - current members become permanent and no one can grant or revoke
+/// again. Retirement therefore starts by re-parenting live roles away from the root
+/// (e.g. to a self-administered guardian committee), and only then renouncing; the
+/// renounce test walks that exact sequence.
 ///
 /// # Disclaimer
 ///

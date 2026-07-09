@@ -1,7 +1,7 @@
 module openzeppelin_finance::example_pausable_grant_tests;
 
 use openzeppelin_finance::example_pausable_grant::{Self, PausableGrant, GrantAdminCap};
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, Released};
+use openzeppelin_finance::vesting_wallet::{Self, DestroyCap, Released};
 use openzeppelin_finance::vesting_wallet_linear::{Self as linear, Linear, Params};
 use std::unit_test::{assert_eq, destroy};
 use sui::balance;
@@ -22,14 +22,16 @@ const TOTAL: u64 = 1_000_000;
 // The grant stays generic over the curve - it only sees `VestingWallet<Linear, ..>`.
 fun create_grant(scenario: &mut ts::Scenario) {
     let params = linear::params_continuous(START_MS, 0, DURATION_MS);
-    let mut wallet = vesting_wallet::new<Linear, Params, USDC>(
+    let (mut wallet, destroy_cap) = vesting_wallet::new<Linear, Params, USDC>(
         params,
         BENEFICIARY,
         scenario.ctx(),
     );
     wallet.deposit(balance::create_for_testing<USDC>(TOTAL));
-    let cap = example_pausable_grant::new(wallet, scenario.ctx());
-    transfer::public_transfer(cap, EMPLOYER);
+    let admin_cap = example_pausable_grant::new(wallet, scenario.ctx());
+    transfer::public_transfer(admin_cap, EMPLOYER);
+    // The wrapper never sees the teardown cap; the admin keeps it for later teardown.
+    transfer::public_transfer(destroy_cap, EMPLOYER);
 }
 
 // Evaluate the curve through the grant's immutable `inner()` view, then release
@@ -127,9 +129,10 @@ fun resume_restores_releases() {
 }
 
 // Teardown through the wrapper: the admin dissolves the grant with `unwrap`, recovering
-// the bare wallet, then the curve module finalizes teardown. `linear::destroy` is
-// beneficiary-gated, so the admin first forwards the drained wallet to the beneficiary -
-// the custodial-holder hand-off linear's teardown docs describe.
+// the bare wallet, then finalizes teardown with the wallet's `DestroyCap`. Teardown is
+// authority-gated by the cap, not by the beneficiary address, so the admin tears the
+// wallet down directly - no hand-off to the beneficiary required (the wallet's
+// beneficiary could even be an object).
 #[test]
 fun unwrap_then_curve_teardown() {
     let mut scenario = ts::begin(EMPLOYER);
@@ -143,21 +146,17 @@ fun unwrap_then_curve_teardown() {
     clock.set_for_testing(START_MS + DURATION_MS);
     release(&mut grant, &clock);
 
-    // Admin dissolves the wrapper, recovering the bare wallet, and forwards it to the
-    // beneficiary so the beneficiary-gated curve teardown can run.
+    // Admin dissolves the wrapper, recovering the bare wallet, and finalizes teardown
+    // with the teardown cap it has held since creation: permissionless `destroy_empty`
+    // for the receipt, then the curve's gated `destroy`.
     scenario.next_tx(EMPLOYER);
-    let cap = scenario.take_from_sender<GrantAdminCap>();
-    let wallet = grant.unwrap(cap);
-    transfer::public_transfer(wallet, BENEFICIARY);
-
-    // Beneficiary finalizes: permissionless `destroy_empty` for the receipt, then the
-    // curve's witness-gated `destroy`.
-    scenario.next_tx(BENEFICIARY);
-    let wallet = scenario.take_from_sender<VestingWallet<Linear, Params, USDC>>();
+    let admin_cap = scenario.take_from_sender<GrantAdminCap>();
+    let destroy_cap = scenario.take_from_sender<DestroyCap>();
+    let wallet = grant.unwrap(admin_cap);
     // TODO: use `destroy_empty` with a real `AccumulatorRoot` once
     // `accumulator::create_for_testing` ships in the published Sui mainnet framework.
     let receipt = wallet.destroy_empty_for_testing();
-    linear::destroy(receipt, &clock, scenario.ctx());
+    linear::destroy(receipt, destroy_cap, &clock);
 
     destroy(clock);
     scenario.end();
