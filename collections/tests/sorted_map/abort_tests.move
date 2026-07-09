@@ -13,13 +13,7 @@ use std::unit_test::assert_eq;
 
 // === borrow / borrow_mut on an absent key -> EKeyNotFound ===
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_absent_below_head() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -27,13 +21,7 @@ fun borrow_absent_below_head() {
     u::get(&m, 5); // below head
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_absent_above_tail() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -41,13 +29,7 @@ fun borrow_absent_above_tail() {
     u::get(&m, 99); // above tail: idx == n, assert must precede the OOB read
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_absent_interior_gap() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
@@ -55,38 +37,20 @@ fun borrow_absent_interior_gap() {
     u::get(&m, 20); // interior gap: idx < n; a pre-assert read would return 30 silently
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_empty_map() {
     let m = sm::new<u64, u64>();
     u::get(&m, 1);
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_mut_absent() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
     u::set(&mut m, 7, 0); // borrow_mut on an absent key (idx == n, above tail)
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_mut_absent_interior_gap() {
     // The interior-gap (idx < n) companion to borrow_mut_absent: a pre-assert &mut read
     // would hand back a live &mut to the SUCCESSOR (30) instead of aborting.
@@ -98,13 +62,7 @@ fun borrow_mut_absent_interior_gap() {
 
 // === destroy_empty on a non-empty map -> ENotEmpty ===
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::ENotEmpty,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::ENotEmpty, location = sm)]
 fun destroy_empty_nonempty() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 1, 1);
@@ -113,25 +71,13 @@ fun destroy_empty_nonempty() {
 
 // === pop_front / pop_back on an empty map -> EEmpty ===
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EEmpty,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EEmpty, location = sm)]
 fun pop_front_empty() {
     let mut m = sm::new<u64, u64>();
     let (_k, _v) = m.pop_front();
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EEmpty,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EEmpty, location = sm)]
 fun pop_back_empty() {
     let mut m = sm::new<u64, u64>();
     let (_k, _v) = m.pop_back(); // n-1 underflow guarded by the empty check
@@ -181,35 +127,17 @@ fun ptb_chain_no_abort() {
 
 // === from_sorted_keys_values -> EUnequalLengths / EKeysNotStrictlyIncreasing ===
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EUnequalLengths,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EUnequalLengths, location = sm)]
 fun from_sorted_unequal_lengths() {
     let _m = sm::from_sorted_keys_values!(vector<u64>[1, 2, 3], vector<u64>[10, 20]);
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeysNotStrictlyIncreasing,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeysNotStrictlyIncreasing, location = sm)]
 fun from_sorted_out_of_order() {
     let _m = sm::from_sorted_keys_values!(vector<u64>[1, 3, 2], vector<u64>[10, 30, 20]);
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeysNotStrictlyIncreasing,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeysNotStrictlyIncreasing, location = sm)]
 fun from_sorted_duplicate_key() {
     // A duplicate compares equal, so it is NOT strictly increasing - aborts rather than
     // de-duplicating (a resource `V` cannot be silently displaced).

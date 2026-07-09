@@ -2,6 +2,7 @@
 /// cap-gated writes, ordered payout, drain-then-destroy, and the ENotEmpty/EEmpty safety nets).
 module openzeppelin_collections::sorted_map_prize_vault_tests;
 
+use openzeppelin_collections::sorted_map as sm;
 use openzeppelin_collections::sorted_map_prize_vault::{
     Self as prize_vault,
     PrizeVault,
@@ -108,13 +109,7 @@ fun fund_payout_destroy() {
 // The conservation safety net: `destroy_empty` refuses to discard a map that still
 // holds value. The abort is the library's ENotEmpty, at the library location - the
 // transaction reverts and the vault (with its coin) stands.
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::ENotEmpty,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::ENotEmpty, location = sm)]
 fun close_nonempty_vault_aborts() {
     let mut scenario = ts::begin(ORGANIZER);
 
@@ -146,13 +141,7 @@ fun close_nonempty_vault_aborts() {
 //
 // prize_vault's second library abort: `pay_next` -> `pop_front` on an empty map asserts
 // EEmpty at the library location, so an over-eager payout reverts cleanly.
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EEmpty,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EEmpty, location = sm)]
 fun pay_next_on_empty_vault_aborts() {
     let mut scenario = ts::begin(ORGANIZER);
 
@@ -179,13 +168,7 @@ fun pay_next_on_empty_vault_aborts() {
 //
 // `pop_front` pays the lowest rank first, so a rank-0 prize would be paid before the
 // champion (rank 1). `fund` guards against it with a named EInvalidRank at this module.
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map_prize_vault::EInvalidRank,
-        location = openzeppelin_collections::sorted_map_prize_vault,
-    ),
-]
+#[test, expected_failure(abort_code = prize_vault::EInvalidRank, location = prize_vault)]
 fun fund_rank_zero_aborts() {
     let mut scenario = ts::begin(ORGANIZER);
 

@@ -2,6 +2,7 @@
 /// reverse-`_by`, pagination, the EKeyNotFound abort).
 module openzeppelin_collections::sorted_map_order_book_tests;
 
+use openzeppelin_collections::sorted_map as sm;
 use openzeppelin_collections::sorted_map_order_book::{Self as order_book, OrderBook};
 use std::unit_test::assert_eq;
 use sui::test_scenario as ts;
@@ -85,13 +86,7 @@ fun order_book_lifecycle() {
 // `borrow!` aborts when the key is absent. The abort originates inside the `sorted_map`
 // module, not in this consumer module - so `#[expected_failure]` must pin
 // `location = openzeppelin_collections::sorted_map`.
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun ask_size_at_absent_aborts() {
     let mut scenario = ts::begin(ALICE);
 

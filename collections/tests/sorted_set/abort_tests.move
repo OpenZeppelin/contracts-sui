@@ -8,43 +8,26 @@
 /// MAP's abort instead.
 module openzeppelin_collections::sorted_set_abort_tests;
 
+use openzeppelin_collections::sorted_map as sm;
 use openzeppelin_collections::sorted_set as ss;
 use openzeppelin_collections::sorted_set_test_util as u;
 use std::unit_test::assert_eq;
 
 // === the ONE abort: pop_front/pop_back on empty -> set-owned EEmpty ===
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_set::EEmpty,
-        location = openzeppelin_collections::sorted_set,
-    ),
-]
+#[test, expected_failure(abort_code = ss::EEmpty, location = ss)]
 fun pop_front_empty_aborts_at_set() {
     let mut s = ss::new<u64>();
     s.pop_front();
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_set::EEmpty,
-        location = openzeppelin_collections::sorted_set,
-    ),
-]
+#[test, expected_failure(abort_code = ss::EEmpty, location = ss)]
 fun pop_back_empty_aborts_at_set() {
     let mut s = ss::new<u64>();
     s.pop_back();
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_set::EEmpty,
-        location = openzeppelin_collections::sorted_set,
-    ),
-]
+#[test, expected_failure(abort_code = ss::EEmpty, location = ss)]
 fun pop_front_after_draining_aborts_at_set() {
     // Drain a singleton, then pop the now-empty set: still the SET's EEmpty.
     let mut s = ss::singleton<u64>(1);
@@ -54,37 +37,19 @@ fun pop_front_after_draining_aborts_at_set() {
 
 // === from_sorted_keys! on unsorted input -> set-owned EKeysNotSorted at the SET's location ===
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_set::EKeysNotSorted,
-        location = openzeppelin_collections::sorted_set,
-    ),
-]
+#[test, expected_failure(abort_code = ss::EKeysNotSorted, location = ss)]
 fun from_sorted_out_of_order_aborts_at_set() {
     // A strictly decreasing adjacent pair (3 then 2) is unsorted -> EKeysNotSorted at the SET.
     let _s = u::from_sorted(vector[1u64, 3, 2]);
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_set::EKeysNotSorted,
-        location = openzeppelin_collections::sorted_set,
-    ),
-]
+#[test, expected_failure(abort_code = ss::EKeysNotSorted, location = ss)]
 fun from_sorted_by_reverse_out_of_order_aborts_at_set() {
     // Under `>`, "sorted" means descending-numeric; an ascending step (1 then 2) is a decrease.
     let _s = u::from_sorted_rev(vector[3u64, 1, 2]);
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_set::EKeysNotSorted,
-        location = openzeppelin_collections::sorted_set,
-    ),
-]
+#[test, expected_failure(abort_code = ss::EKeysNotSorted, location = ss)]
 fun from_sorted_minimal_decrease_aborts_at_set() {
     // The decrease is the FIRST comparison (i == 1), not a later pair as in [1,3,2] - so the abort
     // fires on the very first adjacent check, with only one element built so far.
@@ -93,13 +58,7 @@ fun from_sorted_minimal_decrease_aborts_at_set() {
 
 // === bypass caveat: a direct inner-map pop leaks the MAP's abort, not the set's ===
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EEmpty,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EEmpty, location = sm)]
 fun inner_mut_direct_pop_empty_aborts_at_map() {
     // A consumer DEFEATS the set's location guarantee by calling sorted_map::pop_front through
     // inner_mut on an empty inner map: it aborts at the MAP's location with the MAP's code 2,
@@ -109,13 +68,7 @@ fun inner_mut_direct_pop_empty_aborts_at_map() {
     u::misuse_pop_front_inner(&mut s);
 }
 
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EEmpty,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EEmpty, location = sm)]
 fun inner_mut_direct_pop_back_empty_aborts_at_map() {
     // Symmetric to the pop_front bypass: a direct sorted_map::pop_back through inner_mut on an
     // empty inner map ALSO leaks the MAP's location with the MAP's code 2, not the set's code 0.

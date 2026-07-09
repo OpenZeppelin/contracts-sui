@@ -154,13 +154,7 @@ fun contains_borrow_agree_by() {
 /// The other half of the contains/borrow agreement under a custom comparator: when
 /// `contains_by` is false, the matching `borrow_by` aborts EKeyNotFound at the library
 /// location (it does not succeed).
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_by_absent_aborts() {
     let mut m = sm::new<CoarseKey, u64>();
     u::ins_ck(&mut m, u::ck(10, 0), 1).destroy_none();
@@ -252,13 +246,7 @@ fun borrow_mut_by_persists_order_safe() {
 
 /// Absent key under a custom comparator: borrow_mut_by aborts EKeyNotFound at the library
 /// location (the mutable companion to borrow_by_absent_aborts).
-#[
-    test,
-    expected_failure(
-        abort_code = openzeppelin_collections::sorted_map::EKeyNotFound,
-        location = openzeppelin_collections::sorted_map,
-    ),
-]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_mut_by_absent_aborts() {
     let mut m = sm::new<CoarseKey, u64>();
     u::ins_ck(&mut m, u::ck(10, 0), 1).destroy_none();
