@@ -14,7 +14,7 @@ use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcPar
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
 use openzeppelin_sale::receipt::Receipt;
 use openzeppelin_sale::refund_vault;
-use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
+use openzeppelin_sale::test_utils::{Self as u, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::Clock;
 use sui::event;
@@ -36,18 +36,18 @@ fun setup_with_per_buyer_cap(test: &mut Scenario, clk: &Clock, per_buyer: u64) {
         fixed_rate_curve::params(1),
         1_000,
         0,
-        tu::opens(),
-        tu::closes(),
+        u::opens(),
+        u::closes(),
         ctx,
     );
-    sale.deposit(tu::sale_balance(1_000));
+    sale.deposit(u::sale_balance(1_000));
     sale.set_per_buyer_cap(per_buyer, ctx);
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
     sale.share_and_activate(ticket, clk);
     refund_vault::share(vault);
-    transfer::public_transfer(cap, tu::admin());
+    transfer::public_transfer(cap, u::admin());
 }
 
 // Purchase `paid` via an allowlist entry minted for `buyer` with `max_amount`.
@@ -60,23 +60,23 @@ fun buy_with_entry(
     paid: u64,
     clk: &Clock,
 ) {
-    let admin = test.take_from_address<AllowlistAdmin<SALE>>(tu::admin());
+    let admin = test.take_from_address<AllowlistAdmin<SALE>>(u::admin());
     let entry = admin.new_entry(buyer, max_amount);
-    let quote = fixed_rate_curve::quote(sale, tu::pay_balance(paid));
+    let quote = fixed_rate_curve::quote(sale, u::pay_balance(paid));
     sale.purchase(quote, option::some(entry), clk, test.ctx());
-    ts::return_to_address(tu::admin(), admin);
+    ts::return_to_address(u::admin(), admin);
 }
 
 // === Happy path ===
 
 #[test]
 fun purchase_delivers_receipt_and_updates_state() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 2, 1_000, 0, 2_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 2, 1_000, 0, 2_000);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    tu::buy(&mut sale, 100, &clk, test.ctx());
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 100, &clk, test.ctx());
     assert_eq!(sale.raised(), 100);
     assert_eq!(sale.total_allocated(), 200); // rate 2
     assert_eq!(sale.proceeds_amount(), 100);
@@ -85,12 +85,12 @@ fun purchase_delivers_receipt_and_updates_state() {
     // receipt (not takeable until the next tx), so pin emission here; the payload's
     // paid/allocation are cross-checked against the receipt's own fields below.
     assert_eq!(event::events_by_type<prefunded_sale::Purchased<SALE, USDC>>().length(), 1);
-    tu::return_sale(sale);
+    u::return_sale(sale);
 
     // Receipt landed with the buyer carrying the right data.
-    test.next_tx(tu::buyer());
-    let r = test.take_from_address<Receipt<SALE>>(tu::buyer());
-    assert_eq!(r.buyer(), tu::buyer());
+    test.next_tx(u::buyer());
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    assert_eq!(r.buyer(), u::buyer());
     assert_eq!(r.paid(), 100);
     assert_eq!(r.allocation(), 200);
     destroy(r);
@@ -102,16 +102,16 @@ fun purchase_delivers_receipt_and_updates_state() {
 // Boundary: a purchase that brings raised exactly to hard_cap succeeds.
 #[test]
 fun purchase_at_exact_hard_cap_ok() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    tu::buy(&mut sale, 1_000, &clk, test.ctx());
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 1_000, &clk, test.ctx());
     assert_eq!(sale.raised(), 1_000);
     assert_eq!(sale.has_reached_hard_cap(), true);
     assert_eq!(sale.inventory_remaining(), 0);
-    tu::return_sale(sale);
+    u::return_sale(sale);
 
     destroy(clk);
     test.end();
@@ -122,15 +122,15 @@ fun purchase_at_exact_hard_cap_ok() {
 // A purchase before opens_at_ms is rejected.
 #[test, expected_failure(abort_code = prefunded_sale::ESaleWindowClosed)]
 fun purchase_before_open_aborts() {
-    let (mut test, clk) = tu::setup(); // clk parked at opens() = 1_000
+    let (mut test, clk) = u::setup(); // clk parked at opens() = 1_000
     // Window [2_000, 5_000]: activation at 1_000 is allowed (pre-open), but a
     // purchase at 1_000 is before the window.
-    tu::create_and_activate_full(&mut test, &clk, 1, 1_000, 0, 2_000, 5_000, 1_000, false);
+    u::create_and_activate_full(&mut test, &clk, 1, 1_000, 0, 2_000, 5_000, 1_000, false);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    tu::buy(&mut sale, 10, &clk, test.ctx()); // aborts: ESaleWindowClosed
-    tu::return_sale(sale);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 10, &clk, test.ctx()); // aborts: ESaleWindowClosed
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -138,14 +138,14 @@ fun purchase_before_open_aborts() {
 // A purchase after closes_at_ms is rejected.
 #[test, expected_failure(abort_code = prefunded_sale::ESaleWindowClosed)]
 fun purchase_after_close_aborts() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     clk.set_for_testing(5_001); // past closes_at_ms
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    tu::buy(&mut sale, 10, &clk, test.ctx()); // aborts
-    tu::return_sale(sale);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 10, &clk, test.ctx()); // aborts
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -154,13 +154,13 @@ fun purchase_after_close_aborts() {
 
 #[test, expected_failure(abort_code = prefunded_sale::EHardCapExceeded)]
 fun purchase_exceeds_hard_cap_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    tu::buy(&mut sale, 1_001, &clk, test.ctx()); // aborts
-    tu::return_sale(sale);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 1_001, &clk, test.ctx()); // aborts
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -170,15 +170,15 @@ fun purchase_exceeds_hard_cap_aborts() {
 // Cumulative payments within the cap across multiple purchases succeed.
 #[test]
 fun per_buyer_cap_allows_up_to_cap() {
-    let (mut test, clk) = tu::setup();
+    let (mut test, clk) = u::setup();
     setup_with_per_buyer_cap(&mut test, &clk, 100);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    tu::buy(&mut sale, 60, &clk, test.ctx());
-    tu::buy(&mut sale, 40, &clk, test.ctx()); // cumulative 100 == cap
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 60, &clk, test.ctx());
+    u::buy(&mut sale, 40, &clk, test.ctx()); // cumulative 100 == cap
     assert_eq!(sale.raised(), 100);
-    tu::return_sale(sale);
+    u::return_sale(sale);
 
     destroy(clk);
     test.end();
@@ -187,14 +187,14 @@ fun per_buyer_cap_allows_up_to_cap() {
 // A purchase pushing cumulative payment over the cap is rejected.
 #[test, expected_failure(abort_code = prefunded_sale::EPerBuyerCapExceeded)]
 fun per_buyer_cap_exceeded_aborts() {
-    let (mut test, clk) = tu::setup();
+    let (mut test, clk) = u::setup();
     setup_with_per_buyer_cap(&mut test, &clk, 100);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    tu::buy(&mut sale, 100, &clk, test.ctx());
-    tu::buy(&mut sale, 1, &clk, test.ctx()); // aborts: over cap
-    tu::return_sale(sale);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 100, &clk, test.ctx());
+    u::buy(&mut sale, 1, &clk, test.ctx()); // aborts: over cap
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -204,24 +204,24 @@ fun per_buyer_cap_exceeded_aborts() {
 // Happy: an allowlist sale accepts a purchase carrying a valid entry.
 #[test]
 fun allowlist_purchase_with_entry_succeeds() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate_full(
+    let (mut test, clk) = u::setup();
+    u::create_and_activate_full(
         &mut test,
         &clk,
         1,
         1_000,
         0,
-        tu::opens(),
-        tu::closes(),
+        u::opens(),
+        u::closes(),
         1_000,
         true,
     );
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    buy_with_entry(&mut sale, &mut test, tu::buyer(), 0, 100, &clk); // max 0 = no per-entry cap
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    buy_with_entry(&mut sale, &mut test, u::buyer(), 0, 100, &clk); // max 0 = no per-entry cap
     assert_eq!(sale.raised(), 100);
-    tu::return_sale(sale);
+    u::return_sale(sale);
 
     destroy(clk);
     test.end();
@@ -230,23 +230,23 @@ fun allowlist_purchase_with_entry_succeeds() {
 // An allowlist sale rejects a purchase with no entry.
 #[test, expected_failure(abort_code = prefunded_sale::EAllowlistRequired)]
 fun allowlist_required_but_none_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate_full(
+    let (mut test, clk) = u::setup();
+    u::create_and_activate_full(
         &mut test,
         &clk,
         1,
         1_000,
         0,
-        tu::opens(),
-        tu::closes(),
+        u::opens(),
+        u::closes(),
         1_000,
         true,
     );
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    tu::buy(&mut sale, 100, &clk, test.ctx()); // aborts: no entry
-    tu::return_sale(sale);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 100, &clk, test.ctx()); // aborts: no entry
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -254,18 +254,18 @@ fun allowlist_required_but_none_aborts() {
 // A non-allowlist sale rejects a purchase that carries an entry.
 #[test, expected_failure(abort_code = prefunded_sale::EAllowlistNotRequired)]
 fun allowlist_not_required_but_provided_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
     // Craft an admin + entry for this sale (no allowlist enabled on it).
     let admin = allowlist::new_admin<SALE>(object::id(&sale), test.ctx());
-    let entry = admin.new_entry(tu::buyer(), 0);
-    let quote = fixed_rate_curve::quote(&sale, tu::pay_balance(100));
+    let entry = admin.new_entry(u::buyer(), 0);
+    let quote = fixed_rate_curve::quote(&sale, u::pay_balance(100));
     sale.purchase(quote, option::some(entry), &clk, test.ctx()); // aborts
     destroy(admin);
-    tu::return_sale(sale);
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -273,23 +273,23 @@ fun allowlist_not_required_but_provided_aborts() {
 // The per-entry cap (max_amount) bounds a single purchase.
 #[test, expected_failure(abort_code = prefunded_sale::EPerEntryCapExceeded)]
 fun per_entry_cap_exceeded_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate_full(
+    let (mut test, clk) = u::setup();
+    u::create_and_activate_full(
         &mut test,
         &clk,
         1,
         1_000,
         0,
-        tu::opens(),
-        tu::closes(),
+        u::opens(),
+        u::closes(),
         1_000,
         true,
     );
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    buy_with_entry(&mut sale, &mut test, tu::buyer(), 50, 51, &clk); // 51 > max 50
-    tu::return_sale(sale);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    buy_with_entry(&mut sale, &mut test, u::buyer(), 50, 51, &clk); // 51 > max 50
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -297,24 +297,24 @@ fun per_entry_cap_exceeded_aborts() {
 // Boundary: paying exactly the entry's max_amount is allowed (the guard is paid <= max).
 #[test]
 fun per_entry_cap_exact_boundary_ok() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate_full(
+    let (mut test, clk) = u::setup();
+    u::create_and_activate_full(
         &mut test,
         &clk,
         1,
         1_000,
         0,
-        tu::opens(),
-        tu::closes(),
+        u::opens(),
+        u::closes(),
         1_000,
         true,
     );
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    buy_with_entry(&mut sale, &mut test, tu::buyer(), 50, 50, &clk); // paid == max 50
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    buy_with_entry(&mut sale, &mut test, u::buyer(), 50, 50, &clk); // paid == max 50
     assert_eq!(sale.raised(), 50);
-    tu::return_sale(sale);
+    u::return_sale(sale);
 
     destroy(clk);
     test.end();
@@ -324,25 +324,25 @@ fun per_entry_cap_exact_boundary_ok() {
 // activation-ticket sale-id check.
 #[test, expected_failure(abort_code = prefunded_sale::EQuoteSaleMismatch)]
 fun purchase_with_foreign_quote_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000); // sale A (shared)
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000); // sale A (shared)
 
-    test.next_tx(tu::buyer());
-    let mut sale_a = tu::take_sale(&test);
+    test.next_tx(u::buyer());
+    let mut sale_a = u::take_sale(&test);
     // Sale B — same type, never activated; its quote pins B's id, not A's.
     let (sale_b, cap_b) = prefunded_sale::create_sale<FixedRateCurve, FrcParams, SALE, USDC, VParams>(
         fixed_rate_curve::params(1),
         1_000,
         0,
-        tu::opens(),
-        tu::closes(),
+        u::opens(),
+        u::closes(),
         test.ctx(),
     );
-    let foreign_quote = fixed_rate_curve::quote(&sale_b, tu::pay_balance(10));
+    let foreign_quote = fixed_rate_curve::quote(&sale_b, u::pay_balance(10));
     sale_a.purchase(foreign_quote, option::none(), &clk, test.ctx()); // aborts: EQuoteSaleMismatch
     destroy(sale_b);
     destroy(cap_b);
-    tu::return_sale(sale_a);
+    u::return_sale(sale_a);
     destroy(clk);
     test.end();
 }

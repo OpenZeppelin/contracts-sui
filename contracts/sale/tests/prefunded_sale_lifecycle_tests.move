@@ -11,7 +11,7 @@ use openzeppelin_finance::vesting_wallet_linear::Params as VParams;
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
 use openzeppelin_sale::refund_vault;
-use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
+use openzeppelin_sale::test_utils::{Self as u, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::Clock;
 use sui::event;
@@ -21,10 +21,10 @@ use sui::test_scenario::Scenario;
 
 // Buy `paid` as the buyer in a fresh tx, leaving the sale shared again.
 fun buy_once(test: &mut Scenario, clk: &Clock, paid: u64) {
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(test);
-    tu::buy(&mut sale, paid, clk, test.ctx());
-    tu::return_sale(sale);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(test);
+    u::buy(&mut sale, paid, clk, test.ctx());
+    u::return_sale(sale);
 }
 
 // === finalize ===
@@ -32,14 +32,14 @@ fun buy_once(test: &mut Scenario, clk: &Clock, paid: u64) {
 // Window closed with soft cap met -> Finalized, vault Closed.
 #[test]
 fun finalize_after_close_succeeds() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
     buy_once(&mut test, &clk, 500);
     clk.set_for_testing(5_001);
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
     assert_eq!(sale.phase().is_finalized(), true);
     assert_eq!(vault.is_closed(), true);
@@ -63,8 +63,8 @@ fun finalize_after_close_succeeds() {
         ),
     );
 
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
 
     destroy(clk);
     test.end();
@@ -73,17 +73,17 @@ fun finalize_after_close_succeeds() {
 // Hard cap reached -> finalize allowed early, before the window closes.
 #[test]
 fun finalize_early_when_hard_cap_reached() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     buy_once(&mut test, &clk, 1_000); // raised == hard_cap, still in window
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
     assert_eq!(sale.phase().is_finalized(), true);
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
 
     destroy(clk);
     test.end();
@@ -92,16 +92,16 @@ fun finalize_early_when_hard_cap_reached() {
 // Window still open and hard cap not reached -> cannot finalize.
 #[test, expected_failure(abort_code = prefunded_sale::ESaleWindowStillOpen)]
 fun finalize_window_open_not_sold_out_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     buy_once(&mut test, &clk, 500);
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk); // aborts
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
     destroy(clk);
     test.end();
 }
@@ -109,17 +109,17 @@ fun finalize_window_open_not_sold_out_aborts() {
 // Soft cap not met at close -> cannot finalize.
 #[test, expected_failure(abort_code = prefunded_sale::ESoftCapNotMet)]
 fun finalize_soft_cap_not_met_aborts() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
     buy_once(&mut test, &clk, 300);
     clk.set_for_testing(5_001);
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk); // aborts
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
     destroy(clk);
     test.end();
 }
@@ -127,18 +127,18 @@ fun finalize_soft_cap_not_met_aborts() {
 // Finalized is terminal: a second finalize aborts on the phase guard.
 #[test, expected_failure(abort_code = openzeppelin_sale::phase::ENotActive)]
 fun finalize_twice_aborts() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     buy_once(&mut test, &clk, 500);
     clk.set_for_testing(5_001);
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
     sale.finalize(&mut vault, &clk); // aborts: ENotActive
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
     destroy(clk);
     test.end();
 }
@@ -148,14 +148,14 @@ fun finalize_twice_aborts() {
 // Window closed below the soft cap -> Cancelled, proceeds routed to the vault.
 #[test]
 fun cancel_after_close_succeeds_and_routes_proceeds() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
     buy_once(&mut test, &clk, 300);
     clk.set_for_testing(5_001);
 
-    test.next_tx(tu::buyer()); // permissionless
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::buyer()); // permissionless
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk);
     assert_eq!(sale.phase().is_cancelled(), true);
     assert_eq!(vault.is_refunding(), true);
@@ -191,8 +191,8 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
         ),
     );
 
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
 
     destroy(clk);
     test.end();
@@ -201,17 +201,17 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
 // Soft cap met -> cannot cancel after close (must finalize).
 #[test, expected_failure(abort_code = prefunded_sale::ESoftCapMet)]
 fun cancel_after_close_soft_cap_met_aborts() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
     buy_once(&mut test, &clk, 600);
     clk.set_for_testing(5_001);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk); // aborts
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
     destroy(clk);
     test.end();
 }
@@ -219,16 +219,16 @@ fun cancel_after_close_soft_cap_met_aborts() {
 // Window still open -> cannot cancel_after_close.
 #[test, expected_failure(abort_code = prefunded_sale::ESaleWindowStillOpen)]
 fun cancel_after_close_window_open_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
     buy_once(&mut test, &clk, 100);
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk); // aborts
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
     destroy(clk);
     test.end();
 }
@@ -238,14 +238,14 @@ fun cancel_after_close_window_open_aborts() {
 // In-window emergency cancel by admin -> Cancelled, proceeds routed.
 #[test]
 fun cancel_emergency_succeeds() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     buy_once(&mut test, &clk, 100);
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
-    let cap = tu::take_cap(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
     assert_eq!(sale.phase().is_cancelled(), true);
     assert_eq!(vault.value(), 100);
@@ -258,13 +258,13 @@ fun cancel_emergency_succeeds() {
             object::id(&sale),
             100,
             prefunded_sale::test_cancel_reason_admin_emergency(),
-            tu::opens(),
+            u::opens(),
         ),
     );
 
-    tu::return_sale(sale);
-    tu::return_vault(vault);
-    tu::return_cap(cap);
+    u::return_sale(sale);
+    u::return_vault(vault);
+    u::return_cap(cap);
 
     destroy(clk);
     test.end();
@@ -274,14 +274,14 @@ fun cancel_emergency_succeeds() {
 // through the vault's deposit (the zero-value no-op path) and still cancels cleanly.
 #[test]
 fun cancel_emergency_zero_raised_succeeds() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     // No purchase: raised == 0.
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
-    let cap = tu::take_cap(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
     assert_eq!(sale.phase().is_cancelled(), true);
     assert_eq!(vault.is_refunding(), true);
@@ -298,13 +298,13 @@ fun cancel_emergency_zero_raised_succeeds() {
             object::id(&sale),
             0,
             prefunded_sale::test_cancel_reason_admin_emergency(),
-            tu::opens(),
+            u::opens(),
         ),
     );
 
-    tu::return_sale(sale);
-    tu::return_vault(vault);
-    tu::return_cap(cap);
+    u::return_sale(sale);
+    u::return_vault(vault);
+    u::return_cap(cap);
 
     destroy(clk);
     test.end();
@@ -313,13 +313,13 @@ fun cancel_emergency_zero_raised_succeeds() {
 // A cap that does not match the sale is rejected.
 #[test, expected_failure(abort_code = prefunded_sale::EWrongAdminCap)]
 fun cancel_emergency_wrong_cap_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     buy_once(&mut test, &clk, 100);
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
     // A throwaway sale just to obtain a foreign (mismatching) admin cap.
     let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<
         FixedRateCurve,
@@ -331,15 +331,15 @@ fun cancel_emergency_wrong_cap_aborts() {
         fixed_rate_curve::params(1),
         1_000,
         0,
-        tu::opens(),
-        tu::closes(),
+        u::opens(),
+        u::closes(),
         test.ctx(),
     );
     sale.cancel_emergency(&foreign_cap, &mut vault, &clk); // aborts: EWrongAdminCap
     destroy(foreign_sale);
     destroy(foreign_cap);
-    tu::return_sale(sale);
-    tu::return_vault(vault);
+    u::return_sale(sale);
+    u::return_vault(vault);
     destroy(clk);
     test.end();
 }
@@ -347,19 +347,19 @@ fun cancel_emergency_wrong_cap_aborts() {
 // Emergency cancel after the window has closed is rejected.
 #[test, expected_failure(abort_code = prefunded_sale::EEmergencyCancelAfterClose)]
 fun cancel_emergency_after_close_aborts() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     buy_once(&mut test, &clk, 100);
     clk.set_for_testing(5_001);
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
-    let cap = tu::take_cap(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk); // aborts
-    tu::return_sale(sale);
-    tu::return_vault(vault);
-    tu::return_cap(cap);
+    u::return_sale(sale);
+    u::return_vault(vault);
+    u::return_cap(cap);
     destroy(clk);
     test.end();
 }
@@ -367,18 +367,18 @@ fun cancel_emergency_after_close_aborts() {
 // A sold-out sale cannot be emergency-cancelled (must finalize).
 #[test, expected_failure(abort_code = prefunded_sale::ESaleAlreadyComplete)]
 fun cancel_emergency_hard_cap_reached_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     buy_once(&mut test, &clk, 1_000); // raised == hard_cap
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
-    let cap = tu::take_cap(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk); // aborts
-    tu::return_sale(sale);
-    tu::return_vault(vault);
-    tu::return_cap(cap);
+    u::return_sale(sale);
+    u::return_vault(vault);
+    u::return_cap(cap);
     destroy(clk);
     test.end();
 }
@@ -386,18 +386,18 @@ fun cancel_emergency_hard_cap_reached_aborts() {
 // A sale that has met its soft cap cannot be emergency-cancelled.
 #[test, expected_failure(abort_code = prefunded_sale::ESoftCapMet)]
 fun cancel_emergency_soft_cap_met_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
     buy_once(&mut test, &clk, 500); // raised >= soft_cap
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let mut vault = tu::take_vault(&test);
-    let cap = tu::take_cap(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk); // aborts
-    tu::return_sale(sale);
-    tu::return_vault(vault);
-    tu::return_cap(cap);
+    u::return_sale(sale);
+    u::return_vault(vault);
+    u::return_cap(cap);
     destroy(clk);
     test.end();
 }
@@ -413,19 +413,19 @@ fun cancel_emergency_soft_cap_met_aborts() {
 // window/soft-cap guards pass).
 #[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
 fun finalize_wrong_vault_aborts() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
     buy_once(&mut test, &clk, 500); // soft cap met
     clk.set_for_testing(5_001); // window closed
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
     let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
     sale.finalize(&mut foreign_vault, &clk); // aborts: EWrongVault
 
     destroy(foreign_vault);
     destroy(foreign_cap);
-    tu::return_sale(sale);
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -434,19 +434,19 @@ fun finalize_wrong_vault_aborts() {
 // window/soft-cap guards pass).
 #[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
 fun cancel_after_close_wrong_vault_aborts() {
-    let (mut test, mut clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
     buy_once(&mut test, &clk, 300); // below soft cap
     clk.set_for_testing(5_001); // window closed
 
-    test.next_tx(tu::buyer());
-    let mut sale = tu::take_sale(&test);
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
     let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
     sale.cancel_after_close(&mut foreign_vault, &clk); // aborts: EWrongVault
 
     destroy(foreign_vault);
     destroy(foreign_cap);
-    tu::return_sale(sale);
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }
@@ -455,20 +455,20 @@ fun cancel_after_close_wrong_vault_aborts() {
 // cap/phase/window/cap-guard checks pass).
 #[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
 fun cancel_emergency_wrong_vault_aborts() {
-    let (mut test, clk) = tu::setup();
-    tu::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
     buy_once(&mut test, &clk, 100); // in-window, below hard cap, no soft cap
 
-    test.next_tx(tu::admin());
-    let mut sale = tu::take_sale(&test);
-    let cap = tu::take_cap(&test);
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let cap = u::take_cap(&test);
     let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
     sale.cancel_emergency(&cap, &mut foreign_vault, &clk); // aborts: EWrongVault
 
     destroy(foreign_vault);
     destroy(foreign_cap);
-    tu::return_cap(cap);
-    tu::return_sale(sale);
+    u::return_cap(cap);
+    u::return_sale(sale);
     destroy(clk);
     test.end();
 }

@@ -9,7 +9,7 @@ module openzeppelin_sale::fixed_rate_curve_tests;
 use openzeppelin_finance::vesting_wallet_linear::Params as VParams;
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
-use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
+use openzeppelin_sale::test_utils::{Self as u, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 
 const MAX_U64: u64 = 18_446_744_073_709_551_615;
@@ -46,7 +46,7 @@ fun quote_allocation_is_paid_times_rate() {
     let mut ctx = tx_context::dummy();
     let (sale, cap) = new_sale(3, 1_000, &mut ctx);
 
-    let q = fixed_rate_curve::quote(&sale, tu::pay_balance(100));
+    let q = fixed_rate_curve::quote(&sale, u::pay_balance(100));
     assert_eq!(q.allocation(), 300);
     assert_eq!(q.sale_id(), object::id(&sale));
     assert_eq!(q.payment().value(), 100);
@@ -61,7 +61,7 @@ fun quote_allocation_is_paid_times_rate() {
 fun quote_rejects_zero_payment() {
     let mut ctx = tx_context::dummy();
     let (sale, cap) = new_sale(3, 1_000, &mut ctx);
-    let q = fixed_rate_curve::quote(&sale, tu::pay_balance(0)); // aborts
+    let q = fixed_rate_curve::quote(&sale, u::pay_balance(0)); // aborts
     destroy(q);
     destroy(sale);
     destroy(cap);
@@ -72,7 +72,7 @@ fun quote_rejects_zero_payment() {
 fun quote_allocation_overflow_aborts() {
     let mut ctx = tx_context::dummy();
     let (sale, cap) = new_sale(MAX_U64, 1_000, &mut ctx);
-    let q = fixed_rate_curve::quote(&sale, tu::pay_balance(2)); // 2 * MAX overflows
+    let q = fixed_rate_curve::quote(&sale, u::pay_balance(2)); // 2 * MAX overflows
     destroy(q);
     destroy(sale);
     destroy(cap);

@@ -11,7 +11,7 @@ module openzeppelin_sale::prefunded_sale_curve_trust_tests;
 
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
 use openzeppelin_sale::refund_vault;
-use openzeppelin_sale::test_utils::{Self as tu, SALE, USDC};
+use openzeppelin_sale::test_utils::{Self as u, SALE, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock::{Self, Clock};
 use sui::test_scenario::{Self as ts, Scenario};
@@ -24,9 +24,9 @@ public struct BadCurve has drop {}
 // === Test-Only Helpers ===
 
 fun setup(): (Scenario, Clock) {
-    let mut test = ts::begin(tu::admin());
+    let mut test = ts::begin(u::admin());
     let mut clk = clock::create_for_testing(test.ctx());
-    clk.set_for_testing(tu::opens());
+    clk.set_for_testing(u::opens());
     (test, clk)
 }
 
@@ -44,11 +44,11 @@ fun activate_bad(
         0,
         hard_cap,
         0,
-        tu::opens(),
-        tu::closes(),
+        u::opens(),
+        u::closes(),
         ctx,
     );
-    sale.deposit(tu::sale_balance(inventory));
+    sale.deposit(u::sale_balance(inventory));
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
     let ticket = prefunded_sale::mint_activation_ticket<BadCurve, u64, SALE, USDC, u64>(
@@ -58,7 +58,7 @@ fun activate_bad(
     );
     sale.share_and_activate(ticket, clk);
     refund_vault::share(vault);
-    transfer::public_transfer(cap, tu::admin());
+    transfer::public_transfer(cap, u::admin());
 }
 
 fun take_bad_sale(test: &Scenario): PrefundedSale<BadCurve, u64, SALE, USDC, u64> {
@@ -75,7 +75,7 @@ fun activation_trusts_undersized_required_inventory() {
     let (mut test, clk) = setup();
     activate_bad(&mut test, &clk, 1_000, 10, 10);
 
-    test.next_tx(tu::admin());
+    test.next_tx(u::admin());
     let sale = take_bad_sale(&test);
     assert_eq!(sale.phase().is_active(), true);
     assert_eq!(sale.inventory_total(), 10); // < hard_cap, yet active
@@ -95,13 +95,13 @@ fun overallocating_quote_beyond_inventory_aborts() {
     let (mut test, clk) = setup();
     activate_bad(&mut test, &clk, 1_000, 10, 10); // only 10 inventory
 
-    test.next_tx(tu::buyer());
+    test.next_tx(u::buyer());
     let mut sale = take_bad_sale(&test);
     // paid 1, rate 100 -> allocation 100 > unallocated 10.
     let quote = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
         &sale,
         BadCurve {},
-        tu::pay_balance(1),
+        u::pay_balance(1),
         100,
     );
     sale.purchase(quote, option::none(), &clk, test.ctx()); // aborts: EInsufficientInventory
@@ -118,13 +118,13 @@ fun overallocating_quote_within_inventory_is_accepted() {
     let (mut test, clk) = setup();
     activate_bad(&mut test, &clk, 1_000, 1_000, 1_000);
 
-    test.next_tx(tu::buyer());
+    test.next_tx(u::buyer());
     let mut sale = take_bad_sale(&test);
     // paid 1, rate 500 -> allocation 500; raised only advances by 1.
     let quote = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
         &sale,
         BadCurve {},
-        tu::pay_balance(1),
+        u::pay_balance(1),
         500,
     );
     sale.purchase(quote, option::none(), &clk, test.ctx());
@@ -148,13 +148,13 @@ fun purchase_raised_overflow_aborts() {
     let max = 18_446_744_073_709_551_615;
     activate_bad(&mut test, &clk, max, 10, 10); // hard_cap = u64::MAX, tiny inventory
 
-    test.next_tx(tu::buyer());
+    test.next_tx(u::buyer());
     let mut sale = take_bad_sale(&test);
     // First buy: paid = u64::MAX, rate 0 -> allocation 0; raised becomes u64::MAX.
     let q1 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
         &sale,
         BadCurve {},
-        tu::pay_balance(max),
+        u::pay_balance(max),
         0,
     );
     sale.purchase(q1, option::none(), &clk, test.ctx());
@@ -162,7 +162,7 @@ fun purchase_raised_overflow_aborts() {
     let q2 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, u64>(
         &sale,
         BadCurve {},
-        tu::pay_balance(1),
+        u::pay_balance(1),
         0,
     );
     sale.purchase(q2, option::none(), &clk, test.ctx()); // aborts: ERaisedOverflow

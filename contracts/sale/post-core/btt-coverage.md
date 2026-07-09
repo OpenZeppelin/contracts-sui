@@ -235,7 +235,7 @@ let claimed = event::events_by_type<prefunded_sale::Claimed<SALE, USDC>>();
 assert_eq!(claimed.length(), 1);
 assert_eq!(
     claimed[0],
-    prefunded_sale::test_new_claimed<SALE, USDC>(object::id(&sale), tu::buyer(), receipt_id, 200),
+    prefunded_sale::test_new_claimed<SALE, USDC>(object::id(&sale), u::buyer(), receipt_id, 200),
 );
 ```
 

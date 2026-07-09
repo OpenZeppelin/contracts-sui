@@ -6,7 +6,7 @@
 module openzeppelin_sale::refund_vault_tests;
 
 use openzeppelin_sale::refund_vault;
-use openzeppelin_sale::test_utils::{Self as tu, USDC};
+use openzeppelin_sale::test_utils::{Self as u, USDC};
 use std::unit_test::{assert_eq, destroy};
 use sui::event;
 
@@ -33,8 +33,8 @@ fun deposit_then_close_then_withdraw_all() {
     let mut ctx = tx_context::dummy();
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
 
-    vault.deposit(&cap, tu::pay_balance(300));
-    vault.deposit(&cap, tu::pay_balance(700));
+    vault.deposit(&cap, u::pay_balance(300));
+    vault.deposit(&cap, u::pay_balance(700));
     assert_eq!(vault.value(), 1_000);
 
     vault.flip_to_closed(&cap);
@@ -73,7 +73,7 @@ fun deposit_then_refunding_then_release_partial() {
     let mut ctx = tx_context::dummy();
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
 
-    vault.deposit(&cap, tu::pay_balance(1_000));
+    vault.deposit(&cap, u::pay_balance(1_000));
     vault.flip_to_refunding(&cap);
     assert_eq!(vault.is_refunding(), true);
 
@@ -113,14 +113,14 @@ fun deposit_zero_is_noop() {
     let mut ctx = tx_context::dummy();
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
 
-    vault.deposit(&cap, tu::pay_balance(0));
+    vault.deposit(&cap, u::pay_balance(0));
     assert_eq!(vault.value(), 0);
     assert_eq!(vault.is_active(), true);
     // The zero-value deposit emitted no VaultDeposit event.
     assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 0);
 
     // Still accepts real deposits after the no-op.
-    vault.deposit(&cap, tu::pay_balance(500));
+    vault.deposit(&cap, u::pay_balance(500));
     assert_eq!(vault.value(), 500);
     // Only the non-zero deposit produced an event.
     assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 1);
@@ -137,7 +137,7 @@ fun deposit_with_wrong_cap_aborts() {
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
     let (other_vault, other_cap) = refund_vault::new<USDC>(&mut ctx);
 
-    vault.deposit(&other_cap, tu::pay_balance(1)); // aborts: cap is for other_vault
+    vault.deposit(&other_cap, u::pay_balance(1)); // aborts: cap is for other_vault
 
     destroy(vault);
     destroy(cap);
@@ -153,7 +153,7 @@ fun deposit_after_refunding_aborts() {
     let mut ctx = tx_context::dummy();
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
     vault.flip_to_refunding(&cap);
-    vault.deposit(&cap, tu::pay_balance(1)); // aborts
+    vault.deposit(&cap, u::pay_balance(1)); // aborts
     destroy(vault);
     destroy(cap);
 }
@@ -163,7 +163,7 @@ fun deposit_after_refunding_aborts() {
 fun release_in_active_aborts() {
     let mut ctx = tx_context::dummy();
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
-    vault.deposit(&cap, tu::pay_balance(100));
+    vault.deposit(&cap, u::pay_balance(100));
     let part = vault.release_balance(&cap, 1); // aborts: not Refunding
     destroy(part);
     destroy(vault);
@@ -175,7 +175,7 @@ fun release_in_active_aborts() {
 fun release_over_locked_aborts() {
     let mut ctx = tx_context::dummy();
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
-    vault.deposit(&cap, tu::pay_balance(100));
+    vault.deposit(&cap, u::pay_balance(100));
     vault.flip_to_refunding(&cap);
     let part = vault.release_balance(&cap, 101); // aborts
     destroy(part);
