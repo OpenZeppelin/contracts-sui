@@ -9,8 +9,8 @@
 ///    dynamic field keyed by the operation id; the id is
 ///    `keccak256(DOMAIN_TAG || bcs(IdInput { action, payload_digest, predecessor, salt, timelock_id }))`
 ///    where `payload_digest = keccak256(bcs(params))`. The id is deterministic and
-///    reproducible off-chain, so predecessors can be wired before the predecessor op
-///    is even scheduled.
+///    reproducible off-chain (`hash_operation` documents the byte-exact encoding), so
+///    predecessors can be wired before the predecessor op is even scheduled.
 /// 2. After the per-op delay elapses and before the grace window closes, a holder of
 ///    the executor role calls `execute<Role, Action, Params>` with the operation id
 ///    (returned by `schedule`) - or anyone, if `open_executor == true`, via
@@ -140,7 +140,11 @@ const EInvalidPredecessor: vector<u8> = "Predecessor must be empty or a 32-byte 
 /// Value: 60 days in milliseconds. Does NOT bound the per-call `delay_ms`.
 const MAX_DELAY_MS: u64 = 60 * 24 * 60 * 60 * 1_000;
 
-/// Domain separation tag, hashed into every operation id. Locked at publication.
+/// Domain separation tag prefixed to every operation-id preimage. ASCII
+/// `OZ_Timelock_1_Sui`: `OZ_Timelock` names the primitive, `1` versions the preimage
+/// format (a layout change would re-key every operation id, so it changes only with a
+/// deliberate format break), `Sui` pins the chain. Locked at publication; exposed via
+/// `domain_tag`.
 const DOMAIN_TAG: vector<u8> = b"OZ_Timelock_1_Sui";
 
 // === Structs ===
@@ -356,6 +360,23 @@ public fun share(self: Timelock) {
 
 /// Pure operation-id derivation from a payload digest. Off-chain tooling computes
 /// `payload_digest = keccak256(bcs(params))` and reproduces the id from there.
+///
+/// The id is `keccak256(DOMAIN_TAG || bcs(IdInput))`, byte-exact:
+/// - `DOMAIN_TAG` is the ASCII string `OZ_Timelock_1_Sui` (readable via `domain_tag`).
+///   It is not length-prefixed: the preimage starts with its raw 17 bytes.
+/// - `IdInput` fields are BCS-encoded in declaration order: `action`, `payload_digest`,
+///   `predecessor`, `salt`, `timelock_id`.
+/// - `action` is `type_name::with_original_ids<Action>()`: the fully-qualified type
+///   string (`<address-hex>::<module>::<name>`, 64 lowercase hex chars, no `0x`
+///   prefix, type arguments included), resolved with the ORIGINAL package address so
+///   ids stay stable across package upgrades. Its BCS is a ULEB128 length prefix
+///   followed by those ASCII bytes.
+/// - `payload_digest`, `predecessor`, and `salt` are ULEB128-length-prefixed byte
+///   vectors (an empty `predecessor` encodes as the single byte `0x00`);
+///   `timelock_id` is the raw 32 address bytes, unprefixed.
+///
+/// Cross-check any off-chain implementation against this function before relying on
+/// predicted ids.
 ///
 /// #### Parameters
 /// - `timelock_id`: id of the target `Timelock`; domain-separates ids across instances.
@@ -806,26 +827,44 @@ public fun execute_set_open_executor<Role>(
 
 // === View helpers ===
 
+/// The configured minimum delay in ms - the floor every scheduled `delay_ms` must meet.
 public fun min_delay_ms(self: &Timelock): u64 { self.min_delay_ms }
 
+/// The configured grace period in ms - how long an op stays executable once ready.
+/// Locked into each op at schedule time; later changes never move an existing window.
 public fun grace_period_ms(self: &Timelock): u64 { self.grace_period_ms }
 
+/// Whether open-executor mode is on, letting anyone execute via `execute_open`.
 public fun is_open_executor(self: &Timelock): bool { self.open_executor }
 
+/// The `MAX_DELAY_MS` upper bound on the configured `min_delay_ms` and
+/// `grace_period_ms`. Does NOT bound the per-call `delay_ms`.
 public fun max_delay_ms(): u64 { MAX_DELAY_MS }
 
+/// The `DOMAIN_TAG` byte string prefixed to every operation-id preimage
+/// (see `hash_operation`).
+public fun domain_tag(): vector<u8> { DOMAIN_TAG }
+
+/// The role type bound as proposer when this `Timelock` was created.
 public fun proposer_role(self: &Timelock): TypeName { self.proposer_role }
 
+/// The role type bound as executor when this `Timelock` was created.
 public fun executor_role(self: &Timelock): TypeName { self.executor_role }
 
+/// The role type bound as canceller when this `Timelock` was created.
 public fun canceller_role(self: &Timelock): TypeName { self.canceller_role }
 
+/// The role type bound as admin when this `Timelock` was created.
 public fun admin_role(self: &Timelock): TypeName { self.admin_role }
 
+/// Whether an operation with this id is registered, in ANY state - including `Done`,
+/// since executed ops keep their record (only `cancel` removes one).
 public fun is_operation(self: &Timelock, id: vector<u8>): bool {
     self.timestamps.contains(id)
 }
 
+/// Whether the operation is scheduled and awaiting execution: `Waiting` or `Ready`.
+/// `Expired` ops are NOT pending, though `cancel` still accepts them.
 public fun is_operation_pending(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Waiting { .. } => true,
@@ -834,6 +873,7 @@ public fun is_operation_pending(self: &Timelock, id: vector<u8>, clock: &Clock):
     }
 }
 
+/// Whether the operation is inside its execution window `[ready_at_ms, expires_at_ms)`.
 public fun is_operation_ready(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Ready { .. } => true,
@@ -841,6 +881,8 @@ public fun is_operation_ready(self: &Timelock, id: vector<u8>, clock: &Clock): b
     }
 }
 
+/// Whether the operation's grace window closed before it was executed. An expired op
+/// can never be executed; it stays registered until cancelled.
 public fun is_operation_expired(self: &Timelock, id: vector<u8>, clock: &Clock): bool {
     match (self.op_state(id, clock.timestamp_ms())) {
         OperationState::Expired { .. } => true,
@@ -848,6 +890,7 @@ public fun is_operation_expired(self: &Timelock, id: vector<u8>, clock: &Clock):
     }
 }
 
+/// Whether the operation has been executed. `Done` is sticky - it never resets.
 public fun is_operation_done(self: &Timelock, id: vector<u8>): bool {
     if (!self.timestamps.contains(id)) return false;
     match (self.timestamps.borrow(id)) {
@@ -856,6 +899,8 @@ public fun is_operation_done(self: &Timelock, id: vector<u8>): bool {
     }
 }
 
+/// The observable `OperationState` of an operation at the current `clock` time:
+/// `Unset` (never scheduled, or cancelled), `Waiting`, `Ready`, `Expired`, or `Done`.
 public fun operation_state(self: &Timelock, id: vector<u8>, clock: &Clock): OperationState {
     self.op_state(id, clock.timestamp_ms())
 }
