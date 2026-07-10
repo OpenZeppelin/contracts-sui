@@ -135,7 +135,7 @@ jobs:
     # green fast run so we never trace a broken build.
     needs: [setup, test]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     continue-on-error: true
     permissions:
       contents: read
