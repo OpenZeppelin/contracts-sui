@@ -1158,7 +1158,6 @@ fun cancel_admin_transfer_rejects_non_root() {
     scenario.next_tx(@0xC);
     let mut ac = take_ac(&scenario);
     ac.cancel_default_admin_transfer(scenario.ctx());
-    clock::destroy_for_testing(clk);
     abort
 }
 
@@ -1946,7 +1945,6 @@ fun cancel_delay_change_rejects_non_root() {
     scenario.next_tx(@0xB);
     let mut ac = take_ac(&scenario);
     ac.cancel_default_admin_delay_change(&clk, scenario.ctx());
-    clock::destroy_for_testing(clk);
     abort
 }
 
