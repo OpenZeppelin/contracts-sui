@@ -746,8 +746,7 @@ fun get_role_admin_rejects_foreign() {
     let scenario = setup(deployer, 0);
     let ac = take_ac(&scenario);
     let _ = ac.get_role_admin<_, ForeignRole>();
-    test_scenario::return_shared(ac);
-    scenario.end();
+    abort 999
 }
 
 #[test]
