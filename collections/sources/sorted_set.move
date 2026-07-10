@@ -143,9 +143,7 @@ public fun new<K>(): SortedSet<K> {
     SortedSet { inner: sorted_map::new() }
 }
 
-/// A set containing exactly the one given key. Needs no comparator: a single element is
-/// trivially sorted, so it is placed at index 0 of the (empty) backing vector - the one
-/// provably order-safe direct `insert_at` the set performs.
+/// A set containing exactly the one given key.
 ///
 /// #### Parameters
 /// - `key`: The sole member of the new set.
