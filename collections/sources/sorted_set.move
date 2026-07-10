@@ -67,11 +67,11 @@
 /// # Forced-public internals
 ///
 /// Move 2024 macro hygiene requires every symbol a macro body references to be `public` at the
-/// consumer's expansion site, so `inner`, `inner_mut`, and `unit` are `public`. They are not a
-/// supported API. In particular `inner_mut` hands out `&mut SortedMap<K, Unit>`: driving map ops on
-/// it with an inconsistent comparator (or `insert_at` / `remove_at` at a wrong index) can desort
-/// the set. Use the macro API. The corruption is order-only and local to that one set - no value
-/// is ever lost.
+/// consumer's expansion site, so `inner`, `inner_mut`, `unit`, and `assert_sorted` are `public`.
+/// They are not a supported API. In particular `inner_mut` hands out `&mut SortedMap<K, Unit>`:
+/// driving map ops on it with an inconsistent comparator (or `insert_at` / `remove_at` at a wrong
+/// index) can desort the set. Use the macro API. The corruption is order-only and local to that one
+/// set - no value is ever lost.
 ///
 /// # Upgrade compatibility
 ///
