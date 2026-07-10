@@ -107,14 +107,14 @@ fun create_sale_initializes_in_init_phase() {
         &mut ctx,
     );
 
-    assert_eq!(sale.phase().is_init(), true);
+    assert!(sale.phase().is_init());
     assert_eq!(sale.hard_cap(), 1_000);
     assert_eq!(sale.soft_cap(), 500);
     assert_eq!(sale.raised(), 0);
     assert_eq!(sale.inventory_total(), 0);
     assert_eq!(sale.total_allocated(), 0);
-    assert_eq!(sale.requires_allowlist(), false);
-    assert_eq!(sale.vesting_schedule_params().is_none(), true);
+    assert!(!sale.requires_allowlist());
+    assert!(sale.vesting_schedule_params().is_none());
     assert_eq!(cap.cap_sale_id(), object::id(&sale));
 
     let created = event::events_by_type<prefunded_sale::SaleCreated<FrcParams, SALE, USDC>>();
@@ -279,7 +279,7 @@ fun set_vesting_schedule_params_fills_option() {
         &mut ctx,
     );
     sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4));
-    assert_eq!(sale.vesting_schedule_params().is_some(), true);
+    assert!(sale.vesting_schedule_params().is_some());
 
     let set = event::events_by_type<
         prefunded_sale::VestingScheduleParamsSet<SALE, USDC, VParams>,
@@ -496,7 +496,7 @@ fun enable_allowlist_twice_aborts() {
         ctx,
     );
     let admin1 = sale.enable_allowlist(ctx);
-    assert_eq!(sale.requires_allowlist(), true);
+    assert!(sale.requires_allowlist());
     let admin2 = sale.enable_allowlist(ctx); // aborts: EAllowlistAlreadyEnabled
     destroy(sale);
     destroy(cap);
@@ -631,7 +631,7 @@ fun activate_at_exact_required_inventory_ok() {
 
     test.next_tx(u::admin());
     let sale = u::take_sale(&test);
-    assert_eq!(sale.phase().is_active(), true);
+    assert!(sale.phase().is_active());
     assert_eq!(sale.inventory_total(), 2_000);
     u::return_sale(sale);
 
@@ -781,7 +781,7 @@ fun enable_allowlist_emits_event() {
         &mut ctx,
     );
     let admin = sale.enable_allowlist(&mut ctx);
-    assert_eq!(sale.requires_allowlist(), true);
+    assert!(sale.requires_allowlist());
     let events = event::events_by_type<prefunded_sale::AllowlistEnabled<SALE, USDC>>();
     assert_eq!(events.length(), 1);
     assert_eq!(

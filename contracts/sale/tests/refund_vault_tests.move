@@ -16,7 +16,7 @@ use sui::event;
 fun new_starts_active_and_empty() {
     let mut ctx = tx_context::dummy();
     let (vault, cap) = refund_vault::new<USDC>(&mut ctx);
-    assert_eq!(vault.is_active(), true);
+    assert!(vault.is_active());
     assert_eq!(vault.value(), 0);
     assert_eq!(cap.cap_vault_id(), object::id(&vault));
 
@@ -38,7 +38,7 @@ fun deposit_then_close_then_withdraw_all() {
     assert_eq!(vault.value(), 1_000);
 
     vault.flip_to_closed(&cap);
-    assert_eq!(vault.is_closed(), true);
+    assert!(vault.is_closed());
     let out = vault.withdraw_all(&cap);
     assert_eq!(out.value(), 1_000);
     assert_eq!(vault.value(), 0);
@@ -75,7 +75,7 @@ fun deposit_then_refunding_then_release_partial() {
 
     vault.deposit(&cap, u::pay_balance(1_000));
     vault.flip_to_refunding(&cap);
-    assert_eq!(vault.is_refunding(), true);
+    assert!(vault.is_refunding());
 
     let part = vault.release_balance(&cap, 400);
     assert_eq!(part.value(), 400);
@@ -115,7 +115,7 @@ fun deposit_zero_is_noop() {
 
     vault.deposit(&cap, u::pay_balance(0));
     assert_eq!(vault.value(), 0);
-    assert_eq!(vault.is_active(), true);
+    assert!(vault.is_active());
     // The zero-value deposit emitted no VaultDeposit event.
     assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 0);
 

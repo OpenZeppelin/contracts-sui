@@ -127,7 +127,7 @@ fun purchase_at_exact_hard_cap_ok() {
     let mut sale = u::take_sale(&test);
     u::buy(&mut sale, 1_000, &clk, test.ctx());
     assert_eq!(sale.raised(), 1_000);
-    assert_eq!(sale.has_reached_hard_cap(), true);
+    assert!(sale.has_reached_hard_cap());
     assert_eq!(sale.inventory_remaining(), 0);
     u::return_sale(sale);
 
@@ -413,6 +413,60 @@ fun purchase_with_foreign_quote_aborts() {
     destroy(sale_b);
     destroy(cap_b);
     u::return_sale(sale_a);
+    destroy(clk);
+    test.end();
+}
+
+// === Views ===
+
+// is_open reflects the purchase window while Active: false before opens_at_ms,
+// true within [opens_at_ms, closes_at_ms] (inclusive on both edges), false past close.
+#[test]
+fun is_open_reflects_window() {
+    let (mut test, mut clk) = u::setup(); // clk parked at 1_000
+    // Window [2_000, 5_000]: activation at 1_000 is pre-open and allowed.
+    u::create_and_activate_full(&mut test, &clk, 1, 1_000, 0, 2_000, 5_000, 1_000, false);
+
+    test.next_tx(u::buyer());
+    let sale = u::take_sale(&test);
+    assert!(!sale.is_open(&clk)); // now 1_000 < opens 2_000
+    clk.set_for_testing(3_000);
+    assert!(sale.is_open(&clk)); // within window
+    clk.set_for_testing(5_000);
+    assert!(sale.is_open(&clk)); // inclusive upper edge
+    clk.set_for_testing(5_001);
+    assert!(!sale.is_open(&clk)); // past close
+    u::return_sale(sale);
+
+    destroy(clk);
+    test.end();
+}
+
+// is_open is false once the sale leaves Active, even while the clock is still
+// inside the purchase window. Hitting the hard cap lets finalize close the sale
+// early (now <= closes_at_ms), so the clock stays in-window and only the phase
+// change flips is_open.
+#[test]
+fun is_open_false_when_not_active() {
+    let (mut test, clk) = u::setup(); // clk parked at opens() = 1_000, in window
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(u::buyer());
+    {
+        let mut sale = u::take_sale(&test);
+        u::buy(&mut sale, 1_000, &clk, test.ctx()); // raised == hard_cap
+        u::return_sale(sale);
+    };
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    assert!(sale.is_open(&clk)); // still Active, in-window
+    sale.finalize(&mut vault, &clk); // early close on hard cap, clock still in-window
+    assert!(!sale.is_open(&clk)); // Finalized dominates the in-window clock
+    u::return_sale(sale);
+    u::return_vault(vault);
+
     destroy(clk);
     test.end();
 }

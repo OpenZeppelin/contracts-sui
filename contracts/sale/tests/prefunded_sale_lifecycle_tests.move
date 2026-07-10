@@ -41,8 +41,8 @@ fun finalize_after_close_succeeds() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
-    assert_eq!(sale.phase().is_finalized(), true);
-    assert_eq!(vault.is_closed(), true);
+    assert!(sale.phase().is_finalized());
+    assert!(vault.is_closed());
     assert_eq!(sale.proceeds_amount(), 500); // proceeds stay until withdrawn
 
     let finalized = event::events_by_type<prefunded_sale::SaleFinalized<SALE, USDC>>();
@@ -81,7 +81,7 @@ fun finalize_early_when_hard_cap_reached() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
-    assert_eq!(sale.phase().is_finalized(), true);
+    assert!(sale.phase().is_finalized());
     u::return_sale(sale);
     u::return_vault(vault);
 
@@ -177,8 +177,8 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk);
-    assert_eq!(sale.phase().is_cancelled(), true);
-    assert_eq!(vault.is_refunding(), true);
+    assert!(sale.phase().is_cancelled());
+    assert!(vault.is_refunding());
     assert_eq!(vault.value(), 300); // locked == raised
     assert_eq!(sale.proceeds_amount(), 0); // proceeds drained
 
@@ -286,7 +286,7 @@ fun cancel_emergency_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert_eq!(sale.phase().is_cancelled(), true);
+    assert!(sale.phase().is_cancelled());
     assert_eq!(vault.value(), 100);
 
     let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
@@ -322,8 +322,8 @@ fun cancel_emergency_zero_raised_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert_eq!(sale.phase().is_cancelled(), true);
-    assert_eq!(vault.is_refunding(), true);
+    assert!(sale.phase().is_cancelled());
+    assert!(vault.is_refunding());
     assert_eq!(vault.value(), 0);
 
     // Zero proceeds -> the vault deposit is a no-op and emits no VaultDeposit; the sale
@@ -345,6 +345,32 @@ fun cancel_emergency_zero_raised_succeeds() {
     u::return_vault(vault);
     u::return_cap(cap);
 
+    destroy(clk);
+    test.end();
+}
+
+// Boundary + 2nd disjunct: at exactly closes_at_ms the window is still open for an
+// emergency cancel (guard is inclusive, now <= closes_at_ms), and a configured-but-unmet
+// soft cap (raised < soft_cap, the right side of `soft_cap == 0 || raised < soft_cap`)
+// still permits it. cancel_emergency_succeeds covers the soft_cap == 0 disjunct at opens.
+#[test]
+fun cancel_emergency_at_exact_close_soft_cap_unmet_succeeds() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // raised 300 < soft_cap 500
+    clk.set_for_testing(u::closes()); // now == closes_at_ms
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let cap = u::take_cap(&test);
+    sale.cancel_emergency(&cap, &mut vault, &clk);
+    assert!(sale.phase().is_cancelled());
+    assert_eq!(vault.value(), 300);
+
+    u::return_sale(sale);
+    u::return_vault(vault);
+    u::return_cap(cap);
     destroy(clk);
     test.end();
 }
@@ -531,6 +557,41 @@ fun cancel_emergency_wrong_vault_aborts() {
     destroy(foreign_cap);
     u::return_cap(cap);
     u::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
+// === Views ===
+
+// has_reached_soft_cap: false while raised < soft_cap, true once raised >= soft_cap,
+// and always true when no soft cap is configured (soft_cap == 0).
+#[test]
+fun has_reached_soft_cap_tracks_raised() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    assert!(!sale.has_reached_soft_cap()); // raised 0 < 500
+    u::buy(&mut sale, 500, &clk, test.ctx());
+    assert!(sale.has_reached_soft_cap()); // raised 500 >= 500
+    u::return_sale(sale);
+
+    destroy(clk);
+    test.end();
+}
+
+// With no soft cap configured the sale reads as having met it from the start.
+#[test]
+fun has_reached_soft_cap_true_without_soft_cap() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000); // soft_cap == 0
+
+    test.next_tx(u::buyer());
+    let sale = u::take_sale(&test);
+    assert!(sale.has_reached_soft_cap()); // raised 0 >= 0
+    u::return_sale(sale);
+
     destroy(clk);
     test.end();
 }

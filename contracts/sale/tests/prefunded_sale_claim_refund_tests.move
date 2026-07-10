@@ -242,6 +242,24 @@ fun claim_with_vesting_attached_aborts() {
     test.end();
 }
 
+// The batch claim path enforces the same non-vesting requirement as `claim`.
+#[test, expected_failure(abort_code = prefunded_sale::EClaimRequiresVesting)]
+fun claim_all_with_vesting_attached_aborts() {
+    let (mut test, mut clk) = u::setup();
+    setup_vesting_sale(&mut test, &clk);
+    buy_once(&mut test, &clk, 100);
+    finalize_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let payout = sale.claim_all(vector[r], test.ctx()); // aborts: EClaimRequiresVesting
+    destroy(payout);
+    u::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
 // claim_into_vesting funds a wallet with the allocation, beneficiary = buyer.
 #[test]
 fun claim_into_vesting_returns_funded_wallet() {
@@ -375,6 +393,32 @@ fun claim_into_vesting_without_schedule_aborts() {
     test.end();
 }
 
+// The batch vesting path enforces the same schedule requirement as claim_into_vesting.
+#[test, expected_failure(abort_code = prefunded_sale::ENoVestingScheduleAttached)]
+fun claim_all_into_vesting_without_schedule_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 100);
+    finalize_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let (wallet, destroy_cap) = prefunded_sale::claim_all_into_vesting<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(&mut sale, vector[r], test.ctx()); // aborts: ENoVestingScheduleAttached
+    destroy(wallet);
+    destroy(destroy_cap);
+    u::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
 // === refund ===
 
 #[test]
@@ -413,6 +457,35 @@ fun refund_returns_paid_and_draws_vault() {
     u::return_sale(sale);
     u::return_vault(vault);
 
+    destroy(clk);
+    test.end();
+}
+
+// refund has its own receipt-sale check (ahead of the buyer check): a receipt
+// from a different sale is rejected even on the cancel path.
+#[test, expected_failure(abort_code = prefunded_sale::EReceiptSaleMismatch)]
+fun refund_foreign_receipt_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    // A receipt minted against a foreign sale id (package-internal helper).
+    let foreign = receipt::new_receipt<SALE>(
+        object::id_from_address(@0xDEAD),
+        u::buyer(),
+        300,
+        300,
+        1_000,
+        test.ctx(),
+    );
+    let payment = sale.refund(&mut vault, foreign, test.ctx()); // aborts: EReceiptSaleMismatch
+    destroy(payment);
+    u::return_sale(sale);
+    u::return_vault(vault);
     destroy(clk);
     test.end();
 }
