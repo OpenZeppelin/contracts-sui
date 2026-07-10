@@ -106,6 +106,26 @@ fun finalize_window_open_not_sold_out_aborts() {
     test.end();
 }
 
+// Boundary: at exactly closes_at_ms the window is still open for finalize
+// (the guard is strict, now > closes_at_ms), so a non-sold-out sale cannot
+// finalize yet. Mirror of purchase_at_exact_close_ok, which is inclusive.
+#[test, expected_failure(abort_code = prefunded_sale::ESaleWindowStillOpen)]
+fun finalize_at_exact_close_not_sold_out_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 500);
+    clk.set_for_testing(u::closes()); // now == closes_at_ms
+
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    sale.finalize(&mut vault, &clk); // aborts: window still open at the boundary
+    u::return_sale(sale);
+    u::return_vault(vault);
+    destroy(clk);
+    test.end();
+}
+
 // Soft cap not met at close -> cannot finalize.
 #[test, expected_failure(abort_code = prefunded_sale::ESoftCapNotMet)]
 fun finalize_soft_cap_not_met_aborts() {

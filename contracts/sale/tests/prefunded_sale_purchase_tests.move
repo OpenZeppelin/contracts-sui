@@ -195,6 +195,24 @@ fun purchase_after_close_aborts() {
     test.end();
 }
 
+// Boundary: a purchase at exactly closes_at_ms succeeds. The window is inclusive
+// on the upper edge (now <= closes_at_ms), unlike finalize/cancel_after_close
+// which are strict (now > closes_at_ms). Guards that off-by-one.
+#[test]
+fun purchase_at_exact_close_ok() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    clk.set_for_testing(u::closes()); // now == closes_at_ms
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 10, &clk, test.ctx());
+    assert_eq!(sale.raised(), 10);
+    u::return_sale(sale);
+    destroy(clk);
+    test.end();
+}
+
 // === Hard cap ===
 
 #[test, expected_failure(abort_code = prefunded_sale::EHardCapExceeded)]
