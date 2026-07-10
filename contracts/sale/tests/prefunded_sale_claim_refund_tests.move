@@ -154,11 +154,8 @@ fun claim_wrong_buyer_aborts() {
     test.next_tx(u::buyer2()); // wrong sender
     let mut sale = u::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let payout = sale.claim(r, test.ctx()); // aborts: EBuyerOnly
-    destroy(payout);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _payout = sale.claim(r, test.ctx()); // aborts: EBuyerOnly
+    abort
 }
 
 // A receipt issued by a different sale is rejected.
@@ -180,11 +177,8 @@ fun claim_foreign_receipt_aborts() {
         1_000,
         test.ctx(),
     );
-    let payout = sale.claim(foreign, test.ctx()); // aborts: EReceiptSaleMismatch
-    destroy(payout);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _payout = sale.claim(foreign, test.ctx()); // aborts: EReceiptSaleMismatch
+    abort
 }
 
 // claim before the sale is finalized is rejected.
@@ -197,11 +191,8 @@ fun claim_before_finalize_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let payout = sale.claim(r, test.ctx()); // aborts: ENotFinalized
-    destroy(payout);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _payout = sale.claim(r, test.ctx()); // aborts: ENotFinalized
+    abort
 }
 
 // claim_all before the sale is finalized is rejected (the batch guard in
@@ -215,11 +206,8 @@ fun claim_all_before_finalize_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let payout = sale.claim_all(vector[r], test.ctx()); // aborts: ENotFinalized
-    destroy(payout);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _payout = sale.claim_all(vector[r], test.ctx()); // aborts: ENotFinalized
+    abort
 }
 
 // === Vesting routing ===
@@ -235,11 +223,8 @@ fun claim_with_vesting_attached_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let payout = sale.claim(r, test.ctx()); // aborts: EClaimRequiresVesting
-    destroy(payout);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _payout = sale.claim(r, test.ctx()); // aborts: EClaimRequiresVesting
+    abort
 }
 
 // The batch claim path enforces the same non-vesting requirement as `claim`.
@@ -253,11 +238,8 @@ fun claim_all_with_vesting_attached_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let payout = sale.claim_all(vector[r], test.ctx()); // aborts: EClaimRequiresVesting
-    destroy(payout);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _payout = sale.claim_all(vector[r], test.ctx()); // aborts: EClaimRequiresVesting
+    abort
 }
 
 // claim_into_vesting funds a wallet with the allocation, beneficiary = buyer.
@@ -378,7 +360,7 @@ fun claim_into_vesting_without_schedule_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let (wallet, destroy_cap) = prefunded_sale::claim_into_vesting<
+    let (_wallet, _destroy_cap) = prefunded_sale::claim_into_vesting<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -386,11 +368,7 @@ fun claim_into_vesting_without_schedule_aborts() {
         Linear,
         VParams,
     >(&mut sale, r, test.ctx()); // aborts: ENoVestingScheduleAttached
-    destroy(wallet);
-    destroy(destroy_cap);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // The batch vesting path enforces the same schedule requirement as claim_into_vesting.
@@ -404,7 +382,7 @@ fun claim_all_into_vesting_without_schedule_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let (wallet, destroy_cap) = prefunded_sale::claim_all_into_vesting<
+    let (_wallet, _destroy_cap) = prefunded_sale::claim_all_into_vesting<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -412,11 +390,7 @@ fun claim_all_into_vesting_without_schedule_aborts() {
         Linear,
         VParams,
     >(&mut sale, vector[r], test.ctx()); // aborts: ENoVestingScheduleAttached
-    destroy(wallet);
-    destroy(destroy_cap);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === refund ===
@@ -482,12 +456,8 @@ fun refund_foreign_receipt_aborts() {
         1_000,
         test.ctx(),
     );
-    let payment = sale.refund(&mut vault, foreign, test.ctx()); // aborts: EReceiptSaleMismatch
-    destroy(payment);
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    let _payment = sale.refund(&mut vault, foreign, test.ctx()); // aborts: EReceiptSaleMismatch
+    abort
 }
 
 #[test, expected_failure(abort_code = prefunded_sale::EBuyerOnly)]
@@ -501,12 +471,8 @@ fun refund_wrong_buyer_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let payment = sale.refund(&mut vault, r, test.ctx()); // aborts
-    destroy(payment);
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    let _payment = sale.refund(&mut vault, r, test.ctx()); // aborts
+    abort
 }
 
 // refund is rejected unless the sale is Cancelled.
@@ -520,12 +486,8 @@ fun refund_before_cancel_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let payment = sale.refund(&mut vault, r, test.ctx()); // aborts: ENotCancelled
-    destroy(payment);
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    let _payment = sale.refund(&mut vault, r, test.ctx()); // aborts: ENotCancelled
+    abort
 }
 
 // refund rejects a vault that is not the paired one (reached after the phase /
@@ -539,15 +501,10 @@ fun refund_wrong_vault_aborts() {
 
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
-    let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    let (mut foreign_vault, _foreign_cap) = refund_vault::new<USDC>(test.ctx());
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
-    let payment = sale.refund(&mut foreign_vault, r, test.ctx()); // aborts: EWrongVault
-    destroy(payment);
-    destroy(foreign_vault);
-    destroy(foreign_cap);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _payment = sale.refund(&mut foreign_vault, r, test.ctx()); // aborts: EWrongVault
+    abort
 }
 
 // === withdraw_proceeds ===
@@ -618,7 +575,7 @@ fun withdraw_proceeds_wrong_cap_aborts() {
 
     test.next_tx(u::admin());
     let mut sale = u::take_sale(&test);
-    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<
+    let (_foreign_sale, foreign_cap) = prefunded_sale::create_sale<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -633,13 +590,8 @@ fun withdraw_proceeds_wrong_cap_aborts() {
         u::closes(),
         test.ctx(),
     );
-    let proceeds = sale.withdraw_proceeds(&foreign_cap); // aborts
-    destroy(proceeds);
-    destroy(foreign_sale);
-    destroy(foreign_cap);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _proceeds = sale.withdraw_proceeds(&foreign_cap); // aborts
+    abort
 }
 
 // withdraw_proceeds requires Finalized (not Active).
@@ -652,12 +604,8 @@ fun withdraw_proceeds_before_finalize_aborts() {
     test.next_tx(u::admin());
     let mut sale = u::take_sale(&test);
     let cap = u::take_cap(&test);
-    let proceeds = sale.withdraw_proceeds(&cap); // aborts: ENotFinalized
-    destroy(proceeds);
-    u::return_sale(sale);
-    u::return_cap(cap);
-    destroy(clk);
-    test.end();
+    let _proceeds = sale.withdraw_proceeds(&cap); // aborts: ENotFinalized
+    abort
 }
 
 // === withdraw_unsold_inventory ===
@@ -730,7 +678,7 @@ fun withdraw_unsold_wrong_cap_aborts() {
 
     test.next_tx(u::admin());
     let mut sale = u::take_sale(&test);
-    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<
+    let (_foreign_sale, foreign_cap) = prefunded_sale::create_sale<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -745,13 +693,8 @@ fun withdraw_unsold_wrong_cap_aborts() {
         u::closes(),
         test.ctx(),
     );
-    let unsold = sale.withdraw_unsold_inventory(&foreign_cap); // aborts
-    destroy(unsold);
-    destroy(foreign_sale);
-    destroy(foreign_cap);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    let _unsold = sale.withdraw_unsold_inventory(&foreign_cap); // aborts
+    abort
 }
 
 // withdraw_unsold_inventory is valid in the Cancelled terminal phase (not only
@@ -815,12 +758,8 @@ fun withdraw_unsold_before_terminal_aborts() {
     test.next_tx(u::admin());
     let mut sale = u::take_sale(&test);
     let cap = u::take_cap(&test);
-    let unsold = sale.withdraw_unsold_inventory(&cap); // aborts: ENotTerminal (still Active)
-    destroy(unsold);
-    u::return_sale(sale);
-    u::return_cap(cap);
-    destroy(clk);
-    test.end();
+    let _unsold = sale.withdraw_unsold_inventory(&cap); // aborts: ENotTerminal (still Active)
+    abort
 }
 
 // claim_all with no receipts returns an empty balance (the batch loop is a no-op).

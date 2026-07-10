@@ -34,7 +34,7 @@ fun consume_wrong_sale_aborts() {
     let admin = allowlist::new_admin<SALE>(object::id_from_address(@0x5A1E), &mut ctx);
     let entry = admin.new_entry(@0xB0B, 0);
     let _ = entry.consume(object::id_from_address(@0x0E0E), @0xB0B); // aborts
-    destroy(admin);
+    abort
 }
 
 // consume rejects an entry whose buyer is not the sender.
@@ -45,5 +45,5 @@ fun consume_wrong_buyer_aborts() {
     let admin = allowlist::new_admin<SALE>(sale_id, &mut ctx);
     let entry = admin.new_entry(@0xB0B, 0);
     let _ = entry.consume(sale_id, @0xBAD); // aborts
-    destroy(admin);
+    abort
 }

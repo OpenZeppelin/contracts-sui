@@ -97,9 +97,7 @@ fun overallocating_quote_beyond_inventory_aborts() {
         100,
     );
     sale.purchase(quote, option::none(), &clk, test.ctx()); // aborts: EInsufficientInventory
-    ts::return_shared(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // Within the inventory ceiling, an over-allocating curve IS accepted: inventory
@@ -158,7 +156,5 @@ fun purchase_raised_overflow_aborts() {
         0,
     );
     sale.purchase(q2, option::none(), &clk, test.ctx()); // aborts: ERaisedOverflow
-    ts::return_shared(sale);
-    destroy(clk);
-    test.end();
+    abort
 }

@@ -157,9 +157,7 @@ fun purchase_after_finalize_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     u::buy(&mut sale, 100, &clk, test.ctx()); // aborts: ENotActive
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === Window gate ===
@@ -175,9 +173,7 @@ fun purchase_before_open_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     u::buy(&mut sale, 10, &clk, test.ctx()); // aborts: ESaleWindowClosed
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // A purchase after closes_at_ms is rejected.
@@ -190,9 +186,7 @@ fun purchase_after_close_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     u::buy(&mut sale, 10, &clk, test.ctx()); // aborts
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // Boundary: a purchase at exactly closes_at_ms succeeds. The window is inclusive
@@ -223,9 +217,7 @@ fun purchase_exceeds_hard_cap_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     u::buy(&mut sale, 1_001, &clk, test.ctx()); // aborts
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === Per-buyer cap ===
@@ -257,9 +249,7 @@ fun per_buyer_cap_exceeded_aborts() {
     let mut sale = u::take_sale(&test);
     u::buy(&mut sale, 100, &clk, test.ctx());
     u::buy(&mut sale, 1, &clk, test.ctx()); // aborts: over cap
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === Allowlist coupling ===
@@ -309,9 +299,7 @@ fun allowlist_required_but_none_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     u::buy(&mut sale, 100, &clk, test.ctx()); // aborts: no entry
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // A non-allowlist sale rejects a purchase that carries an entry.
@@ -327,10 +315,7 @@ fun allowlist_not_required_but_provided_aborts() {
     let entry = admin.new_entry(u::buyer(), 0);
     let quote = fixed_rate_curve::quote(&sale, u::pay_balance(100));
     sale.purchase(quote, option::some(entry), &clk, test.ctx()); // aborts
-    destroy(admin);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // The per-entry cap (max_amount) bounds a single purchase.
@@ -352,9 +337,7 @@ fun per_entry_cap_exceeded_aborts() {
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
     buy_with_entry(&mut sale, &mut test, u::buyer(), 50, 51, &clk); // 51 > max 50
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // Boundary: paying exactly the entry's max_amount is allowed (the guard is paid <= max).
@@ -393,7 +376,7 @@ fun purchase_with_foreign_quote_aborts() {
     test.next_tx(u::buyer());
     let mut sale_a = u::take_sale(&test);
     // Sale B - same type, never activated; its quote pins B's id, not A's.
-    let (sale_b, cap_b) = prefunded_sale::create_sale<
+    let (sale_b, _cap_b) = prefunded_sale::create_sale<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -410,11 +393,7 @@ fun purchase_with_foreign_quote_aborts() {
     );
     let foreign_quote = fixed_rate_curve::quote(&sale_b, u::pay_balance(10));
     sale_a.purchase(foreign_quote, option::none(), &clk, test.ctx()); // aborts: EQuoteSaleMismatch
-    destroy(sale_b);
-    destroy(cap_b);
-    u::return_sale(sale_a);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === Views ===

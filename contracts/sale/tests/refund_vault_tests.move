@@ -134,15 +134,11 @@ fun deposit_zero_is_noop() {
 #[test, expected_failure(abort_code = refund_vault::EWrongVaultCap)]
 fun deposit_with_wrong_cap_aborts() {
     let mut ctx = tx_context::dummy();
-    let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
-    let (other_vault, other_cap) = refund_vault::new<USDC>(&mut ctx);
+    let (mut vault, _cap) = refund_vault::new<USDC>(&mut ctx);
+    let (_other_vault, other_cap) = refund_vault::new<USDC>(&mut ctx);
 
     vault.deposit(&other_cap, u::pay_balance(1)); // aborts: cap is for other_vault
-
-    destroy(vault);
-    destroy(cap);
-    destroy(other_vault);
-    destroy(other_cap);
+    abort
 }
 
 // === State guards ===
@@ -154,8 +150,7 @@ fun deposit_after_refunding_aborts() {
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
     vault.flip_to_refunding(&cap);
     vault.deposit(&cap, u::pay_balance(1)); // aborts
-    destroy(vault);
-    destroy(cap);
+    abort
 }
 
 // release requires Refunding.
@@ -164,10 +159,8 @@ fun release_in_active_aborts() {
     let mut ctx = tx_context::dummy();
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
     vault.deposit(&cap, u::pay_balance(100));
-    let part = vault.release_balance(&cap, 1); // aborts: not Refunding
-    destroy(part);
-    destroy(vault);
-    destroy(cap);
+    let _part = vault.release_balance(&cap, 1); // aborts: not Refunding
+    abort
 }
 
 // release cannot exceed the locked balance.
@@ -177,10 +170,8 @@ fun release_over_locked_aborts() {
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
     vault.deposit(&cap, u::pay_balance(100));
     vault.flip_to_refunding(&cap);
-    let part = vault.release_balance(&cap, 101); // aborts
-    destroy(part);
-    destroy(vault);
-    destroy(cap);
+    let _part = vault.release_balance(&cap, 101); // aborts
+    abort
 }
 
 // withdraw_all requires Closed.
@@ -188,10 +179,8 @@ fun release_over_locked_aborts() {
 fun withdraw_all_in_active_aborts() {
     let mut ctx = tx_context::dummy();
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
-    let part = vault.withdraw_all(&cap); // aborts: not Closed
-    destroy(part);
-    destroy(vault);
-    destroy(cap);
+    let _part = vault.withdraw_all(&cap); // aborts: not Closed
+    abort
 }
 
 // Transitions are one-way: Refunding cannot flip to Closed.
@@ -201,6 +190,5 @@ fun flip_to_closed_from_refunding_aborts() {
     let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
     vault.flip_to_refunding(&cap);
     vault.flip_to_closed(&cap); // aborts: source must be Active
-    destroy(vault);
-    destroy(cap);
+    abort
 }

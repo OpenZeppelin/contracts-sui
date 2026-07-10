@@ -60,22 +60,18 @@ fun quote_allocation_is_paid_times_rate() {
 #[test, expected_failure(abort_code = prefunded_sale::EZeroPayment)]
 fun quote_rejects_zero_payment() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = new_sale(3, 1_000, &mut ctx);
-    let q = fixed_rate_curve::quote(&sale, u::pay_balance(0)); // aborts
-    destroy(q);
-    destroy(sale);
-    destroy(cap);
+    let (sale, _cap) = new_sale(3, 1_000, &mut ctx);
+    let _q = fixed_rate_curve::quote(&sale, u::pay_balance(0)); // aborts
+    abort
 }
 
 // allocation = paid * rate overflowing u64 aborts with a typed error.
 #[test, expected_failure(abort_code = prefunded_sale::EAllocationOverflow)]
 fun quote_allocation_overflow_aborts() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = new_sale(MAX_U64, 1_000, &mut ctx);
-    let q = fixed_rate_curve::quote(&sale, u::pay_balance(2)); // 2 * MAX overflows
-    destroy(q);
-    destroy(sale);
-    destroy(cap);
+    let (sale, _cap) = new_sale(MAX_U64, 1_000, &mut ctx);
+    let _q = fixed_rate_curve::quote(&sale, u::pay_balance(2)); // 2 * MAX overflows
+    abort
 }
 
 // === activation ticket sizing + guard ===
@@ -96,11 +92,9 @@ fun activation_ticket_requires_hard_cap_times_rate() {
 #[test, expected_failure(abort_code = fixed_rate_curve::ERequiredInventoryOverflow)]
 fun activation_ticket_overflow_aborts() {
     let mut ctx = tx_context::dummy();
-    let (sale, cap) = new_sale(2, MAX_U64, &mut ctx); // MAX * 2 overflows
-    let ticket = fixed_rate_curve::activation_ticket(&sale);
-    destroy(ticket);
-    destroy(sale);
-    destroy(cap);
+    let (sale, _cap) = new_sale(2, MAX_U64, &mut ctx); // MAX * 2 overflows
+    let _ticket = fixed_rate_curve::activation_ticket(&sale);
+    abort
 }
 
 // === rate view ===

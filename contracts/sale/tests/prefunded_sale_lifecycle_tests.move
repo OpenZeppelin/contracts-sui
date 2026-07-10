@@ -100,10 +100,7 @@ fun finalize_window_open_not_sold_out_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk); // aborts
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // Boundary: at exactly closes_at_ms the window is still open for finalize
@@ -120,10 +117,7 @@ fun finalize_at_exact_close_not_sold_out_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk); // aborts: window still open at the boundary
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // Soft cap not met at close -> cannot finalize.
@@ -138,10 +132,7 @@ fun finalize_soft_cap_not_met_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk); // aborts
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // Finalized is terminal: a second finalize aborts on the phase guard.
@@ -157,10 +148,7 @@ fun finalize_twice_aborts() {
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
     sale.finalize(&mut vault, &clk); // aborts: ENotActive
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === cancel_after_close ===
@@ -230,10 +218,7 @@ fun cancel_after_close_soft_cap_met_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk); // aborts
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // Window still open -> cannot cancel_after_close.
@@ -247,10 +232,7 @@ fun cancel_after_close_window_open_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk); // aborts
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // cancel_after_close requires Active: it aborts once the sale is Finalized.
@@ -266,10 +248,7 @@ fun cancel_after_close_when_finalized_aborts() {
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
     sale.cancel_after_close(&mut vault, &clk); // aborts: ENotActive
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === cancel_emergency ===
@@ -386,7 +365,7 @@ fun cancel_emergency_wrong_cap_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     // A throwaway sale just to obtain a foreign (mismatching) admin cap.
-    let (foreign_sale, foreign_cap) = prefunded_sale::create_sale<
+    let (_foreign_sale, foreign_cap) = prefunded_sale::create_sale<
         FixedRateCurve,
         FrcParams,
         SALE,
@@ -402,12 +381,7 @@ fun cancel_emergency_wrong_cap_aborts() {
         test.ctx(),
     );
     sale.cancel_emergency(&foreign_cap, &mut vault, &clk); // aborts: EWrongAdminCap
-    destroy(foreign_sale);
-    destroy(foreign_cap);
-    u::return_sale(sale);
-    u::return_vault(vault);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // Emergency cancel after the window has closed is rejected.
@@ -423,11 +397,7 @@ fun cancel_emergency_after_close_aborts() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk); // aborts
-    u::return_sale(sale);
-    u::return_vault(vault);
-    u::return_cap(cap);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // A sold-out sale cannot be emergency-cancelled (must finalize).
@@ -442,11 +412,7 @@ fun cancel_emergency_hard_cap_reached_aborts() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk); // aborts
-    u::return_sale(sale);
-    u::return_vault(vault);
-    u::return_cap(cap);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // A sale that has met its soft cap cannot be emergency-cancelled.
@@ -461,11 +427,7 @@ fun cancel_emergency_soft_cap_met_aborts() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk); // aborts
-    u::return_sale(sale);
-    u::return_vault(vault);
-    u::return_cap(cap);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // cancel_emergency requires Active: with a valid cap it still aborts once the
@@ -483,11 +445,7 @@ fun cancel_emergency_when_finalized_aborts() {
     let cap = u::take_cap(&test);
     sale.finalize(&mut vault, &clk);
     sale.cancel_emergency(&cap, &mut vault, &clk); // aborts: ENotActive
-    u::return_sale(sale);
-    u::return_vault(vault);
-    u::return_cap(cap);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === Wrong-vault guards on close paths ===
@@ -508,14 +466,9 @@ fun finalize_wrong_vault_aborts() {
 
     test.next_tx(u::admin());
     let mut sale = u::take_sale(&test);
-    let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    let (mut foreign_vault, _foreign_cap) = refund_vault::new<USDC>(test.ctx());
     sale.finalize(&mut foreign_vault, &clk); // aborts: EWrongVault
-
-    destroy(foreign_vault);
-    destroy(foreign_cap);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // cancel_after_close rejects a vault that is not the paired one (reached after the
@@ -529,14 +482,9 @@ fun cancel_after_close_wrong_vault_aborts() {
 
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
-    let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    let (mut foreign_vault, _foreign_cap) = refund_vault::new<USDC>(test.ctx());
     sale.cancel_after_close(&mut foreign_vault, &clk); // aborts: EWrongVault
-
-    destroy(foreign_vault);
-    destroy(foreign_cap);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // cancel_emergency rejects a vault that is not the paired one (reached after the
@@ -550,15 +498,9 @@ fun cancel_emergency_wrong_vault_aborts() {
     test.next_tx(u::admin());
     let mut sale = u::take_sale(&test);
     let cap = u::take_cap(&test);
-    let (mut foreign_vault, foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    let (mut foreign_vault, _foreign_cap) = refund_vault::new<USDC>(test.ctx());
     sale.cancel_emergency(&cap, &mut foreign_vault, &clk); // aborts: EWrongVault
-
-    destroy(foreign_vault);
-    destroy(foreign_cap);
-    u::return_cap(cap);
-    u::return_sale(sale);
-    destroy(clk);
-    test.end();
+    abort
 }
 
 // === Views ===
