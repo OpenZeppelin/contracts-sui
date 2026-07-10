@@ -1222,8 +1222,10 @@ public fun purchase<
 
 // === Closing ===
 
-/// Close the sale as a success. **Permissionless.** Also transitions the paired
-/// vault to `Closed` in the same call, so the admin can later withdraw proceeds.
+/// Close the sale as a success. **Permissionless.** Also retires the paired vault by
+/// flipping it to `Closed` in the same call, keeping vault state in step with the sale's
+/// terminal phase (no refunds are ever owed on this path). Proceeds are not moved into
+/// the vault; they stay in the sale and the admin withdraws them via `withdraw_proceeds`.
 ///
 /// Allowed when the phase is `Active` and either the window has closed with the soft
 /// cap met (`now > closes_at_ms && raised >= soft_cap`), or the hard cap has been
