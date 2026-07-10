@@ -158,13 +158,13 @@ public fun singleton<K>(key: K): SortedSet<K> {
 ///
 /// Only needed when `K` lacks `drop` (e.g. a resource key): such a `SortedSet<K>` is itself
 /// non-`drop` and cannot fall out of scope, so drain every key via `remove!`/`pop_*` first, then
-/// call this. A set of droppable keys never needs it. The set's own `ENotEmpty` is asserted FIRST,
-/// so a non-empty set aborts at THIS module's location; the wrapped map's `ENotEmpty` is never
-/// reached through here.
+/// call this. A set of droppable keys never needs it.
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the set still holds keys.
 public fun destroy_empty<K>(set: SortedSet<K>) {
+    // Assert the set's own `ENotEmpty` FIRST so a non-empty set aborts at THIS module's location;
+    // the wrapped map's `ENotEmpty` is never reached through here.
     assert!(set.is_empty(), ENotEmpty);
     let SortedSet { inner } = set;
     inner.destroy_empty();
@@ -336,12 +336,8 @@ public fun tail<K: copy>(set: &SortedSet<K>): Option<K> {
 
 // === Pop extremes (regular funs; abort EEmpty) ===
 
-/// Remove and return the smallest key. Length - 1. O(N): delegates to the map's `pop_front`,
-/// which shifts every remaining entry (`pop_back` is O(1)); a front-heavy drain loop is quadratic.
-///
-/// The set's own `EEmpty` is asserted FIRST, before delegating, so an empty-set pop aborts
-/// at THIS module's location - the wrapped map's `EEmpty` is never reached through here.
-/// The map returns `(K, Unit)`; the marker is dropped and only `K` is returned.
+/// Remove and return the smallest key. Length - 1. O(N): shifts every remaining entry
+/// (`pop_back` is O(1)); a front-heavy drain loop is quadratic.
 ///
 /// #### Returns
 /// - The smallest key.
@@ -351,13 +347,14 @@ public fun tail<K: copy>(set: &SortedSet<K>): Option<K> {
 /// - `sorted_map::EEmpty` (guarded by the prior `is_empty` check; unreachable in normal
 ///   operation).
 public fun pop_front<K>(set: &mut SortedSet<K>): K {
+    // Assert the set's own `EEmpty` FIRST, before delegating, so an empty-set pop aborts at THIS
+    // module's location - the wrapped map's `EEmpty` is never reached through here.
     assert!(!set.is_empty(), EEmpty);
     let (key, _unit) = set.inner.pop_front();
     key
 }
 
-/// Remove and return the largest key. Length - 1. O(1). Set-owned `EEmpty` asserted first;
-/// marker dropped.
+/// Remove and return the largest key. Length - 1. O(1).
 ///
 /// #### Returns
 /// - The largest key.
@@ -367,6 +364,8 @@ public fun pop_front<K>(set: &mut SortedSet<K>): K {
 /// - `sorted_map::EEmpty` (guarded by the prior `is_empty` check; unreachable in normal
 ///   operation).
 public fun pop_back<K>(set: &mut SortedSet<K>): K {
+    // Assert the set's own `EEmpty` FIRST so an empty-set pop aborts at THIS module's location;
+    // the wrapped map's `EEmpty` is never reached through here.
     assert!(!set.is_empty(), EEmpty);
     let (key, _unit) = set.inner.pop_back();
     key
@@ -389,9 +388,7 @@ public fun keys<K: copy>(set: &SortedSet<K>): vector<K> {
 
 // === Membership (macros: bare + `_by`) ===
 
-/// True iff `key` is present, under `$lt`. Pure, total read. Routes through the same
-/// `search!` (via the map's `contains_by!`) that `upsert`/`remove!` route through, so the
-/// three never disagree.
+/// True iff `key` is present, under `$lt`. Pure, total read.
 ///
 /// #### Parameters
 /// - `key`: Key to test.
@@ -418,9 +415,6 @@ public macro fun contains<$K>($set: &SortedSet<$K>, $key: &$K): bool {
 /// caller bug rather than a silent no-op. Use `upsert`/`upsert_by` when a duplicate should be
 /// absorbed silently (and reported via the returned bool) instead of aborting.
 ///
-/// The abort delegates to the wrapped map's `add_by!`, so it fires at `sorted_map`'s location
-/// with `sorted_map::EKeyAlreadyExists` (there is no set-level abort code for this).
-///
 /// #### Parameters
 /// - `key`: Key to insert; must not already be present.
 /// - `lt`: Strict less-than comparator.
@@ -446,10 +440,6 @@ public macro fun add<$K>($set: &mut SortedSet<$K>, $key: $K) {
 /// this one (last-write-wins for the key bytes, observable only under a coarse comparator).
 /// Diverges from `vec_set::insert` (which aborts on a duplicate); for that behavior call `add!`,
 /// or write `assert!(s.upsert!(k), E)`.
-///
-/// The returned bool is `upsert_by!(...).is_none()` - the inner upsert returns `none`
-/// exactly on a fresh insert. This is the opposite projection from `remove!`'s
-/// `.is_some()`. The displaced marker (`some(Unit)` on a replace) is dropped.
 ///
 /// #### Parameters
 /// - `key`: Key to insert (taken by value).

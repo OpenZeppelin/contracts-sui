@@ -105,11 +105,6 @@ const EKeyAlreadyExists: vector<u8> = "Key already exists";
 
 /// One key-value pair, stored inline in the map's vector.
 ///
-/// The fields are module-private: outside this module an `Entry` is read only via
-/// `key`/`value` and built only via `new_entry`. No `&mut Entry` is ever
-/// exposed, so a key cannot be mutated in place and can never desync from its sorted
-/// position.
-///
 /// Abilities materialize jointly over `K` and `V`: `Entry<u64, u64>` is `copy + drop +
 /// store`, while `Entry<u64, Coin<T>>` is store-only.
 public struct Entry<K, V> has copy, drop, store {
@@ -163,13 +158,14 @@ public fun singleton<K, V>(key: K, value: V): SortedMap<K, V> {
 ///
 /// This is the only terminal for a map whose value type lacks `drop` (e.g.
 /// `SortedMap<K, Coin<T>>`): drain every value via `remove`/`pop_*` first, then call
-/// this. The assert runs before the inner `vector::destroy_empty`, so a non-empty map
-/// surfaces `ENotEmpty` at this module's location rather than a lower-level abort.
+/// this.
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the map still holds entries.
 public fun destroy_empty<K, V>(map: SortedMap<K, V>) {
     let SortedMap { entries } = map;
+    // Assert before the inner `destroy_empty` so a non-empty map surfaces `ENotEmpty` at this
+    // module's location rather than a lower-level abort.
     assert!(entries.is_empty(), ENotEmpty);
     entries.destroy_empty();
 }
@@ -458,9 +454,7 @@ public macro fun contains<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): bool {
     contains_by!($map, $key, |a, b| *a < *b)
 }
 
-/// Immutable borrow of `key`'s value, under `$lt`. `assert_key_found` runs before the
-/// indexed read: on a miss `idx` is the insertion point, so reading it first would
-/// silently return the successor's value (or abort out-of-bounds at `idx == n`).
+/// Immutable borrow of `key`'s value, under `$lt`.
 ///
 /// #### Parameters
 /// - `key`: Key to look up.
@@ -477,7 +471,10 @@ public macro fun borrow_by<$K, $V>(
     $lt: |&$K, &$K| -> bool,
 ): &$V {
     let map = $map;
-    let (found, idx) = search!(map, $key, $lt);
+    let (found, idx) = map.search!($key, $lt);
+    // Assert before the indexed read: on a miss `idx` is the lower-bound insertion point,
+    // so reading it first would silently return the successor's value (or abort
+    // out-of-bounds at `idx == n`).
     assert_key_found(found);
     map.value_at(idx)
 }
@@ -829,8 +826,7 @@ public macro fun prev_key<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$
 /// Resume a page by passing the last returned key back as `from` with `include == false`:
 /// successive pages have no overlap and no gap, so concatenating them reconstructs the
 /// tail exactly. `limit == 0`, an empty map, or `from` past the tail all yield the empty
-/// vector. The walk is bounded by `out.length() < limit`, never `i < start + limit` - the
-/// latter would overflow when `limit` is near `u64::MAX`.
+/// vector.
 ///
 /// #### Parameters
 /// - `from`: Lower-bound key.
@@ -859,6 +855,8 @@ public macro fun keys_from_by<$K, $V>(
     let n = es.length();
     let mut out = vector[];
     let mut i = start;
+    // Not bounding on `i < start + limit`, as it would overflow when `limit` is near
+    // `u64::MAX`.
     while (i < n && out.length() < limit) {
         out.push_back(*es.borrow(i).key());
         i = i + 1;
@@ -881,10 +879,10 @@ public macro fun keys_from<$K, $V>(
 
 // === Pop extremes (regular funs; abort EEmpty) ===
 
-/// Remove and return the smallest entry `(key, value)`; length - 1. O(N): shifts every
-/// remaining entry (`pop_back` is O(1) - prefer it for bulk drains). Returns a bare tuple
-/// rather than `Option<(K, V)>` (a tuple cannot be a generic type argument in Move), so
-/// emptiness is a runtime abort.
+/// Remove and return the smallest entry `(key, value)`.
+///
+/// The operation is O(N), as it shifts every remaining entry.
+/// Prefer `pop_back` for bulk drains, as it's O(1).
 ///
 /// #### Returns
 /// - The smallest `(key, value)` pair.
