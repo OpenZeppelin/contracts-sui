@@ -100,7 +100,7 @@ fun inner_mut_wrong_index_desorts_no_value_lost() {
     // Drive the wrapped map's insert_at at a WRONG index through inner_mut: 99 prepended at
     // index 0 of [10,20,30] -> [99,10,20,30], desorted. The check catches it; all keys present.
     let mut s = u::fromk(vector[10u64, 20, 30]);
-    u::misuse_insert_at(&mut s, 99, 0); // 99 at the FRONT - maxima, wrong l valueslot
+    u::misuse_insert_at(&mut s, 99, 0); // 99 at the FRONT - maximal value, wrong slot
     assert!(!u::wf(&s));
     assert_eq!(s.length(), 4);
     let ks = s.keys();
