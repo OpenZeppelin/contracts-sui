@@ -100,7 +100,7 @@ fun inner_mut_wrong_index_desorts_no_value_lost() {
     // Drive the wrapped map's insert_at at a WRONG index through inner_mut: 99 prepended at
     // index 0 of [10,20,30] -> [99,10,20,30], desorted. The check catches it; all keys present.
     let mut s = u::fromk(vector[10u64, 20, 30]);
-    u::misuse_insert_at(&mut s, 0, 99); // 99 at the FRONT - maximal value, wrong slot
+    u::misuse_insert_at(&mut s, 99, 0); // 99 at the FRONT - maxima, wrong l valueslot
     assert!(!u::wf(&s));
     assert_eq!(s.length(), 4);
     let ks = s.keys();
@@ -216,7 +216,7 @@ fun well_formedness_check_reuse_cross_package() {
     let clean_k = u::fromk_k(vector[u::mk(2, 0), u::mk(1, 0)]);
     assert!(u::wf_k(&clean_k)); // `_by` check on a struct key
     let mut corrupt = u::fromk(vector[10u64, 20]);
-    u::misuse_insert_at(&mut corrupt, 0, 99);
+    u::misuse_insert_at(&mut corrupt, 99, 0);
     assert!(!u::wf(&corrupt)); // check detects the disorder
 }
 
@@ -229,7 +229,7 @@ fun desort_apparent_membership_loss() {
     // (the key is still findable / physically present).
     // Desort via inner_mut: 99 (maximal) forced to index 0 of [10,20,30] -> inner [99,10,20,30].
     let mut s = u::fromk(vector[10u64, 20, 30]);
-    u::misuse_insert_at(&mut s, 0, 99);
+    u::misuse_insert_at(&mut s, 99, 0);
     assert!(!u::wf(&s)); // desorted under `<`
     assert!(s.keys().contains(&99)); // 99 is PHYSICALLY present - no value lost
     // ...yet the `<` binary search walks right past index 0, so contains! reports 99 ABSENT:

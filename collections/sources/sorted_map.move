@@ -59,10 +59,10 @@
 /// # Forced-public internals
 ///
 /// Move 2024 macro hygiene requires every symbol a macro body references to be `public` at the
-/// consumer's expansion site, so `search!`, `insert_at`, `remove_at`, `new_entry`, `key`,
-/// and similar are `public`. They are not a supported mutation API: `insert_at` / `remove_at`
-/// write at a caller-given position with no order check, so calling them directly can corrupt
-/// sorted order. Use the macro API.
+/// consumer's expansion site, so `search!`, `insert_at`, `remove_at`, `key`, and similar are
+/// `public`. They are not a supported mutation API: `insert_at` / `remove_at` write at a
+/// caller-given position with no order check, so calling them directly can corrupt sorted order.
+/// Use the macro API.
 ///
 /// # Upgrade compatibility
 ///
@@ -222,13 +222,9 @@ public fun value<K, V>(e: &Entry<K, V>): &V {
     &e.value
 }
 
-/// Construct an entry, consuming `key` and `value` by move (no copy, no implicit drop).
-/// Harmless until fed to `insert_at`.
-public fun new_entry<K, V>(key: K, value: V): Entry<K, V> {
-    Entry { key, value }
-}
-
-/// Insert `e` at index `i`, shifting later entries right.
+/// Build an entry from `key`/`value` (consumed by move) and insert it at index `i`, shifting
+/// later entries right. Takes the key and value rather than a prebuilt `Entry` because `Entry`
+/// is unconstructable outside this module.
 ///
 /// > **Warning:** low-level primitive intended solely for use by this module's macro API
 /// > (`upsert`, ...), which computes `i` from a sorted search. It performs no ordering
@@ -237,12 +233,14 @@ public fun new_entry<K, V>(key: K, value: V): Entry<K, V> {
 /// > use the macro API.
 ///
 /// #### Parameters
+/// - `key`: The new entry's key.
+/// - `value`: The new entry's value.
 /// - `i`: Insertion index.
 ///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i > length`.
-public fun insert_at<K, V>(map: &mut SortedMap<K, V>, i: u64, e: Entry<K, V>) {
-    map.entries.insert(e, i);
+public fun insert_at<K, V>(map: &mut SortedMap<K, V>, key: K, value: V, i: u64) {
+    map.entries.insert(Entry { key, value }, i);
 }
 
 /// Remove the entry at index `i`, shifting later entries left, and return its value. The
@@ -404,7 +402,7 @@ public macro fun from_sorted_keys_values_by<$K, $V>(
         let k = keys.pop_back();
         let v = values.pop_back();
         let at = map.length();
-        map.insert_at(at, new_entry(k, v));
+        map.insert_at(k, v, at);
     };
     keys.destroy_empty();
     values.destroy_empty();
@@ -550,7 +548,7 @@ public macro fun add_by<$K, $V>(
     let value = $value;
     let (found, idx) = search!(map, &key, $lt);
     assert_key_absent(!found);
-    map.insert_at(idx, new_entry(key, value));
+    map.insert_at(key, value, idx);
 }
 
 /// `add_by` with the built-in integer `<`.
@@ -606,10 +604,10 @@ public macro fun upsert_by<$K: drop, $V>(
         // The old key is dropped (`K: drop`) and the incoming `key` stored in its place, so a
         // coarse-comparator re-insert keeps the LAST key's bytes (last-write-wins).
         let (_, old_value) = map.remove_at(idx);
-        map.insert_at(idx, new_entry(key, value));
+        map.insert_at(key, value, idx);
         option::some(old_value)
     } else {
-        map.insert_at(idx, new_entry(key, value));
+        map.insert_at(key, value, idx);
         option::none()
     }
 }
