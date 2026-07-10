@@ -76,20 +76,38 @@ fun purchase_delivers_receipt_and_updates_state() {
 
     test.next_tx(u::buyer());
     let mut sale = u::take_sale(&test);
+    let sale_id = object::id(&sale);
     u::buy(&mut sale, 100, &clk, test.ctx());
     assert_eq!(sale.raised(), 100);
     assert_eq!(sale.total_allocated(), 200); // rate 2
     assert_eq!(sale.proceeds_amount(), 100);
     assert_eq!(sale.inventory_remaining(), 1_800);
-    // Purchased is emitted once for the buy. Its receipt_id is the freshly-delivered
-    // receipt (not takeable until the next tx), so pin emission here; the payload's
-    // paid/allocation are cross-checked against the receipt's own fields below.
-    assert_eq!(event::events_by_type<prefunded_sale::Purchased<SALE, USDC>>().length(), 1);
+    // Purchased is emitted once for the buy. The receipt is delivered inside this tx (not
+    // takeable until the next tx) and events do not survive a tx boundary, so read the
+    // event's receipt_id here, assert the full payload against it, then cross-check that id
+    // against the delivered receipt in the next tx.
+    let purchased = event::events_by_type<prefunded_sale::Purchased<SALE, USDC>>();
+    assert_eq!(purchased.length(), 1);
+    let receipt_id = purchased[0].test_purchased_receipt_id();
+    assert_eq!(
+        purchased[0],
+        prefunded_sale::test_new_purchased<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            receipt_id,
+            100, // paid
+            200, // allocation (rate 2)
+            100, // raised_after
+            u::opens(), // purchased_at_ms
+        ),
+    );
     u::return_sale(sale);
 
-    // Receipt landed with the buyer carrying the right data.
+    // Receipt landed with the buyer carrying the right data, and its id is the one the
+    // event reported.
     test.next_tx(u::buyer());
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    assert_eq!(object::id(&r), receipt_id);
     assert_eq!(r.buyer(), u::buyer());
     assert_eq!(r.paid(), 100);
     assert_eq!(r.allocation(), 200);

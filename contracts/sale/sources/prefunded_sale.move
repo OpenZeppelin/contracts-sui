@@ -2551,6 +2551,16 @@ public fun test_new_purchased<SaleCoin, PaymentCoin>(
     Purchased { sale_id, buyer, receipt_id, paid, allocation, raised_after, purchased_at_ms }
 }
 
+/// Read the `receipt_id` off a `Purchased` event. The receipt is delivered inside the
+/// purchase tx (not takeable until the next tx), and events do not survive a tx boundary,
+/// so tests read the id here and cross-check it against the delivered receipt afterwards.
+#[test_only]
+public fun test_purchased_receipt_id<SaleCoin, PaymentCoin>(
+    e: &Purchased<SaleCoin, PaymentCoin>,
+): ID {
+    e.receipt_id
+}
+
 /// Build a `SaleFinalized` event value for asserting against `event::events_by_type`.
 #[test_only]
 public fun test_new_sale_finalized<SaleCoin, PaymentCoin>(
