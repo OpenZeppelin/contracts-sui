@@ -3,7 +3,7 @@ module openzeppelin_access::access_control_tests;
 use openzeppelin_access::access_control::{Self, AccessControl};
 use openzeppelin_access::foreign_role::ForeignRole;
 use std::type_name::with_original_ids;
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::clock;
 use sui::event;
 use sui::test_scenario::{Self, Scenario};
@@ -37,7 +37,7 @@ public struct RoleY {}
 /// Deploys an `AccessControl` rooted at `ACCESS_CONTROL_TESTS`, shares it,
 /// and advances to a fresh transaction so `take_shared` is immediately
 /// available.
-#[test_only, allow(lint(share_owned))]
+#[test_only]
 fun setup(deployer: address, delay: u64): Scenario {
     let mut scenario = test_scenario::begin(deployer);
     let ac = access_control::new<ACCESS_CONTROL_TESTS>(
@@ -59,7 +59,6 @@ fun take_ac(scenario: &Scenario): AccessControl<ACCESS_CONTROL_TESTS> {
 // === Constructor ===
 
 #[test]
-#[allow(lint(share_owned))]
 fun new_with_otw_succeeds() {
     let deployer = @0xA;
     let mut scenario = test_scenario::begin(deployer);
@@ -84,12 +83,11 @@ fun new_with_otw_succeeds() {
     );
     assert_eq!(granted[0], expected);
 
-    transfer::public_share_object(ac);
+    destroy(ac);
     scenario.end();
 }
 
 #[test]
-#[allow(lint(share_owned))]
 fun new_with_admin_sets_explicit_root_holder() {
     let deployer = @0xA;
     let initial_admin = @0xB;
@@ -114,7 +112,7 @@ fun new_with_admin_sets_explicit_root_holder() {
     );
     assert_eq!(granted[0], expected);
 
-    transfer::public_share_object(ac);
+    destroy(ac);
     scenario.end();
 }
 
