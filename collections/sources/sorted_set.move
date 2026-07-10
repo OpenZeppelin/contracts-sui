@@ -277,7 +277,7 @@ public macro fun from_sorted_keys_by<$K>(
     while (i < n) {
         let cur = *keys.borrow(i);
         if (i == 0) {
-            set.inner_mut().insert_at(0, sorted_map::new_entry(cur, unit()));
+            set.inner_mut().insert_at(cur, unit(), 0);
         } else {
             let prev = keys.borrow(i - 1);
             // Input MUST be sorted: reject a strictly decreasing pair (`cur` < `prev`).
@@ -285,14 +285,14 @@ public macro fun from_sorted_keys_by<$K>(
             if ($lt(prev, &cur)) {
                 // Strictly greater than `prev` - a new distinct key; append at the back (O(1)).
                 let at = set.length();
-                set.inner_mut().insert_at(at, sorted_map::new_entry(cur, unit()));
+                set.inner_mut().insert_at(cur, unit(), at);
             } else {
                 // Compare-equal to `prev` - the same element; overwrite the last stored key with
                 // `cur` so the LAST bytes of the run win, matching `upsert!`/`from_keys!`. The
                 // stored key is at the back, so remove+re-append is O(1) (no interior shift).
                 let at = set.length() - 1;
                 let (_, _) = set.inner_mut().remove_at(at);
-                set.inner_mut().insert_at(at, sorted_map::new_entry(cur, unit()));
+                set.inner_mut().insert_at(cur, unit(), at);
             };
         };
         i = i + 1;

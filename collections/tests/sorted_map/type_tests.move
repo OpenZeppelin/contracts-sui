@@ -132,11 +132,6 @@ fun value_at_reads_and_writes() {
 //   sm::keys(&m);                      // E05001: keys/head/tail copy keys out -> need K: copy
 //   sm::upsert!(&mut m, SKey{id:1}, 0);// E05001: upsert/remove drop the key -> need K: drop
 //
-// Entry fields are private; key cannot be read or mutated in place:
-//   let e = sm::new_entry(1u64, 2u64);
-//   let _k = e.key;                   // field `key` is private to sorted_map
-//   // borrow_mut! yields &mut V, never &mut Entry - no &mut to the key exists
-//
 // No bulk mutable / owning escape hatch:
 //   let mut m = sm::new<u64, u64>();
 //   sm::entries_mut(&mut m);          // no such function

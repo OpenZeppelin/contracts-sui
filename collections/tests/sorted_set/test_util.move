@@ -127,8 +127,8 @@ public fun ins_gt(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(k, |a, b|
 
 /// Drive the wrapped map's `insert_at` directly at a caller-chosen index. With a wrong index
 /// this desorts THAT set's inner vector - order-only, NO value lost (the value is `Unit`).
-public fun misuse_insert_at(s: &mut SortedSet<u64>, idx: u64, k: u64) {
-    s.inner_mut().insert_at(idx, sorted_map::new_entry(k, ss::unit()));
+public fun misuse_insert_at(s: &mut SortedSet<u64>, k: u64, idx: u64) {
+    s.inner_mut().insert_at(k, ss::unit(), idx);
 }
 
 /// Drive the wrapped map's `upsert_by!` with an INCONSISTENT comparator through `inner_mut`.
