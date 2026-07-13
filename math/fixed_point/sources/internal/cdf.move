@@ -1,6 +1,6 @@
 /// Standard-normal CDF Φ central-domain evaluator.
 ///
-/// Consumes the AAA-rational coefficients from `cdf_coefficients` and the
+/// Consumes the generated rational coefficients from `cdf_coefficients` and the
 /// generic sign-magnitude / Horner primitives from `horner`. The public typed
 /// APIs live in `sd29x9_base::cdf` and `ud30x9_base::cdf`, which call
 /// `cdf_nonneg_raw` here.
@@ -65,7 +65,7 @@ public(package) fun half_raw(): u128 { HALF_RAW }
 /// - Saturates to `ONE_RAW` (`10^9`) for `z_raw ≥ cdf_coefficients::max_z_raw()`
 ///   (`|z| ≥ 6.109410205`).
 /// - Returns `HALF_RAW` (`5 × 10^8`) exactly for `z_raw == 0` (`Φ(0)`).
-/// - Otherwise evaluates the AAA rational `N(z) / D(z)` from
+/// - Otherwise evaluates the rational `N(z) / D(z)` from
 ///   `cdf_coefficients` via Horner at WAD scale and rounds the ratio back to
 ///   `UD30x9` scale in a single half-up step, clamping any last-ULP overshoot
 ///   to `ONE_RAW`.
@@ -104,7 +104,7 @@ fun eval_rational(
     let n = horner::horner_eval!(z_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), WAD);
     let d = horner::horner_eval!(z_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), WAD);
 
-    // Integrity guards on the AAA fit. A corrupted coefficient table would
+    // Integrity guards on the generated coefficient table. Corrupted data would
     // surface here rather than silently producing a garbled output.
     assert!(!n.is_neg(), EInternalNumNegative);
     assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);

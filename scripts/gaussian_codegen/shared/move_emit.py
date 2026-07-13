@@ -4,10 +4,9 @@ from __future__ import annotations
 import difflib
 import subprocess
 import sys
+from decimal import Decimal, ROUND_HALF_UP, localcontext
 from pathlib import Path
 from typing import Sequence
-
-from mpmath import mp, mpf
 
 from gaussian_codegen.shared import constants
 
@@ -52,11 +51,12 @@ def quantize(c_str: str, wad: int = constants.WAD) -> tuple[int, bool]:
 
     The u128 range is enforced downstream by `fmt_u128` when the literal is
     rendered, so it is not re-checked here."""
-    mp.dps = constants.DPS
-    c = mpf(c_str)
+    c = Decimal(c_str)
     is_neg = c < 0
-    mag_real = (-c if is_neg else c) * mpf(wad)
-    mag = int(mag_real + mpf("0.5"))
+    with localcontext() as context:
+        context.prec = constants.DPS + len(str(wad))
+        mag_real = (-c if is_neg else c) * Decimal(wad)
+        mag = int(mag_real.to_integral_value(rounding=ROUND_HALF_UP))
     if mag == 0:
         is_neg = False  # canonicalize zero
     return mag, bool(is_neg)

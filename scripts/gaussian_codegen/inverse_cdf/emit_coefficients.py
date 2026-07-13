@@ -63,23 +63,24 @@ def emit_module(raw: dict) -> str:
     max_z_raw = int(raw["max_z_raw"])
 
     return f"""{banner}
-/// Numerator and denominator coefficients for the two-region AAA-rational
-/// standard-normal quantile (inverse CDF) approximation on the upper half
+/// Numerator and denominator coefficients for the two-region standard-normal
+/// quantile (inverse CDF) rational on the upper half
 /// `p ∈ [0.5, 1)`. All values are sign-magnitude pairs at WAD (`10^18`) scale,
 /// indexed in ascending power order (index 0 is the constant term).
 ///
-/// - `CENTRAL_*`: the rational in `u = p - 0.5`, used for `p < CENTRAL_THRESHOLD`.
+/// - `CENTRAL_*`: the rational in `u = p - 0.5`, used for
+///   `p < CENTRAL_THRESHOLD`.
 /// - `TAIL_*`: the rational in `r = sqrt(-2 * ln(1 - p))`, used for
 ///   `p >= CENTRAL_THRESHOLD`; the change of variable linearizes the tail so a
 ///   low-degree rational stays well-conditioned where a single rational in `p`
-///   would underflow.
+///   would underflow. The evaluator supplies `r` directly at WAD scale.
 ///
 /// Accessors return the underlying `vector<u128>` / `vector<bool>` constants so
 /// callers can bind them to a local once per evaluation and index locally inside
 /// the Horner loop - avoiding a fresh constant load on every iteration.
 ///
 /// See `inverse_cdf` for the consumer API. This module is regenerated from the
-/// AAA fit in `scripts/gaussian_codegen/inverse_cdf/`; do not hand-edit.
+/// fits in `scripts/gaussian_codegen/inverse_cdf/`; do not hand-edit.
 module openzeppelin_fp_math::inverse_cdf_coefficients;
 
 // === Constants ===

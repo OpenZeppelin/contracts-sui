@@ -220,7 +220,8 @@ sampling. Both fixed-point types expose it:
 Properties:
 
 - **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
-  empirical worst case `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam.
+  the deterministic validation grid found no result more than 1 ULP from the
+  correctly rounded output.
 - **Φ⁻¹(0.5)**: exactly `0`.
 - **Symmetry**: odd about `0.5` - `inverse_cdf(p) = inverse_cdf(1 - p).negate()`.
 - **Saturation**: `p = 1` returns `+6.3` and `p = 0` returns `-6.3` (`Φ⁻¹` is
@@ -251,8 +252,10 @@ let zl = lower.inverse_cdf(); // ≈ -1.959963985
 Limitations: `p` must be a valid probability (see Aborts); the output range is
 `|z| ≤ 6.3` and `10⁻⁹` is the finest distinction it can represent. In the deep
 tail the achievable `z`-resolution is bounded by the `10⁻⁹` resolution of the
-input `p`, not by the approximation. Internally the tail uses `ln` and `sqrt`, so
-`inverse_cdf` is slightly heavier than `cdf`/`pdf`.
+input `p`, not by the approximation. The public input and output remain at
+`10⁹`; the tail carries `ln` and `sqrt` intermediates at `10¹⁸` to avoid losing
+precision before the final rounding. `inverse_cdf` is therefore slightly heavier
+than `cdf`/`pdf`.
 
 ## Usage Example
 

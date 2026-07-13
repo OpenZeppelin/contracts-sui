@@ -1,12 +1,11 @@
-"""Derive AAA-rational coefficients for the standard-normal PDF on [0, MAX_Z].
+"""Derive rounding-aware rational coefficients for the standard-normal PDF.
 
-Mirrors `cdf/derive.py`: fits the AAA rational at a pinned degree (TARGET_DEGREE -
-the shipped degree, held fixed across regenerations so precision/domain changes
-never silently move it), then checks its worst-case absolute error vs scipy on a
-N_VALIDATE_GRID-point grid stays at or below TARGET_ERROR. Saves the fit's
-coefficients (mpmath at 100 dps, decimal-string serialized) to a JSON intermediate
-consumed by `emit_coefficients.py` and `emit_test_vectors.py`. Pass `--report` to
-print the full per-degree error sweep (informational only).
+Mirrors `cdf/derive.py`: fits an AAA rational at the pinned shipped degree, then
+uses broad and near-L1 continuous-error stages followed by a direct
+rounding-cell objective over uniformly sampled representable inputs. The
+count-optimized deployed candidate must improve that refined seed on a disjoint
+exact-integer holdout and still satisfy the continuous error, sign, storage,
+monotonicity, and overflow gates.
 
 The density φ(z) = e^(−z²/2) / √(2π) spans ~9 orders of magnitude on [0, MAX_Z];
 a single rational reaches the 5×10⁻⁹ budget at degree 10 (vs degree 9 for the
@@ -31,6 +30,13 @@ from scipy.stats import norm
 from gaussian_codegen.shared import constants
 from gaussian_codegen.shared.aaa import aaa_to_rational_polys, evaluate_rational, horner_eval_mpf
 from gaussian_codegen.shared.reference import DPS
+from gaussian_codegen.shared.rounding_optimize import (
+    RoundingCellSettings,
+    SoftL1Settings,
+    refinement_holdout_grid,
+    refine_rational,
+    score_quantized_rational,
+)
 
 # AAA emits a RuntimeWarning when it hits `max_terms` before satisfying `rtol`.
 # Our sweep deliberately caps `max_terms`, so the warning is expected noise.
@@ -50,8 +56,52 @@ TARGET_DEGREE = 10  # shipped PDF degree; pinned (not swept) so it stays fixed a
 TARGET_ERROR = 5e-9
 N_FIT_GRID = 5000
 N_VALIDATE_GRID = 10000
+ROUNDING_TRAIN_SIZE = 1_000_000
+ROUNDING_SCORE_SIZE = 2_000_000
+ROUNDING_EXACT_SCORE_SIZE = 1_000_000
+MIN_EXACT_HOLDOUT_CORRECT_FRACTION = 0.991
+ROUNDING_BASIN = SoftL1Settings(scale_ulp=0.008, max_function_evaluations=240)
+ROUNDING_FINE = SoftL1Settings(scale_ulp=0.002, max_function_evaluations=120)
+ROUNDING_CELLS = RoundingCellSettings(
+    temperature_ulp=0.02,
+    max_iterations=400,
+    parameter_step_ulp=0.01,
+    relative_tolerance=1e-15,
+    smooth_abs_epsilon=1e-16,
+    max_line_search_steps=50,
+)
 
 OUTPUT_PATH = pathlib.Path(__file__).parent / ".derive_output.json"
+
+# Fixed-degree candidate optimized for the deployed correctly-rounded output
+# count. Decimal strings are exact at PDF_WAD and therefore reproduce the
+# stored u128 magnitudes without a float conversion.
+DEPLOYED_NUMERATOR = [
+    "0.39894228031864903",
+    "-0.2449308172074619",
+    "-0.006734387499516681",
+    "0.039443732498613396",
+    "-0.009496590782466802",
+    "-0.000858375808929",
+    "0.0008186456042940103",
+    "-0.00017475576805382284",
+    "0.000018920164717078317",
+    "-0.0000010734849138596848",
+    "0.000000025483531952465393",
+]
+DEPLOYED_DENOMINATOR = [
+    "1",
+    "-0.6139505234837148",
+    "0.483119590841909",
+    "-0.20810601818667923",
+    "0.0927620202134527",
+    "-0.02947848515365997",
+    "0.008906298306759586",
+    "-0.0019862721433271217",
+    "0.0003839755661079716",
+    "-0.00004708401421072233",
+    "0.0000040256803742523764",
+]
 
 
 def fit_grid() -> np.ndarray:
@@ -109,7 +159,7 @@ def fit_at(max_terms: int) -> AAA:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Derive PDF AAA coefficients.")
+    parser = argparse.ArgumentParser(description="Derive PDF rational coefficients.")
     parser.add_argument(
         "--report",
         action="store_true",
@@ -149,12 +199,67 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    num, den = aaa_to_rational_polys(aaa)
+    seed_num, seed_den = aaa_to_rational_polys(aaa)
+    seed_err, seed_worst_z = measure_error(seed_num, seed_den, val_grid)
+    if seed_err > TARGET_ERROR:
+        print(
+            f"\nFAIL: degree {degree} AAA error {seed_err:.3e} exceeds target "
+            f"{TARGET_ERROR:.2e} at z={seed_worst_z:.4f}",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        refinement = refine_rational(
+            seed_num,
+            seed_den,
+            reference_values_float,
+            domain_max=MAX_Z_FLOAT,
+            raw_stop=constants.PDF_MAX_Z_RAW,
+            wad=constants.PDF_WAD,
+            output_scale=constants.SCALE_DECIMAL,
+            train_size=ROUNDING_TRAIN_SIZE,
+            score_size=ROUNDING_SCORE_SIZE,
+            validation_size=ROUNDING_EXACT_SCORE_SIZE,
+            minimum_validation_fraction=MIN_EXACT_HOLDOUT_CORRECT_FRACTION,
+            basin=ROUNDING_BASIN,
+            fine=ROUNDING_FINE,
+            cells=ROUNDING_CELLS,
+        )
+    except RuntimeError as exc:
+        print(f"\nFAIL: {exc}", file=sys.stderr)
+        return 1
+    validation_raw = refinement_holdout_grid(
+        constants.PDF_MAX_Z_RAW,
+        ROUNDING_TRAIN_SIZE,
+        ROUNDING_SCORE_SIZE,
+        ROUNDING_EXACT_SCORE_SIZE,
+    )
+    validation_x = validation_raw.astype(np.float64) / constants.SCALE_DECIMAL
+    candidate_score = score_quantized_rational(
+        DEPLOYED_NUMERATOR,
+        DEPLOYED_DENOMINATOR,
+        validation_raw,
+        reference_values_float(validation_x),
+        constants.PDF_WAD,
+        constants.SCALE_DECIMAL,
+    )
+    if (
+        candidate_score.correctly_rounded <= refinement.validation_score.correctly_rounded
+        or candidate_score.correctly_rounded_fraction < MIN_EXACT_HOLDOUT_CORRECT_FRACTION
+    ):
+        print("\nFAIL: deployed candidate did not improve the exact-integer holdout", file=sys.stderr)
+        return 1
+    num_strings = DEPLOYED_NUMERATOR
+    den_strings = DEPLOYED_DENOMINATOR
+    num = [mpf(c) for c in num_strings]
+    den = [mpf(c) for c in den_strings]
+
     err, worst_z = measure_error(num, den, val_grid)
     if err > TARGET_ERROR:
         print(
-            f"\nFAIL: degree {degree} error {err:.3e} exceeds target {TARGET_ERROR:.2e} "
-            f"at z={worst_z:.4f}",
+            f"\nFAIL: refined degree {degree} error {err:.3e} exceeds target "
+            f"{TARGET_ERROR:.2e} at z={worst_z:.4f}",
             file=sys.stderr,
         )
         return 1
@@ -163,7 +268,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     assert_signs_central(num, den, val_grid)
 
     print()
-    print(f"Chosen: degree {degree} (n_coeffs = {degree + 1}), max error {err:.3e} at z={worst_z:.4f}")
+    print(
+        f"AAA seed: {refinement.seed_score.correctly_rounded_fraction:.4%} correctly rounded "
+        f"on {refinement.seed_score.samples:,} deterministic proxy samples"
+    )
+    print(
+        f"Refined:  {refinement.refined_score.correctly_rounded_fraction:.4%} correctly rounded "
+        f"on the same samples"
+    )
+    print(
+        "Refined validation: "
+        f"{refinement.validation_score.correctly_rounded_fraction:.4%} correctly rounded "
+        f"through the exact integer mirror on {refinement.validation_score.samples:,} samples"
+    )
+    print(
+        "Deployed candidate:  "
+        f"{candidate_score.correctly_rounded_fraction:.4%} correctly rounded "
+        f"on the same exact-integer holdout"
+    )
+    print(
+        f"Chosen: degree {degree} (n_coeffs = {degree + 1}), max error "
+        f"{err:.3e} at z={worst_z:.4f}"
+    )
 
     # Coefficient magnitude check at the PDF accumulation scale before serialization.
     wad = mpf(constants.PDF_WAD)
@@ -186,11 +312,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "max_z": constants.PDF_MAX_Z,
         "wad": str(constants.PDF_WAD),
         "scale_decimal": str(constants.SCALE_DECIMAL),
-        "num_coeffs_str": [mp.nstr(c, 30) for c in num],
-        "den_coeffs_str": [mp.nstr(c, 30) for c in den],
-        "support_points": [float(z) for z in aaa.support_points],
-        "support_values": [float(y) for y in aaa.support_values],
-        "weights": [float(w) for w in aaa.weights],
+        "num_coeffs_str": num_strings,
+        "den_coeffs_str": den_strings,
     }
     OUTPUT_PATH.write_text(json.dumps(output, indent=2), encoding="utf-8")
     print(f"\nWrote {OUTPUT_PATH.relative_to(REPO_ROOT)}")

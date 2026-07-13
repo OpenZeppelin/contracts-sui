@@ -52,8 +52,8 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
     den_neg_items = ["true" if n else "false" for _, n in den]
 
     return f"""{banner}
-/// Numerator and denominator coefficients for the AAA-rational standard-normal
-/// CDF approximation on the central domain `[0, {constants.MAX_Z}]`. All values are
+/// Numerator and denominator coefficients for the generated standard-normal
+/// CDF rational on `[0, {constants.MAX_Z}]`. All values are
 /// sign-magnitude pairs at CDF WAD (`10^36`) scale, indexed in ascending power
 /// order (index 0 is the constant term).
 ///
@@ -61,7 +61,7 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
 /// callers can bind them to a local once per CDF evaluation and index locally
 /// inside the Horner loop - avoiding a fresh constant load on every iteration.
 ///
-/// See `cdf` for the consumer API. This module is regenerated from the AAA fit
+/// See `cdf` for the consumer API. This module is regenerated from the pipeline
 /// in `scripts/gaussian_codegen/cdf/`; do not hand-edit.
 module openzeppelin_fp_math::cdf_coefficients;
 

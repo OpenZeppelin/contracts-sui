@@ -300,17 +300,17 @@ fun overshoot_clamps_to_max_z() {
 #[test]
 fun tail_transform_matches_offline_mirror() {
     // The on-chain tail variable `r = sqrt(-2 ln(1 - p))` must match the offline
-    // integer mirror (`scripts/gaussian_codegen/shared/arithmetic.py::tail_r_raw`)
+    // integer mirror (`scripts/gaussian_codegen/shared/arithmetic.py::tail_r_wad`)
     // bit-for-bit, so the codegen validator faithfully re-runs the on-chain path.
     // `r` is a pure function of the `common` log kernel and `u256::sqrt` -
     // independent of the fit coefficients - so these values are stable across
     // coefficient regeneration.
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(975_000_000), 2_716_203_031);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(980_000_000), 2_797_149_622);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(990_000_000), 3_034_854_258);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_000_000), 3_716_922_188);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_990_000), 4_798_525_911);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_999_999), 6_437_898_078);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(975_000_000), 2_716_203_031_481_238_999);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(980_000_000), 2_797_149_622_536_537_127);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(990_000_000), 3_034_854_258_770_292_703);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_000_000), 3_716_922_188_849_838_448);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_990_000), 4_798_525_912_188_081_208);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_999_999), 6_437_898_078_868_041_718);
 }
 
 // === Caller-facing domain aborts ===
