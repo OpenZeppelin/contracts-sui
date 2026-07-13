@@ -477,8 +477,8 @@ public macro fun upsert<$K: drop>($set: &mut SortedSet<$K>, $key: $K): bool {
 /// - `sorted_map::EKeyNotFound` if `key` is absent.
 public macro fun remove_by<$K>($set: &mut SortedSet<$K>, $key: &$K, $lt: |&$K, &$K| -> bool): $K {
     let set = $set;
-    // The map's `remove_by!` returns just the value (`Unit` for a set), which is dropped here, so
-    // `remove!` stays a `()`-returning, `vec_set`-shaped op.
+    // The map's `remove_by!` returns the removed `(key, Unit)` pair; discard the `Unit` value and
+    // return the key.
     let (k, _) = set.inner_mut().remove_by!($key, $lt);
     k
 }
