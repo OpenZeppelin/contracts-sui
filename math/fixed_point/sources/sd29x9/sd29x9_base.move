@@ -286,8 +286,11 @@ public fun pdf(z: SD29x9): SD29x9 {
 ///   two functions agree at the corners.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Empirical
 ///   worst-case from the committed coefficients and on-chain kernels is
-///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`
-///   change of variable is most sensitive.
+///   `≈ 6.3 × 10⁻¹⁰` (within 1 ULP) across the offline validation grid. The
+///   tail change of variable is carried at the internal `10^18` scale with
+///   nearest rounding, so tail accuracy realizes the full precision of the
+///   `ln`/`sqrt` kernels rather than being floored at the `10^9` output
+///   resolution.
 /// - Near `p = 1` the quantile is intrinsically steep - the two largest
 ///   representable inputs differ by `≈ 0.11` in `z` - so a 1-ULP change in `p`
 ///   maps to a large change in `z`. This is a property of `Φ⁻¹`, not the

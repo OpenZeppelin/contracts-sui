@@ -14,10 +14,12 @@
 ///   table); the change of variable linearizes the tail's growth and keeps the
 ///   denominator well away from zero.
 ///
-/// The tail variable is built from the internal `common::raw_log2` /
-/// `apply_log2_factor` and `u256::sqrt` kernels - never the typed
+/// The tail variable is built from the internal `common::raw_log2` kernel and
+/// the `u256::mul_div`/`u256::sqrt` primitives - never the typed
 /// `sd29x9_base::ln`/`sqrt` - so this module stays strictly below the base
-/// modules in the dependency graph (they depend on it).
+/// modules in the dependency graph (they depend on it). It is carried at the
+/// WAD accumulation scale (see `tail_variable_wad`), not the `10^9` output
+/// scale, so the rational receives an argument at kernel precision.
 module openzeppelin_fp_math::inverse_cdf;
 
 use openzeppelin_fp_math::common;
@@ -43,6 +45,7 @@ const EInternalDenNonPositive: vector<u8> =
 /// Internal Horner-accumulation scale (`10^18`) for the quantile rationals - the
 /// precision the committed tables were fitted and validated at. Passed per call
 /// to the shared `horner` primitives (`cdf` and `pdf` run finer, at `10^36`).
+/// The tail change of variable is computed and carried at this same scale.
 const WAD: u256 = 1_000_000_000_000_000_000; // 10^18
 
 /// `Φ⁻¹(0.5) = 0`: the input probability at the `UD30x9` raw scale (`10^9`) whose
@@ -78,7 +81,8 @@ public(package) fun inverse_cdf_upper_raw(p_raw: u128): u128 {
 
     if (p_raw < inverse_cdf_coefficients::central_threshold_raw()) {
         eval_rational(
-            p_raw - HALF_RAW, // u = p - 0.5, exact
+            // u = p - 0.5, exact at 10^9, promoted losslessly to WAD.
+            ((p_raw - HALF_RAW) as u256) * common::scale_u256!(),
             inverse_cdf_coefficients::central_num_mags(),
             inverse_cdf_coefficients::central_num_negs(),
             inverse_cdf_coefficients::central_den_mags(),
@@ -86,7 +90,7 @@ public(package) fun inverse_cdf_upper_raw(p_raw: u128): u128 {
         )
     } else {
         eval_rational(
-            tail_variable_raw(p_raw), // r = sqrt(-2 * ln(1 - p))
+            tail_variable_wad(p_raw), // r = sqrt(-2 * ln(1 - p)) at WAD
             inverse_cdf_coefficients::tail_num_mags(),
             inverse_cdf_coefficients::tail_num_negs(),
             inverse_cdf_coefficients::tail_den_mags(),
@@ -97,35 +101,52 @@ public(package) fun inverse_cdf_upper_raw(p_raw: u128): u128 {
 
 // === Private Functions ===
 
-/// The tail change of variable `r = sqrt(-2 * ln(1 - p))` at the `10^9` scale.
+/// The tail change of variable `r = sqrt(-2 * ln(1 - p))` at the WAD (`10^18`)
+/// accumulation scale, with nearest rounding in both the logarithm rescale and
+/// the square-root step.
 ///
 /// `1 - p` is computed exactly as `SCALE - p_raw` and lies in `(0, 1)` on the
 /// tail domain, so `common::raw_log2` takes its sub-one branch and returns
-/// `|log2(1 - p)|` at `10^18`; `apply_log2_factor` scales that by `ln 2` to
-/// `|ln(1 - p)|` at `10^9`. Doubling yields `-2 * ln(1 - p)` (positive), and
-/// `u256::sqrt` with the `* SCALE` precision lift (as in `ud30x9_base::sqrt`)
-/// returns `r` at the `10^9` scale, truncated down.
-fun tail_variable_raw(p_raw: u128): u128 {
+/// `|log2(1 - p)|` at `10^18`; one nearest-rounded `mul_div` by `ln 2` (also at
+/// `10^18`) keeps `|ln(1 - p)|` at `10^18`. Doubling yields `-2 * ln(1 - p)`
+/// (positive), and `u256::sqrt` with the `* WAD` precision lift returns `r` at
+/// `10^18`, rounded to nearest.
+///
+/// Carrying `r` at WAD rather than the `10^9` output scale preserves the ~18
+/// significant digits the log kernel already computes: quantized to `10^9`,
+/// neighboring tail probabilities would collapse onto the same `r` and cap tail
+/// accuracy below kernel precision, regardless of the fitted coefficients.
+///
+/// The `mul_div` cannot overflow (`log2_mag_e18 < 2^67`, `ln 2 < 2^60`, and the
+/// quotient shrinks back below `2^67`), so `destroy_some` never aborts; the peak
+/// intermediate is `arg_wad * WAD < 2^126`.
+fun tail_variable_wad(p_raw: u128): u256 {
     let complement_raw = common::scale!() - p_raw; // 1 - p at 10^9, exact, in (0, 1)
     let (_, log2_mag_e18) = common::raw_log2(complement_raw); // |log2(1 - p)| at 10^18
-    let ln_mag_raw = common::apply_log2_factor(log2_mag_e18, common::ln2_e18!()); // |ln(1 - p)| at 10^9
-    let arg_raw = 2 * ln_mag_raw; // -2 * ln(1 - p) at 10^9 (positive)
-    u256::sqrt((arg_raw as u256) * common::scale_u256!(), rounding::down()) as u128
+    let ln_mag_wad = u256::mul_div(
+        log2_mag_e18 as u256,
+        common::ln2_e18!() as u256,
+        WAD,
+        rounding::nearest(),
+    ).destroy_some(); // |ln(1 - p)| at 10^18
+    let arg_wad = 2 * ln_mag_wad; // -2 * ln(1 - p) at 10^18 (positive)
+    u256::sqrt(arg_wad * WAD, rounding::nearest()) // r at 10^18, nearest
 }
 
-/// Evaluate `N(x) / D(x)` for a transformed argument `x_raw` (`u` or `r`) at the
-/// `10^9` scale, given a region's coefficient tables. Split out from
-/// `inverse_cdf_upper_raw` so its integrity asserts can be exercised with
-/// injected coefficients in tests, mirroring `cdf::eval_rational`.
+/// Evaluate `N(x) / D(x)` for a transformed argument `x_wad` (`u` or `r`)
+/// already at the WAD (`10^18`) accumulation scale, given a region's coefficient
+/// tables. The central caller promotes its exact `10^9` argument with a lossless
+/// `* 10^9` lift; the tail caller passes `r` computed directly at WAD (see
+/// `tail_variable_wad`). Split out from `inverse_cdf_upper_raw` so its integrity
+/// asserts can be exercised with injected coefficients in tests, mirroring
+/// `cdf::eval_rational`.
 fun eval_rational(
-    x_raw: u128,
+    x_wad: u256,
     num_mags: vector<u128>,
     num_negs: vector<bool>,
     den_mags: vector<u128>,
     den_negs: vector<bool>,
 ): u128 {
-    // Promote the transformed argument from 10^9 to WAD (10^18).
-    let x_wad = (x_raw as u256) * (common::scale_u256!());
     let x_signed = horner::from_unsigned(x_wad);
 
     let n = horner::horner_eval!(x_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), WAD);
@@ -162,22 +183,22 @@ fun eval_rational(
 /// API with the committed coefficients - can be driven with crafted tables.
 #[test_only]
 public(package) fun eval_rational_for_test(
-    x_raw: u128,
+    x_wad: u256,
     num_mags: vector<u128>,
     num_negs: vector<bool>,
     den_mags: vector<u128>,
     den_negs: vector<bool>,
 ): u128 {
-    eval_rational(x_raw, num_mags, num_negs, den_mags, den_negs)
+    eval_rational(x_wad, num_mags, num_negs, den_mags, den_negs)
 }
 
-/// Test-only window onto `tail_variable_raw` so the on-chain tail change of
+/// Test-only window onto `tail_variable_wad` so the on-chain tail change of
 /// variable `r = sqrt(-2 * ln(1 - p))` - composed from `common::raw_log2`,
-/// `apply_log2_factor` and `u256::sqrt` - can be asserted bit-for-bit against the
+/// `u256::mul_div` and `u256::sqrt` - can be asserted bit-for-bit against the
 /// offline integer mirror in `scripts/gaussian_codegen/shared/arithmetic.py`
-/// (`tail_r_raw`), which the codegen validator relies on. `r` depends only on
+/// (`tail_r_wad`), which the codegen validator relies on. `r` depends only on
 /// those fixed kernels, not on the fit coefficients.
 #[test_only]
-public(package) fun tail_variable_raw_for_test(p_raw: u128): u128 {
-    tail_variable_raw(p_raw)
+public(package) fun tail_variable_wad_for_test(p_raw: u128): u256 {
+    tail_variable_wad(p_raw)
 }

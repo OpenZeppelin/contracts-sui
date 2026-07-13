@@ -4,8 +4,9 @@ The single Python source of truth for re-running the on-chain gaussian integer
 arithmetic offline. Mirrors `math/fixed_point/sources/internal/horner.move`
 exactly - floor-division `mul_wad`, sign-magnitude `add`, canonical zero - plus
 the `u256::mul_div(..., Nearest)` half-up rounding (from `math/core`) used for
-each family's final ratio. Every `<family>/validate.py` re-runs through these, so
-one tested copy stays in lock-step with the Move primitives.
+each family's final ratio and the inverse-CDF tail transform. Every
+`<family>/validate.py` re-runs through these, so one tested copy stays in
+lock-step with the Move primitives.
 """
 from __future__ import annotations
 
@@ -97,16 +98,16 @@ def mul_div_nearest(a: int, b: int, d: int) -> int:
 
 # --- Logarithm / square-root kernels (for inverse_cdf's tail transform) ---------
 #
-# These mirror the on-chain `common::raw_log2` + `common::apply_log2_factor`
-# (`math/fixed_point/sources/internal/common.move`) and `u256::sqrt(..., Down)`
-# (`math/core`) so `inverse_cdf/validate.py` can re-run the tail change of
-# variable `r = sqrt(-2 * ln(1 - p))` in Python integer arithmetic, exactly as
-# the Move `inverse_cdf::tail_variable_raw` does.
+# These mirror the on-chain `common::raw_log2`
+# (`math/fixed_point/sources/internal/common.move`) plus `u256::mul_div(...,
+# Nearest)` and `u256::sqrt(..., Nearest)` (`math/core`) so
+# `inverse_cdf/validate.py` can re-run the tail change of variable
+# `r = sqrt(-2 * ln(1 - p))` in Python integer arithmetic, exactly as the Move
+# `inverse_cdf::tail_variable_wad` does.
 
 SCALE = constants.SCALE_DECIMAL  # 10^9
 INTERNAL_LOG_SCALE = 10**18
 LN2_E18 = 693_147_180_559_945_309  # floor(ln(2) * 10^18), == common::ln2_e18!()
-LOG_FACTOR_DENOM_E27 = 10**27
 
 
 def raw_log2(x_raw: int) -> tuple[bool, int]:
@@ -148,31 +149,31 @@ def raw_log2(x_raw: int) -> tuple[bool, int]:
     return neg, magnitude
 
 
-def apply_log2_factor(log2_mag_e18: int, factor_e18: int = LN2_E18) -> int:
-    """Mirror `common::apply_log2_factor`: `floor(log2_mag_e18 * factor_e18 / 10^27)`
-    at the `10^9` scale (Down rounding). Default factor converts `log2` to `ln`."""
-    return (log2_mag_e18 * factor_e18) // LOG_FACTOR_DENOM_E27
-
-
-def isqrt_scaled(value_raw: int) -> int:
-    """Mirror `ud30x9_base::sqrt` / `u256::sqrt(value_raw * 10^9, Down)`: the
-    square root of a `10^9`-scaled value, returned at the `10^9` scale, truncated
-    down. Python's `math.isqrt` is exact floor-sqrt, matching `Down`."""
+def isqrt_nearest(value: int) -> int:
+    """Mirror `u256::sqrt(value, Nearest)`: floor square root, rounded up when
+    the remainder exceeds the floor root (`value - r*r > r`). Exact ties cannot
+    occur (`(r + 1/2)^2` is never an integer), so this is round-to-nearest."""
     from math import isqrt
 
-    return isqrt(value_raw * SCALE)
+    r = isqrt(value)
+    return r + 1 if value - r * r > r else r
 
 
-def tail_r_raw(p_raw: int) -> int:
-    """On-chain tail variable `r = sqrt(-2 * ln(1 - p))` at the `10^9` scale,
-    mirroring `inverse_cdf::tail_variable_raw`. `p_raw` is `p` at `10^9` scale
-    with `0 < p < 1`.
+def tail_r_wad(p_raw: int) -> int:
+    """On-chain tail variable `r = sqrt(-2 * ln(1 - p))` at the WAD (`10^18`)
+    accumulation scale, mirroring `inverse_cdf::tail_variable_wad`. `p_raw` is
+    `p` at `10^9` scale with `0 < p < 1`.
+
+    Carrying `r` at `10^18` - with nearest rounding in both the `ln 2` rescale
+    and the square root - preserves the log kernel's full precision; quantized
+    to the `10^9` output scale, neighboring tail probabilities would collapse
+    onto the same `r`.
 
     Bit-for-bit fidelity to the Move kernel is asserted by the Move test
     `sd29x9_inverse_cdf_tests::tail_transform_matches_offline_mirror`, so this
     mirror is a faithful stand-in for the on-chain path in `validate.py`."""
     complement_raw = SCALE - p_raw  # 1 - p at 10^9, exact
-    _, log2_mag = raw_log2(complement_raw)  # |log2(1 - p)| at 1e18 (1-p < 1)
-    ln_mag_raw = apply_log2_factor(log2_mag, LN2_E18)  # |ln(1 - p)| at 1e9
-    arg_raw = 2 * ln_mag_raw  # -2 * ln(1 - p) at 1e9
-    return isqrt_scaled(arg_raw)
+    _, log2_mag_e18 = raw_log2(complement_raw)  # |log2(1 - p)| at 1e18 (1-p < 1)
+    ln_mag_wad = mul_div_nearest(log2_mag_e18, LN2_E18, WAD)  # |ln(1 - p)| at 1e18
+    arg_wad = 2 * ln_mag_wad  # -2 * ln(1 - p) at 1e18
+    return isqrt_nearest(arg_wad * WAD)

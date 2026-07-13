@@ -8,8 +8,9 @@ arithmetic that mirrors the Move implementation exactly**:
     to MAX_Z, special-case `p = 0.5 → 0`, else the central rational in
     `u = p - 0.5` (`p < threshold`) or the tail rational in
     `r = sqrt(-2 ln(1 - p))` (`p ≥ threshold`).
-  - The tail variable `r` is built with `shared.arithmetic.tail_r_raw`, which
-    mirrors `common::raw_log2` + `apply_log2_factor` + `u256::sqrt(..., Down)`.
+  - The tail variable `r` is built with `shared.arithmetic.tail_r_wad` - at the
+    WAD (10^18) accumulation scale, not the 10^9 output scale - which mirrors
+    `common::raw_log2` + `u256::mul_div(..., Nearest)` + `u256::sqrt(..., Nearest)`.
   - Each rational: WAD-scale Horner (sign-magnitude, floor-div `mul_wad`) then
     the final `mul_div(N, 10^9, D, Nearest)` half-up ratio, clamped to MAX_Z.
   - Signed reflection (`sd29x9_base::inverse_cdf`): `p < 0.5 → -Φ⁻¹(1 - p)`.
@@ -38,7 +39,7 @@ from typing import Sequence
 import numpy as np
 
 from gaussian_codegen.shared import constants
-from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_nearest, tail_r_raw
+from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_nearest, tail_r_wad
 from gaussian_codegen.shared.reference import ppf
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -100,16 +101,17 @@ class Coeffs:
         self.max_z = _parse_u128_const(text, "MAX_Z_RAW")
 
 
-def _eval_rational(x_raw: int, region: Region, max_z: int) -> int:
-    """Mirror `inverse_cdf::eval_rational` for a transformed argument x_raw at 10^9."""
+def _eval_rational(x_wad_mag: int, region: Region, max_z: int) -> int:
+    """Mirror `inverse_cdf::eval_rational` for a transformed argument already at
+    the WAD (10^18) accumulation scale."""
     num, den = region
-    x_wad: SignedInt = (x_raw * SCALE, False)  # 10^9 → 10^18
+    x_wad: SignedInt = (x_wad_mag, False)
     n = horner_eval(x_wad, num)
     d = horner_eval(x_wad, den)
     if n[1]:
-        raise RuntimeError(f"N negative at x_raw={x_raw}")
+        raise RuntimeError(f"N negative at x_wad={x_wad_mag}")
     if d[1] or d[0] == 0:
-        raise RuntimeError(f"D non-positive at x_raw={x_raw}")
+        raise RuntimeError(f"D non-positive at x_wad={x_wad_mag}")
     z = mul_div_nearest(n[0], SCALE, d[0])
     return min(z, max_z)  # last-ULP overshoot / defense-in-depth clamp
 
@@ -121,8 +123,9 @@ def upper_raw(p_raw: int, c: Coeffs) -> int:
     if p_raw == HALF_RAW:
         return 0  # Φ⁻¹(0.5)
     if p_raw < c.threshold:
-        return _eval_rational(p_raw - HALF_RAW, c.central, c.max_z)  # u = p - 0.5
-    return _eval_rational(tail_r_raw(p_raw), c.tail, c.max_z)  # r = sqrt(-2 ln(1 - p))
+        # u = p - 0.5, exact at 10^9, promoted losslessly to 10^18.
+        return _eval_rational((p_raw - HALF_RAW) * SCALE, c.central, c.max_z)
+    return _eval_rational(tail_r_wad(p_raw), c.tail, c.max_z)  # r = sqrt(-2 ln(1 - p)) at 10^18
 
 
 def inverse_cdf_signed(p_raw: int, c: Coeffs) -> int:

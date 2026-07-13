@@ -14,7 +14,7 @@ const HALF_RAW: u128 = 500_000_000; // p = 0.5
 const ONE_RAW: u128 = 1_000_000_000; // p = 1.0
 const MAX_Z_RAW: u128 = 6_300_000_000; // 6.3 at SD29x9 scale (output saturation)
 const SPLIT_RAW: u128 = 975_000_000; // central/tail probability split
-const ONE_WAD: u128 = 1_000_000_000_000_000_000; // 1.0 at WAD scale (coefficient injection)
+const ONE_WAD: u128 = 1_000_000_000_000_000_000; // 1.0 at WAD scale (coefficient/argument injection)
 
 // 5 ULP at the SD29x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
 const TOLERANCE: u128 = 5;
@@ -235,7 +235,7 @@ fun coefficient_arrays_have_matching_lengths() {
 fun numerator_negative_aborts() {
     // A constant numerator of -1.0 forces N(x) < 0.
     let _ = inverse_cdf::eval_rational_for_test(
-        SCALE,
+        ONE_WAD as u256,
         vector[ONE_WAD],
         vector[true],
         vector[ONE_WAD],
@@ -247,7 +247,7 @@ fun numerator_negative_aborts() {
 fun denominator_nonpositive_aborts() {
     // A constant denominator of -1.0 forces D(x) < 0.
     let _ = inverse_cdf::eval_rational_for_test(
-        SCALE,
+        ONE_WAD as u256,
         vector[ONE_WAD],
         vector[false],
         vector[ONE_WAD],
@@ -260,7 +260,7 @@ fun denominator_zero_aborts() {
     // A constant denominator of 0 evaluates to canonical zero, tripping the
     // `mag(d) > 0` half of the guard before the division.
     let _ = inverse_cdf::eval_rational_for_test(
-        SCALE,
+        ONE_WAD as u256,
         vector[ONE_WAD],
         vector[false],
         vector[0],
@@ -272,7 +272,7 @@ fun denominator_zero_aborts() {
 fun numerator_zero_passes_guard_returns_zero() {
     // N(x) = 0 is non-negative: the guard passes and 0 / D(x) is exactly 0.
     let v = inverse_cdf::eval_rational_for_test(
-        SCALE,
+        ONE_WAD as u256,
         vector[0],
         vector[false],
         vector[ONE_WAD],
@@ -286,7 +286,7 @@ fun overshoot_clamps_to_max_z() {
     // N(x)/D(x) = 7.0 exceeds the 6.3 output bound, so the clamp must pin the
     // result to MAX_Z_RAW. Dead for the committed coefficients; driven directly.
     let v = inverse_cdf::eval_rational_for_test(
-        SCALE,
+        ONE_WAD as u256,
         vector[7 * ONE_WAD],
         vector[false],
         vector[ONE_WAD],
@@ -299,18 +299,19 @@ fun overshoot_clamps_to_max_z() {
 
 #[test]
 fun tail_transform_matches_offline_mirror() {
-    // The on-chain tail variable `r = sqrt(-2 ln(1 - p))` must match the offline
-    // integer mirror (`scripts/gaussian_codegen/shared/arithmetic.py::tail_r_raw`)
-    // bit-for-bit, so the codegen validator faithfully re-runs the on-chain path.
-    // `r` is a pure function of the `common` log kernel and `u256::sqrt` -
-    // independent of the fit coefficients - so these values are stable across
-    // coefficient regeneration.
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(975_000_000), 2_716_203_031);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(980_000_000), 2_797_149_622);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(990_000_000), 3_034_854_258);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_000_000), 3_716_922_188);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_990_000), 4_798_525_911);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_999_999), 6_437_898_078);
+    // The on-chain tail variable `r = sqrt(-2 ln(1 - p))`, at the WAD (10^18)
+    // accumulation scale, must match the offline integer mirror
+    // (`scripts/gaussian_codegen/shared/arithmetic.py::tail_r_wad`) bit-for-bit,
+    // so the codegen validator faithfully re-runs the on-chain path. `r` is a
+    // pure function of the `common` log kernel and the `u256` mul_div/sqrt
+    // primitives - independent of the fit coefficients - so these values are
+    // stable across coefficient regeneration.
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(975_000_000), 2_716_203_031_481_238_999);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(980_000_000), 2_797_149_622_536_537_127);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(990_000_000), 3_034_854_258_770_292_703);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_000_000), 3_716_922_188_849_838_448);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_990_000), 4_798_525_912_188_081_208);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_999_999), 6_437_898_078_868_041_718);
 }
 
 // === Caller-facing domain aborts ===

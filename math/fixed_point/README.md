@@ -220,7 +220,11 @@ sampling. Both fixed-point types expose it:
 Properties:
 
 - **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
-  empirical worst case `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam.
+  empirical worst case `≈ 6.3 × 10⁻¹⁰` (within 1 ULP) across the offline
+  validation grid. The tail change of variable `r = sqrt(-2·ln(1-p))` is carried
+  at the internal `10^18` scale, so tail accuracy realizes the full precision of
+  the `ln`/`sqrt` kernels instead of being floored at the `10⁻⁹` output
+  resolution.
 - **Φ⁻¹(0.5)**: exactly `0`.
 - **Symmetry**: odd about `0.5` - `inverse_cdf(p) = inverse_cdf(1 - p).negate()`.
 - **Saturation**: `p = 1` returns `+6.3` and `p = 0` returns `-6.3` (`Φ⁻¹` is
