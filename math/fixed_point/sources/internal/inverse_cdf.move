@@ -72,6 +72,14 @@ const ONE_RAW: u128 = 1_000_000_000;
 ///
 /// Returned value is in `[0, MAX_Z_RAW]`. Caller handles `p < 0.5` via reflection
 /// (`Φ⁻¹(p) = -Φ⁻¹(1 - p)`) and rejects out-of-range probabilities.
+///
+/// #### Aborts
+/// - `EInternalNumNegative` / `EInternalDenNonPositive` from `eval_rational`'s
+///   integrity asserts (defense-in-depth against a corrupted regenerated
+///   coefficient table; these cannot fire for the shipped coefficients).
+/// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the
+///   `p_raw ≥ ONE_RAW` saturation guard runs first, so `1 - p` is never zero;
+///   unreachable).
 public(package) fun inverse_cdf_upper_raw(p_raw: u128): u128 {
     if (p_raw >= ONE_RAW) return inverse_cdf_coefficients::max_z_raw(); // Φ⁻¹(1) saturates
     if (p_raw == HALF_RAW) return 0; // Φ⁻¹(0.5) special case
@@ -117,6 +125,14 @@ fun tail_variable_raw(p_raw: u128): u128 {
 /// `10^9` scale, given a region's coefficient tables. Split out from
 /// `inverse_cdf_upper_raw` so its integrity asserts can be exercised with
 /// injected coefficients in tests, mirroring `cdf::eval_rational`.
+///
+/// #### Aborts
+/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+///   value (defense-in-depth against a corrupted regenerated coefficient table;
+///   cannot fire for the shipped coefficients).
+/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+///   non-positive value (defense-in-depth; cannot fire for the shipped
+///   coefficients).
 fun eval_rational(
     x_raw: u128,
     num_mags: vector<u128>,

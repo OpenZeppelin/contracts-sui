@@ -62,6 +62,11 @@ const WAD_PER_RAW: u256 = 1_000_000_000_000_000_000_000_000_000; // 10^27
 /// Returned value is in `[0, φ(0)]` (peak `398_942_280`). The result depends
 /// only on `|z|`, so the signed caller reuses it directly for negative inputs
 /// (φ is even) - no reflection is needed.
+///
+/// #### Aborts
+/// - `EInternalNumNegative` / `EInternalDenNonPositive` from `eval_rational`'s
+///   integrity asserts (defense-in-depth against a corrupted regenerated
+///   coefficient table; these cannot fire for the shipped coefficients).
 public(package) fun pdf_nonneg_raw(z_raw: u128): u128 {
     if (z_raw >= pdf_coefficients::max_z_raw()) return 0;
 
@@ -79,6 +84,14 @@ public(package) fun pdf_nonneg_raw(z_raw: u128): u128 {
 /// Evaluate `N(z) / D(z)` for a central-domain `z_raw` (`0 ≤ z_raw < max_z`),
 /// given the coefficient tables. Split out from `pdf_nonneg_raw` so its
 /// integrity asserts can be exercised with injected coefficients in tests.
+///
+/// #### Aborts
+/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+///   value (defense-in-depth against a corrupted regenerated coefficient table;
+///   cannot fire for the shipped coefficients).
+/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+///   non-positive value (defense-in-depth; cannot fire for the shipped
+///   coefficients).
 fun eval_rational(
     z_raw: u128,
     num_mags: vector<u128>,
