@@ -472,7 +472,7 @@ public macro fun contains_by<$K, $V>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let map = $map;
-    let (found, _idx) = search!(map, $key, $lt);
+    let (found, _idx) = map.search!($key, $lt);
     found
 }
 
@@ -538,7 +538,7 @@ public macro fun borrow_mut_by<$K, $V>(
     $lt: |&$K, &$K| -> bool,
 ): &mut $V {
     let map = $map;
-    let (found, idx) = search!(map, $key, $lt);
+    let (found, idx) = map.search!($key, $lt);
     assert_key_found(found);
     map.value_at_mut(idx)
 }
@@ -578,7 +578,7 @@ public macro fun add_by<$K, $V>(
     let map = $map;
     let key = $key;
     let value = $value;
-    let (found, idx) = search!(map, &key, $lt);
+    let (found, idx) = map.search!(&key, $lt);
     assert_key_absent(!found);
     map.insert_at(key, value, idx);
 }
@@ -675,7 +675,7 @@ public macro fun remove_by<$K, $V>(
     $lt: |&$K, &$K| -> bool,
 ): ($K, $V) {
     let map = $map;
-    let (found, idx) = search!(map, $key, $lt);
+    let (found, idx) = map.search!($key, $lt);
     assert_key_found(found);
     let (key, value) = map.remove_at(idx);
     (key, value)
@@ -713,7 +713,7 @@ public macro fun find_next_by<$K, $V>(
 ): Option<$K> {
     let map = $map;
     let include = $include;
-    let (found, idx) = search!(map, $key, $lt);
+    let (found, idx) = map.search!($key, $lt);
     let es = map.entries();
     let n = es.length();
     if (found) {
@@ -764,7 +764,7 @@ public macro fun find_prev_by<$K, $V>(
 ): Option<$K> {
     let map = $map;
     let include = $include;
-    let (found, idx) = search!(map, $key, $lt);
+    let (found, idx) = map.search!($key, $lt);
     let es = map.entries();
     if (found) {
         if (include) {
@@ -876,7 +876,7 @@ public macro fun keys_from_by<$K, $V>(
     let map = $map;
     let include = $include;
     let limit = $limit;
-    let (found, idx) = search!(map, $from, $lt);
+    let (found, idx) = map.search!($from, $lt);
     // First qualifying index = the insertion point, skipping an exact hit only when the
     // boundary is exclusive. On a miss `idx` is already the first key > from (the
     // ceiling), so `include` does not shift it.
