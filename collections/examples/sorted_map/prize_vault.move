@@ -6,7 +6,7 @@
 ///
 /// - A `SortedMap<u64, Coin<SUI>>` is itself not droppable - it cannot fall out of
 ///   scope; it must be drained and then `destroy_empty`'d.
-/// - Every op that could displace a value hands it back instead of dropping it
+/// - Every `SortedMap` op that could displace a value hands it back instead of dropping it
 ///   (`upsert` returns `Option<Coin>`, `remove!` returns `(rank, Coin)` (aborting if the rank
 ///   is absent), `pop_front` returns `(rank, Coin)`), and for a resource the compiler forces
 ///   you to consume what you get back - so value cannot silently leak.
