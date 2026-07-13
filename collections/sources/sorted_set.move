@@ -231,7 +231,7 @@ public fun assert_sorted(sorted: bool) {
 ///
 /// #### Returns
 /// - A set of the distinct keys, in comparator order.
-public macro fun from_keys_by<$K>($keys: vector<$K>, $lt: |&$K, &$K| -> bool): SortedSet<$K> {
+public macro fun from_keys_by<$K: drop>($keys: vector<$K>, $lt: |&$K, &$K| -> bool): SortedSet<$K> {
     let keys = $keys;
     keys.fold!(new(), |mut set, k| { set.upsert_by!(k, $lt); set })
 }
@@ -240,7 +240,7 @@ public macro fun from_keys_by<$K>($keys: vector<$K>, $lt: |&$K, &$K| -> bool): S
 ///
 /// #### Returns
 /// - A set of the distinct keys, in ascending order.
-public macro fun from_keys<$K>($keys: vector<$K>): SortedSet<$K> {
+public macro fun from_keys<$K: drop>($keys: vector<$K>): SortedSet<$K> {
     from_keys_by!($keys, |a, b| *a < *b)
 }
 
@@ -266,7 +266,7 @@ public macro fun from_keys<$K>($keys: vector<$K>): SortedSet<$K> {
 ///
 /// #### Aborts
 /// - `EKeysNotSorted` if `keys` has an adjacent pair not sorted under `lt`.
-public macro fun from_sorted_keys_by<$K>(
+public macro fun from_sorted_keys_by<$K: copy + drop>(
     $keys: vector<$K>,
     $lt: |&$K, &$K| -> bool,
 ): SortedSet<$K> {
@@ -307,7 +307,7 @@ public macro fun from_sorted_keys_by<$K>(
 ///
 /// #### Aborts
 /// - `EKeysNotSorted` if `keys` is not ascending.
-public macro fun from_sorted_keys<$K>($keys: vector<$K>): SortedSet<$K> {
+public macro fun from_sorted_keys<$K: copy + drop>($keys: vector<$K>): SortedSet<$K> {
     from_sorted_keys_by!($keys, |a, b| *a < *b)
 }
 
