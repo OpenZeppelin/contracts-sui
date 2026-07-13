@@ -290,6 +290,42 @@ fun numerator_zero_passes_guard_returns_zero() {
     assert_eq!(v, 0);
 }
 
+// === Offline mirror fidelity ===
+
+#[test]
+fun cdf_matches_offline_mirror() {
+    // The full signed `cdf` pipeline must match the offline integer mirror
+    // (`scripts/gaussian_codegen/cdf/validate.py::cdf_simulate`) bit-for-bit, so the
+    // codegen validator faithfully re-runs the on-chain path. Unlike the 5-ULP oracle
+    // vectors these assert exact equality, and unlike the quantile's tail-transform
+    // values they depend on the committed coefficient tables - regenerate them together
+    // (from `scripts/`, in a `make install` env):
+    //   `from gaussian_codegen.cdf import validate as v` then
+    //   `v.cdf_simulate(z_raw, neg, *v.parse_coefficients(v.COEFF_PATH.read_text()))`.
+    // Probes cover the Φ(0) special case, the smallest nonzero input, interior points
+    // on the rational branch, the last interior ULP, and (beyond-)saturation;
+    // z_raw = 1_133_333_323 pins the on-chain arithmetic itself - the mirror yields
+    // 871_462_849 where the 100-dps oracle rounds to ...848.
+    assert_eq!(pos(0).cdf().unwrap(), HALF_RAW); // Φ(0) special case
+    assert_eq!(pos(1).cdf().unwrap(), HALF_RAW); // smallest nonzero input
+    assert_eq!(pos(250_000_000).cdf().unwrap(), 598_706_326);
+    assert_eq!(pos(1_000_000_000).cdf().unwrap(), 841_344_746);
+    assert_eq!(pos(1_133_333_323).cdf().unwrap(), 871_462_849); // implementation-pinning
+    assert_eq!(pos(2_000_000_000).cdf().unwrap(), 977_249_868);
+    assert_eq!(pos(3_500_000_000).cdf().unwrap(), 999_767_371);
+    assert_eq!(pos(5_000_000_000).cdf().unwrap(), 999_999_713);
+    assert_eq!(pos(MAX_Z_RAW - 1).cdf().unwrap(), 999_999_999); // last interior ULP
+    assert_eq!(pos(MAX_Z_RAW).cdf().unwrap(), ONE_RAW); // saturation boundary
+    assert_eq!(pos(7 * SCALE).cdf().unwrap(), ONE_RAW); // beyond saturation
+    // Negative branch: the reflection `10^9 - Φ(|z|)` must also agree exactly.
+    assert_eq!(neg(1).cdf().unwrap(), HALF_RAW);
+    assert_eq!(neg(250_000_000).cdf().unwrap(), 401_293_674);
+    assert_eq!(neg(1_133_333_323).cdf().unwrap(), 128_537_151);
+    assert_eq!(neg(3_500_000_000).cdf().unwrap(), 232_629);
+    assert_eq!(neg(MAX_Z_RAW - 1).cdf().unwrap(), 1);
+    assert_eq!(neg(MAX_Z_RAW).cdf().unwrap(), 0);
+}
+
 // === Method dispatch ===
 
 #[test]
