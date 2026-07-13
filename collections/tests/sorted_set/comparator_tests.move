@@ -26,9 +26,9 @@ fun aborting_lt(_a: &u64, _b: &u64): bool { abort EAbortingComparator }
 #[test]
 fun reverse_comparator_consistent() {
     let mut s = ss::new<u64>();
-    u::ins_rev(&mut s, 10);
-    u::ins_rev(&mut s, 30);
-    u::ins_rev(&mut s, 20);
+    u::ups_rev(&mut s, 10);
+    u::ups_rev(&mut s, 30);
+    u::ups_rev(&mut s, 20);
     assert!(u::wf_rev(&s)); // well-formed under the reverse order it was built with
     assert!(!u::wf(&s)); // and NOT well-formed under `<` - order is relative to the lt
     assert_eq!(s.head(), option::some(30)); // head = largest numeric under reverse lt
@@ -57,11 +57,11 @@ fun add_by_reverse_comparator() {
 #[test]
 fun nonstrict_comparator_creates_duplicates() {
     let mut s = ss::new<u64>();
-    assert!(u::ins_le(&mut s, 5)); // first 5 -> fresh
+    assert!(u::ups_le(&mut s, 5)); // first 5 -> fresh
     // `<=` makes search! treat the existing 5 as "less", so equality is never detected: the
     // second 5 is also reported FRESH (returns true) and inserted AGAIN. The set's de-dup is
     // only as strict as the comparator's derived equality.
-    assert!(u::ins_le(&mut s, 5)); // duplicate, yet reported newly-added
+    assert!(u::ups_le(&mut s, 5)); // duplicate, yet reported newly-added
     assert_eq!(s.length(), 2); // apparent duplicate landed
     assert!(!u::wf(&s)); // adjacent equal pair -> not strictly increasing under `<`
 }
@@ -86,7 +86,7 @@ fun mixed_comparator_insert_desorts_no_value_lost() {
     // the set (the `<` well-formedness check catches it). Crucially, ALL keys are still present -
     // order-only corruption, recoverable by rebuild.
     let mut s = u::fromk(vector[10u64, 20, 30]);
-    u::ins_gt(&mut s, 5);
+    u::ups_gt(&mut s, 5);
     assert!(!u::wf(&s)); // desorted under `<`
     assert_eq!(s.length(), 4);
     let ks = s.keys(); // faithfully reflects the (corrupted) stored order, no re-sort
@@ -128,8 +128,8 @@ fun inner_mut_inconsistent_comparator_desorts_no_value_lost() {
 fun coarse_comparator_last_bytes_win() {
     // Key ordered on `id` ALONE: Key{1,100} and Key{1,200} compare EQUAL.
     let mut s = ss::new<u::Key>();
-    assert!(u::ins_k(&mut s, u::mk(1, 100))); // newly added
-    assert!(!u::ins_k(&mut s, u::mk(1, 200))); // compare-equal -> "already present" (FALSE)
+    assert!(u::ups_k(&mut s, u::mk(1, 100))); // newly added
+    assert!(!u::ups_k(&mut s, u::mk(1, 200))); // compare-equal -> "already present" (FALSE)
     assert_eq!(u::len_k(&s), 1); // collapsed to ONE element
     let ks = u::keys_k(&s);
     assert_eq!(u::key_tag(&ks[0]), 200); // ...AND the LAST inserted key's bytes survive (overwrite)
@@ -150,7 +150,7 @@ fun coarse_from_keys_keeps_last() {
 fun coarse_contains_remove_match_any_byte_variant() {
     // contains!/remove! match ANY stored key compare-equal to the probe, regardless of bytes.
     let mut s = ss::new<u::Key>();
-    u::ins_k(&mut s, u::mk(7, 111));
+    u::ups_k(&mut s, u::mk(7, 111));
     assert!(u::has_k(&s, 7)); // probe Key{7,0} matches stored Key{7,111} under id-order
     u::rem_k(&mut s, 7); // removes it (was-present)
     assert!(!u::has_k(&s, 7));
@@ -245,10 +245,10 @@ fun reverse_comparator_membership_polarity_pop() {
     // contains_by/remove_by under `>` (activating the previously-dead has_rev/rem_rev helpers), and
     // that pop_* (which take NO comparator) read the PHYSICAL front/back.
     let mut s = ss::new<u64>();
-    assert!(u::ins_rev(&mut s, 10)); // fresh under reverse `<` -> true
-    assert!(u::ins_rev(&mut s, 30));
-    assert!(u::ins_rev(&mut s, 20));
-    assert!(!u::ins_rev(&mut s, 20)); // dup under reverse -> false (idempotent)
+    assert!(u::ups_rev(&mut s, 10)); // fresh under reverse `<` -> true
+    assert!(u::ups_rev(&mut s, 30));
+    assert!(u::ups_rev(&mut s, 20));
+    assert!(!u::ups_rev(&mut s, 20)); // dup under reverse -> false (idempotent)
     assert_eq!(s.length(), 3);
     assert!(u::has_rev(&s, 20)); // contains_by present under reverse
     assert!(!u::has_rev(&s, 99)); // contains_by absent under reverse
@@ -268,9 +268,9 @@ fun reverse_comparator_navigation() {
     // First-ever exercise of find_next_by/find_prev_by/next_key_by/prev_key_by with a consumer
     // lambda (reverse-_by, previously reached only via the bare `<`).
     let mut s = ss::new<u64>();
-    u::ins_rev(&mut s, 30);
-    u::ins_rev(&mut s, 20);
-    u::ins_rev(&mut s, 10);
+    u::ups_rev(&mut s, 30);
+    u::ups_rev(&mut s, 20);
+    u::ups_rev(&mut s, 10);
     assert_eq!(u::fnext_rev(&s, 25, true), option::some(20)); // lt-ceiling of 25 = largest <= 25
     assert_eq!(u::fnext_rev(&s, 20, true), option::some(20)); // include hit
     assert_eq!(u::fnext_rev(&s, 20, false), option::some(10)); // strict lt-next = next smaller
@@ -288,11 +288,11 @@ fun reverse_comparator_pagination() {
     // contiguous and resumable with include==false. The ONLY branch where the page macro threads
     // the lambda is search!'s start-index computation - previously untested for a non-default lt.
     let mut s = ss::new<u64>();
-    u::ins_rev(&mut s, 10);
-    u::ins_rev(&mut s, 30);
-    u::ins_rev(&mut s, 20);
-    u::ins_rev(&mut s, 40);
-    u::ins_rev(&mut s, 50); // stored [50,40,30,20,10]
+    u::ups_rev(&mut s, 10);
+    u::ups_rev(&mut s, 30);
+    u::ups_rev(&mut s, 20);
+    u::ups_rev(&mut s, 40);
+    u::ups_rev(&mut s, 50); // stored [50,40,30,20,10]
     assert_eq!(u::page_rev(&s, 50, true, 2), vector[50u64, 40]);
     assert_eq!(u::page_rev(&s, 40, false, 2), vector[30u64, 20]); // resume strictly past 40 under >
     assert_eq!(u::page_rev(&s, 20, false, 10), vector[10u64]); // fewer than limit at the lt-tail
@@ -342,8 +342,8 @@ fun nonstrict_comparator_misses_equal_key() {
     // AND a probe for 5 under `<=` MISSES it (the previously-untested miss half): search!
     // treats the stored 5 as strictly less and walks past it.
     let mut s = ss::new<u64>();
-    u::ins_le(&mut s, 5);
-    u::ins_le(&mut s, 5);
+    u::ups_le(&mut s, 5);
+    u::ups_le(&mut s, 5);
     assert_eq!(s.length(), 2); // two equal-comparing keys landed
     assert!(!u::has_le(&s, 5)); // ...yet contains_by under `<=` MISSES the present key
     u::rem_le(&mut s, 5); // remove_by under `<=` aborts;
@@ -354,7 +354,7 @@ fun nonstrict_comparator_misses_equal_key() {
 
 #[test]
 fun from_keys_by_reverse_integer() {
-    // The reverse direction was only ever built via upsert_by (ins_rev); this pins the BULK builder
+    // The reverse direction was only ever built via upsert_by (ups_rev); this pins the BULK builder
     // (from_keys_by's do!-loop) threading a reverse lt - yields descending-numeric, well-formed
     // under `>` and NOT under `<`.
     let s = ss::from_keys_by!(vector[10u64, 30, 20], |a, b| *a > *b);

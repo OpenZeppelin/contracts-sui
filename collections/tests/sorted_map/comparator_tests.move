@@ -18,9 +18,9 @@ use std::unit_test::assert_eq;
 #[test]
 fun by_forms_struct_keys() {
     let mut m = sm::new<CoarseKey, u64>();
-    u::ins_ck(&mut m, u::ck(30, 1), 300).destroy_none();
-    u::ins_ck(&mut m, u::ck(10, 1), 100).destroy_none();
-    u::ins_ck(&mut m, u::ck(20, 1), 200).destroy_none();
+    u::ups_ck(&mut m, u::ck(30, 1), 300).destroy_none();
+    u::ups_ck(&mut m, u::ck(10, 1), 100).destroy_none();
+    u::ups_ck(&mut m, u::ck(20, 1), 200).destroy_none();
     assert_eq!(m.length(), 3);
     assert!(u::wf_ck(&m)); // ordered by id under the supplied comparator
     assert!(u::has_ck(&m, 20) && u::get_ck(&m, 20) == 200);
@@ -36,9 +36,9 @@ fun by_forms_struct_keys() {
 #[test]
 fun reverse_comparator_consistent() {
     let mut m = sm::new<u64, u64>();
-    u::ins_rev(&mut m, 10, 1).destroy_none();
-    u::ins_rev(&mut m, 30, 3).destroy_none();
-    u::ins_rev(&mut m, 20, 2).destroy_none();
+    u::ups_rev(&mut m, 10, 1).destroy_none();
+    u::ups_rev(&mut m, 30, 3).destroy_none();
+    u::ups_rev(&mut m, 20, 2).destroy_none();
     // physically descending: head() is the largest, tail() the smallest
     assert_eq!(m.head(), option::some(30));
     assert_eq!(m.tail(), option::some(10));
@@ -63,12 +63,12 @@ fun reverse_comparator_consistent() {
 #[test]
 fun nonstrict_comparator_duplicates() {
     let mut m = sm::new<u64, u64>();
-    u::ins_le(&mut m, 5, 1).destroy_none();
+    u::ups_le(&mut m, 5, 1).destroy_none();
     // same key under `<=`: searching for 5 in [5], `lt(mk,target)` = `5<=5` is true, so the
     // search takes the lt-branch (lo=mid+1) and never reaches the equality branch - `found`
     // stays false and the second 5 lands as a fresh duplicate. (Equivalently: derived
     // equality `!(a<=b) && !(b<=a)` is unsatisfiable for a non-strict relation.)
-    u::ins_le(&mut m, 5, 2).destroy_none();
+    u::ups_le(&mut m, 5, 2).destroy_none();
     assert_eq!(m.length(), 2); // TWO entries comparing equal
     assert!(!u::wf(&m)); // the well-formedness check catches the non-strict disorder
 }
@@ -155,9 +155,9 @@ fun add_by_reverse_comparator() {
 #[test]
 fun upsert_coarse_comparator_key_bytes() {
     let mut m = sm::new<CoarseKey, u64>();
-    u::ins_ck(&mut m, u::ck(1, 100), 10).destroy_none(); // id=1, tag=100
+    u::ups_ck(&mut m, u::ck(1, 100), 10).destroy_none(); // id=1, tag=100
     // upsert with the SAME id but a DIFFERENT tag (same class under id-order)
-    let old = u::ins_ck(&mut m, u::ck(1, 200), 20);
+    let old = u::ups_ck(&mut m, u::ck(1, 200), 20);
     assert_eq!(old, option::some(10)); // displaced value returned
     assert_eq!(m.length(), 1); // exactly one entry
     assert_eq!(u::get_ck(&m, 1), 20); // new value won
@@ -169,8 +169,8 @@ fun upsert_coarse_comparator_key_bytes() {
 #[test]
 fun contains_borrow_agree_by() {
     let mut m = sm::new<CoarseKey, u64>();
-    u::ins_ck(&mut m, u::ck(10, 0), 1).destroy_none();
-    u::ins_ck(&mut m, u::ck(20, 0), 2).destroy_none();
+    u::ups_ck(&mut m, u::ck(10, 0), 1).destroy_none();
+    u::ups_ck(&mut m, u::ck(20, 0), 2).destroy_none();
     assert!(u::has_ck(&m, 10) && u::get_ck(&m, 10) == 1); // present: contains AND borrow succeed
     assert!(!u::has_ck(&m, 15)); // absent: contains false
 }
@@ -181,8 +181,8 @@ fun contains_borrow_agree_by() {
 #[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_by_absent_aborts() {
     let mut m = sm::new<CoarseKey, u64>();
-    u::ins_ck(&mut m, u::ck(10, 0), 1).destroy_none();
-    u::ins_ck(&mut m, u::ck(20, 0), 2).destroy_none();
+    u::ups_ck(&mut m, u::ck(10, 0), 1).destroy_none();
+    u::ups_ck(&mut m, u::ck(20, 0), 2).destroy_none();
     u::get_ck(&m, 15); // absent under the id-order comparator -> EKeyNotFound
 }
 
@@ -221,9 +221,9 @@ fun nondeterministic_comparator_corrupts() {
 #[test]
 fun navigation_by_reverse_comparator() {
     let mut m = sm::new<u64, u64>();
-    u::ins_rev(&mut m, 10, 1);
-    u::ins_rev(&mut m, 30, 3);
-    u::ins_rev(&mut m, 20, 2); // physical order under `>`: [30, 20, 10]
+    u::ups_rev(&mut m, 10, 1);
+    u::ups_rev(&mut m, 30, 3);
+    u::ups_rev(&mut m, 20, 2); // physical order under `>`: [30, 20, 10]
     // forward cursor under `>` walks 30 -> 20 -> 10 and terminates at the lt-tail
     assert!(u::nxt_rev(&m, 30) == option::some(20) && u::nxt_rev(&m, 20) == option::some(10));
     assert_eq!(u::nxt_rev(&m, 10), option::none()); // next of lt-tail == none
@@ -242,9 +242,9 @@ fun navigation_by_reverse_comparator() {
 #[test]
 fun keys_from_by_reverse_comparator() {
     let mut m = sm::new<u64, u64>();
-    u::ins_rev(&mut m, 10, 1);
-    u::ins_rev(&mut m, 20, 2);
-    u::ins_rev(&mut m, 30, 3); // physical [30, 20, 10]
+    u::ups_rev(&mut m, 10, 1);
+    u::ups_rev(&mut m, 20, 2);
+    u::ups_rev(&mut m, 30, 3); // physical [30, 20, 10]
     assert_eq!(u::kfrom_rev(&m, 30, true, 2), vector[30, 20]);
     assert_eq!(u::kfrom_rev(&m, 20, false, 2), vector[10]); // resume: no overlap, no gap
     assert_eq!(u::kfrom_rev(&m, 35, true, 10), vector[30, 20, 10]); // from beyond lt-head -> full
@@ -259,9 +259,9 @@ fun keys_from_by_reverse_comparator() {
 #[test]
 fun borrow_mut_by_persists_order_safe() {
     let mut m = sm::new<CoarseKey, u64>();
-    u::ins_ck(&mut m, u::ck(10, 1), 100).destroy_none();
-    u::ins_ck(&mut m, u::ck(20, 1), 200).destroy_none();
-    u::ins_ck(&mut m, u::ck(30, 1), 300).destroy_none();
+    u::ups_ck(&mut m, u::ck(10, 1), 100).destroy_none();
+    u::ups_ck(&mut m, u::ck(20, 1), 200).destroy_none();
+    u::ups_ck(&mut m, u::ck(30, 1), 300).destroy_none();
     u::set_ck(&mut m, 20, 999); // *borrow_mut_by!(.., |a,b| a.id < b.id) = 999
     assert_eq!(u::get_ck(&m, 20), 999); // write persisted
     assert!(u::wf_ck(&m)); // order intact (key not desynced)
@@ -273,7 +273,7 @@ fun borrow_mut_by_persists_order_safe() {
 #[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun borrow_mut_by_absent_aborts() {
     let mut m = sm::new<CoarseKey, u64>();
-    u::ins_ck(&mut m, u::ck(10, 0), 1).destroy_none();
-    u::ins_ck(&mut m, u::ck(20, 0), 2).destroy_none();
+    u::ups_ck(&mut m, u::ck(10, 0), 1).destroy_none();
+    u::ups_ck(&mut m, u::ck(20, 0), 2).destroy_none();
     u::set_ck(&mut m, 15, 0); // absent under the id-order comparator -> EKeyNotFound
 }

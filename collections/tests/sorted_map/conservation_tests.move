@@ -23,7 +23,7 @@ fun conservation_drain_nodrop() {
     // insert key i with a value whose id encodes that key: id(i) = i*7 + 1
     let mut i = 0;
     while (i < n) {
-        u::ins_nd(&mut m, i, u::nd(i * 7 + 1)).destroy_none(); // fresh insert returns none
+        u::ups_nd(&mut m, i, u::nd(i * 7 + 1)).destroy_none(); // fresh insert returns none
         i = i + 1;
     };
     assert_eq!(m.length(), n);
@@ -61,7 +61,7 @@ fun conservation_drain_nodrop() {
 #[test, expected_failure(abort_code = sm::ENotEmpty, location = sm)]
 fun destroy_empty_nonempty_nodrop() {
     let mut m = sm::new<u64, NoDrop>();
-    u::ins_nd(&mut m, 1, u::nd(1)).destroy_none();
+    u::ups_nd(&mut m, 1, u::nd(1)).destroy_none();
     m.destroy_empty(); // non-empty -> ENotEmpty at the library location
 }
 
@@ -70,9 +70,9 @@ fun destroy_empty_nonempty_nodrop() {
 #[test]
 fun upsert_returns_old_nodrop() {
     let mut m = sm::new<u64, NoDrop>();
-    u::ins_nd(&mut m, 5, u::nd(100)).destroy_none();
+    u::ups_nd(&mut m, 5, u::nd(100)).destroy_none();
     // upsert: the OLD value is returned as some(old) and must be consumed.
-    let old = u::ins_nd(&mut m, 5, u::nd(200)).destroy_some();
+    let old = u::ups_nd(&mut m, 5, u::nd(200)).destroy_some();
     assert_eq!(old.nd_unwrap(), 100);
     assert_eq!(m.length(), 1);
     assert_eq!(u::nd_value_id(&m, 5), 200); // new value present
@@ -87,9 +87,9 @@ fun upsert_returns_old_nodrop() {
 #[test]
 fun read_path_conservative_nodrop() {
     let mut m = sm::new<u64, NoDrop>();
-    u::ins_nd(&mut m, 1, u::nd(10)).destroy_none();
-    u::ins_nd(&mut m, 2, u::nd(20)).destroy_none();
-    u::ins_nd(&mut m, 3, u::nd(30)).destroy_none();
+    u::ups_nd(&mut m, 1, u::nd(10)).destroy_none();
+    u::ups_nd(&mut m, 2, u::nd(20)).destroy_none();
+    u::ups_nd(&mut m, 3, u::nd(30)).destroy_none();
     let len0 = m.length();
     // a battery of reads - none may change the stored-value multiset
     assert!(u::has_nd(&m, 2));
@@ -150,8 +150,8 @@ fun store_only_map_wrapped_shared() {
     let mut sc = ts::begin(admin);
     {
         let mut m = sm::new<u64, NoDrop>();
-        u::ins_nd(&mut m, 1, u::nd(11)).destroy_none();
-        u::ins_nd(&mut m, 2, u::nd(22)).destroy_none();
+        u::ups_nd(&mut m, 1, u::nd(11)).destroy_none();
+        u::ups_nd(&mut m, 2, u::nd(22)).destroy_none();
         let w = Wrapper { id: object::new(sc.ctx()), m };
         transfer::share_object(w);
     };

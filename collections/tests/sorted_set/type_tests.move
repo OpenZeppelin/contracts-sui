@@ -166,9 +166,9 @@ fun non_integer_key_by_roundtrip() {
     // A non-integer struct key round-trips through the `_by` API (bare `<` would not
     // type-check for a struct - see the commented snippet).
     let mut s = ss::new<u::Key>();
-    assert!(u::ins_k(&mut s, u::mk(3, 0)));
-    assert!(u::ins_k(&mut s, u::mk(1, 0)));
-    assert!(u::ins_k(&mut s, u::mk(2, 0)));
+    assert!(u::ups_k(&mut s, u::mk(3, 0)));
+    assert!(u::ups_k(&mut s, u::mk(1, 0)));
+    assert!(u::ups_k(&mut s, u::mk(2, 0)));
     assert_eq!(u::len_k(&s), 3);
     assert!(u::has_k(&s, 2));
     u::rem_k(&mut s, 2);

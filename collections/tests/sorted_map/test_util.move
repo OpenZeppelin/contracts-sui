@@ -100,7 +100,7 @@ public fun wf(m: &SortedMap<u64, u64>): bool { m.is_well_formed!() }
 
 // === Thin wrappers - u64/u64, reverse comparator `>` (used CONSISTENTLY: legit case) ===
 
-public fun ins_rev(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
+public fun ups_rev(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
     m.upsert_by!(k, v, |a, b| *a > *b)
 }
 
@@ -153,7 +153,7 @@ public fun kfrom_rev(m: &SortedMap<u64, u64>, from: u64, inc: bool, lim: u64): v
 
 /// Non-strict `<=`: `search!` never derives equality, so equal keys are never detected
 /// (every insert is treated as fresh) -> duplicate keys land. Demonstrates footgun (a).
-public fun ins_le(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
+public fun ups_le(m: &mut SortedMap<u64, u64>, k: u64, v: u64): Option<u64> {
     m.upsert_by!(k, v, |a, b| *a <= *b)
 }
 
@@ -165,7 +165,7 @@ public fun rm_gt(m: &mut SortedMap<u64, u64>, k: u64): (u64, u64) {
 
 // === Thin wrappers - SortedMap<u64, NoDrop> (conservation) ===
 
-public fun ins_nd(m: &mut SortedMap<u64, NoDrop>, k: u64, w: NoDrop): Option<NoDrop> {
+public fun ups_nd(m: &mut SortedMap<u64, NoDrop>, k: u64, w: NoDrop): Option<NoDrop> {
     m.upsert!(k, w)
 }
 
@@ -179,7 +179,7 @@ public fun rm_nd(m: &mut SortedMap<u64, NoDrop>, k: u64): (u64, NoDrop) {
 
 // === Thin wrappers - SortedMap<CoarseKey, u64> ordered on `id` ===
 
-public fun ins_ck(m: &mut SortedMap<CoarseKey, u64>, k: CoarseKey, v: u64): Option<u64> {
+public fun ups_ck(m: &mut SortedMap<CoarseKey, u64>, k: CoarseKey, v: u64): Option<u64> {
     m.upsert_by!(k, v, |a, b| a.id < b.id)
 }
 
@@ -221,11 +221,11 @@ public fun wf_ck(m: &SortedMap<CoarseKey, u64>): bool {
 
 // === Thin wrappers - distinct instantiations coexist ===
 
-public fun ins_bid(m: &mut SortedMap<u64, Bid>, k: u64, v: Bid): Option<Bid> {
+public fun ups_bid(m: &mut SortedMap<u64, Bid>, k: u64, v: Bid): Option<Bid> {
     m.upsert!(k, v)
 }
 
-public fun ins_ask(m: &mut SortedMap<u64, Ask>, k: u64, v: Ask): Option<Ask> {
+public fun ups_ask(m: &mut SortedMap<u64, Ask>, k: u64, v: Ask): Option<Ask> {
     m.upsert!(k, v)
 }
 

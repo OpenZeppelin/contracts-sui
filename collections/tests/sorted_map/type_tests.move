@@ -62,8 +62,8 @@ fun distinct_instantiations_coexist() {
     // that coexist in one function.
     let mut bids = sm::new<u64, Bid>();
     let mut asks = sm::new<u64, Ask>();
-    u::ins_bid(&mut bids, 100, u::bid(1)).destroy_none();
-    u::ins_ask(&mut asks, 200, u::ask(2)).destroy_none();
+    u::ups_bid(&mut bids, 100, u::bid(1)).destroy_none();
+    u::ups_ask(&mut asks, 200, u::ask(2)).destroy_none();
     assert_eq!(u::get_bid_px(&bids, 100), 1);
     assert_eq!(u::get_ask_px(&asks, 200), 2);
 }

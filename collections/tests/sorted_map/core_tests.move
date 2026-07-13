@@ -377,9 +377,9 @@ fun keys_reflects_stored_order_under_reverse_comparator() {
     let mut m = sm::new<u64, u64>();
     // Built consistently with the reverse comparator, so stored order is DESCENDING;
     // `keys` returns that stored order, not the natural ascending one.
-    u::ins_rev(&mut m, 10, 1);
-    u::ins_rev(&mut m, 30, 3);
-    u::ins_rev(&mut m, 20, 2);
+    u::ups_rev(&mut m, 10, 1);
+    u::ups_rev(&mut m, 30, 3);
+    u::ups_rev(&mut m, 20, 2);
     assert_eq!(m.keys(), vector[30, 20, 10]);
 }
 

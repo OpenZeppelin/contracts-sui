@@ -51,7 +51,7 @@ public fun wf(s: &SortedSet<u64>): bool { s.inner().is_well_formed!() }
 
 // === Thin wrappers - u64, reverse comparator `>` used CONSISTENTLY (legit case) ===
 
-public fun ins_rev(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(k, |a, b| *a > *b) }
+public fun ups_rev(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(k, |a, b| *a > *b) }
 
 /// Strict insert under the reverse comparator (aborts on a duplicate).
 public fun add_rev(s: &mut SortedSet<u64>, k: u64) { s.add_by!(k, |a, b| *a > *b) }
@@ -67,7 +67,7 @@ public fun wf_rev(s: &SortedSet<u64>): bool {
 }
 
 /// Reverse-comparator navigation/pagination wrappers (one macro per helper). The `>`
-/// lambda is the SAME reverse strict order `ins_rev` builds with, threaded consistently - so
+/// lambda is the SAME reverse strict order `ups_rev` builds with, threaded consistently - so
 /// "next"/"prev"/page are about lt-extremes (numeric-descending), not numeric order.
 public fun fnext_rev(s: &SortedSet<u64>, k: u64, inc: bool): Option<u64> {
     s.find_next_by!(&k, inc, |a, b| *a > *b)
@@ -105,7 +105,7 @@ public fun fromk_rev(ks: vector<u64>): SortedSet<u64> {
 
 /// Non-strict `<=`: `search!` never derives equality, so equal-comparing keys are treated as
 /// fresh -> a byte-distinct equal key lands again (length grows).
-public fun ins_le(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(k, |a, b| *a <= *b) }
+public fun ups_le(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(k, |a, b| *a <= *b) }
 
 /// Probe/remove under the SAME non-strict `<=`: `search!` never derives equality, so an
 /// equal-comparing key is MISSED (returns false) even though it is present (the "miss" half).
@@ -121,7 +121,7 @@ public fun rem_gt(s: &mut SortedSet<u64>, k: u64) { s.remove_by!(&k, |a, b| *a >
 
 /// Insert under `>` against a set built with `<`: lands a key under the wrong order, desorting
 /// the set (visible to the `<` well-formedness check).
-public fun ins_gt(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(k, |a, b| *a > *b) }
+public fun ups_gt(s: &mut SortedSet<u64>, k: u64): bool { s.upsert_by!(k, |a, b| *a > *b) }
 
 // === `inner_mut` misuse drivers - the public but unchecked order-ONLY corruption surface ===
 
@@ -169,7 +169,7 @@ public fun key_tag(k: &Key): u64 { k.tag }
 
 public fun key_id(k: &Key): u64 { k.id }
 
-public fun ins_k(s: &mut SortedSet<Key>, k: Key): bool { s.upsert_by!(k, |a, b| a.id < b.id) }
+public fun ups_k(s: &mut SortedSet<Key>, k: Key): bool { s.upsert_by!(k, |a, b| a.id < b.id) }
 
 /// Strict insert ordered on `id` alone (aborts when a stored key compares equal, i.e. shares the
 /// `id`, regardless of `tag`).
