@@ -5,7 +5,7 @@ committed Move source and re-runs the on-chain PDF computation in Python using
 the shared sign-magnitude integer arithmetic (the exact mirror of the Move
 `horner` module):
 
-  - z_raw at 10^9 → z_wad at 10^36 (multiply by 10^27 = PDF_WAD / 10^9).
+  - z_raw at 10^9 → z_acc at 10^36 (multiply by 10^27 = PDF_ACC_SCALE / 10^9).
   - Horner inner step via `shared.arithmetic` (floor-division mul_wad, sign-
     magnitude add).
   - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up nearest
@@ -39,7 +39,7 @@ from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_n
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 SCALE = constants.SCALE_DECIMAL
-WAD = constants.PDF_WAD  # PDF Horner-accumulation scale (10^36)
+ACC_SCALE = constants.PDF_ACC_SCALE  # PDF Horner-accumulation scale (10^36)
 MAX_Z_RAW = constants.PDF_MAX_Z_RAW  # 6.402729806 at 10^9 - default; the gate parses the committed value
 MONO_ONSET_RAW = 4_000_000_000  # z=4.0: below the z≈4.42 point where even the old 10^18 noise floor (~1.9e-5 ULP) first reached the per-step φ increment; nothing inverts lower
 
@@ -96,9 +96,9 @@ def pdf_simulate(
     if z_raw >= max_z_raw:
         return 0  # tail saturates to 0
 
-    z_wad: SignedInt = (z_raw * (WAD // SCALE), False)  # 10^9 → 10^36
-    n_acc = horner_eval(z_wad, num, WAD)
-    d_acc = horner_eval(z_wad, den, WAD)
+    z_acc: SignedInt = (z_raw * (ACC_SCALE // SCALE), False)  # 10^9 → 10^36
+    n_acc = horner_eval(z_acc, num, ACC_SCALE)
+    d_acc = horner_eval(z_acc, den, ACC_SCALE)
     if n_acc[1]:
         raise RuntimeError(f"N negative at z_raw={z_raw} - pdf::EInternalNumNegative")
     if d_acc[1] or d_acc[0] == 0:
@@ -154,9 +154,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Exhaustive tail gates the coarse error grid above cannot see: 1-ULP neighbor
     # inversions and the peak u256 Horner intermediate.
     pairs, rechecks = gates.check_neighbor_monotonicity(
-        num, den, WAD, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=False
+        num, den, ACC_SCALE, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=False
     )
-    peak_bits, headroom = gates.check_overflow_margin(num, den, WAD, SCALE, max_z_raw)
+    peak_bits, headroom = gates.check_overflow_margin(num, den, ACC_SCALE, SCALE, max_z_raw)
 
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9

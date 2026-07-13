@@ -48,7 +48,7 @@ def quantize(c_str: str, wad: int = constants.WAD) -> tuple[int, bool]:
     """Quantize a high-precision coefficient string at unit scale to a
     `(u128 magnitude, bool is_negative)` pair at `wad` scale, half-up rounding.
     `wad` defaults to the generic `10^18`; each family passes its own accumulation
-    scale (`CDF_WAD` / `PDF_WAD` = `10^36`).
+    scale (`CDF_ACC_SCALE` / `PDF_ACC_SCALE` = `10^36`).
 
     The u128 range is enforced downstream by `fmt_u128` when the literal is
     rendered, so it is not re-checked here."""

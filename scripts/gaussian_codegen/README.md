@@ -226,7 +226,7 @@ strings (serialized from mpmath at 100 dps); everything else is informational.
 gaussian_codegen/
 ├── Makefile             # install / regen / validate / check / ci / test
 ├── shared/
-│   ├── constants.py     # single source of truth: WAD scales, domain bounds
+│   ├── constants.py     # single source of truth: fixed-point scales, domain bounds
 │   ├── reference.py     # mpmath oracle: Φ, φ, and Φ⁻¹ (erfinv) at 100 dps
 │   ├── aaa.py           # AAA barycentric → N(z)/D(z) polynomial conversion
 │   ├── arithmetic.py    # integer mirror of the on-chain Horner / ln / sqrt kernels

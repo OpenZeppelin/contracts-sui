@@ -153,10 +153,10 @@ public fun ceil(x: SD29x9): SD29x9 {
 ///
 /// Returns the probability `Φ(z) ∈ [0, 1]` represented as a non-negative
 /// `SD29x9`. The implementation evaluates an AAA-rational approximation
-/// `N(|z|) / D(|z|)` at WAD scale (`10^36`) via Horner's method on a
-/// sign-magnitude `u256` accumulator; the final ratio is cast back to `SD29x9`
-/// (`10^9`) in a single nearest-rounding step. Negative inputs reflect via
-/// `Φ(-z) = 1 - Φ(z)`.
+/// `N(|z|) / D(|z|)` at the internal accumulation scale (`10^36`) via Horner's
+/// method on a sign-magnitude `u256` accumulator; the final ratio is cast back
+/// to `SD29x9` (`10^9`) in a single nearest-rounding step. Negative inputs
+/// reflect via `Φ(-z) = 1 - Φ(z)`.
 ///
 /// #### Parameters
 /// - `z`: Input value.
@@ -216,9 +216,10 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// non-negative `SD29x9`, where the peak is `φ(0) = 0.398942280`. `φ` is even,
 /// so the magnitude `|z|` is taken first and the unsigned evaluator
 /// `pdf_nonneg_raw` is applied to it - there is no reflection or sign-flip. The
-/// evaluator computes an AAA-rational approximation `N(|z|) / D(|z|)` at WAD
-/// scale (`10^36`) via Horner's method on a sign-magnitude `u256` accumulator,
-/// rounding the ratio back to `SD29x9` (`10^9`) in a single nearest-rounding step.
+/// evaluator computes an AAA-rational approximation `N(|z|) / D(|z|)` at the
+/// internal accumulation scale (`10^36`) via Horner's method on a sign-magnitude
+/// `u256` accumulator, rounding the ratio back to `SD29x9` (`10^9`) in a single
+/// nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Input value.

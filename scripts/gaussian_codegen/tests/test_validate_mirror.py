@@ -152,7 +152,7 @@ def test_horner_peak_product_matches_manual():
 
 def test_check_overflow_margin_committed_cdf(coeffs):
     num, den = coeffs
-    bits, headroom = gates.check_overflow_margin(num, den, v.WAD, v.SCALE, v.MAX_Z_RAW)
+    bits, headroom = gates.check_overflow_margin(num, den, v.ACC_SCALE, v.SCALE, v.MAX_Z_RAW)
     assert bits <= 256
     assert headroom >= gates.MIN_HEADROOM_BITS
 
@@ -162,6 +162,6 @@ def test_check_neighbor_monotonicity_committed_cdf_window(coeffs):
     # A small in-domain tail window: the gate runs and confirms no inversion
     # (it raises RuntimeError on any confirmed inversion).
     pairs, _ = gates.check_neighbor_monotonicity(
-        num, den, v.WAD, v.SCALE, 5_000_000_000, 5_000_200_000, increasing=True
+        num, den, v.ACC_SCALE, v.SCALE, 5_000_000_000, 5_000_200_000, increasing=True
     )
     assert pairs > 0
