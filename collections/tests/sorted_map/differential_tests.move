@@ -41,7 +41,12 @@ fun differential_1200_ops() {
         } else if (op == 2) {
             // remove aborts on an absent key, so only remove keys the reference model holds; when
             // present, the returned value must equal the reference model's.
-            if (u::ref_contains(&r, k)) assert_eq!(u::rm(&mut m, k), u::ref_remove(&mut r, k));
+            if (u::ref_contains(&r, k)) {
+                let (k, v) = u::rm(&mut m, k);
+                let (k_r, v_r) = u::ref_remove(&mut r, k);
+                assert_eq!(k, k_r);
+                assert_eq!(v, v_r);
+            }
         } else if (op == 3) {
             assert_eq!(u::has(&m, k), u::ref_contains(&r, k));
             if (u::has(&m, k)) assert_eq!(u::get(&m, k), u::ref_get(&r, k));

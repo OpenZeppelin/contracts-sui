@@ -70,7 +70,7 @@ public fun schedule(q: &mut UnlockQueue, deadline: u64): bool {
 /// #### Aborts
 /// - `sorted_map::EKeyNotFound` if `deadline` is not scheduled.
 public fun cancel(q: &mut UnlockQueue, deadline: u64) {
-    q.deadlines.remove!(&deadline)
+    q.deadlines.remove!(&deadline);
 }
 
 /// The EARLIEST scheduled deadline, WITHOUT removing it, or `none` if empty. O(1), never aborts.

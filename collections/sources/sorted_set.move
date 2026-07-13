@@ -471,20 +471,30 @@ public macro fun upsert<$K: drop>($set: &mut SortedSet<$K>, $key: $K): bool {
 /// - `key`: Key to remove.
 /// - `lt`: Strict less-than comparator.
 ///
+/// #### Returns
+/// - The removed key.
+///
 /// #### Aborts
 /// - `sorted_map::EKeyNotFound` if `key` is absent.
-public macro fun remove_by<$K>($set: &mut SortedSet<$K>, $key: &$K, $lt: |&$K, &$K| -> bool) {
+public macro fun remove_by<$K>($set: &mut SortedSet<$K>, $key: &$K, $lt: |&$K, &$K| -> bool): $K {
     let set = $set;
     // The map's `remove_by!` returns just the value (`Unit` for a set), which is dropped here, so
     // `remove!` stays a `()`-returning, `vec_set`-shaped op.
-    let _ = set.inner_mut().remove_by!($key, $lt);
+    let (k, _) = set.inner_mut().remove_by!($key, $lt);
+    k
 }
 
 /// `remove_by` with the built-in integer `<`.
 ///
+/// #### Parameters
+/// - `key`: Key to remove.
+///
+/// #### Returns
+/// - The removed key.
+///
 /// #### Aborts
 /// - `sorted_map::EKeyNotFound` if `key` is absent.
-public macro fun remove<$K>($set: &mut SortedSet<$K>, $key: &$K) {
+public macro fun remove<$K>($set: &mut SortedSet<$K>, $key: &$K): $K {
     remove_by!($set, $key, |a, b| *a < *b)
 }
 

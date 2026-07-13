@@ -25,7 +25,9 @@ fun by_forms_struct_keys() {
     assert!(u::wf_ck(&m)); // ordered by id under the supplied comparator
     assert!(u::has_ck(&m, 20) && u::get_ck(&m, 20) == 200);
     assert!(!u::has_ck(&m, 25));
-    assert_eq!(u::rm_ck(&mut m, 10), 100);
+    let (k, v) = u::rm_ck(&mut m, 10);
+    assert_eq!(k, u::ck(10, 1));
+    assert_eq!(v, 100);
     assert!(u::wf_ck(&m));
 }
 
@@ -44,9 +46,15 @@ fun reverse_comparator_consistent() {
     assert!(!u::wf(&m)); // ... but NOT under `<` (it is genuinely reversed)
     assert!(u::has_rev(&m, 20) && u::get_rev(&m, 20) == 2);
     // every value conserved
-    assert_eq!(u::rm_rev(&mut m, 30), 3);
-    assert_eq!(u::rm_rev(&mut m, 10), 1);
-    assert_eq!(u::rm_rev(&mut m, 20), 2);
+    let (k, v) = u::rm_rev(&mut m, 30);
+    assert_eq!(k, 30);
+    assert_eq!(v, 3);
+    let (k, v) = u::rm_rev(&mut m, 10);
+    assert_eq!(k, 10);
+    assert_eq!(v, 1);
+    let (k, v) = u::rm_rev(&mut m, 20);
+    assert_eq!(k, 20);
+    assert_eq!(v, 2);
     m.destroy_empty();
 }
 

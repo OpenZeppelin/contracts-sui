@@ -66,7 +66,7 @@ public fun add_tick(reg: &mut TickRegistry, tick: u64, liquidity_net: u64, fee_g
 /// #### Aborts
 /// - `sorted_map::EKeyNotFound` if `tick` is inactive - gate with `contains_tick` first.
 public fun remove_tick(reg: &mut TickRegistry, tick: u64): TickInfo {
-    let info = reg.ticks.remove!(&tick);
+    let (_, info) = reg.ticks.remove!(&tick);
     info
 }
 

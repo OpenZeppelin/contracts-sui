@@ -115,7 +115,7 @@ public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>
 public fun pay_rank(vault: &mut PrizeVault, cap: &OrganizerCap, rank: u64): Coin<SUI> {
     assert_cap(vault, cap);
     assert!(vault.prizes.contains!(&rank), ENoSuchRank);
-    let coin = vault.prizes.remove!(&rank);
+    let (_, coin) = vault.prizes.remove!(&rank);
     coin
 }
 

@@ -118,14 +118,14 @@ fun ptb_chain_no_abort() {
     let _ = u::has(&m, 1);
     let _ = u::fnext(&m, 1, true);
     let _ = u::ins(&mut m, 1, 10);
-    let _ = u::rm(&mut m, 1); // remove the key just inserted
+    let (_, _) = u::rm(&mut m, 1); // remove the key just inserted
     let _ = u::kfrom(&m, 0, true, 5);
     u::ins(&mut m, 1, 10);
     u::ins(&mut m, 2, 20);
     u::ins(&mut m, 3, 30);
     let _ = u::has(&m, 2);
     let _ = u::fnext(&m, 2, false);
-    let _ = u::rm(&mut m, 2);
+    let (_, _) = u::rm(&mut m, 2);
     let _ = u::ins(&mut m, 2, 22);
     assert_eq!(u::kfrom(&m, 0, true, 5), vector[1, 2, 3]);
 }

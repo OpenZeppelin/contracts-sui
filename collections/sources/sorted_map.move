@@ -624,16 +624,16 @@ public macro fun upsert<$K: drop, $V>(
     upsert_by!($map, $key, $value, |a, b| *a < *b)
 }
 
-/// Remove `key`'s entry and return its value, under `$lt` (length - 1, order preserved). Uses a
-/// shifting `vector::remove`, never `swap_remove`, which would break strict order. The stored key
-/// is dropped (`K: drop`); only the value is returned.
+/// Remove `key`'s entry and return its value, under `$lt` (length - 1, order preserved).
+///
+/// Uses a shifting `vector::remove`, never `swap_remove`, which would break strict order.
 ///
 /// #### Parameters
 /// - `key`: Key to remove.
 /// - `lt`: Strict less-than comparator.
 ///
 /// #### Returns
-/// - The removed value.
+/// - The removed (key, value) tuple.
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
@@ -641,22 +641,22 @@ public macro fun remove_by<$K, $V>(
     $map: &mut SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
-): $V {
+): ($K, $V) {
     let map = $map;
     let (found, idx) = search!(map, $key, $lt);
     assert_key_found(found);
-    let (_, value) = map.remove_at(idx);
-    value
+    let (key, value) = map.remove_at(idx);
+    (key, value)
 }
 
 /// `remove_by` with the built-in integer `<`.
 ///
 /// #### Returns
-/// - The removed value.
+/// - The removed (key, value) tuple.
 ///
 /// #### Aborts
 /// - `EKeyNotFound` if `key` is absent.
-public macro fun remove<$K, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): $V {
+public macro fun remove<$K, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): ($K, $V) {
     remove_by!($map, $key, |a, b| *a < *b)
 }
 

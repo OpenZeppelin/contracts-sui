@@ -25,7 +25,7 @@ public fun ins(s: &mut SortedSet<u64>, k: u64): bool { s.upsert!(k) }
 /// the key by value; returns nothing.
 public fun add(s: &mut SortedSet<u64>, k: u64) { s.add!(k) }
 
-public fun rem(s: &mut SortedSet<u64>, k: u64) { s.remove!(&k) }
+public fun rem(s: &mut SortedSet<u64>, k: u64) { s.remove!(&k); }
 
 public fun has(s: &SortedSet<u64>, k: u64): bool { s.contains!(&k) }
 
@@ -176,7 +176,7 @@ public fun ins_k(s: &mut SortedSet<Key>, k: Key): bool { s.upsert_by!(k, |a, b| 
 public fun add_k(s: &mut SortedSet<Key>, k: Key) { s.add_by!(k, |a, b| a.id < b.id) }
 
 public fun rem_k(s: &mut SortedSet<Key>, id: u64) {
-    s.remove_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id)
+    s.remove_by!(&Key { id, tag: 0 }, |a, b| a.id < b.id);
 }
 
 public fun has_k(s: &SortedSet<Key>, id: u64): bool {

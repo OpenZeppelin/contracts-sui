@@ -9,7 +9,7 @@ module openzeppelin_collections::sorted_map_conservation_tests;
 
 use openzeppelin_collections::sorted_map::{Self as sm, SortedMap};
 use openzeppelin_collections::sorted_map_test_util::{Self as u, NoDrop};
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 use sui::test_scenario as ts;
@@ -36,7 +36,9 @@ fun conservation_drain_nodrop() {
     let mut k = 0;
     while (k < n) {
         if (k % 2 == 0) {
-            let id = u::rm_nd(&mut m, k).nd_unwrap();
+            let (key, nd) = u::rm_nd(&mut m, k);
+            assert_eq!(key, k);
+            let id = nd.nd_unwrap();
             assert_eq!(id, k * 7 + 1); // remove(k) returned key k's OWN value
             cnt_out = cnt_out + 1;
         };
@@ -74,9 +76,10 @@ fun upsert_returns_old_nodrop() {
     assert_eq!(old.nd_unwrap(), 100);
     assert_eq!(m.length(), 1);
     assert_eq!(u::nd_value_id(&m, 5), 200); // new value present
-    let w = u::rm_nd(&mut m, 5);
-    w.nd_unwrap();
-    m.destroy_empty();
+    let (k, w) = u::rm_nd(&mut m, 5);
+    assert_eq!(k, 5);
+    destroy(w);
+    destroy(m);
 }
 
 // === Read paths conserve the multiset / length ===
@@ -96,10 +99,16 @@ fun read_path_conservative_nodrop() {
     assert_eq!(m.length(), len0);
     assert!(u::nd_value_id(&m, 1) == 10 && u::nd_value_id(&m, 3) == 30); // values intact
     // drain
-    u::rm_nd(&mut m, 1).nd_unwrap();
-    u::rm_nd(&mut m, 2).nd_unwrap();
-    u::rm_nd(&mut m, 3).nd_unwrap();
-    m.destroy_empty();
+    let (k, nd) = u::rm_nd(&mut m, 1);
+    assert_eq!(k, 1);
+    assert_eq!(nd.nd_unwrap(), 10);
+    let (k, nd) = u::rm_nd(&mut m, 2);
+    assert_eq!(k, 2);
+    assert_eq!(nd.nd_unwrap(), 20);
+    let (k, nd) = u::rm_nd(&mut m, 3);
+    assert_eq!(k, 3);
+    assert_eq!(nd.nd_unwrap(), 30);
+    destroy(m);
 }
 
 // === Real resource V: Coin<SUI> round-trips with value preserved ===
@@ -117,7 +126,8 @@ fun coin_value_roundtrip() {
     old.burn_for_testing();
     assert_eq!(m.borrow!(&1).value(), 999);
     // remove returns the value (coin); the key is dropped
-    let r1 = m.remove!(&1);
+    let (k, r1) = m.remove!(&1);
+    assert_eq!(k, 1);
     assert_eq!(r1.value(), 999);
     r1.burn_for_testing();
     // pop the remaining coin
@@ -148,9 +158,11 @@ fun store_only_map_wrapped_shared() {
     sc.next_tx(admin);
     {
         let mut w = sc.take_shared<Wrapper>();
-        let a = u::rm_nd(&mut w.m, 1).nd_unwrap();
-        let b = u::rm_nd(&mut w.m, 2).nd_unwrap();
-        assert_eq!(a + b, 33);
+        let (k_a, a) = u::rm_nd(&mut w.m, 1);
+        let (k_b, b) = u::rm_nd(&mut w.m, 2);
+        assert_eq!(k_a, 1);
+        assert_eq!(k_b, 2);
+        assert_eq!(a.nd_unwrap() + b.nd_unwrap(), 33);
         ts::return_shared(w);
     };
     sc.next_tx(admin);

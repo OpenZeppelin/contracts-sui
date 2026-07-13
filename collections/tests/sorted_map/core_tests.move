@@ -150,9 +150,15 @@ fun remove_head_tail_middle() {
     u::ins(&mut m, 20, 2);
     u::ins(&mut m, 30, 3);
     u::ins(&mut m, 40, 4);
-    assert_eq!(u::rm(&mut m, 10), 1); // head
-    assert_eq!(u::rm(&mut m, 40), 4); // tail
-    assert_eq!(u::rm(&mut m, 20), 2); // middle
+    let (k, v) = u::rm(&mut m, 10);
+    assert_eq!(k, 10);
+    assert_eq!(v, 1); // head
+    let (k, v) = u::rm(&mut m, 40);
+    assert_eq!(k, 40);
+    assert_eq!(v, 4); // tail
+    let (k, v) = u::rm(&mut m, 20);
+    assert_eq!(k, 20);
+    assert_eq!(v, 2); // middle
     assert_eq!(m.length(), 1);
     assert!(u::wf(&m)); // shift kept order
     assert_eq!(m.head(), option::some(30));
@@ -191,7 +197,9 @@ fun remove_reinsert_roundtrip() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
     u::ins(&mut m, 20, 2);
-    assert_eq!(u::rm(&mut m, 10), 1);
+    let (k, v) = u::rm(&mut m, 10);
+    assert_eq!(k, 10);
+    assert_eq!(v, 1);
     assert!(!u::has(&m, 10));
     assert_eq!(u::ins(&mut m, 10, 11), option::none()); // reinserts fresh
     assert_eq!(u::get(&m, 10), 11);
