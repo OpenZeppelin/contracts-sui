@@ -45,11 +45,10 @@
 ///
 /// # `upsert` returns `bool`, not an abort
 ///
-/// A deliberate divergence from `sui::vec_set`, whose `upsert` aborts on a duplicate. `upsert ->
-/// true` iff the key was newly added; this matches the wrapped map's total upsert, stays composable
-/// mid-PTB, and is strictly more general: for vec_set's abort-on-duplicate, call `add!` (the
-/// strict insert) directly, or write `assert!(s.upsert!(k), E)`. `remove!`, by contrast, aborts
-/// on an absent key like `sui::vec_set::remove`. `from_keys` likewise de-duplicates;
+/// `upsert -> true` iff the key was newly added; this matches the wrapped map's `upsert`, stays
+/// composable mid-PTB, and is strictly more general: for vec_set's abort-on-duplicate, call `add!`
+/// (the strict insert) directly, or write `assert!(s.upsert!(k), E)`. `remove!`, by contrast,
+/// aborts on an absent key like `sui::vec_set::remove`. `from_keys` likewise de-duplicates;
 /// to reject duplicates instead, build then `assert!(length(&s) == n, E)`. `from_sorted_keys!`
 /// de-duplicates the same way but needs pre-sorted input and runs in O(N) (see Complexity).
 ///
