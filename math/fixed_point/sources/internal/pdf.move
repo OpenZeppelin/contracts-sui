@@ -31,14 +31,13 @@ const EInternalDenNonPositive: vector<u8> =
 
 // === Constants ===
 
-/// Internal Horner-accumulation scale (`10^36`). An order of magnitude finer than
+/// Internal Horner-accumulation scale (`10^36`). 27 orders of magnitude finer than
 /// the user-facing `10^9`: it keeps per-step floor-truncation noise far below the
-/// tail's true per-step decrement, so the quantized `φ` is strictly monotone
-/// non-increasing in `|z|` (a coarser scale leaves 1-ULP inversions in the far
-/// tail). Free at runtime - the arithmetic already runs in `u256` - and the
-/// rescaled coefficients still fit `u128`. The PDF's degree-10 rational leaves
-/// ~8 bits of headroom under `2^256` - tighter than the CDF's ~10 - guarded by
-/// the codegen overflow gate.
+/// tail's true per-step decrement, so the quantized `φ` is monotone non-increasing
+/// in `|z|` (a coarser scale leaves 1-ULP inversions in the far tail). Free at
+/// runtime - the arithmetic already runs in `u256` - and the rescaled coefficients
+/// still fit `u128`. The PDF's degree-10 rational leaves ~8 bits of headroom under
+/// `2^256` - tighter than the CDF's ~10 - guarded by the codegen overflow gate.
 const WAD: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
 
 /// Multiplier that promotes a raw `UD30x9` input (`10^9`) to `WAD` (`10^36`):

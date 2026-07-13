@@ -93,7 +93,7 @@ validate.py ──► parses the committed cdf_coefficients.move, re-runs it, ch
   It asserts the quantized error stays within budget (≤ 5 ULP at `10⁻⁹`) against
   `scipy`, plus two exhaustive tail gates (`shared/gates.py`): neighbor-resolution
   monotonicity (no 1-ULP inversion between adjacent raw inputs) and u256 overflow
-  margin (the peak Horner product clears `2^256`).
+  margin (the peak Horner product stays under `2^256` with headroom).
 
 The split is deliberate. Deriving needs the heavy `scipy`/`mpmath` machinery;
 validating only needs to confirm the *committed* numbers are still correct,
@@ -164,11 +164,12 @@ python -m gaussian_codegen.inverse_cdf.validate          # re-checks the committ
 Unlike `cdf`/`pdf`, the quantile `Φ⁻¹(p)` is fit as **two** rationals - a central
 one in `u = p - 0.5` and a tail one in `r = sqrt(-2·ln(1-p))` - because a single
 rational in `p` underflows the fixed-point evaluator near `p = 1`. The change of
-variable is the classic Acklam/AS241 split, and the on-chain tail reuses the
-library's `ln`/`sqrt` kernels. Its oracle is mpmath `erfinv` (scipy's float64
-`ppf` is off by ~5e-9 in the deep tail, so it is not usable here). Accordingly
-`inverse_cdf/.derive_output.json` nests a `central` and a `tail` fit object rather
-than the single coefficient set the `cdf`/`pdf` schema uses.
+variable is the classic Acklam/AS241 split, and the on-chain tail builds `r` from
+the internal `raw_log2` and `u256::sqrt` kernels (`ln` is derived from `log2`),
+not the typed `sd29x9_base::ln`/`sqrt`. Its oracle is mpmath `erfinv` (scipy's
+float64 `ppf` is off by ~5e-9 in the deep tail, so it is not usable here).
+Accordingly `inverse_cdf/.derive_output.json` nests a `central` and a `tail` fit
+object rather than the single coefficient set the `cdf`/`pdf` schema uses.
 
 Or via the Makefile (`make -C scripts/gaussian_codegen <target>`): `regen` (derive
 + both emitters for each family; the emitters format their own output),

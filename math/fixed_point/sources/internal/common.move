@@ -18,7 +18,7 @@ const ELogOfZero: vector<u8> = "Logarithm of zero is undefined";
 // === Constants ===
 
 /// Internal precision used by the fixed-point logarithm kernel: `10^18`
-/// (~`2^60`), an order of magnitude finer than the user-facing `10^9` scale.
+/// (~`2^60`), 9 orders of magnitude finer than the user-facing `10^9` scale.
 ///
 /// Error analysis: in the squaring loop, error in `y` grows ~2× per iteration
 /// (since `y_new = y_old^2 / internal`), but a wrong bit at iteration `i`

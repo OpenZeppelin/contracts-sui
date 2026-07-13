@@ -28,9 +28,9 @@ Horner step's floor-truncation discards up to ~`1.9e-5` user-facing ULP, which i
 the far tail exceeds Φ's true per-step increment and lets neighboring outputs
 invert - a quantization artifact, not a property of the continuous rational (which
 is provably monotone). Accumulating at `10^36` drops that noise far below the
-smallest in-domain increment, so the quantized output is strictly monotone. Free
-at runtime (the arithmetic is already `u256`); the rescaled coefficients still fit
-`u128` (~120/128 bits) and the peak `u256` Horner product stays ~10 bits under
+smallest in-domain increment, so the quantized output is monotone non-decreasing.
+Free at runtime (the arithmetic is already `u256`); the rescaled coefficients
+still fit `u128` (~120/128 bits) and the peak `u256` Horner product stays ~10 bits under
 `2^256` on the clamped domain (asserted by `cdf/validate.check_overflow_margin`)."""
 
 PDF_WAD = 10**36
@@ -113,8 +113,8 @@ truth, consumed by `inverse_cdf::inverse_cdf_upper_raw`)."""
 INVERSE_CDF_SPLIT = "0.975"
 """Probability breakpoint between the two rational fits, as an exact decimal
 string. `p < SPLIT` uses the central rational in `u = p − 0.5`; `p ≥ SPLIT` uses
-the tail rational in `r = sqrt(−2·ln(1 − p))`. This is the classic Acklam/AS241
-central-vs-tail split point."""
+the tail rational in `r = sqrt(−2·ln(1 − p))`. A chosen round value near Acklam's
+canonical `0.97575` break (AS241 places its region boundaries differently)."""
 
 _INVERSE_CDF_SPLIT = Decimal(INVERSE_CDF_SPLIT)
 

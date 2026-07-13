@@ -6,9 +6,11 @@
 /// `ud30x9_base::inverse_cdf`, which call `inverse_cdf_upper_raw` here and (for
 /// the signed variant) reflect `p < 0.5` via `Φ⁻¹(p) = -Φ⁻¹(1 - p)`.
 ///
-/// A single rational in `p` cannot be evaluated in fixed point near `p = 1` (its
-/// numerator and denominator both collapse toward zero and underflow the WAD
-/// scale). So the upper half is split, exactly like Acklam/AS241:
+/// A single rational in `p` cannot cover the whole upper half: `Φ⁻¹(p) → +∞` as
+/// `p → 1`, and no low-degree rational in `p` tracks that ever-steepening tail
+/// accurately - a direct fit's numerator and denominator polynomials both
+/// collapse toward zero near `p = 1` and underflow the WAD scale in fixed point.
+/// So the upper half is split, exactly like Acklam/AS241:
 /// - `p ∈ [0.5, threshold)`: a rational in `u = p - 0.5` (`central_*` table).
 /// - `p ∈ [threshold, 1)`: a rational in `r = sqrt(-2 * ln(1 - p))` (`tail_*`
 ///   table); the change of variable linearizes the tail's growth and keeps the
