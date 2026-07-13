@@ -64,9 +64,15 @@ const WAD_PER_RAW: u256 = 1_000_000_000_000_000_000_000_000_000; // 10^27
 /// (φ is even) - no reflection is needed.
 ///
 /// #### Aborts
-/// - `EInternalNumNegative` / `EInternalDenNonPositive` from `eval_rational`'s
-///   integrity asserts (defense-in-depth against a corrupted regenerated
-///   coefficient table; these cannot fire for the shipped coefficients).
+/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+///   value (defense-in-depth against a corrupted regenerated coefficient table;
+///   unreachable with the committed coefficient tables).
+/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+///   non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 public(package) fun pdf_nonneg_raw(z_raw: u128): u128 {
     if (z_raw >= pdf_coefficients::max_z_raw()) return 0;
 
@@ -88,10 +94,13 @@ public(package) fun pdf_nonneg_raw(z_raw: u128): u128 {
 /// #### Aborts
 /// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
 ///   value (defense-in-depth against a corrupted regenerated coefficient table;
-///   cannot fire for the shipped coefficients).
+///   unreachable with the committed coefficient tables).
 /// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
-///   non-positive value (defense-in-depth; cannot fire for the shipped
-///   coefficients).
+///   non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 fun eval_rational(
     z_raw: u128,
     num_mags: vector<u128>,

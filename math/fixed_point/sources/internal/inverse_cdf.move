@@ -74,9 +74,15 @@ const ONE_RAW: u128 = 1_000_000_000;
 /// (`Φ⁻¹(p) = -Φ⁻¹(1 - p)`) and rejects out-of-range probabilities.
 ///
 /// #### Aborts
-/// - `EInternalNumNegative` / `EInternalDenNonPositive` from `eval_rational`'s
-///   integrity asserts (defense-in-depth against a corrupted regenerated
-///   coefficient table; these cannot fire for the shipped coefficients).
+/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+///   value (defense-in-depth against a corrupted regenerated coefficient table;
+///   unreachable with the committed coefficient tables).
+/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+///   non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 /// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the
 ///   `p_raw ≥ ONE_RAW` saturation guard runs first, so `1 - p` is never zero;
 ///   unreachable).
@@ -129,10 +135,13 @@ fun tail_variable_raw(p_raw: u128): u128 {
 /// #### Aborts
 /// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
 ///   value (defense-in-depth against a corrupted regenerated coefficient table;
-///   cannot fire for the shipped coefficients).
+///   unreachable with the committed coefficient tables).
 /// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
-///   non-positive value (defense-in-depth; cannot fire for the shipped
-///   coefficients).
+///   non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 fun eval_rational(
     x_raw: u128,
     num_mags: vector<u128>,
