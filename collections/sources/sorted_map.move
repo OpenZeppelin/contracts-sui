@@ -205,12 +205,24 @@ public fun tail<K: copy, V>(map: &SortedMap<K, V>): Option<K> {
 /// Immutable view of the backing vector. There is deliberately no `&mut`/owning
 /// counterpart, so bulk reordering or bulk value-destruction is unrepresentable through
 /// this surface.
+///
+/// #### Parameters
+/// - `map`: The map to read.
+///
+/// #### Returns
+/// - Reference to the backing entry vector, in ascending key order.
 public fun entries<K, V>(map: &SortedMap<K, V>): &vector<Entry<K, V>> {
     &map.entries
 }
 
 /// Borrow an entry's key. Macro bodies must read keys through this (not `.key`), since
 /// the field is private at the expansion site.
+///
+/// #### Parameters
+/// - `e`: The entry to read.
+///
+/// #### Returns
+/// - Reference to the entry's key.
 public fun key<K, V>(e: &Entry<K, V>): &K {
     &e.key
 }
@@ -218,6 +230,12 @@ public fun key<K, V>(e: &Entry<K, V>): &K {
 /// Borrow an entry's value. Unlike its neighbors in this section, no macro body references
 /// it - it is public as the value-reading complement to `key`, completing the read
 /// surface of `entries` (the `Entry` fields are private).
+///
+/// #### Parameters
+/// - `e`: The entry to read.
+///
+/// #### Returns
+/// - Reference to the entry's value.
 public fun value<K, V>(e: &Entry<K, V>): &V {
     &e.value
 }
@@ -258,6 +276,13 @@ public fun remove_at<K, V>(map: &mut SortedMap<K, V>, i: u64): (K, V) {
 
 /// Borrow the value at index `i` (read-only).
 ///
+/// #### Parameters
+/// - `map`: The map to read.
+/// - `i`: Index of the value to borrow.
+///
+/// #### Returns
+/// - Reference to the value at index `i`.
+///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
 public fun value_at<K, V>(map: &SortedMap<K, V>, i: u64): &V {
@@ -266,6 +291,13 @@ public fun value_at<K, V>(map: &SortedMap<K, V>, i: u64): &V {
 
 /// Mutably borrow the value at index `i`. Yields `&mut V`, never `&mut Entry`, so the key
 /// stays unreachable for in-place mutation and value mutation is order-safe.
+///
+/// #### Parameters
+/// - `map`: The map to mutate.
+/// - `i`: Index of the value to borrow.
+///
+/// #### Returns
+/// - Mutable reference to the value at index `i`.
 ///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i >= length`.

@@ -70,24 +70,46 @@ public struct Revoked has copy, drop { id: u64 }
 // === Public Functions ===
 
 /// Build an allowlist seeded from `initial` (DE-DUPLICATED) and transfer it to the caller.
+///
+/// #### Parameters
+/// - `initial`: Ids to seed the allowlist with; de-duplicated.
+/// - `ctx`: Transaction context; the new allowlist is transferred to its sender.
 public fun create_and_keep(initial: vector<u64>, ctx: &mut TxContext) {
     transfer::transfer(create(initial, ctx), ctx.sender());
 }
 
 /// Build an allowlist seeded from `initial`. `from_keys!` de-duplicates, so `count` of the
 /// result is the number of DISTINCT ids, not `initial.length()`.
+///
+/// #### Parameters
+/// - `initial`: Ids to seed the allowlist with; de-duplicated.
+/// - `ctx`: Transaction context used to allocate the object's `UID`.
+///
+/// #### Returns
+/// - The newly built allowlist.
 public fun create(initial: vector<u64>, ctx: &mut TxContext): Allowlist {
     Allowlist { id: object::new(ctx), members: sorted_set::from_keys!(initial) }
 }
 
 /// Hand the allowlist to a new owner. An owned object, so only the current holder can call this
 /// - reassigning ownership is the whole transfer. The embedded set travels inline with it.
+///
+/// #### Parameters
+/// - `list`: The allowlist to transfer (consumed).
+/// - `recipient`: Address of the new owner.
 public fun transfer_to(list: Allowlist, recipient: address) {
     transfer::transfer(list, recipient);
 }
 
 /// Approve `id`. Returns `true` iff it was NEWLY approved; a re-approval returns `false` and
 /// does NOT abort (idempotent, total). Emits `Approved` only on the `true` (first-seen) case.
+///
+/// #### Parameters
+/// - `list`: The allowlist to modify.
+/// - `id`: Token id to approve.
+///
+/// #### Returns
+/// - `true` if `id` was newly approved, `false` if it was already present.
 public fun approve(list: &mut Allowlist, id: u64): bool {
     let added = list.members.upsert!(id);
     if (added) event::emit(Approved { id });
@@ -96,6 +118,10 @@ public fun approve(list: &mut Allowlist, id: u64): bool {
 
 /// Approve `id`, recovering `vec_set::insert`'s strict semantics on top of the total `upsert`
 /// in one line. Emits `Approved` on success.
+///
+/// #### Parameters
+/// - `list`: The allowlist to modify.
+/// - `id`: Token id to approve.
 ///
 /// #### Aborts
 /// - `EAlreadyApproved` if `id` is already present.
@@ -107,6 +133,10 @@ public fun approve_strict(list: &mut Allowlist, id: u64) {
 /// Revoke `id`, aborting if it is not approved (the set's `remove!` aborts on an absent key).
 /// Emits `Revoked` on success.
 ///
+/// #### Parameters
+/// - `list`: The allowlist to modify.
+/// - `id`: Token id to revoke.
+///
 /// #### Aborts
 /// - `sorted_map::EKeyNotFound` if `id` is not approved.
 public fun revoke(list: &mut Allowlist, id: u64) {
@@ -116,16 +146,35 @@ public fun revoke(list: &mut Allowlist, id: u64) {
 
 /// True iff `id` is currently approved. Routes through the same search the writes use, so
 /// `is_approved` can never disagree with `approve`/`revoke`.
+///
+/// #### Parameters
+/// - `list`: The allowlist to query.
+/// - `id`: Token id to check.
+///
+/// #### Returns
+/// - `true` iff `id` is currently approved.
 public fun is_approved(list: &Allowlist, id: u64): bool {
     list.members.contains!(&id)
 }
 
 /// Number of distinct approved ids.
+///
+/// #### Parameters
+/// - `list`: The allowlist to query.
+///
+/// #### Returns
+/// - The number of distinct approved ids.
 public fun count(list: &Allowlist): u64 {
     list.members.length()
 }
 
 /// All approved ids in ascending order, as an owned snapshot.
+///
+/// #### Parameters
+/// - `list`: The allowlist to query.
+///
+/// #### Returns
+/// - All approved ids in ascending order, as an owned snapshot.
 public fun members(list: &Allowlist): vector<u64> {
     list.members.keys()
 }
