@@ -1,5 +1,6 @@
 module openzeppelin_fp_math::sd29x9_inverse_cdf_tests;
 
+use openzeppelin_fp_math::horner;
 use openzeppelin_fp_math::inverse_cdf;
 use openzeppelin_fp_math::inverse_cdf_coefficients;
 use openzeppelin_fp_math::sd29x9;
@@ -231,7 +232,7 @@ fun coefficient_arrays_have_matching_lengths() {
 
 // === Integrity asserts (defense-in-depth; unreachable via the public API) ===
 
-#[test, expected_failure(abort_code = inverse_cdf::EInternalNumNegative)]
+#[test, expected_failure(abort_code = horner::EInternalNumNegative)]
 fun numerator_negative_aborts() {
     // A constant numerator of -1.0 forces N(x) < 0.
     let _ = inverse_cdf::eval_rational_for_test(
@@ -243,7 +244,7 @@ fun numerator_negative_aborts() {
     );
 }
 
-#[test, expected_failure(abort_code = inverse_cdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_nonpositive_aborts() {
     // A constant denominator of -1.0 forces D(x) < 0.
     let _ = inverse_cdf::eval_rational_for_test(
@@ -255,7 +256,7 @@ fun denominator_nonpositive_aborts() {
     );
 }
 
-#[test, expected_failure(abort_code = inverse_cdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_zero_aborts() {
     // A constant denominator of 0 evaluates to canonical zero, tripping the
     // `mag(d) > 0` half of the guard before the division.

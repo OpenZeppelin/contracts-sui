@@ -2,6 +2,7 @@ module openzeppelin_fp_math::sd29x9_cdf_tests;
 
 use openzeppelin_fp_math::cdf;
 use openzeppelin_fp_math::cdf_coefficients;
+use openzeppelin_fp_math::horner;
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
 use openzeppelin_fp_math::sd29x9_test_helpers::{assert_within, neg, pos};
@@ -239,7 +240,7 @@ fun coefficient_arrays_have_matching_lengths() {
 
 // === Integrity asserts (defense-in-depth; unreachable via the public API) ===
 
-#[test, expected_failure(abort_code = cdf::EInternalNumNegative)]
+#[test, expected_failure(abort_code = horner::EInternalNumNegative)]
 fun numerator_negative_aborts() {
     // A constant numerator of -1.0 forces N(z) < 0 on the central domain.
     let _ = cdf::eval_rational_for_test(
@@ -251,7 +252,7 @@ fun numerator_negative_aborts() {
     );
 }
 
-#[test, expected_failure(abort_code = cdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_nonpositive_aborts() {
     // A constant denominator of -1.0 forces D(z) < 0 on the central domain.
     let _ = cdf::eval_rational_for_test(
@@ -263,7 +264,7 @@ fun denominator_nonpositive_aborts() {
     );
 }
 
-#[test, expected_failure(abort_code = cdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_zero_aborts() {
     // A constant denominator of 0 evaluates to canonical zero, which must trip
     // the `mag(d) > 0` half of the guard rather than reach the division.

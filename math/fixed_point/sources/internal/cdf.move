@@ -11,22 +11,7 @@
 module openzeppelin_fp_math::cdf;
 
 use openzeppelin_fp_math::cdf_coefficients;
-use openzeppelin_fp_math::common;
 use openzeppelin_fp_math::horner;
-use openzeppelin_math::rounding;
-use openzeppelin_math::u256;
-
-// === Errors ===
-
-/// Numerator polynomial returned a negative value on the central domain.
-#[error(code = 0)]
-const EInternalNumNegative: vector<u8> =
-    "CDF numerator polynomial returned a negative value on the central domain";
-
-/// Denominator polynomial returned a non-positive value on the central domain.
-#[error(code = 1)]
-const EInternalDenNonPositive: vector<u8> =
-    "CDF denominator polynomial returned a non-positive value on the central domain";
 
 // === Constants ===
 
@@ -37,10 +22,6 @@ const EInternalDenNonPositive: vector<u8> =
 /// arithmetic already runs in `u256` - and the rescaled coefficients still fit
 /// `u128`.
 const WAD: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
-
-/// Multiplier that promotes a raw `UD30x9` input (`10^9`) to `WAD` (`10^36`):
-/// `WAD / 10^9 = 10^27`.
-const WAD_PER_RAW: u256 = 1_000_000_000_000_000_000_000_000_000; // 10^27
 
 /// `Φ(0)` at the `UD30x9` raw scale (`10^9`).
 const HALF_RAW: u128 = 500_000_000;
@@ -87,9 +68,10 @@ public(package) fun cdf_nonneg_raw(z_raw: u128): u128 {
 
 // === Private Functions ===
 
-/// Evaluate `N(z) / D(z)` for a central-domain `z_raw` (`0 < z_raw < max_z`),
-/// given the coefficient tables. Split out from `cdf_nonneg_raw` so its
-/// integrity asserts can be exercised with injected coefficients in tests.
+/// Evaluate `N(z) / D(z)` for a central-domain `z_raw` (`0 < z_raw < max_z`)
+/// via the shared `horner::eval_rational` evaluator at `WAD` scale, then apply
+/// the CDF-specific overshoot clamp. Split out from `cdf_nonneg_raw` so the
+/// clamp can be exercised with injected coefficients in tests.
 fun eval_rational(
     z_raw: u128,
     num_mags: vector<u128>,
@@ -97,27 +79,7 @@ fun eval_rational(
     den_mags: vector<u128>,
     den_negs: vector<bool>,
 ): u128 {
-    // Promote |z| from UD30x9 (10^9) to WAD (10^36) via WAD_PER_RAW (10^27).
-    let z_wad = (z_raw as u256) * WAD_PER_RAW;
-    let z_signed = horner::from_unsigned(z_wad);
-
-    let n = horner::horner_eval!(z_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), WAD);
-    let d = horner::horner_eval!(z_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), WAD);
-
-    // Integrity guards on the AAA fit. A corrupted coefficient table would
-    // surface here rather than silently producing a garbled output.
-    assert!(!n.is_neg(), EInternalNumNegative);
-    assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
-
-    // Final ratio: N(z) / D(z) at WAD, cast to UD30x9 (10^9) with a single
-    // nearest-rounding step. N.mag is ≤ ~10^36, so the `N · 10^9` intermediate is
-    // ~10^45 - far under u256 capacity, so `destroy_some` cannot abort.
-    let phi_raw_u256 = u256::mul_div(
-        n.mag(),
-        common::scale_u256!(),
-        d.mag(),
-        rounding::nearest(),
-    ).destroy_some();
+    let phi_raw_u256 = horner::eval_rational(z_raw, num_mags, num_negs, den_mags, den_negs, WAD);
     // Last-ULP overshoot guard: rounding can produce ONE_RAW + 1 raw at z just
     // below max_z; clamp to keep the output a valid probability.
     if (phi_raw_u256 > (ONE_RAW as u256)) ONE_RAW
@@ -126,9 +88,10 @@ fun eval_rational(
 
 // === Test-Only Helpers ===
 
-/// Test-only window onto `eval_rational` so the `EInternalNumNegative` /
-/// `EInternalDenNonPositive` integrity asserts - unreachable through the public
-/// API with the committed coefficients - can be driven with crafted tables.
+/// Test-only window onto `eval_rational` so the shared integrity asserts
+/// (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) and the
+/// overshoot clamp - unreachable through the public API with the committed
+/// coefficients - can be driven with crafted tables.
 #[test_only]
 public(package) fun eval_rational_for_test(
     z_raw: u128,
