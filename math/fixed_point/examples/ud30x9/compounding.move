@@ -113,10 +113,12 @@ public fun interest_after(principal: u64, rate_num: u64, rate_den: u64, periods:
 
 /// The per-period growth multiplier `1 + rate_num/rate_den`, as a raw `UD30x9`.
 ///
-/// Exposed so callers can inspect or reuse the multiplier (e.g. feed it to
-/// `compounded_factor`) without recomputing the fraction. `one().div(...)`
-/// builds the fractional rate from plain integers; `add` lifts it to a
-/// multiplier.
+/// Exposed so callers can inspect the multiplier or apply it directly with
+/// `mul` / `pow` without recomputing the fraction. (`compounded_factor` does
+/// not take this value - it takes the raw `rate_num` / `rate_den` integers
+/// and rebuilds the multiplier internally.)
+/// `from_u64(rate_num).div(from_u64(rate_den))` builds the fractional rate
+/// from plain integers; `add` lifts it to a multiplier.
 ///
 /// #### Parameters
 /// - `rate_num`: Numerator of the periodic rate.
