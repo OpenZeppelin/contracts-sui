@@ -164,7 +164,7 @@ fun schedule_transfer_rejects_duplicate() {
     let wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     let clk = clock::create_for_testing(test.ctx());
     attempt_double_schedule(wrapper, owner, clk, test.ctx());
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::ETransferAlreadyScheduled)]
@@ -178,7 +178,7 @@ fun schedule_unwrap_rejects_duplicate() {
     let wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     let clk = clock::create_for_testing(test.ctx());
     attempt_double_unwrap(wrapper, clk, test.ctx());
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EDelayNotElapsed)]
@@ -193,7 +193,7 @@ fun execute_transfer_before_delay_fails() {
     let wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     let clk = clock::create_for_testing(test.ctx());
     attempt_execute_before_delay(wrapper, recipient, clk, test.ctx());
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EDelayNotElapsed)]
@@ -207,7 +207,7 @@ fun unwrap_before_delay_fails() {
     let wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     let clk = clock::create_for_testing(test.ctx());
     attempt_early_unwrap(wrapper, clk, test.ctx());
-    test.end();
+    abort
 }
 
 #[test]
@@ -283,7 +283,7 @@ fun cancel_schedule_without_pending_fails() {
     test.next_tx(owner);
     let wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     expect_cancel_without_pending(wrapper, test.ctx());
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::ENoPendingTransfer)]
@@ -297,7 +297,7 @@ fun execute_transfer_without_pending_fails() {
     clk.set_for_testing(0);
     let wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     expect_execute_without_pending(wrapper, clk, test.ctx());
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::ENoPendingTransfer)]
@@ -311,7 +311,7 @@ fun unwrap_without_pending_fails() {
     clk.set_for_testing(0);
     let wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     expect_unwrap_without_pending(wrapper, clk, test.ctx());
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EWrongPendingAction)]
@@ -327,8 +327,7 @@ fun execute_transfer_wrong_action_fails() {
     wrapper.schedule_unwrap(&clk, test.ctx());
     clk.set_for_testing(10);
     wrapper.execute_transfer(&clk, test.ctx());
-    clock::destroy_for_testing(clk);
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EWrongPendingAction)]
@@ -344,11 +343,8 @@ fun unwrap_wrong_action_fails() {
     let mut wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     wrapper.schedule_transfer(recipient, &clk, test.ctx());
     clk.set_for_testing(10);
-    let obj = wrapper.unwrap(&clk, test.ctx());
-    let DummyCap { id } = obj;
-    id.delete();
-    clock::destroy_for_testing(clk);
-    test.end();
+    let _obj = wrapper.unwrap(&clk, test.ctx());
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EWrongDelayedTransferWrapper)]
@@ -362,7 +358,7 @@ fun return_val_rejects_wrong_wrapper() {
     let first = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     let second = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     expect_return_wrong_wrapper(first, second, test.ctx());
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = delayed_transfer::EWrongDelayedTransferObject)]
@@ -374,7 +370,7 @@ fun return_val_rejects_wrong_object() {
     test.next_tx(owner);
     let wrapper = test.take_from_sender<delayed_transfer::DelayedTransferWrapper<DummyCap>>();
     expect_return_wrong_object(wrapper, test.ctx());
-    test.end();
+    abort
 }
 
 fun attempt_double_schedule(

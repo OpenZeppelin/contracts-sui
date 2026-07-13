@@ -172,7 +172,7 @@ fun accept_transfer_rejects_non_new_owner() {
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     >(&request_id);
     request.accept_transfer(ticket, test.ctx());
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = two_step_transfer::EInvalidTransferRequest)]
@@ -201,7 +201,7 @@ fun accept_transfer_rejects_mismatched_wrapper() {
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     >(&request_id);
     request.accept_transfer(ticket, test.ctx());
-    test.end();
+    abort
 }
 
 #[test]
@@ -255,7 +255,7 @@ fun cancel_transfer_rejects_non_owner() {
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     >(&request_id);
     request.cancel_transfer(ticket, test.ctx());
-    test.end();
+    abort
 }
 
 #[test]
@@ -308,8 +308,7 @@ fun request_borrow_val_rejects_non_owner() {
     >(&request_id);
     let (wrapper, borrow) = request.request_borrow_val(ticket, test.ctx());
     request.request_return_val(wrapper, borrow);
-    test_scenario::return_shared(request);
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = two_step_transfer::EInvalidTransferRequest)]
@@ -336,8 +335,7 @@ fun request_return_val_rejects_wrong_wrapper() {
     id.delete();
 
     request.request_return_val(extra_wrapper, borrow);
-    test_scenario::return_shared(request);
-    test.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = two_step_transfer::EInvalidTransferRequest)]
@@ -365,7 +363,7 @@ fun cancel_transfer_rejects_mismatched_wrapper() {
         two_step_transfer::TwoStepTransferWrapper<DummyCap>,
     >(&request_id);
     request.cancel_transfer(ticket, test.ctx());
-    test.end();
+    abort
 }
 
 #[test]
@@ -435,8 +433,7 @@ fun request_return_val_rejects_wrong_request() {
 
     bogus_request.request_return_val(wrapper, borrow);
     bogus_request.test_destroy_request();
-    test_scenario::return_shared(request);
-    test.end();
+    abort
 }
 
 #[test]
