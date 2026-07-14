@@ -46,7 +46,6 @@ are supporting types you will see in signatures.
 | [`refund_vault`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#refund_vault) | A generic refundable escrow over `Balance<P>`. Every sale is paired with one; on cancel it holds the proceeds and pays buyers back individually. Usable standalone. |
 | [`allowlist`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#allowlist) | A typed compliance slot (`AllowlistAdmin` + single-use `AllowEntry`). The library ships **no** KYC logic - you wire your own scheme against these types. |
 | [`receipt`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#receipt) | The non-transferable, buyer-bound claim ticket minted by `purchase` and consumed by `claim` / `refund`. |
-| [`phase`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#phase) | The shared lifecycle enum: `Init -> Active`, then terminal `Finalized` or `Cancelled`. |
 
 ## Key Concepts
 
