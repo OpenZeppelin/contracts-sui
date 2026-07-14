@@ -251,6 +251,7 @@ public fun value<K, V>(e: &Entry<K, V>): &V {
 /// > use the macro API.
 ///
 /// #### Parameters
+/// - `map`: The map to mutate.
 /// - `key`: The new entry's key.
 /// - `value`: The new entry's value.
 /// - `i`: Insertion index.
@@ -349,6 +350,7 @@ public fun assert_strictly_increasing(increasing: bool) {
 /// Binary search for `target` under `$lt`.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `target`: Key to locate.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -464,6 +466,7 @@ public macro fun from_sorted_keys_values<$K, $V>(
 /// succeeding, since both route through `search!`.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `key`: Key to test.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -490,6 +493,7 @@ public macro fun contains<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): bool {
 /// Immutable borrow of `key`'s value, under `$lt`.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `key`: Key to look up.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -527,6 +531,7 @@ public macro fun borrow<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): &$V {
 /// the key cannot be desynced from its sorted position.
 ///
 /// #### Parameters
+/// - `map`: The map to mutate.
 /// - `key`: Key to look up.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -566,6 +571,7 @@ public macro fun borrow_mut<$K, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): &m
 /// displaced value rather than aborting.
 ///
 /// #### Parameters
+/// - `map`: The map to mutate.
 /// - `key`: Key to insert; must not already be present.
 /// - `value`: Value to store.
 /// - `lt`: Strict less-than comparator.
@@ -617,6 +623,7 @@ public macro fun add<$K, $V>($map: &mut SortedMap<$K, $V>, $key: $K, $value: $V)
 /// ```
 ///
 /// #### Parameters
+/// - `map`: The map to mutate.
 /// - `key`: Key to insert or update (taken by value).
 /// - `value`: Value to store.
 /// - `lt`: Strict less-than comparator.
@@ -664,6 +671,7 @@ public macro fun upsert<$K: drop, $V>(
 /// Uses a shifting `vector::remove`, never `swap_remove`, which would break strict order.
 ///
 /// #### Parameters
+/// - `map`: The map to mutate.
 /// - `key`: Key to remove.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -702,6 +710,7 @@ public macro fun remove<$K, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): ($K, $
 /// `contains`.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `key`: Reference key.
 /// - `include`: Whether an exact match of `key` qualifies.
 /// - `lt`: Strict less-than comparator.
@@ -753,6 +762,7 @@ public macro fun find_next<$K, $V>(
 /// `contains`.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `key`: Reference key.
 /// - `include`: Whether an exact match of `key` qualifies.
 /// - `lt`: Strict less-than comparator.
@@ -803,6 +813,7 @@ public macro fun find_prev<$K, $V>(
 /// signal.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `key`: Reference key.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -829,6 +840,7 @@ public macro fun next_key<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$
 /// signal.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `key`: Reference key.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -862,6 +874,7 @@ public macro fun prev_key<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$
 /// vector.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `from`: Lower-bound key.
 /// - `include`: Whether an exact match of `from` is included.
 /// - `limit`: Maximum number of keys to return.
@@ -970,6 +983,7 @@ public fun keys<K: copy, V>(map: &SortedMap<K, V>): vector<K> {
 /// rather than asserting, so callers compose it into their own assertions.
 ///
 /// #### Parameters
+/// - `map`: The map to read.
 /// - `lt`: Strict less-than comparator.
 ///
 /// #### Returns

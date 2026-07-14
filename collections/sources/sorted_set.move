@@ -390,6 +390,7 @@ public fun keys<K: copy>(set: &SortedSet<K>): vector<K> {
 /// True iff `key` is present, under `$lt`. Pure, total read.
 ///
 /// #### Parameters
+/// - `set`: The set to read.
 /// - `key`: Key to test.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -415,6 +416,7 @@ public macro fun contains<$K>($set: &SortedSet<$K>, $key: &$K): bool {
 /// absorbed silently (and reported via the returned bool) instead of aborting.
 ///
 /// #### Parameters
+/// - `set`: The set to mutate.
 /// - `key`: Key to insert; must not already be present.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -441,6 +443,7 @@ public macro fun add<$K>($set: &mut SortedSet<$K>, $key: $K) {
 /// or write `assert!(s.upsert!(k), E)`.
 ///
 /// #### Parameters
+/// - `set`: The set to mutate.
 /// - `key`: Key to insert (taken by value).
 /// - `lt`: Strict less-than comparator.
 ///
@@ -467,6 +470,7 @@ public macro fun upsert<$K: drop>($set: &mut SortedSet<$K>, $key: $K): bool {
 /// true -> false. Matches `vec_set::remove`, which also aborts when the key is absent.
 ///
 /// #### Parameters
+/// - `set`: The set to mutate.
 /// - `key`: Key to remove.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -486,6 +490,7 @@ public macro fun remove_by<$K>($set: &mut SortedSet<$K>, $key: &$K, $lt: |&$K, &
 /// `remove_by` with the built-in integer `<`.
 ///
 /// #### Parameters
+/// - `set`: The set to mutate.
 /// - `key`: Key to remove.
 ///
 /// #### Returns
@@ -504,6 +509,7 @@ public macro fun remove<$K>($set: &mut SortedSet<$K>, $key: &$K): $K {
 /// `contains!`.
 ///
 /// #### Parameters
+/// - `set`: The set to read.
 /// - `key`: Reference key.
 /// - `include`: Whether an exact match of `key` qualifies.
 /// - `lt`: Strict less-than comparator.
@@ -532,6 +538,7 @@ public macro fun find_next<$K>($set: &SortedSet<$K>, $key: &$K, $include: bool):
 /// `none` if there is no such key. Pure, total read; any returned key satisfies `contains!`.
 ///
 /// #### Parameters
+/// - `set`: The set to read.
 /// - `key`: Reference key.
 /// - `include`: Whether an exact match of `key` qualifies.
 /// - `lt`: Strict less-than comparator.
@@ -560,6 +567,7 @@ public macro fun find_prev<$K>($set: &SortedSet<$K>, $key: &$K, $include: bool):
 /// `next_key!(tail) == none` is the forward-cursor termination signal.
 ///
 /// #### Parameters
+/// - `set`: The set to read.
 /// - `key`: Reference key.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -585,6 +593,7 @@ public macro fun next_key<$K>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
 /// `prev_key!(head) == none` is the backward-cursor termination signal.
 ///
 /// #### Parameters
+/// - `set`: The set to read.
 /// - `key`: Reference key.
 /// - `lt`: Strict less-than comparator.
 ///
@@ -615,6 +624,7 @@ public macro fun prev_key<$K>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
 /// `from` past the tail all yield the empty vector.
 ///
 /// #### Parameters
+/// - `set`: The set to read.
 /// - `from`: Lower-bound key.
 /// - `include`: Whether an exact match of `from` is included.
 /// - `limit`: Maximum number of keys to return.
