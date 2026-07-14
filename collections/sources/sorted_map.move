@@ -261,11 +261,14 @@ public fun insert_at<K, V>(map: &mut SortedMap<K, V>, key: K, value: V, i: u64) 
     map.entries.insert(Entry { key, value }, i);
 }
 
-/// Remove the entry at index `i`, shifting later entries left, and return its value. The
-/// key and value are moved out and returned.
+/// Remove the entry at index `i`, shifting later entries left, and return its (key, value) pair.
+///
+/// #### Parameters
+/// - `map`: The map to mutate.
+/// - `i`: Index of the entry to remove.
 ///
 /// #### Returns
-/// - The value at index `i`.
+/// - The (key, value) pair at index `i`.
 ///
 /// #### Aborts
 /// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
