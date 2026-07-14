@@ -52,7 +52,8 @@ is not required up front.
    `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
 5. **Tear down** - once drained (and any settled funds swept), `vesting_wallet::destroy_empty`
    reclaims the storage rebate and returns a `DestroyReceipt`; hand that to `vesting_wallet_linear::destroy`,
-   which requires the schedule to have ended and the `DestroyCap` object, before accepting the teardown.
+   which requires the schedule to have ended and the matching `DestroyCap` object, before accepting
+   the teardown.
 
 ### Usage
 
