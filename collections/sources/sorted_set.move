@@ -374,7 +374,7 @@ public fun pop_back<K>(set: &mut SortedSet<K>): K {
 
 /// ALL keys in strict ascending (comparator) order as an owned `vector<K>` - sorted and
 /// duplicate-free. NOT a reference: the set stores `Entry<K, Unit>`, so there is no
-/// `vector<K>` to borrow (contrast `vec_set::keys`); each key is copied out.
+/// `vector<K>` to borrow (contrast `vec_set::keys`).
 ///
 /// O(N) in output size with no `limit` - the one read whose result scales with N. For
 /// large or near-ceiling sets, prefer the paged `keys_from!`.
@@ -516,7 +516,7 @@ public macro fun remove<$K>($set: &mut SortedSet<$K>, $key: &$K): $K {
 ///
 /// #### Returns
 /// - The ceiling/strict-next key, or `none`.
-public macro fun find_next_by<$K>(
+public macro fun find_next_by<$K: copy>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $include: bool,
@@ -530,7 +530,7 @@ public macro fun find_next_by<$K>(
 ///
 /// #### Returns
 /// - The ceiling/strict-next key, or `none`.
-public macro fun find_next<$K>($set: &SortedSet<$K>, $key: &$K, $include: bool): Option<$K> {
+public macro fun find_next<$K: copy>($set: &SortedSet<$K>, $key: &$K, $include: bool): Option<$K> {
     find_next_by!($set, $key, $include, |a, b| *a < *b)
 }
 
@@ -545,7 +545,7 @@ public macro fun find_next<$K>($set: &SortedSet<$K>, $key: &$K, $include: bool):
 ///
 /// #### Returns
 /// - The floor/strict-prev key, or `none`.
-public macro fun find_prev_by<$K>(
+public macro fun find_prev_by<$K: copy>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $include: bool,
@@ -559,7 +559,7 @@ public macro fun find_prev_by<$K>(
 ///
 /// #### Returns
 /// - The floor/strict-prev key, or `none`.
-public macro fun find_prev<$K>($set: &SortedSet<$K>, $key: &$K, $include: bool): Option<$K> {
+public macro fun find_prev<$K: copy>($set: &SortedSet<$K>, $key: &$K, $include: bool): Option<$K> {
     find_prev_by!($set, $key, $include, |a, b| *a < *b)
 }
 
@@ -573,7 +573,7 @@ public macro fun find_prev<$K>($set: &SortedSet<$K>, $key: &$K, $include: bool):
 ///
 /// #### Returns
 /// - The strict-next key, or `none`.
-public macro fun next_key_by<$K>(
+public macro fun next_key_by<$K: copy>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -585,7 +585,7 @@ public macro fun next_key_by<$K>(
 ///
 /// #### Returns
 /// - The strict-next key, or `none`.
-public macro fun next_key<$K>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
+public macro fun next_key<$K: copy>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
     find_next_by!($set, $key, false, |a, b| *a < *b)
 }
 
@@ -599,7 +599,7 @@ public macro fun next_key<$K>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
 ///
 /// #### Returns
 /// - The strict-prev key, or `none`.
-public macro fun prev_key_by<$K>(
+public macro fun prev_key_by<$K: copy>(
     $set: &SortedSet<$K>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -611,7 +611,7 @@ public macro fun prev_key_by<$K>(
 ///
 /// #### Returns
 /// - The strict-prev key, or `none`.
-public macro fun prev_key<$K>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
+public macro fun prev_key<$K: copy>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
     find_prev_by!($set, $key, false, |a, b| *a < *b)
 }
 
@@ -632,7 +632,7 @@ public macro fun prev_key<$K>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
 ///
 /// #### Returns
 /// - Up to `limit` keys in ascending order.
-public macro fun keys_from_by<$K>(
+public macro fun keys_from_by<$K: copy>(
     $set: &SortedSet<$K>,
     $from: &$K,
     $include: bool,
@@ -647,7 +647,7 @@ public macro fun keys_from_by<$K>(
 ///
 /// #### Returns
 /// - Up to `limit` keys in ascending order.
-public macro fun keys_from<$K>(
+public macro fun keys_from<$K: copy>(
     $set: &SortedSet<$K>,
     $from: &$K,
     $include: bool,

@@ -225,10 +225,11 @@ public fun page_k(s: &SortedSet<Key>, from_id: u64, inc: bool, lim: u64): vector
 // === Store-only (non-`drop`) key: witnesses the store-only set + the destroy_empty terminal ===
 //
 // A key with `store` but NOT `copy`/`drop` makes `SortedSet<NoDropKey>` itself store-only: it
-// cannot fall out of scope, so it must be drained (keys leave via `pop_*`, each consumed by
-// `ndk_unwrap`) and then `destroy_empty`'d. Ordered on `id`. Only the non-displacing ops apply:
-// `add_by!` (strict insert) inserts, `pop_*` return the bare key; `upsert!` (drops the displaced
-// key) and `remove!` (drops the stored key) require `K: drop` and are unavailable here.
+// cannot fall out of scope, so it must be drained (keys leave via `pop_*`/`remove_by!`, each
+// consumed by `ndk_unwrap`) and then `destroy_empty`'d. Ordered on `id`. The ops that need nothing
+// of K all apply: `add_by!` inserts, `contains_by!` probes, `remove_by!` RETURNS the key, and
+// `pop_*` return the bare key. Only `upsert!` and `from_keys!` (which drop a key) need `K: drop`
+// and are unavailable here; the key-copying reads (head/tail/keys/navigation) need `K: copy`.
 
 public struct NoDropKey has store { id: u64 }
 
@@ -242,6 +243,116 @@ public fun ndk_unwrap(k: NoDropKey): u64 {
 
 /// Strict insert of a store-only key, ordered on `id` (no displacement -> no `drop` needed).
 public fun add_ndk(s: &mut SortedSet<NoDropKey>, k: NoDropKey) { s.add_by!(k, |a, b| a.id < b.id) }
+
+/// contains_by on a store-only key: the probe (no `drop`) is unwrapped after the read.
+public fun has_ndk(s: &SortedSet<NoDropKey>, id: u64): bool {
+    let probe = ndk(id);
+    let found = s.contains_by!(&probe, |a, b| a.id < b.id);
+    probe.ndk_unwrap();
+    found
+}
+
+/// remove_by on a store-only key: the set's `remove_by` RETURNS the key (needs no `drop`); both
+/// the returned key and the probe are unwrapped. Returns the removed id.
+public fun rem_ndk(s: &mut SortedSet<NoDropKey>, id: u64): u64 {
+    let probe = ndk(id);
+    let k = s.remove_by!(&probe, |a, b| a.id < b.id);
+    probe.ndk_unwrap();
+    k.ndk_unwrap()
+}
+
+// === Copy+store key (no `drop`): copy-requiring ops need `copy`, not `drop` ===
+//
+// CopyKey has `copy` but not `drop`. head/tail/keys/navigation/pagination copy keys OUT (need
+// `copy`) and `add_by!` moves a key in (needs nothing); `upsert!`/`from_keys!` (which drop a key)
+// are unavailable - see the type_tests negatives. Ordered on `id`; returned no-`drop` keys are
+// mapped to ids and unwrapped.
+
+public struct CopyKey has copy, store { id: u64 }
+
+public fun copy_key(id: u64): CopyKey { CopyKey { id } }
+
+public fun copy_key_unwrap(k: CopyKey): u64 {
+    let CopyKey { id } = k;
+    id
+}
+
+public fun add_ck(s: &mut SortedSet<CopyKey>, id: u64) {
+    s.add_by!(copy_key(id), |a, b| a.id < b.id)
+}
+
+public fun head_ck(s: &SortedSet<CopyKey>): Option<u64> { s.head().map!(|k| k.copy_key_unwrap()) }
+
+public fun tail_ck(s: &SortedSet<CopyKey>): Option<u64> { s.tail().map!(|k| k.copy_key_unwrap()) }
+
+public fun keys_ck(s: &SortedSet<CopyKey>): vector<u64> { s.keys().map!(|k| k.copy_key_unwrap()) }
+
+public fun fnext_ck(s: &SortedSet<CopyKey>, id: u64, inc: bool): Option<u64> {
+    let probe = copy_key(id);
+    let out = s.find_next_by!(&probe, inc, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+public fun fprev_ck(s: &SortedSet<CopyKey>, id: u64, inc: bool): Option<u64> {
+    let probe = copy_key(id);
+    let out = s.find_prev_by!(&probe, inc, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+public fun nkey_ck(s: &SortedSet<CopyKey>, id: u64): Option<u64> {
+    let probe = copy_key(id);
+    let out = s.next_key_by!(&probe, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+public fun pkey_ck(s: &SortedSet<CopyKey>, id: u64): Option<u64> {
+    let probe = copy_key(id);
+    let out = s.prev_key_by!(&probe, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+public fun page_ck(s: &SortedSet<CopyKey>, from_id: u64, inc: bool, lim: u64): vector<u64> {
+    let probe = copy_key(from_id);
+    let out = s.keys_from_by!(&probe, inc, lim, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+// === Drop+store key (no `copy`): drop-requiring ops need `drop`, not `copy` ===
+//
+// DropKey has `drop` but not `copy`. `upsert!` (drops the displaced key) and `from_keys!` (built
+// on upsert) need `drop`, so they compile here; head/tail/keys/navigation (which copy keys out)
+// do NOT - see the type_tests negatives. A `drop` key needs no manual disposal. Ordered on `id`.
+
+public struct DropKey has drop, store { id: u64 }
+
+public fun drop_key(id: u64): DropKey { DropKey { id } }
+
+public fun ups_dk(s: &mut SortedSet<DropKey>, id: u64): bool {
+    s.upsert_by!(drop_key(id), |a, b| a.id < b.id)
+}
+
+public fun add_dk(s: &mut SortedSet<DropKey>, id: u64) {
+    s.add_by!(drop_key(id), |a, b| a.id < b.id)
+}
+
+public fun has_dk(s: &SortedSet<DropKey>, id: u64): bool {
+    s.contains_by!(&drop_key(id), |a, b| a.id < b.id)
+}
+
+/// remove_by returns the key; a `drop` key needs no disposal, so the returned key is dropped.
+public fun rem_dk(s: &mut SortedSet<DropKey>, id: u64) {
+    s.remove_by!(&drop_key(id), |a, b| a.id < b.id);
+}
+
+/// from_keys over a no-`copy` key: needs `drop` (the dedup upsert), never `copy`.
+public fun fromk_dk(ids: vector<u64>): SortedSet<DropKey> {
+    ss::from_keys_by!(ids.map!(|id| drop_key(id)), |a, b| a.id < b.id)
+}
 
 // === Builders ===
 

@@ -253,20 +253,21 @@ fun ops_leave_value_unconstrained() {
 // (exercised positively above). But two op families constrain K at their expansion site:
 //   let m = sm::new<StoreKey, u64>();
 //   let p = u::store_key(1);
-//   let lt = |a, b| u::store_key_id(a) < u::store_key_id(b); // field is private outside test_util
-//   // (a) key-COPYING ops copy a key OUT of the map -> need K: copy:
-//   sm::head(&m); sm::tail(&m); sm::keys(&m);       // E05001: need K: copy
-//   sm::find_next_by!(&m, &p, true, lt);            // E05001: need K: copy
-//   sm::find_prev_by!(&m, &p, true, lt);            // E05001: need K: copy
-//   sm::next_key_by!(&m, &p, lt);                   // E05001: need K: copy
-//   sm::prev_key_by!(&m, &p, lt);                   // E05001: need K: copy
-//   sm::keys_from_by!(&m, &p, true, 10, lt);        // E05001: need K: copy
+//   // (a) key-COPYING ops copy a key OUT of the map -> need K: copy. The comparator is
+//   //     irrelevant to this error (the copy is from returning the key by value), hence the
+//   //     trivial `|_, _| true`:
+//   sm::head(&m); sm::tail(&m); sm::keys(&m);          // E05001: need K: copy
+//   sm::find_next_by!(&m, &p, true, |_, _| true);      // E05001: need K: copy
+//   sm::find_prev_by!(&m, &p, true, |_, _| true);      // E05001: need K: copy
+//   sm::next_key_by!(&m, &p, |_, _| true);             // E05001: need K: copy
+//   sm::prev_key_by!(&m, &p, |_, _| true);             // E05001: need K: copy
+//   sm::keys_from_by!(&m, &p, true, 10, |_, _| true);  // E05001: need K: copy
 //   // (b) upsert drops the DISPLACED key -> needs K: drop. This fails even for CopyKey (which
 //   //     HAS copy but not drop), isolating `drop` as the missing ability. `add`/`add_by` never
 //   //     drop the key (a duplicate ABORTS), and `remove_by` RETURNS the key, so both need no
 //   //     drop and compile on a no-drop key (exercised positively above):
 //   let mut mc = sm::new<CopyKey, u64>();
-//   sm::upsert_by!(&mut mc, u::copy_key(1), 0, |a, b| u::copy_key_id(a) < u::copy_key_id(b)); // E05001: needs K: drop
+//   sm::upsert_by!(&mut mc, u::copy_key(1), 0, |_, _| true); // E05001: needs K: drop
 //
 // No bulk mutable / owning escape hatch:
 //   let mut m = sm::new<u64, u64>();

@@ -60,9 +60,6 @@ public struct StoreKey has store { id: u64 }
 
 public fun store_key(id: u64): StoreKey { StoreKey { id } }
 
-/// The ordering surface: lets a comparator outside this module read the key (`id` is private).
-public fun store_key_id(k: &StoreKey): u64 { k.id }
-
 /// Consume a `StoreKey` (it has no `drop`), returning its id.
 public fun store_key_unwrap(k: StoreKey): u64 {
     let StoreKey { id } = k;
@@ -74,9 +71,6 @@ public fun store_key_unwrap(k: StoreKey): u64 {
 public struct CopyKey has copy, store { id: u64 }
 
 public fun copy_key(id: u64): CopyKey { CopyKey { id } }
-
-/// The ordering surface: lets a comparator outside this module read the key (`id` is private).
-public fun copy_key_id(k: &CopyKey): u64 { k.id }
 
 /// Consume a `CopyKey` (it has no `drop`), returning its id.
 public fun copy_key_unwrap(k: CopyKey): u64 {
