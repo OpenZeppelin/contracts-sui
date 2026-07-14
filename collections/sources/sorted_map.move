@@ -717,7 +717,7 @@ public macro fun remove<$K, $V>($map: &mut SortedMap<$K, $V>, $key: &$K): ($K, $
 ///
 /// #### Returns
 /// - The ceiling/strict-next key, or `none`.
-public macro fun find_next_by<$K, $V>(
+public macro fun find_next_by<$K: copy, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $include: bool,
@@ -749,7 +749,7 @@ public macro fun find_next_by<$K, $V>(
 ///
 /// #### Returns
 /// - The ceiling/strict-next key, or `none`.
-public macro fun find_next<$K, $V>(
+public macro fun find_next<$K: copy, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $include: bool,
@@ -769,7 +769,7 @@ public macro fun find_next<$K, $V>(
 ///
 /// #### Returns
 /// - The floor/strict-prev key, or `none`.
-public macro fun find_prev_by<$K, $V>(
+public macro fun find_prev_by<$K: copy, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $include: bool,
@@ -800,7 +800,7 @@ public macro fun find_prev_by<$K, $V>(
 ///
 /// #### Returns
 /// - The floor/strict-prev key, or `none`.
-public macro fun find_prev<$K, $V>(
+public macro fun find_prev<$K: copy, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $include: bool,
@@ -819,7 +819,7 @@ public macro fun find_prev<$K, $V>(
 ///
 /// #### Returns
 /// - The strict-next key, or `none`.
-public macro fun next_key_by<$K, $V>(
+public macro fun next_key_by<$K: copy, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -831,7 +831,7 @@ public macro fun next_key_by<$K, $V>(
 ///
 /// #### Returns
 /// - The strict-next key, or `none`.
-public macro fun next_key<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$K> {
+public macro fun next_key<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$K> {
     find_next_by!($map, $key, false, |a, b| *a < *b)
 }
 
@@ -846,7 +846,7 @@ public macro fun next_key<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$
 ///
 /// #### Returns
 /// - The strict-prev key, or `none`.
-public macro fun prev_key_by<$K, $V>(
+public macro fun prev_key_by<$K: copy, $V>(
     $map: &SortedMap<$K, $V>,
     $key: &$K,
     $lt: |&$K, &$K| -> bool,
@@ -858,7 +858,7 @@ public macro fun prev_key_by<$K, $V>(
 ///
 /// #### Returns
 /// - The strict-prev key, or `none`.
-public macro fun prev_key<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$K> {
+public macro fun prev_key<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$K> {
     find_prev_by!($map, $key, false, |a, b| *a < *b)
 }
 
@@ -866,7 +866,7 @@ public macro fun prev_key<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$
 
 /// Up to `limit` keys in strict ascending order, a contiguous run starting at the first
 /// key `>= from` (when `include`) or `> from` (strict). Returns at most `limit` keys;
-/// fewer if the tail is reached. Pure, total read.
+/// fewer if the tail is reached.
 ///
 /// Resume a page by passing the last returned key back as `from` with `include == false`:
 /// successive pages have no overlap and no gap, so concatenating them reconstructs the
@@ -882,7 +882,7 @@ public macro fun prev_key<$K, $V>($map: &SortedMap<$K, $V>, $key: &$K): Option<$
 ///
 /// #### Returns
 /// - Up to `limit` keys in ascending order.
-public macro fun keys_from_by<$K, $V>(
+public macro fun keys_from_by<$K: copy, $V>(
     $map: &SortedMap<$K, $V>,
     $from: &$K,
     $include: bool,
@@ -914,7 +914,7 @@ public macro fun keys_from_by<$K, $V>(
 ///
 /// #### Returns
 /// - Up to `limit` keys in ascending order.
-public macro fun keys_from<$K, $V>(
+public macro fun keys_from<$K: copy, $V>(
     $map: &SortedMap<$K, $V>,
     $from: &$K,
     $include: bool,
@@ -958,9 +958,9 @@ public fun pop_back<K, V>(map: &mut SortedMap<K, V>): (K, V) {
 
 // === Full enumeration (regular fun; no comparator) ===
 
-/// All keys in ascending comparator order as an owned `vector<K>`. O(N) in output size with no
-/// `limit`; for large or near-ceiling maps prefer the paged `keys_from!`. Loads exactly one
-/// stored object regardless of N.
+/// All keys in ascending comparator order as an owned `vector<K>`. O(N) in output size with
+/// no `limit`; for large or near-ceiling maps prefer the paged `keys_from!`. Loads exactly
+/// one stored object regardless of N.
 ///
 /// #### Returns
 /// - Every key, in ascending comparator order.

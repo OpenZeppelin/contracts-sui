@@ -48,6 +48,48 @@ public fun ck_id(k: &CoarseKey): u64 { k.id }
 
 public fun ck_tag(k: &CoarseKey): u64 { k.tag }
 
+// The three lattice-corner key witnesses below isolate WHICH ability each op family demands of
+// K. Each is ordered on `id`, so they drive the `_by` forms with a field comparator; a struct
+// key cannot use the bare integer `<` forms at all.
+
+/// Store-only key (no `copy`, no `drop`): the minimal-ability key. Witnesses that the
+/// value-conserving ops (`contains`/`borrow`/`borrow_mut`/`add`/`remove`/`from_sorted`)
+/// constrain K with NOTHING. It cannot drive the key-copying ops (`head`/`tail`/`keys`/
+/// `find_*`/`keys_from` need `copy`) or `upsert` (needs `drop`).
+public struct StoreKey has store { id: u64 }
+
+public fun store_key(id: u64): StoreKey { StoreKey { id } }
+
+/// The ordering surface: lets a comparator outside this module read the key (`id` is private).
+public fun store_key_id(k: &StoreKey): u64 { k.id }
+
+/// Consume a `StoreKey` (it has no `drop`), returning its id.
+public fun store_key_unwrap(k: StoreKey): u64 {
+    let StoreKey { id } = k;
+    id
+}
+
+/// Copy+store key (no `drop`). Witnesses that the key-copying ops need only `copy`, and that a
+/// no-`drop` key works with `add` but NOT `upsert` (which drops the displaced key).
+public struct CopyKey has copy, store { id: u64 }
+
+public fun copy_key(id: u64): CopyKey { CopyKey { id } }
+
+/// The ordering surface: lets a comparator outside this module read the key (`id` is private).
+public fun copy_key_id(k: &CopyKey): u64 { k.id }
+
+/// Consume a `CopyKey` (it has no `drop`), returning its id.
+public fun copy_key_unwrap(k: CopyKey): u64 {
+    let CopyKey { id } = k;
+    id
+}
+
+/// Drop+store key (no `copy`). Witnesses that `upsert` needs only `drop`, while the key-copying
+/// ops do NOT compile on a no-`copy` key.
+public struct DropKey has drop, store { id: u64 }
+
+public fun drop_key(id: u64): DropKey { DropKey { id } }
+
 /// Two distinct value types for the cross-instantiation test.
 public struct Bid has copy, drop, store { px: u64 }
 
@@ -177,6 +219,28 @@ public fun rm_nd(m: &mut SortedMap<u64, NoDrop>, k: u64): (u64, NoDrop) {
     m.remove!(&k)
 }
 
+// Add / navigation / pagination over a NON-DROPPABLE value. These ops touch only keys, so a
+// resource V never blocks them - `add` MOVES the value in, and the read paths never observe it.
+// K = u64, so they exercise the bare (integer `<`) forms.
+
+public fun add_nd(m: &mut SortedMap<u64, NoDrop>, k: u64, w: NoDrop) { m.add!(k, w) }
+
+public fun fnext_nd(m: &SortedMap<u64, NoDrop>, k: u64, inc: bool): Option<u64> {
+    m.find_next!(&k, inc)
+}
+
+public fun fprev_nd(m: &SortedMap<u64, NoDrop>, k: u64, inc: bool): Option<u64> {
+    m.find_prev!(&k, inc)
+}
+
+public fun nxt_nd(m: &SortedMap<u64, NoDrop>, k: u64): Option<u64> { m.next_key!(&k) }
+
+public fun prv_nd(m: &SortedMap<u64, NoDrop>, k: u64): Option<u64> { m.prev_key!(&k) }
+
+public fun kfrom_nd(m: &SortedMap<u64, NoDrop>, from: u64, inc: bool, lim: u64): vector<u64> {
+    m.keys_from!(&from, inc, lim)
+}
+
 // === Thin wrappers - SortedMap<CoarseKey, u64> ordered on `id` ===
 
 public fun ups_ck(m: &mut SortedMap<CoarseKey, u64>, k: CoarseKey, v: u64): Option<u64> {
@@ -217,6 +281,126 @@ public fun head_ck_tag(m: &SortedMap<CoarseKey, u64>): u64 {
 
 public fun wf_ck(m: &SortedMap<CoarseKey, u64>): bool {
     m.is_well_formed_by!(|a, b| a.id < b.id)
+}
+
+// === Thin wrappers - SortedMap<StoreKey, u64>: value-conserving ops need NOTHING of K ===
+//
+// StoreKey has neither `copy` nor `drop`, the minimal key. Every probe and every removed key is
+// threaded back out and unwrapped (a no-`drop` key cannot be discarded). Field comparator only.
+
+public fun sk_add(m: &mut SortedMap<StoreKey, u64>, id: u64, v: u64) {
+    m.add_by!(store_key(id), v, |a, b| a.id < b.id)
+}
+
+public fun sk_has(m: &SortedMap<StoreKey, u64>, id: u64): bool {
+    let probe = store_key(id);
+    let found = m.contains_by!(&probe, |a, b| a.id < b.id);
+    probe.store_key_unwrap();
+    found
+}
+
+public fun sk_get(m: &SortedMap<StoreKey, u64>, id: u64): u64 {
+    let probe = store_key(id);
+    let v = *m.borrow_by!(&probe, |a, b| a.id < b.id);
+    probe.store_key_unwrap();
+    v
+}
+
+public fun sk_set(m: &mut SortedMap<StoreKey, u64>, id: u64, v: u64) {
+    let probe = store_key(id);
+    *m.borrow_mut_by!(&probe, |a, b| a.id < b.id) = v;
+    probe.store_key_unwrap();
+}
+
+/// Returns `(removed key's id, value)`; both the probe and the removed no-`drop` key are
+/// unwrapped, never dropped.
+public fun sk_remove(m: &mut SortedMap<StoreKey, u64>, id: u64): (u64, u64) {
+    let probe = store_key(id);
+    let (k, v) = m.remove_by!(&probe, |a, b| a.id < b.id);
+    probe.store_key_unwrap();
+    (k.store_key_unwrap(), v)
+}
+
+public fun sk_from_sorted(ids: vector<u64>, vals: vector<u64>): SortedMap<StoreKey, u64> {
+    let keys = ids.map!(|id| store_key(id));
+    sm::from_sorted_keys_values_by!(keys, vals, |a, b| a.id < b.id)
+}
+
+// === Thin wrappers - SortedMap<CopyKey, u64>: key-copying ops need `copy`, not `drop` ===
+//
+// CopyKey has `copy` but not `drop`: head/tail/keys/navigation/pagination copy keys OUT (need
+// `copy`), `add` moves a key in (needs nothing), and `upsert` is rejected (needs `drop` - see
+// the type_tests negatives). Returned no-`drop` keys are mapped to ids and unwrapped.
+
+public fun ck2_add(m: &mut SortedMap<CopyKey, u64>, id: u64, v: u64) {
+    m.add_by!(copy_key(id), v, |a, b| a.id < b.id)
+}
+
+public fun ck2_head(m: &SortedMap<CopyKey, u64>): Option<u64> {
+    m.head().map!(|k| k.copy_key_unwrap())
+}
+
+public fun ck2_tail(m: &SortedMap<CopyKey, u64>): Option<u64> {
+    m.tail().map!(|k| k.copy_key_unwrap())
+}
+
+public fun ck2_keys(m: &SortedMap<CopyKey, u64>): vector<u64> {
+    m.keys().map!(|k| k.copy_key_unwrap())
+}
+
+public fun ck2_fnext(m: &SortedMap<CopyKey, u64>, id: u64, inc: bool): Option<u64> {
+    let probe = copy_key(id);
+    let out = m.find_next_by!(&probe, inc, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+public fun ck2_fprev(m: &SortedMap<CopyKey, u64>, id: u64, inc: bool): Option<u64> {
+    let probe = copy_key(id);
+    let out = m.find_prev_by!(&probe, inc, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+public fun ck2_nxt(m: &SortedMap<CopyKey, u64>, id: u64): Option<u64> {
+    let probe = copy_key(id);
+    let out = m.next_key_by!(&probe, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+public fun ck2_prv(m: &SortedMap<CopyKey, u64>, id: u64): Option<u64> {
+    let probe = copy_key(id);
+    let out = m.prev_key_by!(&probe, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+public fun ck2_kfrom(m: &SortedMap<CopyKey, u64>, from: u64, inc: bool, lim: u64): vector<u64> {
+    let probe = copy_key(from);
+    let out = m.keys_from_by!(&probe, inc, lim, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
+    probe.copy_key_unwrap();
+    out
+}
+
+// === Thin wrappers - SortedMap<DropKey, u64>: upsert needs `drop`, not `copy` ===
+//
+// DropKey has `drop` but not `copy`: `upsert` drops the displaced key (needs `drop`), so it
+// compiles here; the key-copying ops do NOT (need `copy` - see the type_tests negatives). A
+// `drop` key needs no manual disposal.
+
+public fun dk_upsert(m: &mut SortedMap<DropKey, u64>, id: u64, v: u64): Option<u64> {
+    m.upsert_by!(drop_key(id), v, |a, b| a.id < b.id)
+}
+
+public fun dk_get(m: &SortedMap<DropKey, u64>, id: u64): u64 {
+    *m.borrow_by!(&drop_key(id), |a, b| a.id < b.id)
+}
+
+/// Returns the removed value; the removed `drop` key is dropped, no disposal needed.
+public fun dk_remove(m: &mut SortedMap<DropKey, u64>, id: u64): u64 {
+    let (_k, v) = m.remove_by!(&drop_key(id), |a, b| a.id < b.id);
+    v
 }
 
 // === Thin wrappers - distinct instantiations coexist ===
