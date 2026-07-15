@@ -183,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "worst_z": worst_z,
         "target_error": TARGET_ERROR,
         "max_z": constants.MAX_Z,
-        "wad": str(constants.CDF_ACC_SCALE),
+        "acc_scale": str(constants.CDF_ACC_SCALE),
         "scale_decimal": str(constants.SCALE_DECIMAL),
         "num_coeffs_str": [mp.nstr(c, 30) for c in num],
         "den_coeffs_str": [mp.nstr(c, 30) for c in den],

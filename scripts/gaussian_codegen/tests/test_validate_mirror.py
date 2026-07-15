@@ -143,11 +143,11 @@ def test_cdf_simulate_matches_known_phi1(coeffs):
 
 
 def test_horner_peak_product_matches_manual():
-    # The peak product is the largest acc.mag * z.mag fed into a `// wad` step.
+    # The peak product is the largest acc.mag * z.mag fed into a `// acc_scale` step.
     # For P(z) = c0 + c1 z the only Horner step multiplies acc=c1 by z.
     z = (2 * WAD, False)
     peak = arith.horner_peak_product(z, [(3 * WAD, False), (1 * WAD, False)], WAD)
-    assert peak == (1 * WAD) * (2 * WAD)  # c1 * z, before the `// wad` divide
+    assert peak == (1 * WAD) * (2 * WAD)  # c1 * z, before the `// acc_scale` divide
 
 
 def test_check_overflow_margin_committed_cdf(coeffs):

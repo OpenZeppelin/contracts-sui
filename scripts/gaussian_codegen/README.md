@@ -216,7 +216,7 @@ strings (serialized from mpmath at 100 dps); everything else is informational.
 | `degree` / `n_coeffs` | int | Chosen polynomial degree and coefficient count |
 | `max_error` / `worst_z` | float | Worst-case error of the float fit and where it occurs |
 | `target_error` | float | The error budget the sweep had to meet |
-| `max_z` / `wad` / `scale_decimal` | str | The domain bound and scales (see `shared/constants.py`) |
+| `max_z` / `acc_scale` / `scale_decimal` | str | The domain bound and scales (see `shared/constants.py`) |
 | `num_coeffs_str` / `den_coeffs_str` | list[str] | N(z), D(z) coefficients, ascending power order |
 | `support_points` / `support_values` / `weights` | list[float] | Raw AAA barycentric form (audit aid) |
 
