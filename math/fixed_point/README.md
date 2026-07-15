@@ -137,7 +137,7 @@ and sampling. Both fixed-point types expose it:
 Properties:
 
 - **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
-  empirical worst case `~7 × 10⁻¹⁰`.
+  empirical worst case `~5 × 10⁻¹⁰`.
 - **Domain**: effective input range `|z| ≤ 6.109410205`; beyond that the result
   saturates.
 - **Saturation**: exactly `0` for `z ≤ -6.109410205` (SD29x9) and exactly `1` for
@@ -180,7 +180,7 @@ objectives, and density estimation. Both fixed-point types expose it:
 Properties:
 
 - **Accuracy**: max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `10⁹` scale);
-  empirical worst case `~6 × 10⁻¹⁰`.
+  empirical worst case `~5 × 10⁻¹⁰`.
 - **Domain**: effective input range `|z| ≤ 6.402729806`; beyond that the result
   saturates to `0`.
 - **Peak**: `φ(0) = 0.398942280` (`1/sqrt(2*pi)`), returned exactly.

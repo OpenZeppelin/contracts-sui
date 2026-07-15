@@ -170,7 +170,7 @@ public fun ceil(x: SD29x9): SD29x9 {
 ///   endpoint at the `10⁻⁹` output resolution, so the cut-off is lossless.
 /// - `Φ(0)` is exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale).
-///   Empirical worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
+///   Empirical worst-case from the committed coefficients is `~5 × 10⁻¹⁰`.
 /// - `cdf(z) + cdf(z.negate())` is exactly `1` for every input: both
 ///   evaluations share the same `Φ(|z|)` value, which the negative branch
 ///   reflects as `1 - Φ(|z|)`.
@@ -238,7 +238,7 @@ public fun cdf(z: SD29x9): SD29x9 {
 ///   which `φ` rounds to `0` at the `10⁻⁹` output resolution (`φ ≈ 5 × 10⁻¹⁰`
 ///   there), so the cut-off is lossless.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Empirical
-///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
+///   worst-case from the committed coefficients is `~5 × 10⁻¹⁰`.
 /// - Pure, deterministic, and object-free: identical inputs always produce
 ///   identical outputs; touches no storage or Sui objects.
 ///
@@ -284,10 +284,12 @@ public fun pdf(z: SD29x9): SD29x9 {
 ///   there and unrepresentable. `|z| = 6.3` lies beyond the CDF saturation bound
 ///   (`6.109410205`), so `cdf` maps both clamps back to exactly `1` and `0` - the
 ///   two functions agree at the corners.
-/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Empirical
-///   worst-case from the committed coefficients and on-chain kernels is
-///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`
-///   change of variable is most sensitive.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Across the
+///   deterministic offline validation grid, no result is more than 1 ULP from
+///   the correctly rounded output. The tail change of variable is carried at the
+///   internal `10¹⁸` accumulation scale with nearest rounding, so tail accuracy
+///   realizes the full precision of the `ln`/`sqrt` kernels rather than being
+///   floored at the `10⁻⁹` output resolution.
 /// - Near `p = 1` the quantile is intrinsically steep - the two largest
 ///   representable inputs differ by `≈ 0.11` in `z` - so a 1-ULP change in `p`
 ///   maps to a large change in `z`. This is a property of `Φ⁻¹`, not the
