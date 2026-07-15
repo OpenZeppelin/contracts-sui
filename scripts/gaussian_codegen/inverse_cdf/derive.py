@@ -99,6 +99,15 @@ ROUNDING_FINE_MAX_FUNCTION_EVALUATIONS = 120
 # Tail candidate optimized for the correctly-rounded output count after the
 # WAD-scale, nearest-rounded change of variable. The strings are exact at WAD
 # and reproduce the stored u128 magnitudes without a float conversion.
+#
+# Provenance: generated offline by the count-targeted refinement in
+# `shared/rounding_optimize.py` (the same candidate generator `refine_central_fit`
+# uses), seeded from the tail AAA fit over [R_MIN, R_MAX], then pinned here
+# instead of re-derived each run. `deployed_tail_fit` re-validates them every run
+# (continuous error vs `TARGET_ERROR`, sign, u128 width) and `validate.py`
+# re-checks the exact-mirror, monotonicity, and saturation gates. Regenerate when
+# R_MIN, R_MAX, or TARGET_ERROR change: re-run that refinement over the tail
+# region and replace these literals with the winner, keeping every gate green.
 DEPLOYED_TAIL_NUMERATOR = [
     "-3.0943397105617336",
     "-6.207376019943557",
@@ -369,7 +378,11 @@ def refine_central_fit(fit: dict, region: Region) -> dict:
 
 
 def deployed_tail_fit(seed: dict, region: Region) -> dict:
-    """Validate and select the WAD-transform tail candidate."""
+    """Validate and select the WAD-transform tail candidate.
+
+    The candidate is pinned in the `DEPLOYED_TAIL_NUMERATOR` /
+    `DEPLOYED_TAIL_DENOMINATOR` literals above; see that comment for its
+    provenance and how to regenerate it."""
     num = [mpf(c) for c in DEPLOYED_TAIL_NUMERATOR]
     den = [mpf(c) for c in DEPLOYED_TAIL_DENOMINATOR]
     err, worst_x, min_abs_d = measure_error(num, den, region)

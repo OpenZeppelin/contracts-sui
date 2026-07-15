@@ -67,7 +67,7 @@ the number of inputs that cross the wrong output boundary. After AAA, the CDF,
 PDF, and inverse-CDF central fits are therefore refined in a conditioned
 Chebyshev basis with staged continuous-error and direct rounding-cell objectives,
 sampled uniformly over representable raw inputs. In the generated candidates
-this lowers the sampled mis-rounded population while keeping degree, storage,
+this lowers the sampled incorrectly-rounded population while keeping degree, storage,
 API, and evaluator unchanged. AAA and the optimizers ship in SciPy; the
 high-precision reference math uses `mpmath`. None of this runs on-chain.
 
@@ -234,6 +234,7 @@ significant digits.
 |-----|------|---------|
 | `degree` / `n_coeffs` | int | Chosen polynomial degree and coefficient count |
 | `max_error` / `worst_z` (`worst_x` by region) | float | Maximum error on the continuous validation grid and where it occurs |
+| `min_abs_d` | float | Per region: the smallest denominator magnitude `abs(D(x))` seen on that region's validation grid. Top level: the anti-underflow acceptance threshold (`MIN_ABS_D`) the fit had to clear |
 | `target_error` | float | The error budget the sweep had to meet |
 | `max_z` / `wad` / `scale_decimal` | str | The domain bound and scales (see `shared/constants.py`) |
 | `num_coeffs_str` / `den_coeffs_str` | list[str] | N(z), D(z) coefficients, ascending power order |
