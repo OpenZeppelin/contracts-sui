@@ -5,9 +5,8 @@
 /// APIs live in `sd29x9_base::cdf` and `ud30x9_base::cdf`, which call
 /// `cdf_nonneg_raw` here.
 ///
-/// Forward-compat: `pdf` and `inverse_cdf` get their own sibling modules
-/// (`pdf.move`, `inverse_cdf.move`), each importing only its own coefficient
-/// table and reusing `horner` unchanged.
+/// The sibling evaluators `pdf` and `inverse_cdf` follow the same pattern: each
+/// imports only its own coefficient table and reuses `horner` unchanged.
 module openzeppelin_fp_math::cdf;
 
 use openzeppelin_fp_math::cdf_coefficients;
@@ -140,8 +139,9 @@ fun eval_rational(
         d.mag(),
         rounding::nearest(),
     ).destroy_some();
-    // Last-ULP overshoot guard: rounding can produce ONE_RAW + 1 raw at z just
-    // below max_z; clamp to keep the output a valid probability.
+    // Overshoot guard: unreachable for the committed coefficients (N(z) < D(z)
+    // throughout the central domain, so the rounded ratio never exceeds ONE_RAW);
+    // kept as defense-in-depth against a future coefficient regeneration.
     if (phi_raw_u256 > (ONE_RAW as u256)) ONE_RAW
     else (phi_raw_u256 as u128)
 }
