@@ -36,7 +36,7 @@ const ELogUndefined: vector<u8> = "Logarithm is undefined: input must be strictl
 
 /// `cdf_nonneg_raw` returned a value below `Φ(0) = 0.5`, which would make the
 /// negative-input sign-flip subtraction `10^9 - phi` produce a result greater
-/// than `0.5`. Defense-in-depth against an AAA-fit regression.
+/// than `0.5`. Defense-in-depth against a regression in the generated fit.
 #[error(code = 5)]
 const EInternalNegSubUnderflow: vector<u8> =
     "CDF sign-flip subtraction underflowed: internal evaluation returned a value below 0.5";
@@ -152,7 +152,7 @@ public fun ceil(x: SD29x9): SD29x9 {
 /// Standard-normal cumulative distribution function `Φ(z)`.
 ///
 /// Returns the probability `Φ(z) ∈ [0, 1]` represented as a non-negative
-/// `SD29x9`. The implementation evaluates an AAA-rational approximation
+/// `SD29x9`. The implementation evaluates a rounding-aware rational approximation
 /// `N(|z|) / D(|z|)` at the internal accumulation scale (`10^36`) via Horner's
 /// method on a sign-magnitude `u256` accumulator; the final ratio is cast back
 /// to `SD29x9` (`10^9`) in a single nearest-rounding step. Negative inputs
@@ -200,7 +200,7 @@ public fun cdf(z: SD29x9): SD29x9 {
     let Components { mag, neg } = decompose(z.unwrap());
     let phi = cdf_nonneg_raw(mag as u128);
     let raw = if (neg) {
-        // Defense-in-depth: the AAA fit's `Φ(z) ≥ 0.5` mathematical
+        // Defense-in-depth: the generated rational fit's `Φ(z) ≥ 0.5` mathematical
         // contract is what makes `common::scale!() - phi` safe here.
         assert!(phi >= half_raw(), EInternalNegSubUnderflow);
         common::scale!() - phi
@@ -216,7 +216,7 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// non-negative `SD29x9`, where the peak is `φ(0) = 0.398942280`. `φ` is even,
 /// so the magnitude `|z|` is taken first and the unsigned evaluator
 /// `pdf_nonneg_raw` is applied to it - there is no reflection or sign-flip. The
-/// evaluator computes an AAA-rational approximation `N(|z|) / D(|z|)` at the
+/// evaluator computes a rounding-aware rational approximation `N(|z|) / D(|z|)` at the
 /// internal accumulation scale (`10^36`) via Horner's method on a sign-magnitude
 /// `u256` accumulator, rounding the ratio back to `SD29x9` (`10^9`) in a single
 /// nearest-rounding step.
@@ -266,7 +266,7 @@ public fun pdf(z: SD29x9): SD29x9 {
 /// Returns the signed value `z` with `Φ(z) = p`, represented as `SD29x9`. For
 /// `p ≥ 0.5` the result is non-negative; for `p < 0.5` the reflection identity
 /// `Φ⁻¹(p) = -Φ⁻¹(1 - p)` produces a negative `z`. The upper half is evaluated by
-/// a two-region AAA-rational approximation (a rational in `u = p - 0.5` near the
+/// a two-region rounding-aware rational approximation (a rational in `u = p - 0.5` near the
 /// center, and one in `r = sqrt(-2 * ln(1 - p))` in the tail) at WAD scale via
 /// Horner's method on a sign-magnitude `u256` accumulator, rounded back to
 /// `SD29x9` (`10^9`) in a single nearest-rounding step.

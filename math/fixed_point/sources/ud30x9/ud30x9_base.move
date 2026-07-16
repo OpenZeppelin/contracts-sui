@@ -142,7 +142,7 @@ public fun abs(x: UD30x9): UD30x9 {
 ///
 /// Returns the probability `Φ(z) ∈ [0.5, 1]` represented as `UD30x9`. Since
 /// `UD30x9` inputs are inherently non-negative, the output is always at least
-/// `0.5`. The implementation evaluates an AAA-rational approximation
+/// `0.5`. The implementation evaluates a rounding-aware rational approximation
 /// `N(z) / D(z)` at the internal accumulation scale (`10^36`) via Horner's
 /// method on a sign-magnitude `u256` accumulator; the final ratio is cast back
 /// to `UD30x9` (`10^9`) in a single nearest-rounding step.
@@ -189,7 +189,7 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///
 /// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` represented
 /// as `UD30x9`, where the peak is `φ(0) = 0.398942280`. The implementation
-/// evaluates an AAA-rational approximation `N(z) / D(z)` at the internal
+/// evaluates a rounding-aware rational approximation `N(z) / D(z)` at the internal
 /// accumulation scale (`10^36`) via Horner's method on a sign-magnitude `u256`
 /// accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a single
 /// nearest-rounding step.
@@ -237,7 +237,7 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// `UD30x9` is unsigned, only the upper half of the distribution is representable:
 /// `p` must be at least `0.5` (`Φ(0)`). For the full range including negative `z`,
 /// use `SD29x9::inverse_cdf`. The implementation evaluates a two-region
-/// AAA-rational approximation (a rational in `u = p - 0.5` near the center, and
+/// rounding-aware rational approximation (a rational in `u = p - 0.5` near the center, and
 /// one in `r = sqrt(-2 * ln(1 - p))` in the tail) at WAD scale via Horner's method
 /// on a sign-magnitude `u256` accumulator, rounded back to `UD30x9` (`10^9`) in a
 /// single nearest-rounding step.

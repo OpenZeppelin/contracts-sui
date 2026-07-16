@@ -290,9 +290,9 @@ Complete, compilable integration examples live in [`examples/`](examples):
 ## Generated code
 
 The standard-normal CDF (`cdf`), PDF (`pdf`), and quantile (`inverse_cdf`) are
-backed by AAA-rational approximations whose coefficients and test vectors are
-generated offline and must **not** be hand-edited (each carries an
-`AUTO-GENERATED` banner):
+backed by fixed-degree rational approximations seeded by AAA and refined for
+fixed-point rounding. Their coefficients and test vectors are generated offline
+and must **not** be hand-edited (each carries an `AUTO-GENERATED` banner):
 
 - `sources/internal/cdf_coefficients.move`
 - `sources/internal/pdf_coefficients.move`
