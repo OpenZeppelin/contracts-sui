@@ -11,7 +11,7 @@ use openzeppelin_timelock::example_dual_governance::{
     EXAMPLE_DUAL_GOVERNANCE,
     ProposerRole,
     ExecutorRole,
-    EmergencyRole
+    EmergencyRole,
 };
 use openzeppelin_timelock::timelock::{Self, Timelock};
 use std::unit_test::assert_eq;
