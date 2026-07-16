@@ -1016,12 +1016,12 @@ public fun set_per_buyer_cap<
 ///
 /// #### Parameters
 /// - `sale`: The sale to configure, in `Init` phase.
-/// - `schedule`: The issuer-defined vesting schedule. Constructing a
-///   `VestingSchedule<VestingWitness, VestingScheduleParams>` requires a value of
-///   `VestingWitness`; for a genuine curve witness (a `drop` type whose declaring module
-///   is its sole constructor) this means only the curve module can mint schedules.
-///   Accepting the bundle also enforces witness/params coherence: an incoherent pairing
-///   has no inhabitant and fails to compile. The carried schedule is stored on the sale.
+/// - `schedule`: The issuer-defined vesting schedule, minted by the curve module that
+///   owns `VestingWitness`. Because only that module can construct a
+///   `VestingSchedule<VestingWitness, VestingScheduleParams>`, the witness and params
+///   pinned in the sale's type are guaranteed to form a coherent pair - an incoherent
+///   pairing has no value to pass here and fails to compile. The schedule bundle is
+///   stored on the sale.
 ///
 /// #### Aborts
 /// - `ENotInit` if the sale is not in `Init` phase.
