@@ -114,11 +114,13 @@ fun create_sale_initializes_in_init_phase() {
     assert!(sale.vesting_schedule_params().is_none());
     assert_eq!(cap.cap_sale_id(), object::id(&sale));
 
-    let created = event::events_by_type<prefunded_sale::SaleCreated<FrcParams, SALE, USDC>>();
+    let created = event::events_by_type<
+        prefunded_sale::SaleCreated<SALE, USDC, FixedRateCurve, FrcParams>,
+    >();
     assert_eq!(created.length(), 1);
     assert_eq!(
         created[0],
-        prefunded_sale::test_new_sale_created<FrcParams, SALE, USDC>(
+        prefunded_sale::test_new_sale_created<SALE, USDC, FixedRateCurve, FrcParams>(
             object::id(&sale),
             1_000,
             500,
@@ -273,12 +275,12 @@ fun set_vesting_schedule_params_fills_option() {
     assert!(sale.vesting_schedule_params().is_some());
 
     let set = event::events_by_type<
-        prefunded_sale::VestingScheduleParamsSet<SALE, USDC, VParams>,
+        prefunded_sale::VestingScheduleParamsSet<SALE, USDC, Linear, VParams>,
     >();
     assert_eq!(set.length(), 1);
     assert_eq!(
         set[0],
-        prefunded_sale::test_new_vesting_schedule_params_set<SALE, USDC, VParams>(
+        prefunded_sale::test_new_vesting_schedule_params_set<SALE, USDC, Linear, VParams>(
             object::id(&sale),
             vesting_wallet_linear::params(0, 0, 1_000, 4),
         ),

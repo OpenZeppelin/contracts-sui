@@ -533,7 +533,18 @@ public enum CancelReason has copy, drop, store {
 // === Events ===
 
 /// Emitted by `create_sale` when a sale is created.
-public struct SaleCreated<CurveParams, phantom SaleCoin, phantom PaymentCoin> has copy, drop {
+///
+/// The `Curve` witness is carried as a phantom parameter so the emitted type tag
+/// names the module that prices the sale, not just the `CurveParams` payload it
+/// interprets. An event-only consumer can then filter on a specific curve
+/// implementation directly, without reading the sale object to learn which module
+/// enforces `curve_params`.
+public struct SaleCreated<
+    phantom SaleCoin,
+    phantom PaymentCoin,
+    phantom Curve,
+    CurveParams,
+> has copy, drop {
     sale_id: ID,
     hard_cap: u64,
     soft_cap: u64,
@@ -556,10 +567,17 @@ public struct PerBuyerCapSet<phantom SaleCoin, phantom PaymentCoin> has copy, dr
 }
 
 /// Emitted by `set_vesting_schedule_params` when a vesting policy is attached.
+///
+/// The `VestingWitness` is carried as a phantom parameter so the emitted type tag
+/// names the schedule witness that gates release, not just the `VestingScheduleParams`
+/// payload it interprets. An event-only consumer can then filter on a specific vesting
+/// implementation directly, without reading the sale object to learn which module
+/// enforces the schedule.
 public struct VestingScheduleParamsSet<
     phantom SaleCoin,
     phantom PaymentCoin,
-    VestingScheduleParams: copy + drop,
+    phantom VestingWitness,
+    VestingScheduleParams,
 > has copy, drop {
     sale_id: ID,
     params: VestingScheduleParams,
@@ -723,7 +741,7 @@ public fun create_sale<
     let sale_id = object::id(&sale);
     let cap = SaleAdminCap<SaleCoin, PaymentCoin> { id: object::new(ctx), sale_id };
 
-    event::emit(SaleCreated<CurveParams, SaleCoin, PaymentCoin> {
+    event::emit(SaleCreated<SaleCoin, PaymentCoin, Curve, CurveParams> {
         sale_id,
         hard_cap,
         soft_cap,
@@ -856,7 +874,12 @@ public fun set_vesting_schedule_params<
     assert!(sale.phase.is_init(), ENotInit);
     assert!(sale.vesting_schedule_params.is_none(), EVestingScheduleAlreadySet);
     sale.vesting_schedule_params.fill(params);
-    event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
+    event::emit(VestingScheduleParamsSet<
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    > {
         sale_id: object::id(sale),
         params,
     });
@@ -2468,14 +2491,14 @@ fun claim_all_internal<
 
 /// Build a `SaleCreated` event value for asserting against `event::events_by_type`.
 #[test_only]
-public fun test_new_sale_created<CurveParams: copy + drop, SaleCoin, PaymentCoin>(
+public fun test_new_sale_created<SaleCoin, PaymentCoin, Curve: drop, CurveParams: copy + drop>(
     sale_id: ID,
     hard_cap: u64,
     soft_cap: u64,
     opens_at_ms: u64,
     closes_at_ms: u64,
     curve_params: CurveParams,
-): SaleCreated<CurveParams, SaleCoin, PaymentCoin> {
+): SaleCreated<SaleCoin, PaymentCoin, Curve, CurveParams> {
     SaleCreated { sale_id, hard_cap, soft_cap, opens_at_ms, closes_at_ms, curve_params }
 }
 
@@ -2504,11 +2527,12 @@ public fun test_new_per_buyer_cap_set<SaleCoin, PaymentCoin>(
 public fun test_new_vesting_schedule_params_set<
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop,
 >(
     sale_id: ID,
     params: VestingScheduleParams,
-): VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
+): VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams> {
     VestingScheduleParamsSet { sale_id, params }
 }
 
