@@ -44,10 +44,14 @@
 /// If the consumer loses the `AllowlistAdmin<S>` (sends to a
 /// non-existent address, transfers to `0x0`, etc.), the sale becomes
 /// uncompletable: no entries can be minted, and any sale that has
-/// `requires_allowlist == true` aborts every `purchase` call. There is
-/// no library override - that would be a centralization vector. Hold
-/// the admin in an access-controlled wrapper that the operator can
-/// recover from.
+/// `requires_allowlist == true` aborts every `purchase` call. Worse, if
+/// the sale has already met its soft cap (but not its hard cap), the loss
+/// locks money already taken - the payments in the sale's proceeds, every
+/// buyer's allocation, and the issuer's own unsold inventory - until the
+/// purchase window closes, because until then no admin path can finalize
+/// or cancel the sale. There is no library override - that would be a
+/// centralization vector. Hold the admin in an access-controlled wrapper
+/// that the operator can recover from.
 module openzeppelin_sale::allowlist;
 
 // === Errors ===
