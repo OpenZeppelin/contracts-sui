@@ -57,13 +57,13 @@ fun drain_earliest_first() {
     scenario.end();
 }
 
-// === Scenario 4 - the library's ONE abort: pop on an empty set ===
+// === Scenario 4 - processing an empty queue aborts at the set ===
 //
-// `pop_front`/`pop_back` are the only operations in the whole library that abort, and only on an
-// EMPTY set (`EEmpty`). The set asserts its OWN `EEmpty` (code 0) BEFORE delegating to the wrapped
-// map, so the abort surfaces at `location = openzeppelin_collections::sorted_set`. Pinning the
-// wrapped map's location (`openzeppelin_collections::sorted_map`, code 2) here would make this test
-// FAIL - that branch is never reached through the set's own `pop_*`.
+// This scenario isolates the queue's empty-pop path (`EEmpty`). The set asserts its OWN `EEmpty`
+// (code 0) BEFORE delegating to the wrapped map, so the abort surfaces at
+// `location = openzeppelin_collections::sorted_set`. Pinning the wrapped map's location
+// (`openzeppelin_collections::sorted_map`, code 2) here would make this test FAIL - that branch is
+// never reached through the set's own `pop_*`.
 #[test, expected_failure(abort_code = ss::EEmpty, location = ss)]
 fun process_empty_queue_aborts() {
     let mut scenario = ts::begin(ALICE);

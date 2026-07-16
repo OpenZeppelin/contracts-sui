@@ -26,7 +26,8 @@
 /// - **Five aborts:** `pop_front` / `pop_back` on an empty set (`EEmpty`), `remove!` on an absent
 ///   key (`sorted_map::EKeyNotFound`), `add!` / `add_by!` on a duplicate key
 ///   (`sorted_map::EKeyAlreadyExists`), `from_sorted_keys!` on unsorted input (`EKeysNotSorted`),
-///   and `destroy_empty` on a non-empty set (`ENotEmpty`); every other op is total.
+///   and `destroy_empty` on a non-empty set (`ENotEmpty`); every other supported op is total
+///   provided the caller-supplied comparator does not itself abort.
 ///
 /// # The comparator
 ///
@@ -56,8 +57,9 @@
 ///
 /// Costs mirror `SortedMap`, which the set wraps: O(log N) membership, O(N) insert and remove, one
 /// object loaded per call, and the same ~250 KB object-size ceiling. `pop_front` is O(N) - it
-/// shifts every remaining key - while `pop_back` is O(1). `from_keys!` is O(N^2) (a search per
-/// key); `from_sorted_keys!` skips the search on pre-sorted input, building in O(N).
+/// shifts every remaining key - while `pop_back` is O(1). `from_keys!` is O(N^2) in the worst
+/// case: each upsert does a logarithmic search, then can shift a linear suffix.
+/// `from_sorted_keys!` validates once and appends pre-sorted input, building in O(N).
 ///
 /// The set's `_by` macros expand the map's `search!` inline. A single function with many distinct
 /// macro calls can therefore hit Move's ~256 local-variable limit (compiler error `value (N)
@@ -122,8 +124,9 @@ public struct Unit has copy, drop, store {}
 /// with a `copy + drop + store` key it is `copy + drop + store`; with a non-`drop` (e.g.
 /// resource) key it is store-only and must be `destroy_empty`'d, like `SortedMap<K, Coin<T>>`.
 ///
-/// Across every public operation, by delegation to the inner map, the keys are strictly
-/// increasing under the (consistently supplied) comparator: sorted, no duplicates.
+/// Across the supported macro API, by delegation to the inner map, the keys are strictly
+/// increasing under the consistently supplied comparator: sorted, no duplicates. The
+/// forced-public internals described above can bypass this guarantee and are not supported.
 public struct SortedSet<K> has copy, drop, store {
     /// Backing map: every key is a set member; every value is the inert `Unit` marker.
     inner: SortedMap<K, Unit>,
@@ -220,9 +223,9 @@ public fun assert_sorted(sorted: bool) {
 /// instead, build then `assert!(length(&s) == keys.length(), E)`.
 ///
 /// Under a coarse `_by` comparator, byte-distinct compare-equal keys collapse to one
-/// element keeping the last one's bytes (each re-insert is a last-write-wins upsert). Drives the
-/// inserts via a `do!` loop body (one reused expansion), never a straight-line sequence, to stay
-/// under Move's locals limit.
+/// element keeping the last one's bytes (each re-insert is a last-write-wins upsert). Uses a
+/// `fold!` loop body (one reused expansion), never a straight-line sequence, to stay under Move's
+/// locals limit.
 ///
 /// #### Parameters
 /// - `keys`: Keys to insert; duplicates are collapsed.
@@ -619,11 +622,15 @@ public macro fun prev_key<$K: copy>($set: &SortedSet<$K>, $key: &$K): Option<$K>
 
 // === Bounded iteration / pagination (macros: bare + `_by`) ===
 
-/// Up to `limit` keys in strict ascending order - a contiguous run starting at the first
-/// key `>= from` (when `include`) or `> from` (strict); fewer than `limit` only at the
-/// tail. Resume a page by passing the last returned key back as `from` with `include ==
-/// false`: successive pages have no overlap and no gap. `limit == 0`, an empty set, or
-/// `from` past the tail all yield the empty vector.
+/// Up to `limit` keys in strict ascending order - a contiguous run starting at the first key
+/// `>= from` (when `include`) or `> from` (strict); fewer than `limit` if the current tail is
+/// reached. Resume a page by passing the last returned key back as `from` with `include == false`.
+/// While the ordered key set is unchanged, successive pages have no overlap or gap. A cursor reused
+/// after a key-set mutation has keyset semantics: each call reads the keys currently after `from`.
+/// Keys inserted at or before the cursor are skipped, keys inserted after it can appear, and
+/// removed keys do not appear. With a positive `limit`, an empty page means no key follows the
+/// cursor at that moment, not that a persisted scan is permanently complete. `limit == 0`, an
+/// empty set, or `from` past the current tail yields the empty vector.
 ///
 /// #### Parameters
 /// - `set`: The set to read.

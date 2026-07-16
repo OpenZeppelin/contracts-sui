@@ -17,8 +17,8 @@
 /// - **Bare vs `_by`.** Bare ops (`upsert`, `borrow!`) assume the built-in integer `<` and
 ///   compile only for integer keys; `_by` ops take your `lt` lambda and are required for
 ///   `address`, struct, or any non-integer key.
-/// - **Resource values must be drained.** `SortedMap<K, Coin<T>>` is store-only: it cannot be
-///   dropped, so empty it and then `destroy_empty`.
+/// - **Non-droppable entries must be drained.** If either `K` or `V` lacks `drop`, the map cannot
+///   be dropped. Remove every entry, consume both returned parts, and then call `destroy_empty`.
 /// - **Bounded by object size.** O(log N) lookup, O(N) insert/remove, one object loaded per
 ///   call - so the only ceiling is Sui's ~250 KB object cap.
 ///
@@ -26,8 +26,7 @@
 ///
 /// Move has no storable function values, so the comparator can't live in the struct - and a
 /// phantom witness couldn't validate the actual `lt` passed at runtime anyway. Move also has no
-/// standard ordering trait. `std::compare` orders by BCS bytes, not semantic value. So ordering
-/// is a lambda you supply, not a property of `K`.
+/// standard ordering trait, so ordering is a lambda you supply, not a property of `K`.
 ///
 /// You pass a strict less-than; equality is derived as `!lt(a, b) && !lt(b, a)`. It MUST be a
 /// strict total order (irreflexive, asymmetric, transitive, total) and MUST be the same on every
@@ -108,7 +107,9 @@ const EKeyAlreadyExists: vector<u8> = "Key already exists";
 /// Abilities materialize jointly over `K` and `V`: `Entry<u64, u64>` is `copy + drop +
 /// store`, while `Entry<u64, Coin<T>>` is store-only.
 public struct Entry<K, V> has copy, drop, store {
+    /// The entry's key.
     key: K,
+    /// The entry's value.
     value: V,
 }
 
@@ -156,9 +157,9 @@ public fun singleton<K, V>(key: K, value: V): SortedMap<K, V> {
 
 /// Destroy an empty map.
 ///
-/// This is the only terminal for a map whose value type lacks `drop` (e.g.
-/// `SortedMap<K, Coin<T>>`): drain every value via `remove`/`pop_*` first, then call
-/// this.
+/// This is the terminal for a map whose key or value type lacks `drop` (for example,
+/// `SortedMap<K, Coin<T>>`). Drain every entry via `remove` or `pop_*`, consume both the returned
+/// key and value, and then call this function.
 ///
 /// #### Aborts
 /// - `ENotEmpty` if the map still holds entries.
@@ -257,7 +258,8 @@ public fun value<K, V>(e: &Entry<K, V>): &V {
 /// - `i`: Insertion index.
 ///
 /// #### Aborts
-/// - Native out-of-bounds abort inside `std::vector` if `i > length`.
+/// - `std::vector::EINDEX_OUT_OF_BOUNDS` (code `0x20000`, location `std::vector`) if
+///   `i > length`.
 public fun insert_at<K, V>(map: &mut SortedMap<K, V>, key: K, value: V, i: u64) {
     map.entries.insert(Entry { key, value }, i);
 }
@@ -272,7 +274,8 @@ public fun insert_at<K, V>(map: &mut SortedMap<K, V>, key: K, value: V, i: u64) 
 /// - The (key, value) pair at index `i`.
 ///
 /// #### Aborts
-/// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
+/// - `std::vector::EINDEX_OUT_OF_BOUNDS` (code `0x20000`, location `std::vector`) if
+///   `i >= length`.
 public fun remove_at<K, V>(map: &mut SortedMap<K, V>, i: u64): (K, V) {
     let Entry { key, value } = map.entries.remove(i);
     (key, value)
@@ -288,7 +291,7 @@ public fun remove_at<K, V>(map: &mut SortedMap<K, V>, i: u64): (K, V) {
 /// - Reference to the value at index `i`.
 ///
 /// #### Aborts
-/// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
+/// - A native vector bounds error (`vector_error`, minor status 1) if `i >= length`.
 public fun value_at<K, V>(map: &SortedMap<K, V>, i: u64): &V {
     &map.entries.borrow(i).value
 }
@@ -304,7 +307,7 @@ public fun value_at<K, V>(map: &SortedMap<K, V>, i: u64): &V {
 /// - Mutable reference to the value at index `i`.
 ///
 /// #### Aborts
-/// - Native out-of-bounds abort inside `std::vector` if `i >= length`.
+/// - A native vector bounds error (`vector_error`, minor status 1) if `i >= length`.
 public fun value_at_mut<K, V>(map: &mut SortedMap<K, V>, i: u64): &mut V {
     &mut map.entries.borrow_mut(i).value
 }
@@ -668,7 +671,8 @@ public macro fun upsert<$K: drop, $V>(
     upsert_by!($map, $key, $value, |a, b| *a < *b)
 }
 
-/// Remove `key`'s entry and return its value, under `$lt` (length - 1, order preserved).
+/// Remove `key`'s entry and return its `(key, value)` pair, under `$lt` (length - 1, order
+/// preserved).
 ///
 /// Uses a shifting `vector::remove`, never `swap_remove`, which would break strict order.
 ///
@@ -870,10 +874,14 @@ public macro fun prev_key<$K: copy, $V>($map: &SortedMap<$K, $V>, $key: &$K): Op
 /// key `>= from` (when `include`) or `> from` (strict). Returns at most `limit` keys;
 /// fewer if the tail is reached.
 ///
-/// Resume a page by passing the last returned key back as `from` with `include == false`:
-/// successive pages have no overlap and no gap, so concatenating them reconstructs the
-/// tail exactly. `limit == 0`, an empty map, or `from` past the tail all yield the empty
-/// vector.
+/// Resume a page by passing the last returned key back as `from` with `include == false`.
+/// While the ordered key set is unchanged, successive pages have no overlap or gap, so
+/// concatenating them reconstructs the tail exactly. A cursor reused after a key-set mutation has
+/// keyset semantics: each call reads the keys currently after `from`. Keys inserted at or before
+/// the cursor are skipped, keys inserted after it can appear, and removed keys do not appear. With
+/// a positive `limit`, an empty page means no key follows the cursor at that moment, not that a
+/// persisted scan is permanently complete. `limit == 0`, an empty map, or `from` past the current
+/// tail all yield the empty vector.
 ///
 /// #### Parameters
 /// - `map`: The map to read.
@@ -938,7 +946,8 @@ public macro fun keys_from<$K: copy, $V>(
 /// #### Aborts
 /// - `EEmpty` if the map is empty.
 public fun pop_front<K, V>(map: &mut SortedMap<K, V>): (K, V) {
-    // Check first: `remove(0)` on an empty vector would abort with a native code, not `EEmpty`.
+    // Check first: `remove(0)` on an empty vector would abort with
+    // `std::vector::EINDEX_OUT_OF_BOUNDS` (code `0x20000`), not `EEmpty`.
     assert!(!map.is_empty(), EEmpty);
     let Entry { key, value } = map.entries.remove(0);
     (key, value)
@@ -952,7 +961,8 @@ public fun pop_front<K, V>(map: &mut SortedMap<K, V>): (K, V) {
 /// #### Aborts
 /// - `EEmpty` if the map is empty.
 public fun pop_back<K, V>(map: &mut SortedMap<K, V>): (K, V) {
-    // Check first: `pop_back` on an empty vector would abort with a native code, not `EEmpty`.
+    // Check first: `pop_back` on an empty vector would raise a native vector bounds error
+    // (`vector_error`, minor status 2), not `EEmpty`.
     assert!(!map.is_empty(), EEmpty);
     let Entry { key, value } = map.entries.pop_back();
     (key, value)

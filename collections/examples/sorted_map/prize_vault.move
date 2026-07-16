@@ -99,7 +99,7 @@ public fun fund(vault: &mut PrizeVault, cap: &OrganizerCap, coin: Coin<SUI>, ran
 ///
 /// #### Aborts
 /// - `EWrongVault` if `cap` does not authorize `vault`.
-/// - `EEmpty` if the vault is empty.
+/// - `sorted_map::EEmpty` if the vault is empty.
 public fun pay_next(vault: &mut PrizeVault, cap: &OrganizerCap): (u64, Coin<SUI>) {
     assert_cap(vault, cap);
     vault.prizes.pop_front()
@@ -129,11 +129,11 @@ public fun unclaimed(vault: &PrizeVault): u64 {
 ///
 /// #### Aborts
 /// - `EWrongVault` if `cap` does not authorize `vault`.
-/// - `ENotEmpty` if any prize is still unclaimed.
+/// - `sorted_map::ENotEmpty` if any prize is still unclaimed.
 public fun close(vault: PrizeVault, cap: OrganizerCap) {
     assert_cap(&vault, &cap);
     let PrizeVault { id, prizes } = vault;
-    prizes.destroy_empty(); // ENotEmpty here if prizes remain
+    prizes.destroy_empty(); // `sorted_map::ENotEmpty` here if prizes remain
     id.delete();
     let OrganizerCap { id: cap_id, vault: _ } = cap;
     cap_id.delete();
