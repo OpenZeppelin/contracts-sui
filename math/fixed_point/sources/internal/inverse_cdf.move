@@ -6,9 +6,14 @@
 /// `ud30x9_base::inverse_cdf`, which call `inverse_cdf_upper_raw` here and (for
 /// the signed variant) reflect `p < 0.5` via `Φ⁻¹(p) = -Φ⁻¹(1 - p)`.
 ///
-/// A single rational in `p` cannot be evaluated in fixed point near `p = 1` (its
-/// numerator and denominator both collapse toward zero and underflow the WAD
-/// scale). So the upper half is split, exactly like Acklam/AS241:
+/// A single rational in `p` cannot cover the whole upper half: `Φ⁻¹(p) → +∞` as
+/// `p → 1`, and no low-degree rational in `p` tracks that ever-steepening tail
+/// accurately. Chasing the blow-up forces a direct fit's denominator into a
+/// near-pole: `D(p)` collapses toward zero near `p = 1` - dragging the numerator
+/// down with it, since the fitted ratio stays moderate - and both underflow the
+/// WAD scale in fixed point. So the upper half is split, following the
+/// central-vs-tail scheme of Acklam/AS241 with this library's own break and
+/// fitted tables:
 /// - `p ∈ [0.5, threshold)`: a rational in `u = p - 0.5` (`central_*` table).
 /// - `p ∈ [threshold, 1)`: a rational in `r = sqrt(-2 * ln(1 - p))` (`tail_*`
 ///   table); the change of variable linearizes the tail's growth and keeps the
