@@ -24,6 +24,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - `cdf` / `pdf`: raised the internal evaluation precision to `10^36`, making both functions monotone between every pair of adjacent representable inputs, and clamped their domains to the analytic saturation points (`6.109410205` / `6.402729806`). Gas, storage, and the public API are unchanged. (#431)
 
+### `openzeppelin_sale`
+
+#### Added
+
+- `prefunded_sale` module: a fixed-price, pre-funded token sale (presale / IDO) over a fixed inventory, generic over a witness-gated pricing curve, with an `Init -> Active -> Finalized | Cancelled` lifecycle and permissionless buyer redemption (`purchase`, `finalize`, `cancel_after_close`, `claim` / `refund`). (#414)
+- `fixed_rate_curve` module: the built-in `allocation = paid * rate` curve, minting the `Quote` and `ActivationTicket` a `FixedRateCurve` sale requires. (#414)
+- `refund_vault` module: a generic refundable escrow over `Balance<P>` that holds proceeds on cancel and pays buyers back individually; usable standalone. (#414)
+
 ### `openzeppelin_collections`
 
 #### Added

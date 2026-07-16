@@ -5,6 +5,7 @@ sui.keystore
 .trace
 .coverage_map.mvcov
 traces/
+lcov.info
 
 # Local node publish artifact
 Pub.local.toml
