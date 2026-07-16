@@ -5,7 +5,7 @@ use openzeppelin_fp_math::example_compounding::{
     interest_after,
     growth_multiplier,
     compounded_factor,
-    per_period_multiplier
+    per_period_multiplier,
 };
 use openzeppelin_fp_math::ud30x9;
 use openzeppelin_fp_math::ud30x9_base;

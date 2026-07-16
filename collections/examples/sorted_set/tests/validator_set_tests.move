@@ -4,7 +4,7 @@ use openzeppelin_collections::sorted_set;
 use openzeppelin_collections::sorted_set_validator_set::{
     Self as validator_set,
     Validator,
-    ValidatorSet
+    ValidatorSet,
 };
 use std::unit_test::assert_eq;
 use sui::test_scenario as ts;
