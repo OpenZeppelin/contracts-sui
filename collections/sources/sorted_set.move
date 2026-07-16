@@ -450,7 +450,6 @@ public macro fun add<$K>($set: &mut SortedSet<$K>, $key: $K) {
 ///
 /// #### Returns
 /// - `true` iff the key was newly added, `false` if it was already present.
-#[allow(lint(unused_return_value))] // unclear why this is happening, see https://github.com/OpenZeppelin/contracts-sui/actions/runs/29492281185/job/87601046796?pr=454#step:5:17
 public macro fun upsert_by<$K: drop>(
     $set: &mut SortedSet<$K>,
     $key: $K,
