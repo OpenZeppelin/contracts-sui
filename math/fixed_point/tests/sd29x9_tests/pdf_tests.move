@@ -255,14 +255,14 @@ fun pdf_matches_offline_mirror() {
     //   `v.pdf_simulate(z_raw, *v.parse_coefficients(v.COEFF_PATH.read_text()))`.
     // Probes cover the peak (via the rational - no z = 0 special case), the smallest
     // nonzero input, interior points, the last interior ULP, and (beyond-)saturation;
-    // z_raw = 2_366_666_644 pins the on-chain arithmetic itself - the mirror yields
-    // 24_246_233 where the 100-dps oracle rounds to ...232.
+    // z_raw = 1_925_000_000 pins the on-chain arithmetic itself - the mirror yields
+    // 62_552_378 where the 100-dps oracle rounds to ...377.
     assert_eq!(pos(0).pdf().unwrap(), PDF_0_RAW); // exact peak, D(0) = 1
     assert_eq!(pos(1).pdf().unwrap(), PDF_0_RAW); // smallest nonzero input
     assert_eq!(pos(250_000_000).pdf().unwrap(), 386_668_117);
     assert_eq!(pos(1_000_000_000).pdf().unwrap(), 241_970_725);
     assert_eq!(pos(2_000_000_000).pdf().unwrap(), 53_990_967);
-    assert_eq!(pos(2_366_666_644).pdf().unwrap(), 24_246_233); // implementation-pinning
+    assert_eq!(pos(1_925_000_000).pdf().unwrap(), 62_552_378); // implementation-pinning
     assert_eq!(pos(3_500_000_000).pdf().unwrap(), 872_683);
     assert_eq!(pos(5_000_000_000).pdf().unwrap(), 1_487);
     assert_eq!(pos(MAX_Z_RAW - 1).pdf().unwrap(), 1); // last interior ULP
@@ -270,7 +270,7 @@ fun pdf_matches_offline_mirror() {
     assert_eq!(pos(7 * SCALE).pdf().unwrap(), 0); // beyond saturation
     // φ is even: the signed path feeds |z| into the same kernel, exactly.
     assert_eq!(neg(1).pdf().unwrap(), PDF_0_RAW);
-    assert_eq!(neg(2_366_666_644).pdf().unwrap(), 24_246_233);
+    assert_eq!(neg(1_925_000_000).pdf().unwrap(), 62_552_378);
     assert_eq!(neg(MAX_Z_RAW - 1).pdf().unwrap(), 1);
 }
 
