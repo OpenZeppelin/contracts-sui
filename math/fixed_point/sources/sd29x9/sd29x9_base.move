@@ -185,8 +185,8 @@ public fun ceil(x: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Does not abort for any `SD29x9` input under the committed, validated
 ///   coefficients. The implementation carries internal integrity asserts
-///   (`EInternalNegSubUnderflow` here, plus `cdf::EInternalNumNegative` /
-///   `cdf::EInternalDenNonPositive` in the evaluator) as defense-in-depth
+///   (`EInternalNegSubUnderflow` here, plus `horner::EInternalNumNegative` /
+///   `horner::EInternalDenNonPositive` in the evaluator) as defense-in-depth
 ///   against a corrupted regenerated coefficient table; these cannot fire for
 ///   the shipped coefficients.
 ///
@@ -246,7 +246,7 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Does not abort for any `SD29x9` input under the committed, validated
 ///   coefficients. The evaluator carries internal integrity asserts
-///   (`pdf::EInternalNumNegative` / `pdf::EInternalDenNonPositive`) as
+///   (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
 ///
@@ -303,7 +303,7 @@ public fun pdf(z: SD29x9): SD29x9 {
 ///
 /// #### Aborts
 /// - `EProbabilityOutOfRange` if `p` is negative or exceeds `1`.
-/// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
+/// - `horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`
 ///   (defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients).
 /// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`

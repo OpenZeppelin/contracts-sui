@@ -104,9 +104,9 @@ def pdf_simulate(
     n_acc = horner_eval(z_acc, num, ACC_SCALE)
     d_acc = horner_eval(z_acc, den, ACC_SCALE)
     if n_acc[1]:
-        raise RuntimeError(f"N negative at z_raw={z_raw} - pdf::EInternalNumNegative")
+        raise RuntimeError(f"N negative at z_raw={z_raw} - horner::EInternalNumNegative")
     if d_acc[1] or d_acc[0] == 0:
-        raise RuntimeError(f"D non-positive at z_raw={z_raw} - pdf::EInternalDenNonPositive")
+        raise RuntimeError(f"D non-positive at z_raw={z_raw} - horner::EInternalDenNonPositive")
 
     # Final ratio: phi_raw = round(N * 10^9 / D) with Nearest (half-up) rounding.
     return mul_div_nearest(n_acc[0], SCALE, d_acc[0])

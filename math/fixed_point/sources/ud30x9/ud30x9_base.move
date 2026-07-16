@@ -171,7 +171,7 @@ public fun abs(x: UD30x9): UD30x9 {
 /// #### Aborts
 /// - Does not abort for any `UD30x9` input under the committed, validated
 ///   coefficients. The evaluator carries internal integrity asserts
-///   (`cdf::EInternalNumNegative` / `cdf::EInternalDenNonPositive`) as
+///   (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
 ///
@@ -217,7 +217,7 @@ public fun cdf(z: UD30x9): UD30x9 {
 /// #### Aborts
 /// - Does not abort for any `UD30x9` input under the committed, validated
 ///   coefficients. The evaluator carries internal integrity asserts
-///   (`pdf::EInternalNumNegative` / `pdf::EInternalDenNonPositive`) as
+///   (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
 ///
@@ -269,7 +269,7 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// #### Aborts
 /// - `EProbabilityBelowHalf` if `p < 0.5` (the quantile would be negative).
 /// - `EProbabilityOutOfRange` if `p > 1`.
-/// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
+/// - `horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`
 ///   (defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients).
 /// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`
