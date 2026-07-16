@@ -4,7 +4,7 @@ use openzeppelin_access::example_operator_handoff::{Self as handoff, Service, Op
 use openzeppelin_access::two_step_transfer::{
     Self as two_step,
     TwoStepTransferWrapper,
-    PendingOwnershipTransfer,
+    PendingOwnershipTransfer
 };
 use std::unit_test::destroy;
 use sui::test_scenario as ts;

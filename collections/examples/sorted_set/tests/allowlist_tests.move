@@ -5,7 +5,7 @@ use openzeppelin_collections::sorted_set_allowlist::{
     Self as allowlist,
     Allowlist,
     Approved,
-    Revoked,
+    Revoked
 };
 use std::unit_test::assert_eq;
 use sui::event;

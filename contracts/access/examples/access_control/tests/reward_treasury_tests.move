@@ -7,7 +7,7 @@ use openzeppelin_access::example_reward_treasury::{
     DistributorRole,
     GuardianRole,
     PauserRole,
-    EXAMPLE_REWARD_TREASURY,
+    EXAMPLE_REWARD_TREASURY
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::coin;

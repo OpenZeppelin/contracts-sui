@@ -12,7 +12,7 @@ use openzeppelin_timelock::example_upgrade_vault::{
     ProposerRole,
     ExecutorRole,
     CancellerRole,
-    AdminRole,
+    AdminRole
 };
 use openzeppelin_timelock::timelock::{Self, Timelock};
 use std::unit_test::destroy;

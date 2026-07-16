@@ -57,7 +57,7 @@ use openzeppelin_finance::vesting_wallet::{
     VestingWallet,
     VestedAmount,
     DestroyReceipt,
-    DestroyCap,
+    DestroyCap
 };
 use openzeppelin_math::rounding;
 use openzeppelin_math::u64::mul_div;

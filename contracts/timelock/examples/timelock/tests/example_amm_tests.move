@@ -13,7 +13,7 @@ use openzeppelin_timelock::example_amm::{
     ExecutorRole,
     CancellerRole,
     TimelockAdminRole,
-    FeeChangeAction,
+    FeeChangeAction
 };
 use openzeppelin_timelock::timelock::{Self, Timelock};
 use std::unit_test::assert_eq;

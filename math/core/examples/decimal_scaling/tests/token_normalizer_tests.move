@@ -4,7 +4,7 @@ use openzeppelin_math::decimal_scaling;
 use openzeppelin_math::example_token_normalizer::{
     Self as ledger,
     BridgedTokenLedger,
-    LedgerAdminCap,
+    LedgerAdminCap
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::test_scenario as ts;
