@@ -32,6 +32,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `fixed_rate_curve` module: the built-in `allocation = paid * rate` curve, minting the `Quote` and `ActivationTicket` a `FixedRateCurve` sale requires. (#414)
 - `refund_vault` module: a generic refundable escrow over `Balance<P>` that holds proceeds on cancel and pays buyers back individually; usable standalone. (#414)
 
+### `openzeppelin_collections`
+
+#### Added
+
+- New `openzeppelin_collections` package: an ordered-collections family in a single package, with two modules - `sorted_map` and `sorted_set`. Both provide bare (built-in integer `<`) and `_by` (custom comparator) macro forms. (#454)
+
 ## 1.4.0 (09-07-2026)
 
 ### `openzeppelin_allowance`

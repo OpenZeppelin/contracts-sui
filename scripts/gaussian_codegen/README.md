@@ -216,7 +216,7 @@ strings (serialized from mpmath at 100 dps); everything else is informational.
 | `degree` / `n_coeffs` | int | Chosen polynomial degree and coefficient count |
 | `max_error` / `worst_z` | float | Worst-case error of the float fit and where it occurs |
 | `target_error` | float | The error budget the sweep had to meet |
-| `max_z` / `wad` / `scale_decimal` | str | The domain bound and scales (see `shared/constants.py`) |
+| `max_z` / `acc_scale` / `scale_decimal` | str | The domain bound and scales (see `shared/constants.py`) |
 | `num_coeffs_str` / `den_coeffs_str` | list[str] | N(z), D(z) coefficients, ascending power order |
 | `support_points` / `support_values` / `weights` | list[float] | Raw AAA barycentric form (audit aid) |
 
@@ -226,7 +226,7 @@ strings (serialized from mpmath at 100 dps); everything else is informational.
 gaussian_codegen/
 ├── Makefile             # install / regen / validate / check / ci / test
 ├── shared/
-│   ├── constants.py     # single source of truth: WAD scales, domain bounds
+│   ├── constants.py     # single source of truth: fixed-point scales, domain bounds
 │   ├── reference.py     # mpmath oracle: Φ, φ, and Φ⁻¹ (erfinv) at 100 dps
 │   ├── aaa.py           # AAA barycentric → N(z)/D(z) polynomial conversion
 │   ├── arithmetic.py    # integer mirror of the on-chain Horner / ln / sqrt kernels
