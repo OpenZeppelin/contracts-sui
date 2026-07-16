@@ -88,7 +88,7 @@ public fun place_bid(book: &mut OrderBook, price: u64, size: u64) {
         let lvl = book.bids.borrow_mut_by!(&price, |a, b| outbids(a, b));
         lvl.size = lvl.size + size;
     } else {
-        book.bids.upsert_by!(price, Level { size }, |a, b| outbids(a, b));
+        _ = book.bids.upsert_by!(price, Level { size }, |a, b| outbids(a, b));
     }
 }
 

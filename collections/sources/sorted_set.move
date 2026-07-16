@@ -455,7 +455,8 @@ public macro fun upsert_by<$K: drop>(
     $lt: |&$K, &$K| -> bool,
 ): bool {
     let set = $set;
-    return set.inner_mut().upsert_by!($key, unit(), $lt).is_none()
+    let res = set.inner_mut().upsert_by!($key, unit(), $lt);
+    res.is_none()
 }
 
 /// `upsert_by` with the built-in integer `<`.
