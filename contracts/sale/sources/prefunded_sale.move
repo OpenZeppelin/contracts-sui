@@ -1511,7 +1511,8 @@ public fun claim_all<
 /// `VestingWitness` with the sale's pinned witness, a buyer cannot substitute a
 /// permissive witness declared in their own package to mint a full `VestedAmount` and
 /// release the whole allocation immediately - the lockup holds. Only the module
-/// declaring the pinned `VestingWitness` can advance the returned wallet; this is a
+/// declaring the pinned `VestingWitness` can mint the `VestedAmount` that `release`
+/// requires - `release` itself stays permissionless, but is inert without one; this is a
 /// genuine lockup only when that witness is a real curve's witness (module-private
 /// constructor), which is why `create_sale` must pin one - see there.
 ///
