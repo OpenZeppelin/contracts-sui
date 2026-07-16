@@ -394,6 +394,14 @@ const ENotTerminal: vector<u8> = "The sale must have ended";
 /// `VestingWitness` can mint the `VestedAmount` that releases it - so a buyer cannot
 /// substitute a permissive witness of their own to release early. For a non-vesting
 /// sale the slot is inert (any `drop` type); no schedule is ever attached.
+///
+/// The two slots must be a coherent pair, and that coherence is **enforced**, not left
+/// to convention: `set_vesting_schedule` accepts only a
+/// `VestingSchedule<VestingWitness, VestingScheduleParams>`, and only the curve module
+/// that declares `VestingWitness` can mint one (it takes the witness by value). Naming
+/// one curve's witness with another's params therefore has no schedule value to attach
+/// and fails to compile. An integrator shipping a second curve alongside the built-in
+/// linear one does not have to keep the slots in step by hand - the compiler does.
 public struct PrefundedSale<
     phantom Curve: drop,
     CurveParams: copy + drop + store,
@@ -660,9 +668,12 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// witness/params pair of the intended schedule curve (e.g.
 /// `vesting_wallet_linear::{Linear, Params}`); `set_vesting_schedule` then
 /// attaches a concrete schedule, and `claim_into_vesting` builds the wallet under this
-/// pinned witness so the lockup cannot be bypassed. For a non-vesting sale both slots
-/// are inert - pick any `drop` witness and any `copy + drop + store` params type and
-/// never attach a schedule.
+/// pinned witness so the lockup cannot be bypassed. A mismatched choice cannot be turned
+/// into a live vesting sale: `set_vesting_schedule` accepts only a curve-minted
+/// `VestingSchedule<VestingWitness, VestingScheduleParams>`, so attaching a schedule to an
+/// incoherent pair fails to compile - such a sale can only ever redeem via plain `claim`.
+/// For a non-vesting sale both slots are inert - pick any `drop` witness and any
+/// `copy + drop + store` params type and never attach a schedule.
 ///
 /// #### Parameters
 /// - `curve_params`: The curve's stored configuration, opaque to the sale.
