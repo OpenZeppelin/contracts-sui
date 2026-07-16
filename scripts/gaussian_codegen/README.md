@@ -174,10 +174,13 @@ python -m gaussian_codegen.inverse_cdf.validate          # re-checks the committ
 
 Unlike `cdf`/`pdf`, the quantile `Φ⁻¹(p)` is fit as **two** rationals - a central
 one in `u = p - 0.5` and a tail one in `r = sqrt(-2·ln(1-p))` - because a single
-rational in `p` underflows the fixed-point evaluator near `p = 1`. The change of
-variable is the classic Acklam/AS241 split. The on-chain tail keeps the internal
-logarithm and transformed variable at `10^18`, then rounds the base conversion
-and square root to nearest before Horner evaluation. Its oracle is mpmath
+rational in `p` underflows the fixed-point evaluator near `p = 1`. The two-region
+scheme takes after Acklam/AS241 - the tail change of variable is Acklam's - but
+the split point and fitted tables are this project's own. The on-chain tail keeps
+the internal logarithm and transformed variable at `10^18`, then rounds the base
+conversion and square root to nearest before Horner evaluation. It builds those
+values from the internal `raw_log2` and `u256::sqrt` kernels (`ln` is derived
+from `log2`), not the typed `sd29x9_base::ln`/`sqrt`. Its oracle is mpmath
 `erfinv` (SciPy's float64 `ppf` is off by ~5e-9 in the deep tail, so it is not
 usable here). Accordingly
 `inverse_cdf/.derive_output.json` nests a `central` and a `tail` fit object rather

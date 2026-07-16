@@ -4,8 +4,8 @@ The mpmath oracle (100 dps) is used where we need values exact far beyond the
 target scales: emitting bit-exact test vectors and quantizing the derived
 coefficients. The `cdf`/`pdf` *derivation* and *validation* scripts instead
 measure error against `scipy.stats.norm.cdf` / `scipy.stats.norm.pdf` (float64,
-accurate to ~1e-16 - three orders of magnitude tighter than the 5e-9 error
-budget), so scipy is the reference there. The quantile is the exception:
+accurate to ~1e-16 - over seven orders of magnitude tighter than the 5e-9
+error budget), so scipy is the reference there. The quantile is the exception:
 SciPy's inverse-normal function is off by up to ~5e-9 in the deep tail, so the
 authoritative continuous derivation and validation gates use the mpmath
 `erfinv`-based `ppf` below. The inverse-CDF central optimizer, proxy selection,
