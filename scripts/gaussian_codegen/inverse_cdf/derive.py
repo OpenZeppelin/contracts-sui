@@ -4,9 +4,10 @@ Unlike `cdf`/`pdf` - smooth, bounded functions a single rational fits - the
 quantile blows up as `p → 0, 1`. A single rational `N(p)/D(p)` looks fine in
 float but *dies in the fixed-point evaluator*: as `p → 1` both `N` and `D`
 collapse toward zero (`D ≈ 1e-85`), underflow the WAD granularity, and return
-garbage. So we split the domain, exactly like the Acklam/AS241 algorithms, and
-fit two well-conditioned rationals on the upper half `p ∈ [0.5, 1)` (the signed
-API reflects `p < 0.5` via `Φ⁻¹(p) = −Φ⁻¹(1−p)`):
+garbage. So we split the domain, taking after the Acklam/AS241 algorithms (the
+split point and the fits are our own), and fit two well-conditioned rationals on
+the upper half `p ∈ [0.5, 1)` (the signed API reflects `p < 0.5` via
+`Φ⁻¹(p) = −Φ⁻¹(1−p)`):
 
 - **Central** `p ∈ [0.5, SPLIT)`: `z` as a rational in `u = p − 0.5`.
 - **Tail** `p ∈ [SPLIT, 1 − TAIL_MIN_P]`: `z` as a rational in the Acklam change

@@ -126,7 +126,7 @@ def check_overflow_margin(
     min_headroom_bits: int = MIN_HEADROOM_BITS,
 ) -> tuple[int, int]:
     """Prove the peak full-width `acc.mag * z.mag` Horner product over `[0, max_z_raw]`
-    clears `2^256` with at least `min_headroom_bits` to spare. The product grows
+    stays under `2^256` with at least `min_headroom_bits` to spare. The product grows
     smoothly with z (peak near `max_z_raw`), so a coarse grid plus the top input
     captures it. Returns `(peak_bits, headroom_bits)`; raises on insufficient
     headroom."""
