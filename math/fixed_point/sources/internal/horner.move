@@ -53,7 +53,7 @@ const EInternalDenNonPositive: vector<u8> =
 /// Convention: zero is always represented canonically as `(mag = 0, neg = false)`.
 public struct SignedScaled256 has copy, drop {
     /// The magnitude, at the caller's fixed-point scale. It is `u256` so that
-    /// the WAD-scale product `a × b` cannot overflow as long as callers keep
+    /// the accumulation-scale product `a × b` cannot overflow as long as callers keep
     /// magnitudes bounded (see the precondition on `mul_wad`).
     mag: u256,
     /// The sign, riding as a separate flag because Move lacks signed integer
@@ -267,6 +267,56 @@ public(package) fun eval_rational(
 ): u256 {
     // Promote the raw 10^9 argument to the accumulation scale.
     let x_scaled = (x_raw as u256) * (acc_scale / common::scale_u256!());
+    eval_rational_scaled(x_scaled, num_mags, num_negs, den_mags, den_negs, acc_scale)
+}
+
+/// Evaluate the rational function `N(x) / D(x)` for an argument already at the
+/// accumulation scale `acc_scale`, and round the ratio to the raw `10^9` scale
+/// in a single nearest step.
+///
+/// This is the promotion-free variant of `eval_rational`, for callers whose
+/// argument does not originate at the raw `10^9` scale: `inverse_cdf` computes
+/// its tail change of variable directly at `10^18` (full kernel precision) and
+/// promotes its exact central argument losslessly itself.
+///
+/// #### Parameters
+/// - `x_scaled`: Evaluation point, already at scale `acc_scale`.
+/// - `num_mags`: Numerator coefficient magnitudes at scale `acc_scale`, in
+///   ascending power order.
+/// - `num_negs`: Numerator coefficient signs, parallel to `num_mags`.
+/// - `den_mags`: Denominator coefficient magnitudes at scale `acc_scale`, in
+///   ascending power order.
+/// - `den_negs`: Denominator coefficient signs, parallel to `den_mags`.
+/// - `acc_scale`: Fixed-point accumulation scale, a positive multiple of `10^9`
+///   (`cdf` and `pdf` use `10^36`; `inverse_cdf` uses `10^18`).
+///
+/// #### Returns
+/// - `N(x) / D(x)` nearest-rounded to the raw `10^9` scale, unclamped.
+///
+/// #### Precondition
+/// Inherits `mul_wad`'s bound: the argument and the coefficients must be small
+/// enough that no intermediate product exceeds `u256` (see `mul_wad`). The
+/// committed gaussian tables satisfy it, and under the same bound the final
+/// `N × 10^9` rescale stays far below `u256`, so the ratio's `destroy_some`
+/// cannot abort.
+///
+/// #### Aborts
+/// - `EEmptyPolynomial` if either coefficient table is empty.
+/// - `EInternalNumNegative` if `N(x)` evaluates to a negative value -
+///   defense-in-depth against a corrupted coefficient table; cannot fire for
+///   the committed tables.
+/// - `EInternalDenNonPositive` if `D(x)` evaluates to a negative or zero
+///   value - same defense-in-depth; cannot fire for the committed tables.
+/// - Vector out-of-bounds if a signs table is shorter than its magnitudes
+///   table.
+public(package) fun eval_rational_scaled(
+    x_scaled: u256,
+    num_mags: vector<u128>,
+    num_negs: vector<bool>,
+    den_mags: vector<u128>,
+    den_negs: vector<bool>,
+    acc_scale: u256,
+): u256 {
     let x_signed = from_unsigned(x_scaled);
 
     let n = horner_eval!(x_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), acc_scale);

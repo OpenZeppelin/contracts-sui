@@ -1,4 +1,4 @@
-"""Derive AAA-rational coefficients for the standard-normal quantile Φ⁻¹(p).
+"""Derive rational coefficients for the standard-normal quantile Φ⁻¹(p).
 
 Unlike `cdf`/`pdf` - smooth, bounded functions a single rational fits - the
 quantile blows up as `p → 0, 1`. A single rational `N(p)/D(p)` looks fine in
@@ -8,21 +8,31 @@ garbage. So we split the domain, exactly like the Acklam/AS241 algorithms, and
 fit two well-conditioned rationals on the upper half `p ∈ [0.5, 1)` (the signed
 API reflects `p < 0.5` via `Φ⁻¹(p) = −Φ⁻¹(1−p)`):
 
-- **Central** `p ∈ [0.5, SPLIT]`: `z` as a rational in `u = p − 0.5`.
+- **Central** `p ∈ [0.5, SPLIT)`: `z` as a rational in `u = p − 0.5`.
 - **Tail** `p ∈ [SPLIT, 1 − TAIL_MIN_P]`: `z` as a rational in the Acklam change
   of variable `r = sqrt(−2·ln(1−p))`, which linearizes the tail's growth.
 
 Each region sweeps AAA `max_terms` upward and picks the smallest degree whose
 worst-case absolute error in `z` vs the mpmath `erfinv` oracle stays at or below
-TARGET_ERROR. Both `D`s are checked to stay comfortably away from zero
-(`|D| ≥ MIN_ABS_D`) - the guard that would have caught the single-rational
-failure. Coefficients (mpmath at 100 dps, decimal-string serialized) go to a JSON
-intermediate consumed by `emit_coefficients.py` and `emit_test_vectors.py`, in
-ascending power order, normalized so `D(0) = 1`.
+TARGET_ERROR. The central-region AAA seed is then refined with staged soft-L1
+continuous-error objectives sampled uniformly over representable probabilities.
+The tail candidate is optimized for the deployed integer pipeline, which carries
+the transformed variable at WAD and rounds the logarithm conversion and square
+root to nearest.
 
-Oracle note: `scipy.stats.norm.ppf` is float64 and wrong by up to ~5e-9 in the
-deep tail, so it is **not** used here - the reference is `shared.reference.ppf`
-(`sqrt(2)·erfinv(2p−1)` at 100 dps).
+Both `D`s are checked to stay comfortably away from zero
+(`|D| ≥ MIN_ABS_D`) - the guard that would have caught the single-rational
+failure. AAA seed and tail coefficients retain their high-precision decimal
+conversion; the float64-refined central coefficients serialize 17 significant
+digits without inventing precision. They go to a JSON intermediate consumed by
+`emit_coefficients.py`, in ascending power order, normalized so `D(0) = 1`.
+
+Oracle note: SciPy's float64 inverse-normal function can be wrong by up to
+~5e-9 in the deep tail, so it is not the authoritative continuous fit/error
+oracle. The AAA sweep and continuous error gate use `shared.reference.ppf`
+(`sqrt(2)·erfinv(2p−1)` at 100 dps). `scipy.special.ndtri` is used for central
+optimization and the sampled exact-integer validation regression; the latter is
+an exact evaluator score against a float64 oracle.
 """
 from __future__ import annotations
 
@@ -36,10 +46,19 @@ from typing import Callable, Sequence
 import numpy as np
 from mpmath import exp, ln, mp, mpf, sqrt
 from scipy.interpolate import AAA
+from scipy.special import ndtri
 
 from gaussian_codegen.shared import constants
 from gaussian_codegen.shared.aaa import aaa_to_rational_polys, evaluate_rational, horner_eval_mpf
 from gaussian_codegen.shared.reference import DPS, ppf
+from gaussian_codegen.shared.rounding_optimize import (
+    coefficient_strings,
+    midpoint_raw_holdout_grid,
+    optimize_soft_l1,
+    score_quantized_rational,
+    score_rational,
+    uniform_raw_grid,
+)
 
 # AAA emits a RuntimeWarning when it hits `max_terms` before satisfying `rtol`.
 # Our sweep deliberately caps `max_terms`, so the warning is expected noise.
@@ -68,6 +87,41 @@ TARGET_ERROR = 1e-9
 MIN_ABS_D = 1e-9
 N_FIT_GRID = 4000
 N_VALIDATE_GRID = 8000
+ROUNDING_TRAIN_SIZE = 1_000_000
+ROUNDING_SCORE_SIZE = 2_000_000
+ROUNDING_EXACT_SCORE_SIZE = 1_000_000
+MIN_EXACT_HOLDOUT_CORRECT_FRACTION = 0.9885
+ROUNDING_BASIN_SOFT_L1_SCALE_ULP = 0.02
+ROUNDING_BASIN_MAX_FUNCTION_EVALUATIONS = 240
+ROUNDING_FINE_SOFT_L1_SCALE_ULP = 0.003
+ROUNDING_FINE_MAX_FUNCTION_EVALUATIONS = 120
+
+# Tail candidate optimized for the correctly-rounded output count after the
+# WAD-scale, nearest-rounded change of variable. The strings are exact at WAD
+# and reproduce the stored u128 magnitudes without a float conversion.
+#
+# Provenance: generated offline by the count-targeted refinement in
+# `shared/rounding_optimize.py` (the same candidate generator `refine_central_fit`
+# uses), seeded from the tail AAA fit over [R_MIN, R_MAX], then pinned here
+# instead of re-derived each run. `deployed_tail_fit` re-validates them every run
+# (continuous error vs `TARGET_ERROR`, sign, u128 width) and `validate.py`
+# re-checks the exact-mirror, monotonicity, and saturation gates. Regenerate when
+# R_MIN, R_MAX, or TARGET_ERROR change: re-run that refinement over the tail
+# region and replace these literals with the winner, keeping every gate green.
+DEPLOYED_TAIL_NUMERATOR = [
+    "-3.0943397105617336",
+    "-6.207376019943557",
+    "3.075018098279669",
+    "3.306509139927573",
+    "0.38680465651912765",
+]
+DEPLOYED_TAIL_DENOMINATOR = [
+    "1",
+    "4.664193128006789",
+    "3.324846871342176",
+    "0.38644130209389493",
+    "0.000004952204793303",
+]
 
 OUTPUT_PATH = pathlib.Path(__file__).parent / ".derive_output.json"
 
@@ -197,14 +251,170 @@ def fit_region(region: Region, report: bool) -> dict:
         "min_abs_d": min_abs_d,
         "num_coeffs_str": [mp.nstr(c, 30) for c in num],
         "den_coeffs_str": [mp.nstr(c, 30) for c in den],
-        "support_points": [float(z) for z in aaa.support_points],
-        "support_values": [float(y) for y in aaa.support_values],
-        "weights": [float(w) for w in aaa.weights],
+    }
+
+
+def refine_central_fit(fit: dict, region: Region) -> dict:
+    """Refine the central AAA seed against uniformly weighted raw probabilities."""
+    central_width_raw = constants.INVERSE_CDF_SPLIT_RAW - constants.HALF_RAW
+    # Include u=0 as a stabilizing anchor even though the on-chain dispatcher
+    # special-cases p=0.5 to zero before consulting the rational.
+    train_raw = uniform_raw_grid(0, central_width_raw, ROUNDING_TRAIN_SIZE)
+    train_x = train_raw.astype(np.float64) / constants.SCALE_DECIMAL
+    train_reference = ndtri(0.5 + train_x)
+
+    basin = optimize_soft_l1(
+        [float(c) for c in fit["num_coeffs_str"]],
+        [float(c) for c in fit["den_coeffs_str"]],
+        train_x,
+        train_reference,
+        float(U_MAX),
+        constants.SCALE_DECIMAL,
+        ROUNDING_BASIN_SOFT_L1_SCALE_ULP,
+        ROUNDING_BASIN_MAX_FUNCTION_EVALUATIONS,
+    )
+    fine = optimize_soft_l1(
+        basin.numerator,
+        basin.denominator,
+        train_x,
+        train_reference,
+        float(U_MAX),
+        constants.SCALE_DECIMAL,
+        ROUNDING_FINE_SOFT_L1_SCALE_ULP,
+        ROUNDING_FINE_MAX_FUNCTION_EVALUATIONS,
+    )
+
+    num_strings = coefficient_strings(fine.numerator)
+    den_strings = coefficient_strings(fine.denominator)
+
+    score_raw = uniform_raw_grid(1, central_width_raw, ROUNDING_SCORE_SIZE)
+    score_x = score_raw.astype(np.float64) / constants.SCALE_DECIMAL
+    score_reference = ndtri(0.5 + score_x)
+    seed_score = score_rational(
+        [float(c) for c in fit["num_coeffs_str"]],
+        [float(c) for c in fit["den_coeffs_str"]],
+        score_x,
+        score_reference,
+        constants.SCALE_DECIMAL,
+    )
+    refined_score = score_rational(
+        fine.numerator,
+        fine.denominator,
+        score_x,
+        score_reference,
+        constants.SCALE_DECIMAL,
+    )
+    num = [mpf(c) for c in num_strings]
+    den = [mpf(c) for c in den_strings]
+    err, worst_x, min_abs_d = measure_error(num, den, region)
+    if err > TARGET_ERROR:
+        raise RuntimeError(
+            f"[central] refined error {err:.3e} exceeds target {TARGET_ERROR:.2e} "
+            f"at x={worst_x:.4f}"
+        )
+    assert_signs(num, den, region)
+
+    wad = mpf(constants.WAD)
+    max_mag = max(abs(c) * wad for c in num + den)
+    if max_mag >= mpf(2) ** 128:
+        raise RuntimeError("[central] a refined coefficient does not fit u128 at WAD scale")
+
+    excluded_raw = np.unique(np.concatenate([train_raw[train_raw >= 1], score_raw]))
+    exact_raw = midpoint_raw_holdout_grid(
+        1,
+        central_width_raw,
+        ROUNDING_EXACT_SCORE_SIZE,
+        excluded_raw,
+    )
+    exact_x = exact_raw.astype(np.float64) / constants.SCALE_DECIMAL
+    exact_reference = ndtri(0.5 + exact_x)
+    seed_exact_score = score_quantized_rational(
+        fit["num_coeffs_str"],
+        fit["den_coeffs_str"],
+        exact_raw,
+        exact_reference,
+        constants.WAD,
+        constants.SCALE_DECIMAL,
+    )
+    refined_exact_score = score_quantized_rational(
+        num_strings,
+        den_strings,
+        exact_raw,
+        exact_reference,
+        constants.WAD,
+        constants.SCALE_DECIMAL,
+    )
+    if not basin.success or not fine.success:
+        raise RuntimeError("[central] at least one rounding-refinement stage did not converge")
+    if (
+        refined_score.correctly_rounded <= seed_score.correctly_rounded
+        or refined_score.mean_absolute_error_ulp >= seed_score.mean_absolute_error_ulp
+        or refined_exact_score.correctly_rounded <= seed_exact_score.correctly_rounded
+        or (
+            refined_exact_score.correctly_rounded_fraction
+            < MIN_EXACT_HOLDOUT_CORRECT_FRACTION
+        )
+    ):
+        raise RuntimeError("[central] staged refinement did not improve its acceptance metrics")
+    print(
+        f"[central] AAA seed: {seed_score.correctly_rounded_fraction:.4%}; "
+        f"refined: {refined_score.correctly_rounded_fraction:.4%} correctly rounded "
+        f"on {score_raw.size:,} proxy samples"
+    )
+    print(
+        f"[central] validation: {refined_exact_score.correctly_rounded_fraction:.4%} "
+        f"correct through the exact integer mirror on {refined_exact_score.samples:,} samples"
+    )
+
+    return {
+        "degree": fit["degree"],
+        "n_coeffs": fit["n_coeffs"],
+        "max_error": err,
+        "worst_x": worst_x,
+        "min_abs_d": min_abs_d,
+        "num_coeffs_str": num_strings,
+        "den_coeffs_str": den_strings,
+    }
+
+
+def deployed_tail_fit(seed: dict, region: Region) -> dict:
+    """Validate and select the WAD-transform tail candidate.
+
+    The candidate is pinned in the `DEPLOYED_TAIL_NUMERATOR` /
+    `DEPLOYED_TAIL_DENOMINATOR` literals above; see that comment for its
+    provenance and how to regenerate it."""
+    num = [mpf(c) for c in DEPLOYED_TAIL_NUMERATOR]
+    den = [mpf(c) for c in DEPLOYED_TAIL_DENOMINATOR]
+    err, worst_x, min_abs_d = measure_error(num, den, region)
+    if err > TARGET_ERROR:
+        raise RuntimeError(
+            f"[tail] deployed error {err:.3e} exceeds target {TARGET_ERROR:.2e} "
+            f"at x={worst_x:.4f}"
+        )
+    assert_signs(num, den, region)
+
+    max_mag = max(abs(c) * mpf(constants.WAD) for c in num + den)
+    if max_mag >= mpf(2) ** 128:
+        raise RuntimeError("[tail] a deployed coefficient does not fit u128 at WAD scale")
+    if len(num) != seed["n_coeffs"] or len(den) != seed["n_coeffs"]:
+        raise RuntimeError("[tail] deployed candidate changed the pinned rational degree")
+    print(
+        f"[tail] deployed degree {seed['degree']} (n_coeffs={seed['n_coeffs']}), "
+        f"err {err:.3e}, min|D| {min_abs_d:.3g}, max |coeff|×WAD {float(max_mag):.3e}"
+    )
+    return {
+        "degree": seed["degree"],
+        "n_coeffs": seed["n_coeffs"],
+        "max_error": err,
+        "worst_x": worst_x,
+        "min_abs_d": min_abs_d,
+        "num_coeffs_str": DEPLOYED_TAIL_NUMERATOR,
+        "den_coeffs_str": DEPLOYED_TAIL_DENOMINATOR,
     }
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Derive inverse-CDF AAA coefficients.")
+    parser = argparse.ArgumentParser(description="Derive inverse-CDF rational coefficients.")
     parser.add_argument(
         "--report",
         action="store_true",
@@ -217,8 +427,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         central_fit = fit_region(central, args.report)
+        central_fit = refine_central_fit(central_fit, central)
         print()
-        tail_fit = fit_region(tail, args.report)
+        tail_seed = fit_region(tail, args.report)
+        tail_fit = deployed_tail_fit(tail_seed, tail)
     except RuntimeError as exc:
         print(f"\nFAIL: {exc}", file=sys.stderr)
         return 1

@@ -82,11 +82,13 @@ def test_raw_log2_of_one_half_is_minus_one():
     assert mag == 10**18  # exactly 1.0 at the 1e18 internal scale
 
 
-def test_tail_r_raw_matches_mpmath():
+def test_tail_r_wad_matches_mpmath():
     for k in (1, 2, 100, 1000, 10**6, 25_000_000):
         p_raw = A.SCALE - k  # 1 - p = k / 1e9
-        r_true = int(sqrt(-2 * ln(mpf(k) / A.SCALE)) * A.SCALE)  # floor
-        assert abs(A.tail_r_raw(p_raw) - r_true) <= 1
+        r_true = int(sqrt(-2 * ln(mpf(k) / A.SCALE)) * A.INTERNAL_LOG_SCALE + mpf("0.5"))
+        # `raw_log2` is itself an integer approximation; after the nearest
+        # conversion and square root its error remains within two WAD units.
+        assert abs(A.tail_r_wad(p_raw) - r_true) <= 2
 
 
 # --- inverse_cdf integer simulation vs committed coefficients ---------------

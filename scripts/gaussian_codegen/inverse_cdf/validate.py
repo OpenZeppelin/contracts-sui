@@ -8,21 +8,22 @@ arithmetic that mirrors the Move implementation exactly**:
     to MAX_Z, special-case `p = 0.5 → 0`, else the central rational in
     `u = p - 0.5` (`p < threshold`) or the tail rational in
     `r = sqrt(-2 ln(1 - p))` (`p ≥ threshold`).
-  - The tail variable `r` is built with `shared.arithmetic.tail_r_raw`, which
-    mirrors `common::raw_log2` + `apply_log2_factor` + `u256::sqrt(..., Down)`.
+  - The tail variable `r` is built at WAD with `shared.arithmetic.tail_r_wad`,
+    mirroring `common::raw_log2`, scale-preserving multiplication by `ln 2`, and
+    `u256::sqrt(..., Nearest)`.
   - Each rational: WAD-scale Horner (sign-magnitude, floor-div `mul_wad`) then
     the final `mul_div(N, 10^9, D, Nearest)` half-up ratio, clamped to MAX_Z.
   - Signed reflection (`sd29x9_base::inverse_cdf`): `p < 0.5 → -Φ⁻¹(1 - p)`.
 
-Asserts, over a ~41k-point grid - a uniform interior sweep plus exhaustive
+Asserts, over a ~40k-point grid - a uniform interior sweep plus exhaustive
 consecutive-input windows where the rounding is most delicate (just above
 `p = 0.5`, across the central/tail seam, and the deepest tail), log-spaced
 coverage of the tail complement `1 - p`, and the deep-tail anchor points - that
 the worst-case absolute error in `z` vs the mpmath `erfinv` oracle stays within
-`TARGET_ERROR_ULP × 10^-9`, that the signed output is monotone non-decreasing in
-`p` (true adjacent-input monotonicity inside the exhaustive windows), and that
-the reflection identity holds bit-exactly. Non-zero exit on failure, suitable
-for CI.
+`TARGET_ERROR_ULP × 10^-9`, no sampled output differs from the correctly rounded
+oracle by more than one integer ULP, the signed output is monotone non-decreasing
+in `p` (true adjacent-input monotonicity inside the exhaustive windows), and the
+reflection identity holds bit-exactly. Non-zero exit on failure, suitable for CI.
 
 Oracle note: `scipy.stats.norm.ppf` is float64 and wrong by up to ~5e-9 in the
 deep tail, so the reference is the mpmath `erfinv`-based `shared.reference.ppf`.
@@ -36,9 +37,10 @@ import sys
 from typing import Sequence
 
 import numpy as np
+from mpmath import floor
 
 from gaussian_codegen.shared import constants
-from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_nearest, tail_r_raw
+from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_nearest, tail_r_wad
 from gaussian_codegen.shared.reference import ppf
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -47,6 +49,7 @@ SCALE = constants.SCALE_DECIMAL
 HALF_RAW = constants.HALF_RAW  # 5e8, Φ⁻¹(0.5) = 0
 ONE_RAW = SCALE  # 1e9, p = 1.0
 TARGET_ERROR_ULP = 5
+MAX_INTEGER_ERROR_ULP = 1
 
 COEFF_PATH = (
     REPO_ROOT
@@ -100,16 +103,16 @@ class Coeffs:
         self.max_z = _parse_u128_const(text, "MAX_Z_RAW")
 
 
-def _eval_rational(x_raw: int, region: Region, max_z: int) -> int:
-    """Mirror `inverse_cdf::eval_rational` for a transformed argument x_raw at 10^9."""
+def _eval_rational_wad(x_wad_raw: int, region: Region, max_z: int) -> int:
+    """Mirror `inverse_cdf::eval_rational_wad` for an argument at `10^18`."""
     num, den = region
-    x_wad: SignedInt = (x_raw * SCALE, False)  # 10^9 → 10^18
+    x_wad: SignedInt = (x_wad_raw, False)
     n = horner_eval(x_wad, num)
     d = horner_eval(x_wad, den)
     if n[1]:
-        raise RuntimeError(f"N negative at x_raw={x_raw}")
+        raise RuntimeError(f"N negative at x_wad_raw={x_wad_raw}")
     if d[1] or d[0] == 0:
-        raise RuntimeError(f"D non-positive at x_raw={x_raw}")
+        raise RuntimeError(f"D non-positive at x_wad_raw={x_wad_raw}")
     z = mul_div_nearest(n[0], SCALE, d[0])
     return min(z, max_z)  # last-ULP overshoot / defense-in-depth clamp
 
@@ -121,8 +124,8 @@ def upper_raw(p_raw: int, c: Coeffs) -> int:
     if p_raw == HALF_RAW:
         return 0  # Φ⁻¹(0.5)
     if p_raw < c.threshold:
-        return _eval_rational(p_raw - HALF_RAW, c.central, c.max_z)  # u = p - 0.5
-    return _eval_rational(tail_r_raw(p_raw), c.tail, c.max_z)  # r = sqrt(-2 ln(1 - p))
+        return _eval_rational_wad((p_raw - HALF_RAW) * SCALE, c.central, c.max_z)
+    return _eval_rational_wad(tail_r_wad(p_raw), c.tail, c.max_z)
 
 
 def inverse_cdf_signed(p_raw: int, c: Coeffs) -> int:
@@ -190,6 +193,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     grid = build_grid(args.n, c.threshold)
     worst_err = 0.0
     worst_p = 0.0
+    correctly_rounded = 0
+    max_integer_error = 0
     prev_z = None
     for p_raw in grid:
         z = inverse_cdf_signed(p_raw, c)
@@ -218,17 +223,37 @@ def main(argv: Sequence[str] | None = None) -> int:
         if err > worst_err:
             worst_err = err
             worst_p = p_raw / SCALE
+        expected = (
+            int(floor(z_true * SCALE + 0.5))
+            if z_true >= 0
+            else -int(floor(-z_true * SCALE + 0.5))
+        )
+        integer_error = abs(z - expected)
+        if integer_error == 0:
+            correctly_rounded += 1
+        max_integer_error = max(max_integer_error, integer_error)
 
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
     print(f"Monotonicity: non-decreasing across all {len(grid)} grid points ✓")
     print("Reflection:   Φ⁻¹(p) == -Φ⁻¹(1 - p) bit-exact across the grid ✓")
     print("Saturation:   Φ⁻¹(1) = +MAX_Z, Φ⁻¹(0) = -MAX_Z ✓")
+    print(
+        f"Rounding:     {correctly_rounded / len(grid):.4%} correctly rounded; "
+        f"max integer error {max_integer_error} ULP"
+    )
     print(f"Worst error:  {worst_err:.3e} = {err_ulp} ULP at p={worst_p:.9f}")
     print(f"Target:       {target_abs:.3e} = {TARGET_ERROR_ULP} ULP")
-    if worst_err <= target_abs:
+    if worst_err <= target_abs and max_integer_error <= MAX_INTEGER_ERROR_ULP:
         print(f"PASS: max_error_quantized = {worst_err:.3e} ≤ {target_abs:.3e} ✓")
         return 0
+    if max_integer_error > MAX_INTEGER_ERROR_ULP:
+        print(
+            f"FAIL: max integer error {max_integer_error} ULP exceeds "
+            f"{MAX_INTEGER_ERROR_ULP} ULP",
+            file=sys.stderr,
+        )
+        return 1
     print(f"FAIL: max_error_quantized = {worst_err:.3e} > {target_abs:.3e}", file=sys.stderr)
     return 1
 

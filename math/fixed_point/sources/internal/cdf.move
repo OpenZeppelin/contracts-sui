@@ -1,6 +1,6 @@
 /// Standard-normal CDF Φ central-domain evaluator.
 ///
-/// Consumes the AAA-rational coefficients from `cdf_coefficients` and the
+/// Consumes the generated rational coefficients from `cdf_coefficients` and the
 /// generic sign-magnitude / Horner primitives from `horner`. The public typed
 /// APIs live in `sd29x9_base::cdf` and `ud30x9_base::cdf`, which call
 /// `cdf_nonneg_raw` here.
@@ -45,7 +45,7 @@ public(package) fun half_raw(): u128 { HALF_RAW }
 /// - Saturates to `ONE_RAW` (`10^9`) for `z_raw ≥ cdf_coefficients::max_z_raw()`
 ///   (`|z| ≥ 6.109410205`).
 /// - Returns `HALF_RAW` (`5 × 10^8`) exactly for `z_raw == 0` (`Φ(0)`).
-/// - Otherwise evaluates the AAA rational `N(z) / D(z)` from
+/// - Otherwise evaluates the rational `N(z) / D(z)` from
 ///   `cdf_coefficients` via Horner at `ACC_SCALE` and rounds the ratio back to
 ///   `UD30x9` scale in a single half-up step, clamping any last-ULP overshoot
 ///   to `ONE_RAW`.
@@ -54,10 +54,10 @@ public(package) fun half_raw(): u128 { HALF_RAW }
 /// sign-flipping (`ONE_RAW - phi`) when the original input was negative.
 ///
 /// #### Aborts
-/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+/// - `horner::EInternalNumNegative` if the numerator polynomial evaluates to a negative
 ///   value (defense-in-depth against a corrupted regenerated coefficient table;
 ///   unreachable with the committed coefficient tables).
-/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+/// - `horner::EInternalDenNonPositive` if the denominator polynomial evaluates to a
 ///   non-positive value (defense-in-depth against a corrupted regenerated
 ///   coefficient table; unreachable with the committed coefficient tables).
 /// - A vector index out of bounds abort if a magnitude table and its paired sign

@@ -142,7 +142,7 @@ public fun abs(x: UD30x9): UD30x9 {
 ///
 /// Returns the probability `Φ(z) ∈ [0.5, 1]` represented as `UD30x9`. Since
 /// `UD30x9` inputs are inherently non-negative, the output is always at least
-/// `0.5`. The implementation evaluates an AAA-rational approximation
+/// `0.5`. The implementation evaluates a rounding-aware rational approximation
 /// `N(z) / D(z)` at the internal accumulation scale (`10^36`) via Horner's
 /// method on a sign-magnitude `u256` accumulator; the final ratio is cast back
 /// to `UD30x9` (`10^9`) in a single nearest-rounding step.
@@ -159,7 +159,7 @@ public fun abs(x: UD30x9): UD30x9 {
 ///   lossless.
 /// - `Φ(0)` is exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
-///   worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
+///   worst-case from the committed coefficients is `~5 × 10⁻¹⁰`.
 /// - Monotone non-decreasing between every pair of adjacent representable
 ///   inputs. The `10^36` accumulation scale holds floor-truncation noise far
 ///   below the true per-step increment, and the codegen CI gate confirms this
@@ -189,7 +189,7 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///
 /// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` represented
 /// as `UD30x9`, where the peak is `φ(0) = 0.398942280`. The implementation
-/// evaluates an AAA-rational approximation `N(z) / D(z)` at the internal
+/// evaluates a rounding-aware rational approximation `N(z) / D(z)` at the internal
 /// accumulation scale (`10^36`) via Horner's method on a sign-magnitude `u256`
 /// accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a single
 /// nearest-rounding step.
@@ -210,7 +210,7 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///   which `φ` rounds to `0` at the `10⁻⁹` output resolution (`φ ≈ 5 × 10⁻¹⁰`
 ///   there), so the cut-off is lossless.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
-///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
+///   worst-case from the committed coefficients is `~5 × 10⁻¹⁰`.
 /// - Pure, deterministic, and object-free: identical inputs always produce
 ///   identical outputs; touches no storage or Sui objects.
 ///
@@ -237,7 +237,7 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// `UD30x9` is unsigned, only the upper half of the distribution is representable:
 /// `p` must be at least `0.5` (`Φ(0)`). For the full range including negative `z`,
 /// use `SD29x9::inverse_cdf`. The implementation evaluates a two-region
-/// AAA-rational approximation (a rational in `u = p - 0.5` near the center, and
+/// rounding-aware rational approximation (a rational in `u = p - 0.5` near the center, and
 /// one in `r = sqrt(-2 * ln(1 - p))` in the tail) at WAD scale via Horner's method
 /// on a sign-magnitude `u256` accumulator, rounded back to `UD30x9` (`10^9`) in a
 /// single nearest-rounding step.
@@ -254,10 +254,12 @@ public fun pdf(z: UD30x9): UD30x9 {
 ///   unrepresentable. The clamp equals the CDF saturation bound (the smallest `z`
 ///   `cdf` resolves to exactly `1`), so `cdf` maps it back to exactly `1` -
 ///   `cdf`/`inverse_cdf` agree at the corner.
-/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
-///   worst-case from the committed coefficients and on-chain kernels is
-///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`
-///   change of variable is most sensitive.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Across the
+///   deterministic offline validation grid, no result is more than 1 ULP from
+///   the correctly rounded output. The tail change of variable is carried at the
+///   internal `10¹⁸` accumulation scale with nearest rounding, so tail accuracy
+///   realizes the full precision of the `ln`/`sqrt` kernels rather than being
+///   floored at the `10⁻⁹` output resolution.
 /// - Near `p = 1` the quantile is intrinsically steep - the two largest
 ///   representable inputs differ by `≈ 0.11` in `z` - so a 1-ULP change in `p`
 ///   maps to a large change in `z`; this is a property of `Φ⁻¹`, not the
