@@ -1,5 +1,6 @@
 module openzeppelin_fp_math::sd29x9_pdf_tests;
 
+use openzeppelin_fp_math::horner;
 use openzeppelin_fp_math::pdf;
 use openzeppelin_fp_math::pdf_coefficients;
 use openzeppelin_fp_math::sd29x9;
@@ -11,7 +12,7 @@ use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000; // SD29x9 raw scale (10^9)
 const MAX_Z_RAW: u128 = 6_402_729_806; // 6.402729806 at SD29x9 scale
-const ONE_WAD: u128 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 1.0 at WAD scale (10^36, coefficient injection)
+const ONE_ACC_SCALE: u128 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 1.0 at the accumulation scale (10^36, coefficient injection)
 
 // 5 ULP at the SD29x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
 const TOLERANCE: u128 = 5;
@@ -189,37 +190,37 @@ fun coefficient_arrays_have_matching_lengths() {
 
 // === Integrity asserts (defense-in-depth; unreachable via the public API) ===
 
-#[test, expected_failure(abort_code = pdf::EInternalNumNegative)]
+#[test, expected_failure(abort_code = horner::EInternalNumNegative)]
 fun numerator_negative_aborts() {
     // A constant numerator of -1.0 forces N(z) < 0 on the central domain.
     let _ = pdf::eval_rational_for_test(
         SCALE, // z = 1.0, inside [0, 6.402729806)
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[true],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
     );
 }
 
-#[test, expected_failure(abort_code = pdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_nonpositive_aborts() {
     // A constant denominator of -1.0 forces D(z) < 0 on the central domain.
     let _ = pdf::eval_rational_for_test(
         SCALE,
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[true],
     );
 }
 
-#[test, expected_failure(abort_code = pdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_zero_aborts() {
     // A constant denominator of 0 evaluates to canonical zero, which must trip
     // the `mag(d) > 0` half of the guard rather than reach the division.
     let _ = pdf::eval_rational_for_test(
         SCALE,
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
         vector[0],
         vector[false],
@@ -234,10 +235,43 @@ fun numerator_zero_passes_guard_returns_zero() {
         SCALE,
         vector[0],
         vector[false],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
     );
     assert_eq!(v, 0);
+}
+
+// === Offline mirror fidelity ===
+
+#[test]
+fun pdf_matches_offline_mirror() {
+    // The full `pdf` pipeline must match the offline integer mirror
+    // (`scripts/gaussian_codegen/pdf/validate.py::pdf_simulate`) bit-for-bit, so the
+    // codegen validator faithfully re-runs the on-chain path. Unlike the 5-ULP oracle
+    // vectors these assert exact equality, and unlike the quantile's tail-transform
+    // values they depend on the committed coefficient tables - regenerate them together
+    // (from `scripts/`, in a `make install` env):
+    //   `from gaussian_codegen.pdf import validate as v` then
+    //   `v.pdf_simulate(z_raw, *v.parse_coefficients(v.COEFF_PATH.read_text()))`.
+    // Probes cover the peak (via the rational - no z = 0 special case), the smallest
+    // nonzero input, interior points, the last interior ULP, and (beyond-)saturation;
+    // z_raw = 2_366_666_644 pins the on-chain arithmetic itself - the mirror yields
+    // 24_246_233 where the 100-dps oracle rounds to ...232.
+    assert_eq!(pos(0).pdf().unwrap(), PDF_0_RAW); // exact peak, D(0) = 1
+    assert_eq!(pos(1).pdf().unwrap(), PDF_0_RAW); // smallest nonzero input
+    assert_eq!(pos(250_000_000).pdf().unwrap(), 386_668_117);
+    assert_eq!(pos(1_000_000_000).pdf().unwrap(), 241_970_725);
+    assert_eq!(pos(2_000_000_000).pdf().unwrap(), 53_990_967);
+    assert_eq!(pos(2_366_666_644).pdf().unwrap(), 24_246_233); // implementation-pinning
+    assert_eq!(pos(3_500_000_000).pdf().unwrap(), 872_683);
+    assert_eq!(pos(5_000_000_000).pdf().unwrap(), 1_487);
+    assert_eq!(pos(MAX_Z_RAW - 1).pdf().unwrap(), 1); // last interior ULP
+    assert_eq!(pos(MAX_Z_RAW).pdf().unwrap(), 0); // saturation boundary
+    assert_eq!(pos(7 * SCALE).pdf().unwrap(), 0); // beyond saturation
+    // φ is even: the signed path feeds |z| into the same kernel, exactly.
+    assert_eq!(neg(1).pdf().unwrap(), PDF_0_RAW);
+    assert_eq!(neg(2_366_666_644).pdf().unwrap(), 24_246_233);
+    assert_eq!(neg(MAX_Z_RAW - 1).pdf().unwrap(), 1);
 }
 
 // === Method dispatch ===

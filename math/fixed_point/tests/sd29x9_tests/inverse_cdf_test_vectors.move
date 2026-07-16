@@ -24,7 +24,7 @@ public struct TestCase has copy, drop {
 fun inverse_cdf_vectors_match_oracle() {
     let tol = sd29x9::wrap(TOLERANCE, false);
     let cases = vector[
-        TestCase { p_raw: 0, expected_mag: 6_300_000_000, expected_neg: true },
+        TestCase { p_raw: 0, expected_mag: 6_109_410_205, expected_neg: true },
         TestCase { p_raw: 1, expected_mag: 5_997_807_015, expected_neg: true },
         TestCase { p_raw: 1_000, expected_mag: 4_753_424_309, expected_neg: true },
         TestCase { p_raw: 100_000, expected_mag: 3_719_016_485, expected_neg: true },
@@ -74,7 +74,7 @@ fun inverse_cdf_vectors_match_oracle() {
         TestCase { p_raw: 999_900_000, expected_mag: 3_719_016_485, expected_neg: false },
         TestCase { p_raw: 999_999_000, expected_mag: 4_753_424_309, expected_neg: false },
         TestCase { p_raw: 999_999_999, expected_mag: 5_997_807_015, expected_neg: false },
-        TestCase { p_raw: 1_000_000_000, expected_mag: 6_300_000_000, expected_neg: false },
+        TestCase { p_raw: 1_000_000_000, expected_mag: 6_109_410_205, expected_neg: false },
     ];
     cases.destroy!(|case| {
         let actual = sd29x9::wrap(case.p_raw, false).inverse_cdf();

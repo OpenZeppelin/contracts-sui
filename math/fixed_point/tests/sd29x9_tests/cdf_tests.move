@@ -2,6 +2,7 @@ module openzeppelin_fp_math::sd29x9_cdf_tests;
 
 use openzeppelin_fp_math::cdf;
 use openzeppelin_fp_math::cdf_coefficients;
+use openzeppelin_fp_math::horner;
 use openzeppelin_fp_math::sd29x9;
 use openzeppelin_fp_math::sd29x9_base;
 use openzeppelin_fp_math::sd29x9_test_helpers::{assert_within, neg, pos};
@@ -13,7 +14,7 @@ const SCALE: u128 = 1_000_000_000; // SD29x9 raw scale (10^9)
 const HALF_RAW: u128 = 500_000_000;
 const ONE_RAW: u128 = 1_000_000_000;
 const MAX_Z_RAW: u128 = 6_109_410_205; // 6.109410205 at SD29x9 scale
-const ONE_WAD: u128 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 1.0 at WAD scale (10^36, coefficient injection)
+const ONE_ACC_SCALE: u128 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 1.0 at the accumulation scale (10^36, coefficient injection)
 
 // 5 ULP at the SD29x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
 const TOLERANCE: u128 = 5;
@@ -139,9 +140,9 @@ fun overshoot_clamps_to_one() {
     // it is driven directly through the eval_rational seam.
     let v = cdf::eval_rational_for_test(
         SCALE,
-        vector[2 * ONE_WAD],
+        vector[2 * ONE_ACC_SCALE],
         vector[false],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
     );
     assert_eq!(v, ONE_RAW);
@@ -239,37 +240,37 @@ fun coefficient_arrays_have_matching_lengths() {
 
 // === Integrity asserts (defense-in-depth; unreachable via the public API) ===
 
-#[test, expected_failure(abort_code = cdf::EInternalNumNegative)]
+#[test, expected_failure(abort_code = horner::EInternalNumNegative)]
 fun numerator_negative_aborts() {
     // A constant numerator of -1.0 forces N(z) < 0 on the central domain.
     let _ = cdf::eval_rational_for_test(
         SCALE, // z = 1.0, inside [0, 6.109410205)
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[true],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
     );
 }
 
-#[test, expected_failure(abort_code = cdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_nonpositive_aborts() {
     // A constant denominator of -1.0 forces D(z) < 0 on the central domain.
     let _ = cdf::eval_rational_for_test(
         SCALE,
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[true],
     );
 }
 
-#[test, expected_failure(abort_code = cdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_zero_aborts() {
     // A constant denominator of 0 evaluates to canonical zero, which must trip
     // the `mag(d) > 0` half of the guard rather than reach the division.
     let _ = cdf::eval_rational_for_test(
         SCALE,
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
         vector[0],
         vector[false],
@@ -284,10 +285,46 @@ fun numerator_zero_passes_guard_returns_zero() {
         SCALE,
         vector[0],
         vector[false],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
     );
     assert_eq!(v, 0);
+}
+
+// === Offline mirror fidelity ===
+
+#[test]
+fun cdf_matches_offline_mirror() {
+    // The full signed `cdf` pipeline must match the offline integer mirror
+    // (`scripts/gaussian_codegen/cdf/validate.py::cdf_simulate`) bit-for-bit, so the
+    // codegen validator faithfully re-runs the on-chain path. Unlike the 5-ULP oracle
+    // vectors these assert exact equality, and unlike the quantile's tail-transform
+    // values they depend on the committed coefficient tables - regenerate them together
+    // (from `scripts/`, in a `make install` env):
+    //   `from gaussian_codegen.cdf import validate as v` then
+    //   `v.cdf_simulate(z_raw, neg, *v.parse_coefficients(v.COEFF_PATH.read_text()))`.
+    // Probes cover the Φ(0) special case, the smallest nonzero input, interior points
+    // on the rational branch, the last interior ULP, and (beyond-)saturation;
+    // z_raw = 1_133_333_323 pins the on-chain arithmetic itself - the mirror yields
+    // 871_462_849 where the 100-dps oracle rounds to ...848.
+    assert_eq!(pos(0).cdf().unwrap(), HALF_RAW); // Φ(0) special case
+    assert_eq!(pos(1).cdf().unwrap(), HALF_RAW); // smallest nonzero input
+    assert_eq!(pos(250_000_000).cdf().unwrap(), 598_706_326);
+    assert_eq!(pos(1_000_000_000).cdf().unwrap(), 841_344_746);
+    assert_eq!(pos(1_133_333_323).cdf().unwrap(), 871_462_849); // implementation-pinning
+    assert_eq!(pos(2_000_000_000).cdf().unwrap(), 977_249_868);
+    assert_eq!(pos(3_500_000_000).cdf().unwrap(), 999_767_371);
+    assert_eq!(pos(5_000_000_000).cdf().unwrap(), 999_999_713);
+    assert_eq!(pos(MAX_Z_RAW - 1).cdf().unwrap(), 999_999_999); // last interior ULP
+    assert_eq!(pos(MAX_Z_RAW).cdf().unwrap(), ONE_RAW); // saturation boundary
+    assert_eq!(pos(7 * SCALE).cdf().unwrap(), ONE_RAW); // beyond saturation
+    // Negative branch: the reflection `10^9 - Φ(|z|)` must also agree exactly.
+    assert_eq!(neg(1).cdf().unwrap(), HALF_RAW);
+    assert_eq!(neg(250_000_000).cdf().unwrap(), 401_293_674);
+    assert_eq!(neg(1_133_333_323).cdf().unwrap(), 128_537_151);
+    assert_eq!(neg(3_500_000_000).cdf().unwrap(), 232_629);
+    assert_eq!(neg(MAX_Z_RAW - 1).cdf().unwrap(), 1);
+    assert_eq!(neg(MAX_Z_RAW).cdf().unwrap(), 0);
 }
 
 // === Method dispatch ===
