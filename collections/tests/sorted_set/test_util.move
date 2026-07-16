@@ -248,7 +248,7 @@ public fun add_ndk(s: &mut SortedSet<NoDropKey>, k: NoDropKey) { s.add_by!(k, |a
 public fun has_ndk(s: &SortedSet<NoDropKey>, id: u64): bool {
     let probe = ndk(id);
     let found = s.contains_by!(&probe, |a, b| a.id < b.id);
-    probe.ndk_unwrap();
+    _ = probe.ndk_unwrap();
     found
 }
 
@@ -257,7 +257,7 @@ public fun has_ndk(s: &SortedSet<NoDropKey>, id: u64): bool {
 public fun rem_ndk(s: &mut SortedSet<NoDropKey>, id: u64): u64 {
     let probe = ndk(id);
     let k = s.remove_by!(&probe, |a, b| a.id < b.id);
-    probe.ndk_unwrap();
+    _ = probe.ndk_unwrap();
     k.ndk_unwrap()
 }
 
@@ -290,35 +290,35 @@ public fun keys_ck(s: &SortedSet<CopyKey>): vector<u64> { s.keys().map!(|k| k.co
 public fun fnext_ck(s: &SortedSet<CopyKey>, id: u64, inc: bool): Option<u64> {
     let probe = copy_key(id);
     let out = s.find_next_by!(&probe, inc, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
 public fun fprev_ck(s: &SortedSet<CopyKey>, id: u64, inc: bool): Option<u64> {
     let probe = copy_key(id);
     let out = s.find_prev_by!(&probe, inc, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
 public fun nkey_ck(s: &SortedSet<CopyKey>, id: u64): Option<u64> {
     let probe = copy_key(id);
     let out = s.next_key_by!(&probe, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
 public fun pkey_ck(s: &SortedSet<CopyKey>, id: u64): Option<u64> {
     let probe = copy_key(id);
     let out = s.prev_key_by!(&probe, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
 public fun page_ck(s: &SortedSet<CopyKey>, from_id: u64, inc: bool, lim: u64): vector<u64> {
     let probe = copy_key(from_id);
     let out = s.keys_from_by!(&probe, inc, lim, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 

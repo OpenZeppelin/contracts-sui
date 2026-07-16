@@ -647,10 +647,10 @@ public macro fun upsert_by<$K: drop, $V>(
         // coarse-comparator re-insert keeps the LAST key's bytes (last-write-wins).
         let (_, old_value) = map.remove_at(idx);
         map.insert_at(key, value, idx);
-        option::some(old_value)
+        return option::some(old_value)
     } else {
         map.insert_at(key, value, idx);
-        option::none()
+        return option::none()
     }
 }
 

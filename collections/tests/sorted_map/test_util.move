@@ -289,21 +289,21 @@ public fun sk_add(m: &mut SortedMap<StoreKey, u64>, id: u64, v: u64) {
 public fun sk_has(m: &SortedMap<StoreKey, u64>, id: u64): bool {
     let probe = store_key(id);
     let found = m.contains_by!(&probe, |a, b| a.id < b.id);
-    probe.store_key_unwrap();
+    _ = probe.store_key_unwrap();
     found
 }
 
 public fun sk_get(m: &SortedMap<StoreKey, u64>, id: u64): u64 {
     let probe = store_key(id);
     let v = *m.borrow_by!(&probe, |a, b| a.id < b.id);
-    probe.store_key_unwrap();
+    _ = probe.store_key_unwrap();
     v
 }
 
 public fun sk_set(m: &mut SortedMap<StoreKey, u64>, id: u64, v: u64) {
     let probe = store_key(id);
     *m.borrow_mut_by!(&probe, |a, b| a.id < b.id) = v;
-    probe.store_key_unwrap();
+    _ = probe.store_key_unwrap();
 }
 
 /// Returns `(removed key's id, value)`; both the probe and the removed no-`drop` key are
@@ -311,7 +311,7 @@ public fun sk_set(m: &mut SortedMap<StoreKey, u64>, id: u64, v: u64) {
 public fun sk_remove(m: &mut SortedMap<StoreKey, u64>, id: u64): (u64, u64) {
     let probe = store_key(id);
     let (k, v) = m.remove_by!(&probe, |a, b| a.id < b.id);
-    probe.store_key_unwrap();
+    _ = probe.store_key_unwrap();
     (k.store_key_unwrap(), v)
 }
 
@@ -345,35 +345,35 @@ public fun ck2_keys(m: &SortedMap<CopyKey, u64>): vector<u64> {
 public fun ck2_fnext(m: &SortedMap<CopyKey, u64>, id: u64, inc: bool): Option<u64> {
     let probe = copy_key(id);
     let out = m.find_next_by!(&probe, inc, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
 public fun ck2_fprev(m: &SortedMap<CopyKey, u64>, id: u64, inc: bool): Option<u64> {
     let probe = copy_key(id);
     let out = m.find_prev_by!(&probe, inc, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
 public fun ck2_nxt(m: &SortedMap<CopyKey, u64>, id: u64): Option<u64> {
     let probe = copy_key(id);
     let out = m.next_key_by!(&probe, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
 public fun ck2_prv(m: &SortedMap<CopyKey, u64>, id: u64): Option<u64> {
     let probe = copy_key(id);
     let out = m.prev_key_by!(&probe, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
 public fun ck2_kfrom(m: &SortedMap<CopyKey, u64>, from: u64, inc: bool, lim: u64): vector<u64> {
     let probe = copy_key(from);
     let out = m.keys_from_by!(&probe, inc, lim, |a, b| a.id < b.id).map!(|k| k.copy_key_unwrap());
-    probe.copy_key_unwrap();
+    _ = probe.copy_key_unwrap();
     out
 }
 
