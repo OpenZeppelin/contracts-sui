@@ -82,6 +82,8 @@ const BPS: u64 = 10_000;
 /// - `EEmptyReserves` if either reserve is zero.
 /// - `EZeroInput` if `amount_in` is zero.
 /// - `EFeeTooHigh` if `fee_bps` exceeds `10_000` (100%).
+/// - Arithmetic overflow if the denominator `reserve_in + net_in` exceeds `u64`: the sum is
+///   a native `u64` addition, evaluated before `mul_div` runs its widened arithmetic.
 /// - `EOverflow` if an intermediate `mul_div` overflows `u64`.
 public fun quote_swap_out(reserve_in: u64, reserve_out: u64, amount_in: u64, fee_bps: u64): u64 {
     assert!(reserve_in > 0 && reserve_out > 0, EEmptyReserves);

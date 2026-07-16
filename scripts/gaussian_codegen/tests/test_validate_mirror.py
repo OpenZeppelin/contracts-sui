@@ -143,16 +143,16 @@ def test_cdf_simulate_matches_known_phi1(coeffs):
 
 
 def test_horner_peak_product_matches_manual():
-    # The peak product is the largest acc.mag * z.mag fed into a `// wad` step.
+    # The peak product is the largest acc.mag * z.mag fed into a `// acc_scale` step.
     # For P(z) = c0 + c1 z the only Horner step multiplies acc=c1 by z.
     z = (2 * WAD, False)
     peak = arith.horner_peak_product(z, [(3 * WAD, False), (1 * WAD, False)], WAD)
-    assert peak == (1 * WAD) * (2 * WAD)  # c1 * z, before the `// wad` divide
+    assert peak == (1 * WAD) * (2 * WAD)  # c1 * z, before the `// acc_scale` divide
 
 
 def test_check_overflow_margin_committed_cdf(coeffs):
     num, den = coeffs
-    bits, headroom = gates.check_overflow_margin(num, den, v.WAD, v.SCALE, v.MAX_Z_RAW)
+    bits, headroom = gates.check_overflow_margin(num, den, v.ACC_SCALE, v.SCALE, v.MAX_Z_RAW)
     assert bits <= 256
     assert headroom >= gates.MIN_HEADROOM_BITS
 
@@ -162,6 +162,6 @@ def test_check_neighbor_monotonicity_committed_cdf_window(coeffs):
     # A small in-domain tail window: the gate runs and confirms no inversion
     # (it raises RuntimeError on any confirmed inversion).
     pairs, _ = gates.check_neighbor_monotonicity(
-        num, den, v.WAD, v.SCALE, 5_000_000_000, 5_000_200_000, increasing=True
+        num, den, v.ACC_SCALE, v.SCALE, 5_000_000_000, 5_000_200_000, increasing=True
     )
     assert pairs > 0

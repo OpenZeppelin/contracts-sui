@@ -1,0 +1,454 @@
+/// Functional core on `SortedMap<u64, u64>`.
+///
+/// Covers the maintained-by-construction core: lifecycle, upsert/remove
+/// semantics, extremes & pop, navigation, pagination (incl. the overflow-safe
+/// `out.length() < limit` bound). Sorted order is checked after mutations via the
+/// `wf` well-formedness check. All ops route through `test_util`'s thin wrappers so no
+/// test function approaches the 256-locals limit.
+module openzeppelin_collections::sorted_map_core_tests;
+
+use openzeppelin_collections::sorted_map as sm;
+use openzeppelin_collections::sorted_map_test_util as u;
+use std::unit_test::assert_eq;
+
+const U64_MAX: u64 = 18446744073709551615;
+
+// === Lifecycle ===
+
+#[test]
+fun new_empty() {
+    let m = sm::new<u64, u64>();
+    assert_eq!(m.length(), 0);
+    assert!(m.is_empty());
+    assert_eq!(m.head(), option::none());
+    assert_eq!(m.tail(), option::none());
+    m.destroy_empty(); // destroy_empty happy path
+}
+
+// === Insert: fresh grows, upsert replaces ===
+
+#[test]
+fun insert_fresh_grows() {
+    let mut m = sm::new<u64, u64>();
+    assert_eq!(u::ins(&mut m, 20, 200), option::none()); // none on fresh
+    assert_eq!(u::ins(&mut m, 10, 100), option::none());
+    assert_eq!(u::ins(&mut m, 30, 300), option::none());
+    assert_eq!(m.length(), 3); // +1 each
+    assert!(u::wf(&m)); // sorted, no dups
+    assert_eq!(u::get(&m, 10), 100);
+    assert_eq!(u::get(&m, 20), 200);
+    assert_eq!(u::get(&m, 30), 300);
+}
+
+#[test]
+fun insert_upsert_replaces() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 100);
+    u::ins(&mut m, 20, 200);
+    // Re-insert an existing key: length unchanged, returns some(old), new value wins.
+    assert_eq!(u::ins(&mut m, 10, 999), option::some(100)); // some(old)
+    assert_eq!(m.length(), 2); // no growth
+    assert_eq!(u::get(&m, 10), 999); // new value
+    assert!(u::wf(&m));
+    // Repeated replace stays constant (no duplicates / +2).
+    assert_eq!(u::ins(&mut m, 10, 111), option::some(999));
+    assert_eq!(m.length(), 2);
+    assert!(u::wf(&m));
+}
+
+// === add: strict insert (fresh only); the duplicate-aborts side lives in abort_tests ===
+
+#[test]
+fun add_fresh_grows() {
+    let mut m = sm::new<u64, u64>();
+    // add takes the key by value and returns nothing; each fresh key grows the map by 1
+    // and lands in sorted position regardless of insertion order.
+    u::add(&mut m, 20, 200);
+    u::add(&mut m, 10, 100);
+    u::add(&mut m, 30, 300);
+    assert_eq!(m.length(), 3); // +1 each, no aborts on distinct keys
+    assert!(u::wf(&m)); // strictly ascending
+    assert_eq!(u::get(&m, 10), 100);
+    assert_eq!(u::get(&m, 20), 200);
+    assert_eq!(u::get(&m, 30), 300);
+}
+
+#[test]
+fun insert_order_shuffled() {
+    // 60 scrambled keys inserted in arbitrary order -> still strictly ascending.
+    let m = u::build_scrambled(60);
+    assert_eq!(m.length(), 60);
+    assert!(u::wf(&m));
+    // Independent ascending-walk check via head + next_key: strictly increasing, count == n.
+    let mut cur = m.head();
+    let mut prev = option::none<u64>();
+    let mut count = 0u64;
+    while (cur.is_some()) {
+        let k = *cur.borrow();
+        if (prev.is_some()) assert!(*prev.borrow() < k); // strictly increasing
+        prev = option::some(k);
+        cur = u::nxt(&m, k);
+        count = count + 1;
+    };
+    assert_eq!(count, 60);
+}
+
+// === Borrow / borrow_mut ===
+
+#[test]
+fun borrow_and_mut_present() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 5, 50);
+    u::ins(&mut m, 7, 70);
+    assert_eq!(u::get(&m, 5), 50);
+    u::set(&mut m, 5, 51); // borrow_mut -> overwrite value
+    assert_eq!(u::get(&m, 5), 51);
+    assert_eq!(u::get(&m, 7), 70); // neighbor untouched
+}
+
+#[test]
+fun borrow_mut_preserves_order() {
+    // borrow_mut yields &mut V, never &mut Entry: the key cannot be desynced.
+    let mut m = u::build_scrambled(40);
+    let h = *m.head().borrow();
+    let t = *m.tail().borrow();
+    u::set(&mut m, h, 12345);
+    u::set(&mut m, t, 67890);
+    assert!(u::wf(&m)); // order intact after value mutation
+    assert_eq!(m.head(), option::some(h)); // extremes unchanged
+    assert_eq!(m.tail(), option::some(t));
+    assert_eq!(u::get(&m, h), 12345);
+}
+
+// === contains == borrow-succeeds ===
+
+#[test]
+fun contains_matches_borrow() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    // present
+    assert!(u::has(&m, 20) && u::get(&m, 20) == 2);
+    // absent: below head, above tail, interior gap
+    assert!(!u::has(&m, 5));
+    assert!(!u::has(&m, 35));
+    assert!(!u::has(&m, 25));
+    // state transition: insert flips false->true, remove flips true->false
+    u::ins(&mut m, 25, 25);
+    assert!(u::has(&m, 25));
+    u::rm(&mut m, 25);
+    assert!(!u::has(&m, 25));
+}
+
+// === Remove ===
+
+#[test]
+fun remove_head_tail_middle() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    u::ins(&mut m, 40, 4);
+    let (k, v) = u::rm(&mut m, 10);
+    assert_eq!(k, 10);
+    assert_eq!(v, 1); // head
+    let (k, v) = u::rm(&mut m, 40);
+    assert_eq!(k, 40);
+    assert_eq!(v, 4); // tail
+    let (k, v) = u::rm(&mut m, 20);
+    assert_eq!(k, 20);
+    assert_eq!(v, 2); // middle
+    assert_eq!(m.length(), 1);
+    assert!(u::wf(&m)); // shift kept order
+    assert_eq!(m.head(), option::some(30));
+    assert!(!u::has(&m, 20));
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound)]
+fun remove_below_head_aborts() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 30, 3);
+    u::rm(&mut m, 5);
+    abort
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound)]
+fun remove_above_tail_aborts() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 30, 3);
+    u::rm(&mut m, 35);
+    abort
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound)]
+fun remove_interior_gap_aborts() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 30, 3);
+    u::rm(&mut m, 20);
+    abort
+}
+
+#[test]
+fun remove_reinsert_roundtrip() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    let (k, v) = u::rm(&mut m, 10);
+    assert_eq!(k, 10);
+    assert_eq!(v, 1);
+    assert!(!u::has(&m, 10));
+    assert_eq!(u::ins(&mut m, 10, 11), option::none()); // reinserts fresh
+    assert_eq!(u::get(&m, 10), 11);
+    assert!(u::wf(&m));
+}
+
+// === Extremes & pop ===
+
+#[test]
+fun head_tail_extremes() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 20, 2);
+    assert!(m.head() == option::some(20) && m.tail() == option::some(20)); // singleton
+    u::ins(&mut m, 10, 1); // new min
+    u::ins(&mut m, 30, 3); // new max
+    assert_eq!(m.head(), option::some(10));
+    assert_eq!(m.tail(), option::some(30));
+}
+
+#[test]
+fun pop_front_back_drains() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    let (k0, v0) = m.pop_front(); // smallest
+    assert!(k0 == 10 && v0 == 1);
+    let (k1, v1) = m.pop_back(); // largest
+    assert!(k1 == 30 && v1 == 3);
+    assert_eq!(m.length(), 1);
+    let (k2, v2) = m.pop_back(); // length-1 map: no n-1 underflow
+    assert!(k2 == 20 && v2 == 2);
+    assert!(m.is_empty());
+    m.destroy_empty();
+}
+
+// === Navigation: find_next / find_prev ===
+
+#[test]
+fun find_next_table() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    // absent target: include is irrelevant (ceiling == strict-next)
+    assert_eq!(u::fnext(&m, 15, true), option::some(20));
+    assert_eq!(u::fnext(&m, 15, false), option::some(20));
+    // present target: include returns it; strict skips it
+    assert_eq!(u::fnext(&m, 20, true), option::some(20));
+    assert_eq!(u::fnext(&m, 20, false), option::some(30));
+    // at the max
+    assert_eq!(u::fnext(&m, 30, true), option::some(30));
+    assert_eq!(u::fnext(&m, 30, false), option::none());
+    // below head / above tail
+    assert_eq!(u::fnext(&m, 5, true), option::some(10));
+    assert_eq!(u::fnext(&m, 35, true), option::none());
+}
+
+#[test]
+fun find_prev_table() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    assert_eq!(u::fprev(&m, 25, true), option::some(20));
+    assert_eq!(u::fprev(&m, 25, false), option::some(20));
+    assert_eq!(u::fprev(&m, 20, true), option::some(20));
+    assert_eq!(u::fprev(&m, 20, false), option::some(10));
+    assert_eq!(u::fprev(&m, 10, true), option::some(10));
+    assert_eq!(u::fprev(&m, 10, false), option::none()); // strict-prev of min
+    assert_eq!(u::fprev(&m, 35, true), option::some(30));
+    assert_eq!(u::fprev(&m, 5, false), option::none());
+}
+
+#[test]
+fun next_prev_key_sugar() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    assert_eq!(u::nxt(&m, 20), option::some(30));
+    assert_eq!(u::nxt(&m, 30), option::none()); // next_key(tail) == none
+    assert_eq!(u::prv(&m, 20), option::some(10));
+    assert_eq!(u::prv(&m, 10), option::none()); // prev_key(head) == none
+}
+
+// === Navigation boundary duality ===
+
+#[test]
+fun navigation_boundary_duality() {
+    // empty: all four none
+    let e = sm::new<u64, u64>();
+    assert_eq!(u::fnext(&e, 5, true), option::none());
+    assert_eq!(u::fprev(&e, 5, true), option::none());
+    assert_eq!(u::nxt(&e, 5), option::none());
+    assert_eq!(u::prv(&e, 5), option::none());
+    e.destroy_empty();
+
+    // singleton {10}: H == T == 10
+    let mut s = sm::new<u64, u64>();
+    u::ins(&mut s, 10, 1);
+    assert!(u::nxt(&s, 10) == option::none() && u::prv(&s, 10) == option::none());
+    assert_eq!(u::fnext(&s, 10, true), option::some(10));
+    assert_eq!(u::fprev(&s, 10, true), option::some(10));
+    assert_eq!(s.head(), s.tail());
+
+    // {10,20,30}: cursor-termination relations at the extremes
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    let h = *m.head().borrow();
+    let t = *m.tail().borrow();
+    assert_eq!(u::nxt(&m, t), option::none()); // forward walk stops at tail
+    assert_eq!(u::prv(&m, t), option::some(20));
+    assert_eq!(u::prv(&m, h), option::none()); // backward walk stops at head
+    assert_eq!(u::nxt(&m, h), option::some(20));
+    assert_eq!(u::fnext(&m, 5, true), m.head()); // find_next(k<=H,true) == head
+    assert_eq!(u::fprev(&m, 35, true), m.tail()); // find_prev(k>=T,true) == tail
+}
+
+// === Pagination ===
+
+#[test]
+fun keys_from_paginate_resume() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    u::ins(&mut m, 40, 4);
+    u::ins(&mut m, 50, 5);
+    // page 1, resume with include=false, no overlap / no gap
+    assert_eq!(u::kfrom(&m, 10, true, 2), vector[10, 20]);
+    assert_eq!(u::kfrom(&m, 20, false, 2), vector[30, 40]);
+    assert_eq!(u::kfrom(&m, 40, false, 10), vector[50]);
+    assert_eq!(u::kfrom(&m, 50, false, 10), vector[]); // past tail via strict resume
+    // from < head pages from head; from > tail is empty; limit 0 is empty
+    assert_eq!(u::kfrom(&m, 5, true, 10), vector[10, 20, 30, 40, 50]);
+    assert_eq!(u::kfrom(&m, 100, true, 10), vector[]);
+    assert_eq!(u::kfrom(&m, 10, true, 0), vector[]);
+}
+
+#[test]
+fun keys_from_overflow_limit() {
+    // The loop bound is `out.length() < limit`, never `start + limit` - so a huge limit
+    // returns the tail with NO arithmetic overflow / abort.
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::ins(&mut m, 30, 3);
+    assert_eq!(u::kfrom(&m, 20, false, 1000), vector[30]);
+    assert_eq!(u::kfrom(&m, 0, true, U64_MAX), vector[10, 20, 30]);
+}
+
+// === Full enumeration (keys) ===
+
+#[test]
+fun keys_empty_is_empty() {
+    let m = sm::new<u64, u64>();
+    assert_eq!(m.keys(), vector[]);
+}
+
+#[test]
+fun keys_returns_all_in_ascending_order() {
+    let mut m = sm::new<u64, u64>();
+    // Insert out of order; the map sorts, so keys come back ascending.
+    u::ins(&mut m, 30, 3);
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    assert_eq!(m.keys(), vector[10, 20, 30]);
+}
+
+#[test]
+fun keys_reflects_stored_order_under_reverse_comparator() {
+    let mut m = sm::new<u64, u64>();
+    // Built consistently with the reverse comparator, so stored order is DESCENDING;
+    // `keys` returns that stored order, not the natural ascending one.
+    u::ups_rev(&mut m, 10, 1);
+    u::ups_rev(&mut m, 30, 3);
+    u::ups_rev(&mut m, 20, 2);
+    assert_eq!(m.keys(), vector[30, 20, 10]);
+}
+
+// === Bulk construction (singleton, from_sorted_keys_values) ===
+
+#[test]
+fun singleton_holds_one_entry() {
+    let m = sm::singleton(5, 50);
+    assert_eq!(m.length(), 1);
+    assert_eq!(m.keys(), vector[5]);
+    assert_eq!(u::get(&m, 5), 50);
+}
+
+#[test]
+fun from_sorted_builds_ascending() {
+    let m = sm::from_sorted_keys_values!(vector[10, 20, 30], vector[1, 2, 3]);
+    assert_eq!(m.keys(), vector[10, 20, 30]);
+    assert_eq!(u::get(&m, 20), 2);
+    assert!(u::wf(&m));
+}
+
+#[test]
+fun from_sorted_empty_is_empty() {
+    let m = sm::from_sorted_keys_values!(vector<u64>[], vector<u64>[]);
+    assert!(m.is_empty());
+}
+
+#[test]
+fun from_sorted_singleton() {
+    // Boundary: one pair -> singleton. No adjacent pair exists, so the strictly-increasing check
+    // never runs for n == 1.
+    let m = sm::from_sorted_keys_values!(vector[1], vector[10]);
+    assert_eq!(m.keys(), vector[1]);
+    assert_eq!(u::get(&m, 1), 10);
+    assert!(u::wf(&m));
+}
+
+#[test]
+fun from_sorted_by_reverse_comparator() {
+    // Descending keys are strictly increasing UNDER the reverse comparator, so this builds a
+    // consistently-reversed map; `keys` returns the stored (descending) order.
+    let m = sm::from_sorted_keys_values_by!(vector[30, 20, 10], vector[3, 2, 1], |a, b| *a > *b);
+    assert_eq!(m.keys(), vector[30, 20, 10]);
+    assert_eq!(u::get_rev(&m, 20), 2);
+    assert!(u::wf_rev(&m));
+}
+
+#[test]
+fun from_sorted_matches_insert_loop() {
+    // Differential: the O(n) builder produces the same map as a loop of `upsert`.
+    let built = sm::from_sorted_keys_values!(vector[1, 5, 9], vector[10, 50, 90]);
+    let mut looped = sm::new<u64, u64>();
+    u::ins(&mut looped, 1, 10);
+    u::ins(&mut looped, 5, 50);
+    u::ins(&mut looped, 9, 90);
+    assert_eq!(built.keys(), looped.keys());
+    assert_eq!(u::get(&built, 5), u::get(&looped, 5));
+}
+
+// === Length tracks the vector with no cached counter ===
+
+#[test]
+fun length_delta_per_op() {
+    let mut m = sm::new<u64, u64>();
+    assert_eq!(m.length(), 0);
+    u::ins(&mut m, 10, 1);
+    assert_eq!(m.length(), 1); // fresh: +1
+    u::ins(&mut m, 10, 2);
+    assert_eq!(m.length(), 1); // upsert: 0
+    u::rm(&mut m, 10);
+    assert_eq!(m.length(), 0); // remove: -1
+}
