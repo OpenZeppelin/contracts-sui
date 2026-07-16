@@ -143,6 +143,13 @@ fun from_sorted_out_of_order() {
 }
 
 #[test, expected_failure(abort_code = sm::EKeysNotStrictlyIncreasing, location = sm)]
+fun from_sorted_first_pair_not_increasing() {
+    // The out-of-order step is the FIRST comparison (i == 1), not a later pair as in [1,3,2] - so
+    // the abort fires on the very first adjacent check.
+    let _m = sm::from_sorted_keys_values!(vector<u64>[2, 1], vector<u64>[20, 10]);
+}
+
+#[test, expected_failure(abort_code = sm::EKeysNotStrictlyIncreasing, location = sm)]
 fun from_sorted_duplicate_key() {
     // A duplicate compares equal, so it is NOT strictly increasing - aborts rather than
     // de-duplicating (a resource `V` cannot be silently displaced).

@@ -408,6 +408,16 @@ fun from_sorted_empty_is_empty() {
 }
 
 #[test]
+fun from_sorted_singleton() {
+    // Boundary: one pair -> singleton. No adjacent pair exists, so the strictly-increasing check
+    // never runs for n == 1.
+    let m = sm::from_sorted_keys_values!(vector[1], vector[10]);
+    assert_eq!(m.keys(), vector[1]);
+    assert_eq!(u::get(&m, 1), 10);
+    assert!(u::wf(&m));
+}
+
+#[test]
 fun from_sorted_by_reverse_comparator() {
     // Descending keys are strictly increasing UNDER the reverse comparator, so this builds a
     // consistently-reversed map; `keys` returns the stored (descending) order.
