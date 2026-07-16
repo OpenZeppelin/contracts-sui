@@ -72,6 +72,17 @@ public(package) fun half_raw(): u128 { HALF_RAW }
 ///
 /// Returned value is in `[HALF_RAW, ONE_RAW]`. Caller is responsible for
 /// sign-flipping (`ONE_RAW - phi`) when the original input was negative.
+///
+/// #### Aborts
+/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+///   value (defense-in-depth against a corrupted regenerated coefficient table;
+///   unreachable with the committed coefficient tables).
+/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+///   non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 public(package) fun cdf_nonneg_raw(z_raw: u128): u128 {
     if (z_raw >= cdf_coefficients::max_z_raw()) return ONE_RAW;
     if (z_raw == 0) return HALF_RAW; // Φ(0) special case
@@ -90,6 +101,17 @@ public(package) fun cdf_nonneg_raw(z_raw: u128): u128 {
 /// Evaluate `N(z) / D(z)` for a central-domain `z_raw` (`0 < z_raw < max_z`),
 /// given the coefficient tables. Split out from `cdf_nonneg_raw` so its
 /// integrity asserts can be exercised with injected coefficients in tests.
+///
+/// #### Aborts
+/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+///   value (defense-in-depth against a corrupted regenerated coefficient table;
+///   unreachable with the committed coefficient tables).
+/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+///   non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 fun eval_rational(
     z_raw: u128,
     num_mags: vector<u128>,
