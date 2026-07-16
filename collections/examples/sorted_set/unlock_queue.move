@@ -46,7 +46,13 @@ public struct UnlockQueue has key {
 
 /// Emitted by `process_earliest` / `process_latest` when a deadline is processed (popped) off
 /// the queue.
-public struct Unlocked has copy, drop { deadline: u64 }
+public struct Unlocked has copy, drop {
+    /// ID of the queue that emitted the event. Creation is permissionless, so consumers bind
+    /// events to one instance by this id.
+    queue_id: ID,
+    /// The processed deadline.
+    deadline: u64,
+}
 
 // === Public Functions ===
 
@@ -101,7 +107,7 @@ public fun is_empty(q: &UnlockQueue): bool {
 ///   `next_deadline` first.
 public fun process_earliest(q: &mut UnlockQueue): u64 {
     let deadline = q.deadlines.pop_front();
-    event::emit(Unlocked { deadline });
+    event::emit(Unlocked { queue_id: object::id(q), deadline });
     deadline
 }
 
@@ -111,7 +117,7 @@ public fun process_earliest(q: &mut UnlockQueue): u64 {
 /// - `EEmpty` if the queue is empty (same as `process_earliest`).
 public fun process_latest(q: &mut UnlockQueue): u64 {
     let deadline = q.deadlines.pop_back();
-    event::emit(Unlocked { deadline });
+    event::emit(Unlocked { queue_id: object::id(q), deadline });
     deadline
 }
 
@@ -121,4 +127,10 @@ public fun process_latest(q: &mut UnlockQueue): u64 {
 #[test_only]
 public fun deadlines_well_formed(q: &UnlockQueue): bool {
     q.deadlines.inner().is_well_formed!()
+}
+
+/// Reconstruct an `Unlocked` event for test assertions.
+#[test_only]
+public fun unlocked_event(queue_id: ID, deadline: u64): Unlocked {
+    Unlocked { queue_id, deadline }
 }

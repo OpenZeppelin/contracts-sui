@@ -1,8 +1,13 @@
 module openzeppelin_collections::sorted_set_unlock_queue_tests;
 
 use openzeppelin_collections::sorted_set as ss;
-use openzeppelin_collections::sorted_set_unlock_queue::{Self as unlock_queue, UnlockQueue};
+use openzeppelin_collections::sorted_set_unlock_queue::{
+    Self as unlock_queue,
+    UnlockQueue,
+    Unlocked,
+};
 use std::unit_test::assert_eq;
+use sui::event;
 use sui::test_scenario as ts;
 
 const ALICE: address = @0x0A;
@@ -48,6 +53,18 @@ fun drain_earliest_first() {
         q.cancel(30); // remove the tail
         assert_eq!(q.pending(), 1); // {25}
         assert_eq!(q.process_latest(), 25); // pop_back: largest (now only)
+
+        // Each pop emitted an `Unlocked` carrying THIS queue's id - consumers watching another
+        // (permissionless) instance can tell the events apart.
+        let qid = object::id(&q);
+        assert_eq!(
+            event::events_by_type<Unlocked>(),
+            vector[
+                unlock_queue::unlocked_event(qid, 10),
+                unlock_queue::unlocked_event(qid, 20),
+                unlock_queue::unlocked_event(qid, 25),
+            ],
+        );
 
         assert!(q.is_empty());
         assert!(q.deadlines_well_formed()); // an empty set is well-formed
