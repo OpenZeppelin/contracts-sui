@@ -108,8 +108,9 @@ fun eval_rational(
     assert!(!n.is_neg(), EInternalNumNegative);
     assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
 
-    // Final ratio: N(z) / D(z) at ACC_SCALE, cast to UD30x9 (10^9) with a single
-    // nearest-rounding step. On the central domain (degree-10 Horner at
+    // Final ratio: `N` and `D` are Horner accumulators at ACC_SCALE, which cancels
+    // in the quotient; a single nearest-rounding `mul_div` lands `N(z) / D(z)` at
+    // the external UD30x9 scale (10^9). On the central domain (degree-10 Horner at
     // |z| ≤ 6.402729806) the peak `acc.mag × z.mag` intermediate is ~2.6 × 10^74
     // (248 bits, ~8 under u256's 2^256), so `destroy_some` cannot abort. The peak
     // `φ(0)` is well under `1.0`, so no overshoot clamp is needed.

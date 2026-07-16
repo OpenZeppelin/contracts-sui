@@ -119,9 +119,10 @@ fun eval_rational(
     assert!(!n.is_neg(), EInternalNumNegative);
     assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
 
-    // Final ratio: N(z) / D(z) at ACC_SCALE, cast to UD30x9 (10^9) with a single
-    // nearest-rounding step. N.mag is ≤ ~10^36, so the `N · 10^9` intermediate is
-    // ~10^45 - far under u256 capacity, so `destroy_some` cannot abort.
+    // Final ratio: `N` and `D` are Horner accumulators at ACC_SCALE, which cancels
+    // in the quotient; a single nearest-rounding `mul_div` lands `N(z) / D(z)` at
+    // the external UD30x9 scale (10^9). N.mag is ≤ ~10^36, so the `N · 10^9`
+    // intermediate is ~10^45 - far under u256 capacity, so `destroy_some` cannot abort.
     let phi_raw_u256 = u256::mul_div(
         n.mag(),
         common::scale_u256!(),

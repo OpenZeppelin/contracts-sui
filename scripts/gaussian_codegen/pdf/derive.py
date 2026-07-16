@@ -172,7 +172,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         m = abs(c) * acc_scale
         if m > max_mag:
             max_mag = m
-    print(f"Max |coeff| × PDF_ACC_SCALE = {float(max_mag):.3e} (must be < 2^128 ≈ 3.4e38)")
+    print(f"Max |coeff| x PDF_ACC_SCALE = {float(max_mag):.3e} (must be < 2^128 ≈ 3.4e38)")
     if max_mag >= mpf(2) ** 128:
         print("FAIL: at least one coefficient does not fit u128 at PDF_ACC_SCALE", file=sys.stderr)
         return 1

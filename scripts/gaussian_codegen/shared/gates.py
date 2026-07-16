@@ -59,8 +59,11 @@ def _proxy_output(z: np.ndarray, num_f: np.ndarray, den_f: np.ndarray, scale: in
 
 def _eval_int(z_raw: int, num, den, acc_scale: int, scale: int) -> int:
     """Exact integer central-domain output `round(N(z)/D(z) * scale)` at the
-    family WAD. No saturation or reflection - callers scan strictly inside the
-    central domain, so the raw rational is what ships there."""
+    external `scale` (10^9). Horner evaluation runs at the family `acc_scale`,
+    which cancels in the `N / D` quotient; only the final nearest-rounding step
+    lands the result on the external grid. No saturation or reflection - callers
+    scan strictly inside the central domain, so the raw rational is what ships
+    there."""
     z_acc: SignedInt = (z_raw * (acc_scale // scale), False)  # 10^9 -> acc_scale
     n = horner_eval(z_acc, num, acc_scale)
     d = horner_eval(z_acc, den, acc_scale)

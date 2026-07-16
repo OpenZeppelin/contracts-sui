@@ -139,8 +139,9 @@ fun eval_rational(
     assert!(!n.is_neg(), EInternalNumNegative);
     assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
 
-    // Final ratio: z = N(x) / D(x) at WAD, cast to 10^9 with a single
-    // nearest-rounding step.
+    // Final ratio: `N` and `D` are Horner accumulators at WAD, which cancels in
+    // the quotient; a single nearest-rounding `mul_div` lands `z = N(x) / D(x)`
+    // at the 10^9 output scale.
     let z_raw_u256 = u256::mul_div(
         n.mag(),
         common::scale_u256!(),
