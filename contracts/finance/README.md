@@ -227,8 +227,9 @@ that never releases. Have the curve hand you the pair as one value:
 `VestingSchedule<S, P>`, and since minting one takes an `S` value, only the declaring curve
 can build it. Accept that bundle instead of a bare `P` and the two slots unify against a
 coherent pair - an incoherent one fails to compile. The linear curve exposes
-`vesting_schedule` / `vesting_schedule_continuous`; unwrap the bundle with `.params()` when
-you build the wallet.
+`vesting_schedule` / `vesting_schedule_continuous` to build a bundle from raw inputs, and
+`into_vesting_schedule` to wrap a `Params` you already hold; unwrap the bundle with
+`.params()` when you build the wallet.
 
 ### Custom schedules
 

@@ -229,6 +229,24 @@ public fun vesting_schedule_continuous(
     vesting_wallet::new_schedule(Linear {}, params_continuous(start_ms, cliff_ms, duration_ms))
 }
 
+/// Wrap an already-built `Params` into a `VestingSchedule<Linear, Params>`. Where
+/// `vesting_schedule` validates and bundles in one step, this bundles a `Params` you
+/// already hold - e.g. one read back from a wallet via `vesting_wallet::schedule_params`,
+/// or produced by `params` / `params_continuous`. It is the inverse of the bundle's
+/// `vesting_wallet::params` accessor. No revalidation is needed: a `Params` can only be
+/// obtained from this module's validating constructors, so it is already well-formed;
+/// and since only this module can supply the `Linear` witness, the resulting
+/// `(Linear, Params)` pair is coherent by construction.
+///
+/// #### Parameters
+/// - `params`: The stepped-schedule parameters to bundle.
+///
+/// #### Returns
+/// - A `VestingSchedule<Linear, Params>` carrying `params`.
+public fun into_vesting_schedule(params: Params): VestingSchedule<Linear, Params> {
+    vesting_wallet::new_schedule(Linear {}, params)
+}
+
 /// Build a `VestingWallet<Linear, Params, C>` on the stepped (tranche) schedule.
 /// Returns the wallet by value, plus the `DestroyCap` that authorizes its teardown, so
 /// the caller can chain deposit and topology selection in one PTB and route the cap to
