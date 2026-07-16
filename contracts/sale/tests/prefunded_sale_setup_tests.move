@@ -126,6 +126,7 @@ fun create_sale_accepts_window_at_max_duration() {
     );
 
     assert!(sale.phase().is_init());
+    assert_eq!(sale.closes_at_ms() - sale.opens_at_ms(), prefunded_sale::max_sale_duration_ms());
     destroy(sale);
     destroy(cap);
 }

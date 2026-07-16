@@ -108,15 +108,17 @@
 ///    `enable_allowlist`, at most once, and never replaceable. Losing it
 ///    stops all minting, so every `purchase` aborts. On a sale that has
 ///    **already met its soft cap** (but not its hard cap) this does more
-///    than block future purchases: raising to the hard cap is the only
-///    admin-driven exit, and purchases are the only way to raise, so the
-///    admin-only exits (`finalize`, `cancel_after_close`, `cancel_emergency`)
-///    all wait on the close of the window. Until `closes_at_ms`, the
-///    payments already taken (in `proceeds`), every buyer's allocation
-///    (behind claiming's `Finalized` guard), and the unsold inventory are
-///    all locked, with no party able to release them. `MAX_SALE_DURATION_MS`
-///    bounds how long that lasts; a shorter window shortens it. Hold the
-///    admin in a recoverable container.
+///    than block future purchases: purchases are the only way to raise
+///    toward the hard cap, so with minting dead the only exit is the
+///    permissionless `finalize`, which becomes callable once the window
+///    closes (the soft cap is already met). `cancel_after_close` (needs a
+///    soft-cap miss) and `cancel_emergency` (in-window, soft cap not met)
+///    both stay blocked. Until `closes_at_ms`, the payments already taken
+///    (in `proceeds`), every buyer's allocation (behind claiming's
+///    `Finalized` guard), and the unsold inventory are all locked, with no
+///    party able to release them. `MAX_SALE_DURATION_MS` bounds how long
+///    that lasts; a shorter window shortens it. Hold the admin in a
+///    recoverable container.
 ///
 /// 4. **Every sale requires a paired `RefundVault<PaymentCoin>`.** Even sales
 ///    with `soft_cap == 0` need a vault - `cancel_emergency` always
