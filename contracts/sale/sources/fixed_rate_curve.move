@@ -144,6 +144,9 @@ public fun activation_ticket<
 /// #### Aborts
 /// - `EAllocationOverflow` if `balance.value() * rate` would exceed `u64::MAX`.
 /// - `prefunded_sale::EZeroPayment` if `balance` has zero value.
+/// - `prefunded_sale::EZeroAllocation` if the computed allocation is zero;
+///   guarded as unreachable here since `rate > 0` and a non-zero `balance` value
+///   yield a positive product.
 public fun quote<
     SaleCoin,
     PaymentCoin,

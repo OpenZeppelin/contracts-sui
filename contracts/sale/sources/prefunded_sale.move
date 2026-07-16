@@ -511,7 +511,10 @@ public struct ActivationTicket<phantom Curve: drop> {
 // `Quote` for a `PrefundedSale<C, ..>`) is the security boundary. The
 // sale's only independent protections are a non-zero-allocation floor
 // (a paying buyer must receive tokens), inventory backing
-// (`allocation <= inventory - total_allocated`), and u128 overflow guards.
+// (`allocation <= inventory - total_allocated`), and a checked-u64 raise
+// guard (`purchase` asserts `u64::MAX - paid >= raised` before summing
+// `raised + paid`). The widened allocation-product overflow check is
+// `fixed_rate_curve`'s, not the sale's.
 
 /// Hot-potato carrying a curve-priced quote for a single purchase.
 public struct Quote<phantom PaymentCoin> {
