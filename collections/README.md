@@ -64,10 +64,12 @@ public struct PriceBook has key {
     levels: SortedMap<u64, u64>,
 }
 
-/// Create and share an empty price book.
-public fun deploy_and_share(ctx: &mut TxContext) {
+/// Create and share an empty price book, returning its `ID`.
+public fun deploy_and_share(ctx: &mut TxContext): ID {
     let book = PriceBook { id: object::new(ctx), levels: sorted_map::new() };
+    let id = object::id(&book);
     transfer::share_object(book);
+    id
 }
 
 /// Add positive `size` at `price`, merging into an existing level if present. Price zero is valid.
@@ -200,7 +202,7 @@ The comparator footgun applies to both modules and is stated once at the top of 
 
 ### SortedSet
 
-- **No resource value is ever lost; a coarse comparator can still drop a key.** Unlike the map (which can strand a `Coin` on misuse), the set's value is the trivial `Unit`, so there is no resource to conserve - the decisive simplification over the map. Two comparator failure modes remain, and they need different oracles. An inconsistent or non-strict comparator *desorts* the set: membership answers go wrong but every key is physically present and recoverable via `keys()`; `sorted_map::is_well_formed_by!(sorted_set::inner(&s), lt)` catches it (returns `false`). A **coarse (non-injective)** comparator is worse - it reports two byte-distinct keys as equal and `upsert` collapses them to one: the earlier key is dropped and is *not* recoverable, yet the set stays sorted so `is_well_formed_by!` still returns `true`. Detect that failure with a cardinality check (`length(&s)` vs. the expected distinct count), not the order oracle.
+- **No resource value is ever lost; a coarse comparator can still drop a key.** Unlike the map (which can strand a `Coin` on misuse), the set's value is the trivial `Unit`, so there is no resource to conserve - the decisive simplification over the map. Two comparator failure modes remain, and they need different oracles. An inconsistent or non-strict comparator *desorts* the set: membership answers go wrong but every key is physically present - snapshot them via `keys()` (needs `K: copy`) or drain them via `pop_*`. `sorted_map::is_well_formed_by!(sorted_set::inner(&s), lt)` checks only that adjacent keys are strictly increasing under the `lt` it is given: it returns `false` on a desorted vector, but a non-strict comparator threaded into the oracle masks its own duplicates (under `<=` an equal adjacent pair satisfies the relation), so also assert strictness directly (`!lt(&k, &k)`) or check cardinality. A **coarse (non-injective)** comparator is worse - it reports two byte-distinct keys as equal and `upsert` collapses them to one: the earlier key is dropped and is *not* recoverable, yet the set stays sorted so `is_well_formed_by!` still returns `true`. Detect that failure with a cardinality check (`length(&s)` vs. the expected distinct count), not the order oracle.
 - **`upsert` returns `bool` and does not abort; `add`/`remove` abort.** `upsert -> true` iff newly added (diverges from `vec_set`'s abort-on-duplicate). To recover `vec_set`'s strict insert, call `add!`/`add_by!` (a duplicate aborts) or wrap the bool with one `assert!`. `remove!` aborts `EKeyNotFound` on an absent key, matching `vec_set::remove`. `from_keys!` de-duplicates.
 - **Five library-owned aborts.** `pop_front`/`pop_back` on an empty set abort `EEmpty`, `from_sorted_keys!`/`_by` on unsorted input abort `EKeysNotSorted`, and `destroy_empty` on a non-empty set aborts `ENotEmpty`, all three at this module's location. Two more are DELEGATED to the wrapped map and abort at the *map's* location: `remove!` on an absent key (`sorted_map::EKeyNotFound`) and `add!`/`add_by!` on a duplicate key (`sorted_map::EKeyAlreadyExists`). Consumer `#[expected_failure]` tests must pin `location` accordingly (`openzeppelin_collections::sorted_set` for the first three, `::sorted_map` for the delegated pair). Every other supported operation is total provided the caller-supplied comparator does not itself abort.
 - **Forced-public internals are not an API.** `inner`, `inner_mut`, `unit`, and `assert_sorted` are `public` only for macro hygiene. Driving the wrapped map through `inner_mut` with an inconsistent comparator can desort the set (order-only, local to that set). Use the macro API.

@@ -356,6 +356,7 @@ public fun fromk_dk(ids: vector<u64>): SortedSet<DropKey> {
 }
 
 /// from_sorted_keys over a no-`copy` key: needs `drop` for adjacent de-duplication, never `copy`.
+/// Aborts `sorted_set::EKeysNotSorted` if `ids` is not ascending.
 public fun from_sorted_dk(ids: vector<u64>): SortedSet<DropKey> {
     ss::from_sorted_keys_by!(ids.map!(|id| drop_key(id)), |a, b| a.id < b.id)
 }
