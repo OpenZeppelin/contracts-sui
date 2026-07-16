@@ -275,16 +275,17 @@ public fun pdf(z: SD29x9): SD29x9 {
 /// - `p`: Probability in `[0, 1]`, as a non-negative `SD29x9`.
 ///
 /// #### Returns
-/// - `Φ⁻¹(p) ∈ [-6.3, 6.3]` at `SD29x9` scale.
+/// - `Φ⁻¹(p) ∈ [-6.109410205, 6.109410205]` at `SD29x9` scale.
 ///
 /// #### Behavior
 /// - `Φ⁻¹(0.5)` is exactly `0`.
 /// - Odd about `p = 0.5`: `inverse_cdf(p) == inverse_cdf(one - p).negate()`; both
 ///   share the same upper-half evaluation.
-/// - Saturates to `+6.3` at `p = 1` and `-6.3` at `p = 0`, since `Φ⁻¹` is `±∞`
-///   there and unrepresentable. `|z| = 6.3` lies beyond the CDF saturation bound
-///   (`6.109410205`), so `cdf` maps both clamps back to exactly `1` and `0` - the
-///   two functions agree at the corners.
+/// - Saturates to `+6.109410205` at `p = 1` and `-6.109410205` at `p = 0`, since
+///   `Φ⁻¹` is `±∞` there and unrepresentable. The clamp equals the CDF saturation
+///   bound (the smallest `|z|` `cdf` resolves to exactly `1`, resp. `0`), so `cdf`
+///   maps both clamps back to exactly `1` and `0` - the two functions agree at
+///   the corners.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Empirical
 ///   worst-case from the committed coefficients and on-chain kernels is
 ///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`
@@ -316,7 +317,7 @@ public fun pdf(z: SD29x9): SD29x9 {
 /// ```
 public fun inverse_cdf(p: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(p.unwrap());
-    assert!(!neg, EProbabilityOutOfRange); // p ≥ 0 (p = 0 reflects to -6.3)
+    assert!(!neg, EProbabilityOutOfRange); // p ≥ 0 (p = 0 reflects to -6.109410205)
     let p_raw = mag as u128;
     assert!(p_raw <= common::scale!(), EProbabilityOutOfRange); // p ≤ 1
     if (p_raw >= common::scale!() / 2) {

@@ -35,7 +35,12 @@ const EEmptyPolynomial: vector<u8> = "Polynomial must have at least one coeffici
 ///
 /// Convention: zero is always represented canonically as `(mag = 0, neg = false)`.
 public struct SignedScaled256 has copy, drop {
+    /// The magnitude, at the caller's fixed-point scale. It is `u256` so that
+    /// the WAD-scale product `a × b` cannot overflow as long as callers keep
+    /// magnitudes bounded (see the precondition on `mul_wad`).
     mag: u256,
+    /// The sign, riding as a separate flag because Move lacks signed integer
+    /// types (`true` means negative; canonical zero is never negative).
     neg: bool,
 }
 
@@ -65,8 +70,10 @@ public(package) fun from_coeff(mag: u128, neg: bool): SignedScaled256 {
 
 // === Accessors ===
 
+/// The magnitude of `x`, at the caller's fixed-point scale.
 public(package) fun mag(x: &SignedScaled256): u256 { x.mag }
 
+/// Whether `x` is negative (`false` for canonical zero).
 public(package) fun is_neg(x: &SignedScaled256): bool { x.neg }
 
 // === Arithmetic ===

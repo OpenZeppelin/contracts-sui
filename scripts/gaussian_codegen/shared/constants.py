@@ -95,20 +95,22 @@ The lower bound of the quantile's representable upper half: `inverse_cdf` on
 `UD30x9` accepts `p ∈ [0.5, 1]`, and the signed `SD29x9` variant reflects `p < 0.5`
 via `Φ⁻¹(p) = −Φ⁻¹(1−p)`."""
 
-INVERSE_CDF_MAX_Z = "6.3"
+INVERSE_CDF_MAX_Z = MAX_Z
 """Output saturation clamp for the quantile, as an exact decimal string: the
-largest `|z|` `inverse_cdf` returns. Deliberately equal to the CDF domain bound
-`MAX_Z` so the two functions agree at the corner (`cdf(6.3)` saturates to `1`, so
-`inverse_cdf(1)` saturates to `6.3`). The deepest real value at `10^9` input
-resolution is `Φ⁻¹(1 − 10⁻⁹) ≈ 5.998`, so `6.3` is only ever returned for the
-exact endpoint `p = 1`."""
+largest `|z|` `inverse_cdf` returns. Defined as the CDF domain bound `MAX_Z`
+(not a second literal) so the two functions agree at the corner: `inverse_cdf(1)`
+saturates to the smallest `z` the CDF already treats as fully saturated
+(`cdf(MAX_Z) = 1`). The deepest real value at `10^9` input resolution is
+`Φ⁻¹(1 − 10⁻⁹) ≈ 5.998`, so the clamp is only ever returned for the exact
+endpoints `p = 1` (and, reflected, `p = 0`)."""
 
 _INVERSE_CDF_MAX_Z = Decimal(INVERSE_CDF_MAX_Z)
 
 INVERSE_CDF_MAX_Z_RAW = int(_INVERSE_CDF_MAX_Z * SCALE_DECIMAL)
-"""`INVERSE_CDF_MAX_Z` at the raw `10^9` scale - i.e. `6_300_000_000`. Emitted as
-the on-chain `inverse_cdf_coefficients::MAX_Z_RAW` (the output saturation source of
-truth, consumed by `inverse_cdf::inverse_cdf_upper_raw`)."""
+"""`INVERSE_CDF_MAX_Z` at the raw `10^9` scale - i.e. `6_109_410_205`, equal to
+`MAX_Z_RAW`. Emitted as the on-chain `inverse_cdf_coefficients::MAX_Z_RAW` (the
+output saturation source of truth, consumed by
+`inverse_cdf::inverse_cdf_upper_raw`)."""
 
 INVERSE_CDF_SPLIT = "0.975"
 """Probability breakpoint between the two rational fits, as an exact decimal

@@ -10,7 +10,7 @@ use std::unit_test::assert_eq;
 const SCALE: u128 = 1_000_000_000; // UD30x9 raw scale (10^9)
 const HALF_RAW: u128 = 500_000_000; // p = 0.5, the domain lower bound
 const ONE_RAW: u128 = 1_000_000_000; // p = 1.0
-const MAX_Z_RAW: u128 = 6_300_000_000; // 6.3 at UD30x9 scale (output saturation)
+const MAX_Z_RAW: u128 = 6_109_410_205; // 6.109410205 at UD30x9 scale (output saturation)
 const SPLIT_RAW: u128 = 975_000_000; // central/tail probability split
 
 // 5 ULP at the UD30x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
@@ -56,7 +56,7 @@ fun saturates_at_one() {
 
 #[test]
 fun deep_tail_is_finite_below_max_z() {
-    // p = 1 − 1e-9 maps to z ≈ 5.998, strictly below the 6.3 saturation sentinel.
+    // p = 1 − 1e-9 maps to z ≈ 5.998, strictly below the saturation clamp.
     let z = fixed(ONE_RAW - 1).inverse_cdf().unwrap();
     assert!(z < MAX_Z_RAW);
     assert_within(z, Z_TAIL_RAW, TOLERANCE);
