@@ -1,6 +1,6 @@
 /// Standard-normal PDF φ central-domain evaluator.
 ///
-/// Consumes the AAA-rational coefficients from `pdf_coefficients` and the
+/// Consumes the generated rational coefficients from `pdf_coefficients` and the
 /// generic sign-magnitude / Horner primitives from `horner`. The public typed
 /// APIs live in `sd29x9_base::pdf` and `ud30x9_base::pdf`, which call
 /// `pdf_nonneg_raw` here.
@@ -36,7 +36,7 @@ const ACC_SCALE: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10
 /// - Saturates to `0` for `z_raw ≥ pdf_coefficients::max_z_raw()`
 ///   (`|z| ≥ 6.402729806`), where `φ` has already decayed below the `10^-9`
 ///   output resolution.
-/// - Otherwise evaluates the AAA rational `N(z) / D(z)` from `pdf_coefficients`
+/// - Otherwise evaluates the rational `N(z) / D(z)` from `pdf_coefficients`
 ///   via Horner at `ACC_SCALE` and rounds the ratio back to `UD30x9` scale in a
 ///   single half-up step.
 ///
@@ -45,10 +45,10 @@ const ACC_SCALE: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10
 /// (φ is even) - no reflection is needed.
 ///
 /// #### Aborts
-/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+/// - `horner::EInternalNumNegative` if the numerator polynomial evaluates to a negative
 ///   value (defense-in-depth against a corrupted regenerated coefficient table;
 ///   unreachable with the committed coefficient tables).
-/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+/// - `horner::EInternalDenNonPositive` if the denominator polynomial evaluates to a
 ///   non-positive value (defense-in-depth against a corrupted regenerated
 ///   coefficient table; unreachable with the committed coefficient tables).
 /// - A vector index out of bounds abort if a magnitude table and its paired sign
