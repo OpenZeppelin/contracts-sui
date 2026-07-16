@@ -14,10 +14,10 @@ use openzeppelin_fp_math::horner;
 
 // === Constants ===
 
-/// Internal Horner-accumulation scale (`10^36`). An order of magnitude finer than
+/// Internal Horner-accumulation scale (`10^36`). 27 orders of magnitude finer than
 /// the user-facing `10^9`: it keeps per-step floor-truncation noise far below the
-/// tail's true per-step increment, so the quantized `Φ` is strictly monotone (a
-/// coarser scale leaves 1-ULP inversions in the far tail). Free at runtime - the
+/// tail's true per-step increment, so the quantized `Φ` is monotone non-decreasing
+/// (a coarser scale leaves 1-ULP inversions in the far tail). Free at runtime - the
 /// arithmetic already runs in `u256` - and the rescaled coefficients still fit
 /// `u128`.
 const ACC_SCALE: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
