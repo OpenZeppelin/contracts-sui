@@ -265,37 +265,38 @@ public macro fun from_keys<$K: drop>($keys: vector<$K>): SortedSet<$K> {
 ///
 /// #### Aborts
 /// - `EKeysNotSorted` if `keys` has an adjacent pair not sorted under `lt`.
-public macro fun from_sorted_keys_by<$K: copy + drop>(
+public macro fun from_sorted_keys_by<$K: drop>(
     $keys: vector<$K>,
     $lt: |&$K, &$K| -> bool,
 ): SortedSet<$K> {
-    let keys = $keys;
-    let n = keys.length();
+    let mut keys = $keys;
+    // Consume `keys` front-to-back (reverse, then O(1) `pop_back` each) so keys move into the set by
+    // value - no `copy` bound, matching `from_keys_by`/`from_sorted_keys_values_by`.
     let mut set = new();
-    let mut i = 0;
-    while (i < n) {
-        let cur = *keys.borrow(i);
-        if (i == 0) {
-            set.inner_mut().insert_at(cur, unit(), 0);
-        } else {
-            let prev = keys.borrow(i - 1);
+    if (!keys.is_empty()) {
+        keys.reverse();
+        // Lag by one: `prev` holds the last key kept for the current compare-equal run, moved into
+        // the set only once the next distinct key confirms the run has ended. `prev` always equals
+        // the previous input element, so the sorted check compares each adjacent input pair.
+        let mut prev = keys.pop_back();
+        while (!keys.is_empty()) {
+            let cur = keys.pop_back();
             // Input MUST be sorted: reject a strictly decreasing pair (`cur` < `prev`).
-            assert_sorted(!$lt(&cur, prev));
-            if ($lt(prev, &cur)) {
-                // Strictly greater than `prev` - a new distinct key; append at the back (O(1)).
+            assert_sorted(!$lt(&cur, &prev));
+            if ($lt(&prev, &cur)) {
+                // Strictly greater than `prev` - the run ended; append `prev` at the back (O(1)).
                 let at = set.length();
-                set.inner_mut().insert_at(cur, unit(), at);
-            } else {
-                // Compare-equal to `prev` - the same element; overwrite the last stored key with
-                // `cur` so the LAST bytes of the run win, matching `upsert!`/`from_keys!`. The
-                // stored key is at the back, so remove+re-append is O(1) (no interior shift).
-                let at = set.length() - 1;
-                let (_, _) = set.inner_mut().remove_at(at);
-                set.inner_mut().insert_at(cur, unit(), at);
+                set.inner_mut().insert_at(prev, unit(), at);
             };
+            // Compare-equal collapses the run to the LAST key: reassigning drops the old `prev`
+            // (last-write-wins, matching `upsert!`/`from_keys!`); after a distinct key, `prev` was
+            // moved into the set above, so this just advances the window.
+            prev = cur;
         };
-        i = i + 1;
+        let at = set.length();
+        set.inner_mut().insert_at(prev, unit(), at);
     };
+    keys.destroy_empty();
     set
 }
 
@@ -306,7 +307,7 @@ public macro fun from_sorted_keys_by<$K: copy + drop>(
 ///
 /// #### Aborts
 /// - `EKeysNotSorted` if `keys` is not ascending.
-public macro fun from_sorted_keys<$K: copy + drop>($keys: vector<$K>): SortedSet<$K> {
+public macro fun from_sorted_keys<$K: drop>($keys: vector<$K>): SortedSet<$K> {
     from_sorted_keys_by!($keys, |a, b| *a < *b)
 }
 
