@@ -41,19 +41,27 @@ is not required up front.
 ### Lifecycle
 
 1. **Create** - call `new` (stepped) or `new_continuous`, both returning the wallet
-   by value so you can fund and choose a topology in the same PTB. `create_and_share`/
-   `create_and_share_continuous` are sugar that builds the wallet and shares it in one call.
-2. **Fund** - `deposit` a `Balance<C>`. Permissionless: anyone may fund, and funds added
-   after the schedule starts participate retroactively.
+   by value (plus a `DestroyCap` that authorizes its later teardown) so you can fund and
+   choose a topology in the same PTB. `create_and_share`/`create_and_share_continuous`
+   are sugar that builds the wallet, shares it, and returns its `ID` and `DestroyCap` in
+   one call.
+2. **Fund** - `deposit` a `Balance<C>`, claim an addressed `Coin<C>` with
+   `receive_and_deposit`, or pull settled address-balance funds in with `sweep_settled`.
+   Permissionless: anyone may fund, and funds added after the schedule starts
+   participate retroactively.
 3. **Release** - `release` evaluates the curve at the current `Clock` and pays the
    not-yet-released portion into the beneficiary's address balance. Permissionless
-   and idempotent: if nothing new has vested it is a no-op.
+   and idempotent: if nothing new has vested it is a no-op. No payout `Coin<C>` object
+   is minted.
 4. **Inspect** - `releasable` returns what `release` would pay right now; `start_ms`,
    `period_ms`, `steps`, `duration_ms`, `end_ms`, and `cliff_ms` read the schedule.
-5. **Tear down** - once drained (and any settled funds swept), `vesting_wallet::destroy_empty`
-   reclaims the storage rebate and returns a `DestroyReceipt`; hand that to `vesting_wallet_linear::destroy`,
-   which requires the schedule to have ended and the caller to be the beneficiary
-   before accepting the teardown.
+5. **Tear down** - once drained and any settled funds have been swept,
+   `vesting_wallet::destroy_empty` reclaims the storage rebate and returns a
+   `DestroyReceipt`; hand that, together with the wallet's `DestroyCap`, to
+   `vesting_wallet_linear::destroy`, which requires the schedule to have ended before
+   accepting the teardown. Authority is the cap, not the caller's address, so a wallet
+   whose `beneficiary` is an object (never a transaction sender) can still be torn down
+   by whoever holds its cap.
 
 ### Usage
 
@@ -120,9 +128,14 @@ and you pick the topology:
 - **Owned** (fast path) - `transfer::public_transfer(wallet, holder)`. Only the
   holder can pass the wallet by `&mut`, so release is reachable from the holder's
   transactions only. Outside parties fund an owned wallet by `public_transfer`-ing a
-  `Coin<C>` to the wallet's object address (the holder claims each with
-  `receive_and_deposit`) or by settling a `Balance<C>` into the address (the holder
-  pulls it in with `sweep_settled`).
+  `Coin<C>` to the wallet's object address; the holder then claims each with
+  `receive_and_deposit`. They can also settle a `Balance<C>` into the address for the
+  holder to pull in with `sweep_settled`. Liveness risk: `release`, `deposit`,
+  `receive_and_deposit`, `sweep_settled`, and `destroy_empty` all require `&mut` or
+  by-value access only the holder can produce, so a holder who is not the beneficiary
+  and turns uncooperative can withhold every payout with no on-chain path for the
+  beneficiary to force one. The recommended Shared topology avoids this because its
+  `release` is permissionless.
 
 The `beneficiary` is fixed at construction. To rotate the recipient, point
 `beneficiary` at a consumer-owned object and rotate ownership of that object instead.
@@ -189,6 +202,16 @@ public fun release<S: drop, P: copy + drop + store, C>(
     // ... enforce protocol invariants (not paused, caller approved, ...) ...
     self.inner.release(vested);
 }
+
+/// Re-expose `receive_and_deposit` so address-targeted funding can still be claimed
+/// while wrapped - it needs the same private `&mut inner`. Omit this and any `Coin<C>`
+/// `public_transfer`'d to the inner wallet's address stays stranded until unwrapped.
+public fun receive_and_deposit<S: drop, P: copy + drop + store, C>(
+    self: &mut GatedVault<S, P, C>,
+    receiving: Receiving<Coin<C>>,
+) {
+    self.inner.receive_and_deposit(receiving);
+}
 ```
 
 The caller picks the curve module at the call site; the vault never knows which curve it holds:
@@ -233,9 +256,13 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
 3. A `vested_amount(&VestingWallet<MyCurve, MyParams, C>, &Clock): VestedAmount<MyCurve>`
    that evaluates the curve and ends in `wallet.mint_vested_amount(MyCurve {}, amount)`.
 4. A teardown that calls `wallet.destroy_empty(root)` for a `DestroyReceipt<MyCurve,
-   MyParams>`, then `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover
-   the beneficiary and parameters and destructure them. `destroy_empty` is permissionless;
-   the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
+   MyParams>`, then `vesting_wallet::consume_receipt(receipt, cap, MyCurve {})` - passing
+   the wallet's `DestroyCap` - to recover the schedule parameters and destructure them.
+   `destroy_empty` is permissionless; `consume_receipt` is gated on both the witness
+   (so the curve can run teardown logic or veto) and the cap (the teardown authority).
+   **Gate teardown on the cap, never on `ctx.sender() == beneficiary`:** an object
+   beneficiary is never a transaction sender, so that check could never be satisfied
+   and would brick teardown for object-beneficiary wallets.
 
 The curve **must be monotonically non-decreasing in time and bounded above by
 `balance + released`.** `release` enforces only the failure modes that threaten funds:

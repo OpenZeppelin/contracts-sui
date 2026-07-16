@@ -18,7 +18,7 @@ follow the links to the sources of truth.
 ## For each package
 
 - **README** - what it does, when to use it, usage examples
-- **`examples/`** - compilable integration examples (composition recipes)
+- **`examples/`** - compilable, audited-adjacent integration examples (the composition recipes)
 - **API reference** - generated from doc-comments (`sui move build --doc`), published at
   `https://docs.openzeppelin.com/contracts-sui/1.x/api/<package>`
 - [audits/](https://raw.githubusercontent.com/OpenZeppelin/contracts-sui/main/audits/README.md) - audit reports and their scope

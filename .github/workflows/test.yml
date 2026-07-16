@@ -160,10 +160,6 @@ jobs:
         run: sui move test --trace --rand-num-iters 1
         working-directory: ./${{ matrix.package }}
 
-      - name: Generate Codecov report
-        run: sui move coverage lcov > lcov.info
-        working-directory: ./${{ matrix.package }}
-
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
