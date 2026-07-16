@@ -8,7 +8,7 @@ use openzeppelin_finance::vesting_wallet::{
     Deposited,
     Received,
     Released,
-    Destroyed
+    Destroyed,
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::balance::{Self, Balance};
