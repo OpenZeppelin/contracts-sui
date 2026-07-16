@@ -102,10 +102,15 @@ public fun new(mean: SD29x9, stddev: SD29x9): RiskProfile {
 /// z = (value - mean) / stddev
 /// ```
 ///
-/// The result is negative precisely when `value < mean` - the signed type is
-/// what makes that representable. `sub` produces the (possibly negative)
-/// deviation; `div` then scales it by the (positive) spread, preserving the
-/// sign of the numerator.
+/// The result is negative when `value < mean` and the quotient is nonzero -
+/// the signed type is what makes that representable. `sub` produces the
+/// (possibly negative) deviation; `div` then scales it by the (positive)
+/// spread, preserving the sign of the numerator. One rounding caveat: `div`
+/// truncates toward zero and collapses a zero magnitude to the canonical,
+/// non-negative `zero()`, so a deviation smaller than one raw unit (`10^-9`)
+/// times `stddev` yields a zero z-score even when `value < mean`. Use
+/// `is_downside`, which reads the sign of the deviation without dividing,
+/// for a rounding-independent direction test.
 ///
 /// #### Aborts
 /// - Aborts if the deviation overflows the `SD29x9` range (only for extreme

@@ -5,9 +5,8 @@
 /// APIs live in `sd29x9_base::cdf` and `ud30x9_base::cdf`, which call
 /// `cdf_nonneg_raw` here.
 ///
-/// Forward-compat: `pdf` and `inverse_cdf` get their own sibling modules
-/// (`pdf.move`, `inverse_cdf.move`), each importing only its own coefficient
-/// table and reusing `horner` unchanged.
+/// The sibling evaluators `pdf` and `inverse_cdf` follow the same pattern: each
+/// imports only its own coefficient table and reuses `horner` unchanged.
 module openzeppelin_fp_math::cdf;
 
 use openzeppelin_fp_math::cdf_coefficients;
@@ -53,6 +52,17 @@ public(package) fun half_raw(): u128 { HALF_RAW }
 ///
 /// Returned value is in `[HALF_RAW, ONE_RAW]`. Caller is responsible for
 /// sign-flipping (`ONE_RAW - phi`) when the original input was negative.
+///
+/// #### Aborts
+/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+///   value (defense-in-depth against a corrupted regenerated coefficient table;
+///   unreachable with the committed coefficient tables).
+/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+///   non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 public(package) fun cdf_nonneg_raw(z_raw: u128): u128 {
     if (z_raw >= cdf_coefficients::max_z_raw()) return ONE_RAW;
     if (z_raw == 0) return HALF_RAW; // Φ(0) special case
@@ -72,6 +82,17 @@ public(package) fun cdf_nonneg_raw(z_raw: u128): u128 {
 /// via the shared `horner::eval_rational` evaluator at `WAD` scale, then apply
 /// the CDF-specific overshoot clamp. Split out from `cdf_nonneg_raw` so the
 /// clamp can be exercised with injected coefficients in tests.
+///
+/// #### Aborts
+/// - `horner::EInternalNumNegative` if the numerator polynomial evaluates to a
+///   negative value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - `horner::EInternalDenNonPositive` if the denominator polynomial evaluates
+///   to a non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 fun eval_rational(
     z_raw: u128,
     num_mags: vector<u128>,
@@ -80,8 +101,9 @@ fun eval_rational(
     den_negs: vector<bool>,
 ): u128 {
     let phi_raw_u256 = horner::eval_rational(z_raw, num_mags, num_negs, den_mags, den_negs, WAD);
-    // Last-ULP overshoot guard: rounding can produce ONE_RAW + 1 raw at z just
-    // below max_z; clamp to keep the output a valid probability.
+    // Overshoot guard: unreachable for the committed coefficients (N(z) < D(z)
+    // throughout the central domain, so the rounded ratio never exceeds ONE_RAW);
+    // kept as defense-in-depth against a future coefficient regeneration.
     if (phi_raw_u256 > (ONE_RAW as u256)) ONE_RAW
     else (phi_raw_u256 as u128)
 }

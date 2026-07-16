@@ -241,6 +241,39 @@ fun numerator_zero_passes_guard_returns_zero() {
     assert_eq!(v, 0);
 }
 
+// === Offline mirror fidelity ===
+
+#[test]
+fun pdf_matches_offline_mirror() {
+    // The full `pdf` pipeline must match the offline integer mirror
+    // (`scripts/gaussian_codegen/pdf/validate.py::pdf_simulate`) bit-for-bit, so the
+    // codegen validator faithfully re-runs the on-chain path. Unlike the 5-ULP oracle
+    // vectors these assert exact equality, and unlike the quantile's tail-transform
+    // values they depend on the committed coefficient tables - regenerate them together
+    // (from `scripts/`, in a `make install` env):
+    //   `from gaussian_codegen.pdf import validate as v` then
+    //   `v.pdf_simulate(z_raw, *v.parse_coefficients(v.COEFF_PATH.read_text()))`.
+    // Probes cover the peak (via the rational - no z = 0 special case), the smallest
+    // nonzero input, interior points, the last interior ULP, and (beyond-)saturation;
+    // z_raw = 2_366_666_644 pins the on-chain arithmetic itself - the mirror yields
+    // 24_246_233 where the 100-dps oracle rounds to ...232.
+    assert_eq!(pos(0).pdf().unwrap(), PDF_0_RAW); // exact peak, D(0) = 1
+    assert_eq!(pos(1).pdf().unwrap(), PDF_0_RAW); // smallest nonzero input
+    assert_eq!(pos(250_000_000).pdf().unwrap(), 386_668_117);
+    assert_eq!(pos(1_000_000_000).pdf().unwrap(), 241_970_725);
+    assert_eq!(pos(2_000_000_000).pdf().unwrap(), 53_990_967);
+    assert_eq!(pos(2_366_666_644).pdf().unwrap(), 24_246_233); // implementation-pinning
+    assert_eq!(pos(3_500_000_000).pdf().unwrap(), 872_683);
+    assert_eq!(pos(5_000_000_000).pdf().unwrap(), 1_487);
+    assert_eq!(pos(MAX_Z_RAW - 1).pdf().unwrap(), 1); // last interior ULP
+    assert_eq!(pos(MAX_Z_RAW).pdf().unwrap(), 0); // saturation boundary
+    assert_eq!(pos(7 * SCALE).pdf().unwrap(), 0); // beyond saturation
+    // φ is even: the signed path feeds |z| into the same kernel, exactly.
+    assert_eq!(neg(1).pdf().unwrap(), PDF_0_RAW);
+    assert_eq!(neg(2_366_666_644).pdf().unwrap(), 24_246_233);
+    assert_eq!(neg(MAX_Z_RAW - 1).pdf().unwrap(), 1);
+}
+
 // === Method dispatch ===
 
 #[test]
