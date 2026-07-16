@@ -149,7 +149,7 @@
 ///    winding a sale down.
 module openzeppelin_sale::prefunded_sale;
 
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestingSchedule, params};
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
 use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{RefundVault, RefundVaultCap};
@@ -337,7 +337,7 @@ const EPerBuyerCapZero: vector<u8> = "The per-buyer limit must be greater than z
 
 // Vesting schedule configuration
 
-/// `set_vesting_schedule_params` was called a second time on the same sale.
+/// `set_vesting_schedule` was called a second time on the same sale.
 #[error(code = 33)]
 const EVestingScheduleAlreadySet: vector<u8> = "The vesting schedule has already been set";
 
@@ -441,7 +441,7 @@ public struct PrefundedSale<
     /// `claim_into_vesting` (which returns a funded `VestingWallet` and its
     /// `DestroyCap`) rather than `claim`. Fixed at construction; the buyer cannot
     /// influence it.
-    vesting_schedule_params: Option<VestingScheduleParams>,
+    vesting_schedule: Option<VestingSchedule<VestingWitness, VestingScheduleParams>>,
 }
 
 /// Lifecycle phases shared by every sale flavor.
@@ -555,7 +555,7 @@ public struct PerBuyerCapSet<phantom SaleCoin, phantom PaymentCoin> has copy, dr
     cap: u64,
 }
 
-/// Emitted by `set_vesting_schedule_params` when a vesting policy is attached.
+/// Emitted by `set_vesting_schedule` when a vesting policy is attached.
 public struct VestingScheduleParamsSet<
     phantom SaleCoin,
     phantom PaymentCoin,
@@ -658,7 +658,7 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// The `VestingWitness` and `VestingScheduleParams` type arguments are fixed here and
 /// carried in the sale's type for its whole life. For a vesting sale they must be the
 /// witness/params pair of the intended schedule curve (e.g.
-/// `vesting_wallet_linear::{Linear, Params}`); `set_vesting_schedule_params` then
+/// `vesting_wallet_linear::{Linear, Params}`); `set_vesting_schedule` then
 /// attaches a concrete schedule, and `claim_into_vesting` builds the wallet under this
 /// pinned witness so the lockup cannot be bypassed. For a non-vesting sale both slots
 /// are inert - pick any `drop` witness and any `copy + drop + store` params type and
@@ -718,7 +718,7 @@ public fun create_sale<
         refund_vault_cap: option::none(),
         per_buyer_cap: option::none(),
         contributions: option::none(),
-        vesting_schedule_params: option::none(),
+        vesting_schedule: option::none(),
     };
     let sale_id = object::id(&sale);
     let cap = SaleAdminCap<SaleCoin, PaymentCoin> { id: object::new(ctx), sale_id };
@@ -830,12 +830,17 @@ public fun set_per_buyer_cap<
 ///
 /// #### Parameters
 /// - `sale`: The sale to configure, in `Init` phase.
-/// - `params`: The issuer-defined vesting schedule parameters, stored on the sale.
+/// - `schedule`: The issuer-defined vesting schedule, minted by the curve module that
+///   owns `VestingWitness`. Because only that module can construct a
+///   `VestingSchedule<VestingWitness, VestingScheduleParams>`, the witness and params
+///   pinned in the sale's type are guaranteed to form a coherent pair - an incoherent
+///   pairing has no value to pass here and fails to compile. The unwrapped params are
+///   stored on the sale.
 ///
 /// #### Aborts
 /// - `ENotInit` if the sale is not in `Init` phase.
 /// - `EVestingScheduleAlreadySet` if a schedule is already configured.
-public fun set_vesting_schedule_params<
+public fun set_vesting_schedule<
     Curve: drop,
     CurveParams: copy + drop + store,
     SaleCoin,
@@ -851,14 +856,14 @@ public fun set_vesting_schedule_params<
         VestingWitness,
         VestingScheduleParams,
     >,
-    params: VestingScheduleParams,
+    schedule: VestingSchedule<VestingWitness, VestingScheduleParams>,
 ) {
     assert!(sale.phase.is_init(), ENotInit);
-    assert!(sale.vesting_schedule_params.is_none(), EVestingScheduleAlreadySet);
-    sale.vesting_schedule_params.fill(params);
+    assert!(sale.vesting_schedule.is_none(), EVestingScheduleAlreadySet);
+    sale.vesting_schedule.fill(schedule);
     event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
         sale_id: object::id(sale),
-        params,
+        params: schedule.params(),
     });
 }
 
@@ -1440,7 +1445,7 @@ public fun claim<
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
-    assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
+    assert!(sale.vesting_schedule.is_none(), EClaimRequiresVesting);
     sale.claim_internal(receipt, ctx)
 }
 
@@ -1480,7 +1485,7 @@ public fun claim_all<
     receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
-    assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
+    assert!(sale.vesting_schedule.is_none(), EClaimRequiresVesting);
     sale.claim_all_internal(receipts, ctx)
 }
 
@@ -1545,15 +1550,11 @@ public fun claim_into_vesting<
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): (VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
-    assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
+    assert!(sale.vesting_schedule.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_internal(receipt, ctx);
 
-    let (mut wallet, destroy_cap) = vesting_wallet::new<
-        VestingWitness,
-        VestingScheduleParams,
-        SaleCoin,
-    >(
-        *sale.vesting_schedule_params.borrow(),
+    let (mut wallet, destroy_cap) = vesting_wallet::new(
+        sale.vesting_schedule.borrow().params(),
         ctx.sender(), // only buyer can claim
         ctx,
     );
@@ -1606,15 +1607,11 @@ public fun claim_all_into_vesting<
     receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): (VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
-    assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
+    assert!(sale.vesting_schedule.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_all_internal(receipts, ctx);
 
-    let (mut wallet, destroy_cap) = vesting_wallet::new<
-        VestingWitness,
-        VestingScheduleParams,
-        SaleCoin,
-    >(
-        *sale.vesting_schedule_params.borrow(),
+    let (mut wallet, destroy_cap) = vesting_wallet::new(
+        sale.vesting_schedule.borrow().params(),
         ctx.sender(), // only buyer can claim
         ctx,
     );
@@ -2059,9 +2056,9 @@ public fun requires_allowlist<
 /// - `sale`: The sale to query.
 ///
 /// #### Returns
-/// - `Some(params)` if the issuer called `set_vesting_schedule_params` during Init,
+/// - `Some(schedule)` if the issuer called `set_vesting_schedule` during Init,
 ///   otherwise `None`.
-public fun vesting_schedule_params<
+public fun vesting_schedule<
     Curve: drop,
     CurveParams: copy + drop + store,
     SaleCoin,
@@ -2077,8 +2074,8 @@ public fun vesting_schedule_params<
         VestingWitness,
         VestingScheduleParams,
     >,
-): Option<VestingScheduleParams> {
-    sale.vesting_schedule_params
+): Option<VestingSchedule<VestingWitness, VestingScheduleParams>> {
+    sale.vesting_schedule
 }
 
 /// Total inventory currently held by the sale (allocated plus unallocated).
@@ -2501,11 +2498,7 @@ public fun test_new_per_buyer_cap_set<SaleCoin, PaymentCoin>(
 /// Build a `VestingScheduleParamsSet` event value for asserting against
 /// `event::events_by_type`.
 #[test_only]
-public fun test_new_vesting_schedule_params_set<
-    SaleCoin,
-    PaymentCoin,
-    VestingScheduleParams: copy + drop,
->(
+public fun test_new_vesting_schedule_set<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop>(
     sale_id: ID,
     params: VestingScheduleParams,
 ): VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {

@@ -111,7 +111,7 @@ fun create_sale_initializes_in_init_phase() {
     assert_eq!(sale.inventory_total(), 0);
     assert_eq!(sale.total_allocated(), 0);
     assert!(!sale.requires_allowlist());
-    assert!(sale.vesting_schedule_params().is_none());
+    assert!(sale.vesting_schedule().is_none());
     assert_eq!(cap.cap_sale_id(), object::id(&sale));
 
     let created = event::events_by_type<prefunded_sale::SaleCreated<FrcParams, SALE, USDC>>();
@@ -248,11 +248,11 @@ fun set_per_buyer_cap_after_activate_aborts() {
     abort
 }
 
-// === set_vesting_schedule_params ===
+// === set_vesting_schedule ===
 
 // Setting a schedule fills the Option; one-shot guard rejects a second call.
 #[test]
-fun set_vesting_schedule_params_fills_option() {
+fun set_vesting_schedule_fills_option() {
     let mut ctx = tx_context::dummy();
     let (mut sale, cap) = prefunded_sale::create_sale<
         FixedRateCurve,
@@ -269,8 +269,8 @@ fun set_vesting_schedule_params_fills_option() {
         5_000,
         &mut ctx,
     );
-    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4));
-    assert!(sale.vesting_schedule_params().is_some());
+    sale.set_vesting_schedule(vesting_wallet_linear::vesting_schedule(0, 0, 1_000, 4));
+    assert!(sale.vesting_schedule().is_some());
 
     let set = event::events_by_type<
         prefunded_sale::VestingScheduleParamsSet<SALE, USDC, VParams>,
@@ -278,7 +278,7 @@ fun set_vesting_schedule_params_fills_option() {
     assert_eq!(set.length(), 1);
     assert_eq!(
         set[0],
-        prefunded_sale::test_new_vesting_schedule_params_set<SALE, USDC, VParams>(
+        prefunded_sale::test_new_vesting_schedule_set<SALE, USDC, VParams>(
             object::id(&sale),
             vesting_wallet_linear::params(0, 0, 1_000, 4),
         ),
@@ -289,7 +289,7 @@ fun set_vesting_schedule_params_fills_option() {
 }
 
 #[test, expected_failure(abort_code = prefunded_sale::EVestingScheduleAlreadySet)]
-fun set_vesting_schedule_params_twice_aborts() {
+fun set_vesting_schedule_twice_aborts() {
     let mut ctx = tx_context::dummy();
     let (mut sale, _cap) = prefunded_sale::create_sale<
         FixedRateCurve,
@@ -306,20 +306,20 @@ fun set_vesting_schedule_params_twice_aborts() {
         5_000,
         &mut ctx,
     );
-    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4));
-    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 8)); // aborts
+    sale.set_vesting_schedule(vesting_wallet_linear::vesting_schedule(0, 0, 1_000, 4));
+    sale.set_vesting_schedule(vesting_wallet_linear::vesting_schedule(0, 0, 1_000, 8)); // aborts
     abort
 }
 
-// set_vesting_schedule_params is Init-only: it aborts once the sale is Active.
+// set_vesting_schedule is Init-only: it aborts once the sale is Active.
 #[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
-fun set_vesting_schedule_params_after_activate_aborts() {
+fun set_vesting_schedule_after_activate_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
 
     test.next_tx(u::admin());
     let mut sale = u::take_sale(&test);
-    sale.set_vesting_schedule_params(vesting_wallet_linear::params(0, 0, 1_000, 4)); // aborts: ENotInit
+    sale.set_vesting_schedule(vesting_wallet_linear::vesting_schedule(0, 0, 1_000, 4)); // aborts: ENotInit
     abort
 }
 

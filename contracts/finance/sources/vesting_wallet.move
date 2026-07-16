@@ -260,6 +260,19 @@ public struct DestroyCap has key, store {
     wallet_id: ID,
 }
 
+/// A curve's schedule `params` bundled with its witness `W`. Constructing one via
+/// `new_schedule` requires a *value* of type `W`, and only the module that declares
+/// `W` can produce that value - so a `VestingSchedule<W, P>` can only be built by the
+/// curve that owns `W`, which fixes `P` to that same curve's parameters. A consumer
+/// that accepts this bundle (rather than a bare `P`) therefore forces its own witness
+/// and params type arguments to unify against a coherent pair: an incoherent pairing
+/// has no inhabitant and fails to type-check.
+public struct VestingSchedule<phantom W: drop, P: copy + drop + store> has copy, drop, store {
+    /// The curve's stored configuration. Opaque here; only the declaring curve
+    /// interprets it.
+    params: P,
+}
+
 // === Events ===
 
 /// Emitted by `new` when a wallet is created.
@@ -356,6 +369,23 @@ public fun new<S: drop, P: copy + drop + store, C>(
     });
 
     (wallet, DestroyCap { id: object::new(ctx), wallet_id })
+}
+
+/// Bundle a curve's `schedule_params` with its witness into a `VestingSchedule<W, P>`.
+/// Witness-gated: the caller must supply a value of type `W`, and only the module that
+/// declares `W` can construct one - so the returned bundle can only pair `params` with
+/// the witness of the curve that produced it. A consumer that accepts a
+/// `VestingSchedule<W, P>` thus gets a compile-time guarantee that `W` and `P` form a
+/// coherent pair, which passing a bare `P` cannot provide.
+///
+/// #### Parameters
+/// - `_w`: The curve witness `W`; proves the caller is the declaring curve module.
+/// - `params`: The curve's schedule configuration to bundle.
+///
+/// #### Returns
+/// - A `VestingSchedule<W, P>` carrying `params`, pinned to witness `W`.
+public fun new_schedule<W: drop, P: copy + drop + store>(_w: W, params: P): VestingSchedule<W, P> {
+    VestingSchedule { params }
 }
 
 /// Mint a `VestedAmount<S>` recording `amount` as the cumulative vested total for
@@ -660,6 +690,11 @@ public fun amount<S>(vested: &VestedAmount<S>): u64 {
 /// information.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params
+}
+
+/// Read the parameters carried by a `VestingSchedule` bundle.
+public fun params<W: drop, P: copy + drop + store>(schedule: &VestingSchedule<W, P>): P {
+    schedule.params
 }
 
 /// Address that receives every `release`.

@@ -105,7 +105,7 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
   create_sale ─┐
   deposit       │
   set_per_buyer_cap          │  Init phase - sale is an OWNED value;
-  set_vesting_schedule_params├   holding it by &mut is the authority.
+  set_vesting_schedule       ├   holding it by &mut is the authority.
   enable_allowlist           │   All setup happens here.
   pair_refund_vault          │
                              │
@@ -152,7 +152,11 @@ directly from the vault; this never depends on admin liveness.
 
 ### Optional vesting
 
-Attach an issuer-defined schedule with `set_vesting_schedule_params` during `Init`.
+Attach an issuer-defined schedule with `set_vesting_schedule` during `Init`. The
+schedule is supplied as a `VestingSchedule<VestingWitness, VestingScheduleParams>` that
+only the curve module can mint (e.g. `vesting_wallet_linear::vesting_schedule(..)`), so
+the witness and params pinned in the sale's type are guaranteed to be a matching pair -
+naming one curve's witness with another's params simply fails to compile.
 When set, the plain `claim` path aborts and the only redemption route is
 `claim_into_vesting`, which returns a funded
 [`VestingWallet`](../finance) (from `openzeppelin_finance`) - with `beneficiary` forced
@@ -233,7 +237,7 @@ public fun launch(
     // 3. Optional knobs - all Init-only and one-shot.
     sale.set_per_buyer_cap(per_buyer_cap, ctx);
     // let allow_admin = sale.enable_allowlist(ctx);  // for a strategic round
-    // sale.set_vesting_schedule_params(vesting_wallet_linear::params(...));
+    // sale.set_vesting_schedule(vesting_wallet_linear::vesting_schedule(...));
 
     // 4. Pair a fresh, empty, Active vault, then activate. share_and_activate takes
     //    the vault by value and shares it together with the sale, so the
@@ -298,7 +302,7 @@ transfer::public_transfer(coin::from_balance(money_back, ctx), ctx.sender());
 
 ### Redeem into vesting
 
-For a sale created with `set_vesting_schedule_params`, redemption must go through
+For a sale created with `set_vesting_schedule`, redemption must go through
 `claim_into_vesting`. The vesting schedule - both its `VestingWitness` (here
 `vesting_wallet_linear::Linear`) and its `VestingScheduleParams` - is fixed at
 `create_sale`, so `claim_into_vesting` infers **every** type argument from the `sale`

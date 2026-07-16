@@ -219,6 +219,17 @@ let vault = GatedVault { id: object::new(ctx), inner, /* ... */ };
 Every curve following the pattern exposes an analogous `params` constructor, so the
 protocol stays one integration wide across curves.
 
+**Keeping the `(S, P)` pair coherent.** A consumer that pins `S` and `P` as *separate*
+type parameters (rather than nesting an already-built wallet) can be handed a mismatched
+pair - one curve's witness with another's params - which type-checks but produces a wallet
+that never releases. Have the curve hand you the pair as one value:
+`vesting_wallet::new_schedule` bundles a `P` behind its witness into a
+`VestingSchedule<S, P>`, and since minting one takes an `S` value, only the declaring curve
+can build it. Accept that bundle instead of a bare `P` and the two slots unify against a
+coherent pair - an incoherent one fails to compile. The linear curve exposes
+`vesting_schedule` / `vesting_schedule_continuous`; unwrap the bundle with `.params()` when
+you build the wallet.
+
 ### Custom schedules
 
 To author a new curve, follow the `vesting_wallet_linear` pattern:
@@ -236,6 +247,10 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    MyParams>`, then `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover
    the beneficiary and parameters and destructure them. `destroy_empty` is permissionless;
    the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
+5. *(Optional)* A `vesting_schedule(..): VestingSchedule<MyCurve, MyParams>` constructor -
+   sugar over `vesting_wallet::new_schedule(MyCurve {}, params(..))` - for consumers that
+   pin the `(witness, params)` pair as separate type slots and need the compile-time
+   guarantee that the two match (see "Curve-agnostic protocols" above).
 
 The curve **must be monotonically non-decreasing in time and bounded above by
 `balance + released`.** `release` enforces only the failure modes that threaten funds:
