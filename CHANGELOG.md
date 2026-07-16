@@ -32,6 +32,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `fixed_rate_curve` module: the built-in `allocation = paid * rate` curve, minting the `Quote` and `ActivationTicket` a `FixedRateCurve` sale requires. (#414)
 - `refund_vault` module: a generic refundable escrow over `Balance<P>` that holds proceeds on cancel and pays buyers back individually; usable standalone. (#414)
 
+### `openzeppelin_finance`
+
+#### Added
+
+- `vesting_wallet`: new `VestingSchedule<W, P>` type bundling a curve's schedule params with its witness, plus a `new_schedule` constructor and `params` accessor. Lets a curve-agnostic consumer accept a witness-pinned schedule that keeps its witness and params type arguments coherent. (#489)
+- `vesting_wallet_linear`: `vesting_schedule` and `vesting_schedule_continuous` constructors that validate and bundle a stepped/continuous `Params` into a `VestingSchedule<Linear, Params>`, plus `into_vesting_schedule` to wrap an already-built `Params`. (#489)
+
 ### `openzeppelin_collections`
 
 #### Added
