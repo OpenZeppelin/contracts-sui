@@ -166,15 +166,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Chosen: degree {degree} (n_coeffs = {degree + 1}), max error {err:.3e} at z={worst_z:.4f}")
 
     # Coefficient magnitude check at the PDF accumulation scale before serialization.
-    wad = mpf(constants.PDF_WAD)
+    acc_scale = mpf(constants.PDF_ACC_SCALE)
     max_mag = mpf(0)
     for c in num + den:
-        m = abs(c) * wad
+        m = abs(c) * acc_scale
         if m > max_mag:
             max_mag = m
-    print(f"Max |coeff| × PDF_WAD = {float(max_mag):.3e} (must be < 2^128 ≈ 3.4e38)")
+    print(f"Max |coeff| x PDF_ACC_SCALE = {float(max_mag):.3e} (must be < 2^128 ≈ 3.4e38)")
     if max_mag >= mpf(2) ** 128:
-        print("FAIL: at least one coefficient does not fit u128 at PDF_WAD scale", file=sys.stderr)
+        print("FAIL: at least one coefficient does not fit u128 at PDF_ACC_SCALE", file=sys.stderr)
         return 1
 
     output = {
@@ -184,7 +184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "worst_z": worst_z,
         "target_error": TARGET_ERROR,
         "max_z": constants.PDF_MAX_Z,
-        "wad": str(constants.PDF_WAD),
+        "acc_scale": str(constants.PDF_ACC_SCALE),
         "scale_decimal": str(constants.SCALE_DECIMAL),
         "num_coeffs_str": [mp.nstr(c, 30) for c in num],
         "den_coeffs_str": [mp.nstr(c, 30) for c in den],

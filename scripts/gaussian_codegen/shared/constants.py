@@ -19,10 +19,10 @@ from decimal import Decimal
 WAD = 10**18
 """Generic Horner-accumulation scale (`10^18`) - the default for the shared
 sign-magnitude primitives (`shared/arithmetic.py`) and the scale their primitive
-unit tests run at. Individual gaussian families accumulate finer; see `CDF_WAD` /
-`PDF_WAD`."""
+unit tests run at. Individual gaussian families accumulate finer; see
+`CDF_ACC_SCALE` / `PDF_ACC_SCALE`."""
 
-CDF_WAD = 10**36
+CDF_ACC_SCALE = 10**36
 """CDF Horner-accumulation scale (`10^36` = `SCALE_DECIMAL**4`). At `10^18` each
 Horner step's floor-truncation discards up to ~`1.9e-5` user-facing ULP, which in
 the far tail exceeds Φ's true per-step increment and lets neighboring outputs
@@ -33,8 +33,8 @@ at runtime (the arithmetic is already `u256`); the rescaled coefficients still f
 `u128` (~120/128 bits) and the peak `u256` Horner product stays ~10 bits under
 `2^256` on the clamped domain (asserted by `cdf/validate.check_overflow_margin`)."""
 
-PDF_WAD = 10**36
-"""PDF Horner-accumulation scale (`10^36`). Same rationale as `CDF_WAD`: guarantees
+PDF_ACC_SCALE = 10**36
+"""PDF Horner-accumulation scale (`10^36`). Same rationale as `CDF_ACC_SCALE`: guarantees
 the density is monotone non-increasing in `|z|`. Overflow headroom is tighter than
 the CDF (degree 10 + wider tail leave ~8 bits under `2^256`), so the overflow gate
 is load-bearing here."""
@@ -67,8 +67,8 @@ truth, consumed by `cdf::cdf_nonneg_raw`)."""
 
 MAX_Z_RAW_WAD = int(_MAX_Z * WAD)
 """`MAX_Z` at the generic `WAD` scale (`10^18`) - i.e. `6_109_410_205_000_000_000`.
-Kept for cross-scale consistency checks; the on-chain CDF accumulates at `CDF_WAD`
-and the saturation bound is the raw-scale `MAX_Z_RAW` above."""
+Kept for cross-scale consistency checks; the on-chain CDF accumulates at
+`CDF_ACC_SCALE` and the saturation bound is the raw-scale `MAX_Z_RAW` above."""
 
 # --- PDF domain bound -------------------------------------------------------
 

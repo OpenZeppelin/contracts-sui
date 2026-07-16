@@ -1,5 +1,5 @@
 """Read derive.py output, quantize each coefficient to (u128 magnitude, bool sign)
-at WAD scale, and emit `pdf_coefficients.move`.
+at the PDF accumulation scale, and emit `pdf_coefficients.move`.
 
 Mirrors `cdf/emit_coefficients.py`. Coefficient layout in the emitted module:
 - `NUM_MAGS: vector<u128>` and `NUM_NEGS: vector<bool>` (parallel arrays).
@@ -54,8 +54,8 @@ def emit_module(num: list[tuple[int, bool]], den: list[tuple[int, bool]]) -> str
     return f"""{banner}
 /// Numerator and denominator coefficients for the AAA-rational standard-normal
 /// PDF approximation on the central domain `[0, {constants.PDF_MAX_Z}]`. All values are
-/// sign-magnitude pairs at PDF WAD (`10^36`) scale, indexed in ascending power
-/// order (index 0 is the constant term).
+/// sign-magnitude pairs at the PDF accumulation scale (`10^36`), indexed in
+/// ascending power order (index 0 is the constant term).
 ///
 /// Accessors return the underlying `vector<u128>` / `vector<bool>` constants so
 /// callers can bind them to a local once per PDF evaluation and index locally
@@ -118,8 +118,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     raw = json.loads(args.input.read_text(encoding="utf-8"))
 
-    num = [quantize(s, constants.PDF_WAD) for s in raw["num_coeffs_str"]]
-    den = [quantize(s, constants.PDF_WAD) for s in raw["den_coeffs_str"]]
+    num = [quantize(s, constants.PDF_ACC_SCALE) for s in raw["num_coeffs_str"]]
+    den = [quantize(s, constants.PDF_ACC_SCALE) for s in raw["den_coeffs_str"]]
     text = emit_module(num, den)
     text = format_move(text, args.output, REPO_ROOT)
 
@@ -130,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("FAIL: run `python -m gaussian_codegen.pdf.emit_coefficients` to regenerate", file=sys.stderr)
         return 1
 
-    print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at PDF_WAD")
+    print(f"Quantized {len(num)} numerator + {len(den)} denominator coefficients at PDF_ACC_SCALE")
     write_move(args.output, text)
     print(f"Wrote {rel_or_abs(args.output, REPO_ROOT)}")
     return 0

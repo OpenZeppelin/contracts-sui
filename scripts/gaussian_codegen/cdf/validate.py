@@ -4,8 +4,8 @@ Reads the (u128, bool) coefficient tables out of the committed Move source and
 runs the on-chain CDF computation in Python using **integer arithmetic that
 mirrors the Move implementation exactly**:
 
-  - z_raw at 10^9 → z_wad at 10^36 (multiply by 10^27 = CDF_WAD / 10^9).
-  - Horner inner step: `acc = (acc.mag * z_wad) // 10^36 + c_i`, with
+  - z_raw at 10^9 → z_acc at 10^36 (multiply by 10^27 = CDF_ACC_SCALE / 10^9).
+  - Horner inner step: `acc = (acc.mag * z_acc) // 10^36 + c_i`, with
     sign-magnitude tracking and floor-division on the magnitude (matches
     `mul_div(..., Down)` in `math/core/sources/u256.move`).
   - Final ratio: `phi_raw = round(N.mag * 10^9 / D.mag)` with half-up
@@ -36,7 +36,7 @@ from gaussian_codegen.shared.arithmetic import SignedInt, horner_eval, mul_div_n
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 SCALE = constants.SCALE_DECIMAL
-WAD = constants.CDF_WAD  # CDF Horner-accumulation scale (10^36)
+ACC_SCALE = constants.CDF_ACC_SCALE  # CDF Horner-accumulation scale (10^36)
 MAX_Z_RAW = constants.MAX_Z_RAW  # 6.109410205 at 10^9 - default; the gate parses the committed value
 HALF_SCALE = SCALE // 2  # Φ(0) bit-exact
 MONO_ONSET_RAW = 4_000_000_000  # z=4.0: below the z≈4.42 point where even the old 10^18 noise floor (~1.9e-5 ULP) first reached the per-step Φ increment; nothing inverts lower
@@ -101,9 +101,9 @@ def cdf_simulate(
     if z_raw == 0:
         return HALF_SCALE  # Φ(0) bit-exact special case (INV-12)
 
-    z_wad: SignedInt = (z_raw * (WAD // SCALE), False)  # 10^9 → 10^36
-    n_acc = horner_eval(z_wad, num, WAD)
-    d_acc = horner_eval(z_wad, den, WAD)
+    z_acc: SignedInt = (z_raw * (ACC_SCALE // SCALE), False)  # 10^9 → 10^36
+    n_acc = horner_eval(z_acc, num, ACC_SCALE)
+    d_acc = horner_eval(z_acc, den, ACC_SCALE)
     if n_acc[1]:
         raise RuntimeError(f"N negative at z_raw={z_raw} - INV-8 violation")
     if d_acc[1] or d_acc[0] == 0:
@@ -184,9 +184,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Exhaustive tail gates the coarse error grid above cannot see: 1-ULP neighbor
     # inversions and the peak u256 Horner intermediate.
     pairs, rechecks = gates.check_neighbor_monotonicity(
-        num, den, WAD, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=True
+        num, den, ACC_SCALE, SCALE, MONO_ONSET_RAW, max_z_raw, increasing=True
     )
-    peak_bits, headroom = gates.check_overflow_margin(num, den, WAD, SCALE, max_z_raw)
+    peak_bits, headroom = gates.check_overflow_margin(num, den, ACC_SCALE, SCALE, max_z_raw)
 
     err_ulp = round(worst_err * SCALE)
     target_abs = TARGET_ERROR_ULP * 1e-9
