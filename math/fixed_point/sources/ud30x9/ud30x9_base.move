@@ -245,13 +245,14 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// - `p`: Probability in `[0.5, 1]`.
 ///
 /// #### Returns
-/// - `Φ⁻¹(p) ∈ [0, 6.3]` at `UD30x9` scale.
+/// - `Φ⁻¹(p) ∈ [0, 6.109410205]` at `UD30x9` scale.
 ///
 /// #### Behavior
 /// - `Φ⁻¹(0.5)` is exactly `0`.
-/// - Saturates to `6.3` at `p = 1`, since `Φ⁻¹(1) = +∞` is unrepresentable. `6.3`
-///   lies beyond the CDF saturation bound (`6.109410205`), so `cdf` maps it back
-///   to exactly `1` - `cdf`/`inverse_cdf` agree at the corner.
+/// - Saturates to `6.109410205` at `p = 1`, since `Φ⁻¹(1) = +∞` is
+///   unrepresentable. The clamp equals the CDF saturation bound (the smallest `z`
+///   `cdf` resolves to exactly `1`), so `cdf` maps it back to exactly `1` -
+///   `cdf`/`inverse_cdf` agree at the corner.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
 ///   worst-case from the committed coefficients and on-chain kernels is
 ///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`

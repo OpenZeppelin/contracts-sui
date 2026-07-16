@@ -47,7 +47,7 @@ fun inverse_cdf_vectors_match_oracle() {
         TestCase { p_raw: 999_900_000, expected: 3_719_016_485 },
         TestCase { p_raw: 999_999_000, expected: 4_753_424_309 },
         TestCase { p_raw: 999_999_999, expected: 5_997_807_015 },
-        TestCase { p_raw: 1_000_000_000, expected: 6_300_000_000 },
+        TestCase { p_raw: 1_000_000_000, expected: 6_109_410_205 },
     ];
     cases.destroy!(|case| {
         let actual = ud30x9::wrap(case.p_raw).inverse_cdf().unwrap();

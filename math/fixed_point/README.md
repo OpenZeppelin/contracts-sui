@@ -213,9 +213,10 @@ such that `Φ(z) = p`. It inverts `cdf`, turning a probability into a z-score -
 confidence-interval bounds, Value-at-Risk thresholds, and inverse-transform
 sampling. Both fixed-point types expose it:
 
-- `UD30x9::inverse_cdf` takes `p ∈ [0.5, 1]` and returns `z ∈ [0, 6.3]` (the
-  non-negative half; an unsigned type cannot represent a negative quantile).
-- `SD29x9::inverse_cdf` takes `p ∈ [0, 1]` and returns the signed `z ∈ [-6.3, 6.3]`.
+- `UD30x9::inverse_cdf` takes `p ∈ [0.5, 1]` and returns `z ∈ [0, 6.109410205]`
+  (the non-negative half; an unsigned type cannot represent a negative quantile).
+- `SD29x9::inverse_cdf` takes `p ∈ [0, 1]` and returns the signed
+  `z ∈ [-6.109410205, 6.109410205]`.
 
 Properties:
 
@@ -223,9 +224,10 @@ Properties:
   empirical worst case `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam.
 - **Φ⁻¹(0.5)**: exactly `0`.
 - **Symmetry**: odd about `0.5` - `inverse_cdf(p) = inverse_cdf(1 - p).negate()`.
-- **Saturation**: `p = 1` returns `+6.3` and `p = 0` returns `-6.3` (`Φ⁻¹` is
-  `±∞` there and unrepresentable); `6.3` lies beyond the CDF saturation bound
-  (`6.109410205`), so `cdf` maps the clamped values back to exactly `1` and `0`.
+- **Saturation**: `p = 1` returns `+6.109410205` and `p = 0` returns
+  `-6.109410205` (`Φ⁻¹` is `±∞` there and unrepresentable); the clamp equals the
+  CDF saturation bound, so `cdf` maps the clamped values back to exactly `1` and
+  `0`.
 - **Aborts**: unlike `cdf`/`pdf`, the quantile has invalid inputs. `inverse_cdf`
   aborts if `p ∉ [0, 1]`; the `UD30x9` variant additionally aborts if `p < 0.5`,
   whose quantile would be negative.
@@ -249,10 +251,10 @@ let zl = lower.inverse_cdf(); // ≈ -1.959963985
 ```
 
 Limitations: `p` must be a valid probability (see Aborts); the output range is
-`|z| ≤ 6.3` and `10⁻⁹` is the finest distinction it can represent. In the deep
-tail the achievable `z`-resolution is bounded by the `10⁻⁹` resolution of the
-input `p`, not by the approximation. Internally the tail uses `ln` and `sqrt`, so
-`inverse_cdf` is slightly heavier than `cdf`/`pdf`.
+`|z| ≤ 6.109410205` and `10⁻⁹` is the finest distinction it can represent. In
+the deep tail the achievable `z`-resolution is bounded by the `10⁻⁹` resolution
+of the input `p`, not by the approximation. Internally the tail uses `ln` and
+`sqrt`, so `inverse_cdf` is slightly heavier than `cdf`/`pdf`.
 
 ## Usage Example
 
