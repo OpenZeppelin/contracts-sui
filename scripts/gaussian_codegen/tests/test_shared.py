@@ -40,6 +40,13 @@ def test_pdf_domain_bound():
     assert constants.PDF_MAX_Z_RAW == 6_402_729_806
 
 
+def test_inverse_cdf_clamp_equals_cdf_domain_bound():
+    # The quantile's output saturation clamp is *defined as* the CDF domain
+    # bound, so `cdf`/`inverse_cdf` agree at the saturation corner.
+    assert constants.INVERSE_CDF_MAX_Z == constants.MAX_Z
+    assert constants.INVERSE_CDF_MAX_Z_RAW == constants.MAX_Z_RAW == 6_109_410_205
+
+
 # --- fmt_u128 / grouping ----------------------------------------------------
 
 

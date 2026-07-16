@@ -92,7 +92,11 @@ def pdf_simulate(
 
     `max_z_raw` is the saturation cutoff; the CI gate passes the value parsed
     from the committed `pdf_coefficients.move` so the simulation tracks the
-    on-chain bound instead of a Python copy that could silently drift from it."""
+    on-chain bound instead of a Python copy that could silently drift from it.
+
+    Bit-for-bit fidelity to the Move pipeline is asserted by the Move test
+    `sd29x9_pdf_tests::pdf_matches_offline_mirror`, so this mirror is a faithful
+    stand-in for the on-chain path in the validation gates."""
     if z_raw >= max_z_raw:
         return 0  # tail saturates to 0
 
