@@ -18,7 +18,7 @@ use openzeppelin_collections::sorted_map_test_util::{
     Ask,
     StoreKey,
     CopyKey,
-    DropKey
+    DropKey,
 };
 use std::unit_test::assert_eq;
 

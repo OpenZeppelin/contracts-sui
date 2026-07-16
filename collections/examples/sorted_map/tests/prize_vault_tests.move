@@ -6,7 +6,7 @@ use openzeppelin_collections::sorted_map as sm;
 use openzeppelin_collections::sorted_map_prize_vault::{
     Self as prize_vault,
     PrizeVault,
-    OrganizerCap
+    OrganizerCap,
 };
 use std::unit_test::assert_eq;
 use sui::coin::{Self, Coin};
