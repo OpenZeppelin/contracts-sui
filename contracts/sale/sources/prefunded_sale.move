@@ -149,7 +149,7 @@
 ///    winding a sale down.
 module openzeppelin_sale::prefunded_sale;
 
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestingSchedule, params};
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestingSchedule};
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
 use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{RefundVault, RefundVaultCap};
@@ -388,12 +388,16 @@ const ENotTerminal: vector<u8> = "The sale must have ended";
 ///
 /// `VestingWitness` is the `drop`-only schedule witness of the curve module that
 /// interprets `VestingScheduleParams` (e.g. `vesting_wallet_linear::Linear` pairs
-/// with its `Params`). Pinning it in the sale's type is what makes the vesting
-/// lockup unbypassable: `claim_into_vesting` builds a
-/// `VestingWallet<VestingWitness, ..>`, and only the module declaring
-/// `VestingWitness` can mint the `VestedAmount` that releases it - so a buyer cannot
-/// substitute a permissive witness of their own to release early. For a non-vesting
-/// sale the slot is inert (any `drop` type); no schedule is ever attached.
+/// with its `Params`). Pinning a genuine curve witness in the sale's type is what makes
+/// the vesting lockup unbypassable: `claim_into_vesting` builds a
+/// `VestingWallet<VestingWitness, ..>`, and `mint_vested_amount` takes the witness by
+/// value, so only the module declaring `VestingWitness` can mint the `VestedAmount` that
+/// releases it - a buyer cannot substitute a permissive witness of their own to release
+/// early. That guarantee is conditional: `VestingWitness` must be a real curve witness -
+/// a `drop` type whose declaring module is its sole constructor. Pin a public type anyone
+/// can build (e.g. `bool`) and the lockup is gone - anyone can then construct the witness
+/// and mint a releasing `VestedAmount`. For a non-vesting sale the slot is inert (any
+/// `drop` type); no schedule is ever attached.
 ///
 /// The two slots must be a coherent pair, and that coherence is **enforced**, not left
 /// to convention: `set_vesting_schedule` accepts only a
@@ -401,7 +405,10 @@ const ENotTerminal: vector<u8> = "The sale must have ended";
 /// that declares `VestingWitness` can mint one (it takes the witness by value). Naming
 /// one curve's witness with another's params therefore has no schedule value to attach
 /// and fails to compile. An integrator shipping a second curve alongside the built-in
-/// linear one does not have to keep the slots in step by hand - the compiler does.
+/// linear one does not have to keep the slots in step by hand - the compiler does. This
+/// coherence check is type-matching only and is not a substitute for the witness rule
+/// above: with a public witness such as `bool`, `new_schedule<bool, _>(true, ..)` is
+/// buildable by anyone, so the pair is trivially coherent yet the lockup is bypassable.
 public struct PrefundedSale<
     phantom Curve: drop,
     CurveParams: copy + drop + store,
@@ -668,10 +675,15 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// witness/params pair of the intended schedule curve (e.g.
 /// `vesting_wallet_linear::{Linear, Params}`); `set_vesting_schedule` then
 /// attaches a concrete schedule, and `claim_into_vesting` builds the wallet under this
-/// pinned witness so the lockup cannot be bypassed. A mismatched choice cannot be turned
+/// pinned witness so the lockup cannot be bypassed - provided `VestingWitness` is a
+/// genuine curve witness whose declaring module is its sole constructor. Pin a public
+/// type anyone can construct (e.g. `bool`) and the sale has no real lockup: anyone can
+/// mint the releasing `VestedAmount`. A mismatched choice cannot be turned
 /// into a live vesting sale: `set_vesting_schedule` accepts only a curve-minted
 /// `VestingSchedule<VestingWitness, VestingScheduleParams>`, so attaching a schedule to an
 /// incoherent pair fails to compile - such a sale can only ever redeem via plain `claim`.
+/// That coherence check does not rescue a public witness: `new_schedule<bool, _>(true, ..)`
+/// is buildable by anyone, so a `bool` pair is trivially coherent yet unlocked.
 /// For a non-vesting sale both slots are inert - pick any `drop` witness and any
 /// `copy + drop + store` params type and never attach a schedule.
 ///
@@ -832,10 +844,13 @@ public fun set_per_buyer_cap<
 ///
 /// Once a schedule is attached, the plain `claim` path aborts and buyers must redeem
 /// through `claim_into_vesting`, which returns a funded `VestingWallet` and its
-/// `DestroyCap`. The schedule cannot be bypassed: `claim_into_vesting` builds the
-/// wallet under the sale's pinned `VestingWitness` type parameter, so only the curve
-/// module that owns that witness can mint the `VestedAmount` needed to release - a
-/// buyer cannot supply a permissive witness of their own. The schedule is
+/// `DestroyCap`. When `VestingWitness` is a genuine curve witness - a `drop` type only
+/// its declaring module can construct - the schedule cannot be bypassed:
+/// `claim_into_vesting` builds the wallet under the sale's pinned `VestingWitness` type
+/// parameter, so only that curve module can mint the `VestedAmount` needed to release - a
+/// buyer cannot supply a permissive witness of their own. A public witness anyone can
+/// build (e.g. `bool`) removes this guarantee, and the coherence check on `schedule`
+/// below does not restore it. The schedule is
 /// **issuer-defined**: the buyer is the caller of the redemption path and cannot
 /// supply or override these values, nor the witness that interprets them.
 ///
@@ -1420,8 +1435,10 @@ public fun cancel_emergency<
 /// Destroys the receipt. The buyer wraps the balance into a `Coin` and transfers it.
 ///
 /// A sale with a vesting schedule must redeem via `claim_into_vesting` instead; this
-/// is the library's enforcement that the schedule cannot be bypassed by the
-/// immediate-distribution path.
+/// abort closes the immediate-distribution path, so redemption always flows through the
+/// vesting wallet. Whether that wallet actually locks the tokens depends on
+/// `VestingWitness` being a genuine curve witness (see `set_vesting_schedule` and the
+/// `PrefundedSale` type doc) - a public witness leaves the wallet releasable at once.
 ///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Finalized` phase.
@@ -1512,7 +1529,11 @@ public fun claim_all<
 /// `create_sale`. Because the `&mut sale` argument unifies this function's
 /// `VestingWitness` with the sale's pinned witness, a buyer cannot substitute a
 /// permissive witness declared in their own package to mint a full `VestedAmount` and
-/// release the whole allocation immediately - the lockup holds. Only the module
+/// release the whole allocation immediately - the lockup holds so long as the pinned
+/// `VestingWitness` is itself a genuine curve witness, a `drop` type only its declaring
+/// module can construct. If the sale was created with a public witness anyone can build
+/// (e.g. `bool`), no substitution is needed - the buyer constructs the pinned witness
+/// directly, mints a full `VestedAmount`, and releases at once. Only the module
 /// declaring the pinned `VestingWitness` can advance the returned wallet.
 ///
 /// Alongside the wallet, `vesting_wallet::new` mints a `DestroyCap` bound to it - the
