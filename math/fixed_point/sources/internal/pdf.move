@@ -24,7 +24,7 @@ use openzeppelin_fp_math::pdf_coefficients;
 /// rescaled coefficients still fit `u128`. The PDF's degree-10 rational leaves
 /// ~8 bits of headroom under `2^256` - tighter than the CDF's ~10 - guarded by
 /// the codegen overflow gate.
-const WAD: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
+const ACC_SCALE: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
 
 // === Package Functions ===
 
@@ -37,7 +37,7 @@ const WAD: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
 ///   (`|z| ≥ 6.402729806`), where `φ` has already decayed below the `10^-9`
 ///   output resolution.
 /// - Otherwise evaluates the AAA rational `N(z) / D(z)` from `pdf_coefficients`
-///   via Horner at WAD scale and rounds the ratio back to `UD30x9` scale in a
+///   via Horner at `ACC_SCALE` and rounds the ratio back to `UD30x9` scale in a
 ///   single half-up step.
 ///
 /// Returned value is in `[0, φ(0)]` (peak `398_942_280`). The result depends
@@ -69,7 +69,7 @@ public(package) fun pdf_nonneg_raw(z_raw: u128): u128 {
 // === Private Functions ===
 
 /// Evaluate `N(z) / D(z)` for a central-domain `z_raw` (`0 ≤ z_raw < max_z`)
-/// via the shared `horner::eval_rational` evaluator at `WAD` scale. The peak
+/// via the shared `horner::eval_rational` evaluator at `ACC_SCALE`. The peak
 /// `φ(0)` is well under `1.0`, so no overshoot clamp is needed and the ratio
 /// always fits `u128`. Split out from `pdf_nonneg_raw` so the path can be
 /// exercised with injected coefficients in tests.
@@ -91,7 +91,7 @@ fun eval_rational(
     den_mags: vector<u128>,
     den_negs: vector<bool>,
 ): u128 {
-    horner::eval_rational(z_raw, num_mags, num_negs, den_mags, den_negs, WAD) as u128
+    horner::eval_rational(z_raw, num_mags, num_negs, den_mags, den_negs, ACC_SCALE) as u128
 }
 
 // === Test-Only Helpers ===

@@ -12,7 +12,7 @@ use std::unit_test::assert_eq;
 
 const SCALE: u128 = 1_000_000_000; // SD29x9 raw scale (10^9)
 const MAX_Z_RAW: u128 = 6_402_729_806; // 6.402729806 at SD29x9 scale
-const ONE_WAD: u128 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 1.0 at WAD scale (10^36, coefficient injection)
+const ONE_ACC_SCALE: u128 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 1.0 at the accumulation scale (10^36, coefficient injection)
 
 // 5 ULP at the SD29x9 scale (≡ 5 × 10^-9 absolute), per the accuracy contract.
 const TOLERANCE: u128 = 5;
@@ -195,9 +195,9 @@ fun numerator_negative_aborts() {
     // A constant numerator of -1.0 forces N(z) < 0 on the central domain.
     let _ = pdf::eval_rational_for_test(
         SCALE, // z = 1.0, inside [0, 6.402729806)
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[true],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
     );
 }
@@ -207,9 +207,9 @@ fun denominator_nonpositive_aborts() {
     // A constant denominator of -1.0 forces D(z) < 0 on the central domain.
     let _ = pdf::eval_rational_for_test(
         SCALE,
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[true],
     );
 }
@@ -220,7 +220,7 @@ fun denominator_zero_aborts() {
     // the `mag(d) > 0` half of the guard rather than reach the division.
     let _ = pdf::eval_rational_for_test(
         SCALE,
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
         vector[0],
         vector[false],
@@ -235,7 +235,7 @@ fun numerator_zero_passes_guard_returns_zero() {
         SCALE,
         vector[0],
         vector[false],
-        vector[ONE_WAD],
+        vector[ONE_ACC_SCALE],
         vector[false],
     );
     assert_eq!(v, 0);

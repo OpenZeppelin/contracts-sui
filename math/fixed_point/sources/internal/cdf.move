@@ -20,7 +20,7 @@ use openzeppelin_fp_math::horner;
 /// coarser scale leaves 1-ULP inversions in the far tail). Free at runtime - the
 /// arithmetic already runs in `u256` - and the rescaled coefficients still fit
 /// `u128`.
-const WAD: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
+const ACC_SCALE: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
 
 /// `Φ(0)` at the `UD30x9` raw scale (`10^9`).
 const HALF_RAW: u128 = 500_000_000;
@@ -46,7 +46,7 @@ public(package) fun half_raw(): u128 { HALF_RAW }
 ///   (`|z| ≥ 6.109410205`).
 /// - Returns `HALF_RAW` (`5 × 10^8`) exactly for `z_raw == 0` (`Φ(0)`).
 /// - Otherwise evaluates the AAA rational `N(z) / D(z)` from
-///   `cdf_coefficients` via Horner at WAD scale and rounds the ratio back to
+///   `cdf_coefficients` via Horner at `ACC_SCALE` and rounds the ratio back to
 ///   `UD30x9` scale in a single half-up step, clamping any last-ULP overshoot
 ///   to `ONE_RAW`.
 ///
@@ -79,7 +79,7 @@ public(package) fun cdf_nonneg_raw(z_raw: u128): u128 {
 // === Private Functions ===
 
 /// Evaluate `N(z) / D(z)` for a central-domain `z_raw` (`0 < z_raw < max_z`)
-/// via the shared `horner::eval_rational` evaluator at `WAD` scale, then apply
+/// via the shared `horner::eval_rational` evaluator at `ACC_SCALE`, then apply
 /// the CDF-specific overshoot clamp. Split out from `cdf_nonneg_raw` so the
 /// clamp can be exercised with injected coefficients in tests.
 ///
@@ -100,7 +100,14 @@ fun eval_rational(
     den_mags: vector<u128>,
     den_negs: vector<bool>,
 ): u128 {
-    let phi_raw_u256 = horner::eval_rational(z_raw, num_mags, num_negs, den_mags, den_negs, WAD);
+    let phi_raw_u256 = horner::eval_rational(
+        z_raw,
+        num_mags,
+        num_negs,
+        den_mags,
+        den_negs,
+        ACC_SCALE,
+    );
     // Overshoot guard: unreachable for the committed coefficients (N(z) < D(z)
     // throughout the central domain, so the rounded ratio never exceeds ONE_RAW);
     // kept as defense-in-depth against a future coefficient regeneration.

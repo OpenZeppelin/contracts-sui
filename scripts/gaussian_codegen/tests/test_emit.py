@@ -39,9 +39,9 @@ def test_quantize_rounds_half_up():
     assert quantize("5e-19") == (1, False)
 
 
-def test_quantize_at_family_wad():
+def test_quantize_at_family_acc_scale():
     # an explicit family scale overrides the default 10^18: 0.5 at 10^36 -> 5e35
-    assert quantize("0.5", constants.CDF_WAD) == (5 * 10**35, False)
+    assert quantize("0.5", constants.CDF_ACC_SCALE) == (5 * 10**35, False)
 
 
 # --- expected_phi_raw saturation boundary mirrors the on-chain `>=` ----------

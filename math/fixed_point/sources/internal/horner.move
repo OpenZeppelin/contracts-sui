@@ -39,6 +39,11 @@ const EInternalDenNonPositive: vector<u8> =
 /// Sign-magnitude representation used during Horner accumulation at the caller's
 /// fixed-point scale.
 ///
+/// The magnitude is `u256` so that the accumulation-scale product `a × b` cannot
+/// overflow as long as callers keep magnitudes bounded (see the precondition on
+/// `mul_wad`). The sign rides as a separate flag because Move lacks
+/// signed integer types.
+///
 /// Visibility note: the type is declared `public` because Move 2024 does not
 /// yet support `public(package)` on struct declarations, but it is effectively
 /// package-internal: only `public(package)` constructors in this module can
@@ -65,7 +70,7 @@ public(package) fun zero(): SignedScaled256 {
     SignedScaled256 { mag: 0, neg: false }
 }
 
-/// Wrap a non-negative WAD-scaled magnitude.
+/// Wrap a non-negative accumulation-scaled magnitude.
 public(package) fun from_unsigned(mag: u256): SignedScaled256 {
     SignedScaled256 { mag, neg: false }
 }
@@ -128,8 +133,8 @@ public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): Signe
     }
 }
 
-/// Scaled multiplication: `(a × b) / wad` with truncation toward zero on the
-/// magnitude (equivalent to `mul_div(..., Down)` rounding) and XOR signs. `wad`
+/// Scaled multiplication: `(a × b) / acc_scale` with truncation toward zero on the
+/// magnitude (equivalent to `mul_div(..., Down)` rounding) and XOR signs. `acc_scale`
 /// is the caller's fixed-point accumulation scale, passed per call so each
 /// gaussian family runs at its own precision (`cdf` and `pdf` use `10^36`;
 /// `inverse_cdf` uses `10^18`).
@@ -139,7 +144,7 @@ public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): Signe
 /// #### Precondition
 /// The caller must keep magnitudes bounded so that the full-width product
 /// `a.mag × b.mag` fits in `u256` (`< 2^256`); this is **not** checked here, for
-/// efficiency. At `wad = 10^36` the peak intermediate is ~`1.1 × 10^74` for the
+/// efficiency. At `acc_scale = 10^36` the peak intermediate is ~`1.1 × 10^74` for the
 /// CDF (`|z| ≤ 6.109410205`; 246 bits, ~10 under `2^256`) and ~`2.6 × 10^74` for
 /// the PDF (`|z| ≤ 6.402729806`; 248 bits, ~8 under `2^256`). A new consumer, a
 /// higher degree, or a wider domain must re-establish this bound - the codegen's
@@ -149,8 +154,12 @@ public(package) fun add_coeff(acc: SignedScaled256, mag: u128, neg: bool): Signe
 /// - Arithmetic overflow if the full-width product `a.mag * b.mag` exceeds `u256`.
 ///   The caller guarantees this cannot happen (see Precondition); it is not
 ///   checked here.
-public(package) fun mul_wad(a: SignedScaled256, b: SignedScaled256, wad: u256): SignedScaled256 {
-    let mag = (a.mag * b.mag) / wad;
+public(package) fun mul_wad(
+    a: SignedScaled256,
+    b: SignedScaled256,
+    acc_scale: u256,
+): SignedScaled256 {
+    let mag = (a.mag * b.mag) / acc_scale;
     let neg = mag != 0 && a.neg != b.neg;
     SignedScaled256 { mag, neg }
 }
@@ -168,16 +177,16 @@ public(package) fun assert_polynomial_nonempty(len: u64) {
 ///   `c[len-1] · z^(len-1) + ... + c[1] · z + c[0]`
 ///
 /// via Horner's method. Coefficients are pulled in *ascending* power order by
-/// `$coeff_at`, which returns `(u128 magnitude, bool is_negative)` at WAD
-/// scale. The accessor is invoked exactly once per coefficient.
+/// `$coeff_at`, which returns `(u128 magnitude, bool is_negative)` at the
+/// accumulation scale. The accessor is invoked exactly once per coefficient.
 ///
-/// All arithmetic is sign-magnitude `u256` at scale `$wad`; `$z` must already be
-/// scaled to `$wad`.
+/// All arithmetic is sign-magnitude `u256` at scale `$acc_scale`; `$z` must already be
+/// scaled to `$acc_scale`.
 ///
 /// #### Precondition
 /// Inherits `mul_wad`'s bound: the caller must keep `$z` and the coefficients
 /// small enough that no intermediate `acc.mag × z.mag` exceeds `u256`. Satisfied
-/// for the CDF and PDF by their saturation guards at `$wad = 10^36` (see `mul_wad`).
+/// for the CDF and PDF by their saturation guards at `$acc_scale = 10^36` (see `mul_wad`).
 ///
 /// #### Aborts
 /// - Aborts with `EEmptyPolynomial` if `$len == 0`.
@@ -185,11 +194,11 @@ public(package) macro fun horner_eval(
     $z: SignedScaled256,
     $len: u64,
     $coeff_at: |u64| -> (u128, bool),
-    $wad: u256,
+    $acc_scale: u256,
 ): SignedScaled256 {
     let z = $z;
     let len = $len;
-    let wad = $wad;
+    let acc_scale = $acc_scale;
     assert_polynomial_nonempty(len);
 
     let last = len - 1;
@@ -199,7 +208,7 @@ public(package) macro fun horner_eval(
     let mut i = last;
     while (i > 0) {
         i = i - 1;
-        acc = mul_wad(acc, z, wad);
+        acc = mul_wad(acc, z, acc_scale);
         let (m_i, n_i) = $coeff_at(i);
         acc = add_coeff(acc, m_i, n_i);
     };
@@ -212,21 +221,21 @@ public(package) macro fun horner_eval(
 /// raw `10^9` scale) and round the ratio back to that raw scale in a single
 /// nearest step.
 ///
-/// The argument is promoted from `10^9` to the accumulation scale `wad`, both
-/// polynomials are evaluated with `horner_eval!`, and the rounded ratio is
+/// The argument is promoted from `10^9` to the accumulation scale `acc_scale`,
+/// both polynomials are evaluated with `horner_eval!`, and the rounded ratio is
 /// returned as a raw `u256` so each caller applies its own domain-specific
 /// clamp (`cdf` pins to `1.0`, `inverse_cdf` to its maximum `z`; `pdf` needs
 /// none).
 ///
 /// #### Parameters
 /// - `x_raw`: Evaluation point at the raw `10^9` scale.
-/// - `num_mags`: Numerator coefficient magnitudes at scale `wad`, in ascending
-///   power order.
+/// - `num_mags`: Numerator coefficient magnitudes at scale `acc_scale`, in
+///   ascending power order.
 /// - `num_negs`: Numerator coefficient signs, parallel to `num_mags`.
-/// - `den_mags`: Denominator coefficient magnitudes at scale `wad`, in
+/// - `den_mags`: Denominator coefficient magnitudes at scale `acc_scale`, in
 ///   ascending power order.
 /// - `den_negs`: Denominator coefficient signs, parallel to `den_mags`.
-/// - `wad`: Fixed-point accumulation scale, a positive multiple of `10^9`
+/// - `acc_scale`: Fixed-point accumulation scale, a positive multiple of `10^9`
 ///   (`cdf` and `pdf` use `10^36`; `inverse_cdf` uses `10^18`).
 ///
 /// #### Returns
@@ -254,21 +263,22 @@ public(package) fun eval_rational(
     num_negs: vector<bool>,
     den_mags: vector<u128>,
     den_negs: vector<bool>,
-    wad: u256,
+    acc_scale: u256,
 ): u256 {
     // Promote the raw 10^9 argument to the accumulation scale.
-    let x_scaled = (x_raw as u256) * (wad / common::scale_u256!());
+    let x_scaled = (x_raw as u256) * (acc_scale / common::scale_u256!());
     let x_signed = from_unsigned(x_scaled);
 
-    let n = horner_eval!(x_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), wad);
-    let d = horner_eval!(x_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), wad);
+    let n = horner_eval!(x_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), acc_scale);
+    let d = horner_eval!(x_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), acc_scale);
 
     // Integrity guards on the fitted tables. A corrupted coefficient table
     // surfaces here rather than silently producing a garbled output.
     assert!(!n.is_neg(), EInternalNumNegative);
     assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
 
-    // Final ratio: N(x) / D(x) at `wad`, cast back to the raw 10^9 scale with a
-    // single nearest-rounding step.
+    // Final ratio: `N` and `D` are Horner accumulators at `acc_scale`, which
+    // cancels in the quotient; a single nearest-rounding `mul_div` lands
+    // `N(x) / D(x)` at the raw `10^9` scale.
     u256::mul_div(n.mag(), common::scale_u256!(), d.mag(), rounding::nearest()).destroy_some()
 }
