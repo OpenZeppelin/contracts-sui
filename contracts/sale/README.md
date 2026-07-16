@@ -67,9 +67,7 @@ PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingWitness, Vesting
 | `VestingScheduleParams` | The vesting params type. Filled only if you attach a schedule, but the slot must always be instantiated. | `vesting_wallet_linear::Params` |
 
 The sale never prices a purchase itself. It accepts a `Quote` - carrying a
-curve-computed `allocation` - and applies it **verbatim**, bounded only by unallocated
-inventory and `u64` overflow guards. There is **no `max_rate` field and no
-independent per-payment rate check**: correct pricing is delegated to the curve.
+curve-computed `allocation` - and applies it **verbatim**, bounded only by a non-zero floor (a paying buyer must receive tokens), unallocated inventory, and `u64` overflow guards. There is **no `max_rate` field and no independent per-payment rate check**: correct pricing is delegated to the curve.
 
 What keeps this safe is the **witness gate**. A `Quote` for a `PrefundedSale<C, …>`
 can only be minted by passing a value of type `C`, and `C`'s constructor is private to
@@ -386,10 +384,7 @@ in a wallet.
 
 ## Security Notes
 
-- **The curve is trusted.** The sale applies the curve's allocation verbatim, bounded
-  only by inventory and overflow. The witness gate makes a `FixedRateCurve` sale
-  un-priceable by anything but the fixed-rate module; a *custom* curve is
-  security-critical and must be audited with the sale.
+- **The curve is trusted.** The sale applies the curve's allocation verbatim, bounded only by a non-zero floor (a paying buyer must receive tokens), inventory, and overflow. The witness gate makes a `FixedRateCurve` sale un-priceable by anything but the fixed-rate module; a *custom* curve is security-critical and must be audited with the sale.
 - **Buyer redemption never depends on admin liveness.** `purchase`, `claim`, `refund`,
   `finalize`, and `cancel_after_close` are permissionless. Losing the `SaleAdminCap`
   forfeits only `cancel_emergency`, `withdraw_proceeds`, and `withdraw_unsold_inventory`

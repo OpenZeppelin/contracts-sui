@@ -52,6 +52,11 @@ const ERateZero: vector<u8> = "The exchange rate must be greater than zero";
 const ERequiredInventoryOverflow: vector<u8> =
     "The required token inventory is too large to represent";
 
+/// `paid * rate` would exceed `u64::MAX`, so the allocation this curve prices
+/// cannot be represented.
+#[error(code = 2)]
+const EAllocationOverflow: vector<u8> = "The token allocation would be too large to represent";
+
 // === Structs ===
 
 /// Witness type for this curve. Field-less with `drop` only; its
@@ -123,8 +128,9 @@ public fun activation_ticket<
 
 // === Quote ===
 
-/// Mint a `Quote<PaymentCoin>` for a buyer's `balance`. The allocation is
-/// `balance.value() * rate`, u128-widened to detect overflow. The `Quote` carries
+/// Mint a `Quote<PaymentCoin>` for a buyer's `balance`. This curve computes the
+/// allocation as `balance.value() * rate`, u128-widened to detect overflow, and
+/// hands the finished `u64` to `prefunded_sale::mint_quote`. The `Quote` carries
 /// the balance through to `purchase`.
 ///
 /// #### Parameters
@@ -136,9 +142,8 @@ public fun activation_ticket<
 ///   the computed allocation.
 ///
 /// #### Aborts
+/// - `EAllocationOverflow` if `balance.value() * rate` would exceed `u64::MAX`.
 /// - `prefunded_sale::EZeroPayment` if `balance` has zero value.
-/// - `prefunded_sale::EAllocationOverflow` if `balance.value() * rate` would exceed
-///   `u64::MAX`.
 public fun quote<
     SaleCoin,
     PaymentCoin,
@@ -156,7 +161,9 @@ public fun quote<
     balance: Balance<PaymentCoin>,
 ): Quote<PaymentCoin> {
     let rate = sale.curve_params().rate;
-    sale.mint_quote(FixedRateCurve {}, balance, rate)
+    let allocation = (balance.value() as u128) * (rate as u128);
+    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
+    sale.mint_quote(FixedRateCurve {}, balance, allocation as u64)
 }
 
 // === View helpers ===
