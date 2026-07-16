@@ -41,35 +41,35 @@ def add(a: SignedInt, b: SignedInt) -> SignedInt:
     return (0, False)  # exact cancellation
 
 
-def mul_wad(a: SignedInt, b: SignedInt, wad: int = WAD) -> SignedInt:
-    """`(a * b) / wad` with floor-division on magnitudes (== mul_div with Down
-    rounding). `wad` is the accumulation scale (default the generic `10^18`; the
-    CDF and PDF families pass `10^36`), mirroring the per-call `wad` parameter on
+def mul_wad(a: SignedInt, b: SignedInt, acc_scale: int = WAD) -> SignedInt:
+    """`(a * b) / acc_scale` with floor-division on magnitudes (== mul_div with Down
+    rounding). `acc_scale` is the accumulation scale (default the generic `10^18`; the
+    CDF and PDF families pass `10^36`), mirroring the per-call `acc_scale` parameter on
     the Move `horner::mul_wad`."""
     am, an = a
     bm, bn = b
     prod = am * bm
     if prod > U256_MAX:
         raise RuntimeError(f"u256 overflow in mul_wad: {am} * {bm}")
-    mag = prod // wad
+    mag = prod // acc_scale
     return _canonicalize((mag, an ^ bn))
 
 
-def horner_eval(z: SignedInt, coeffs: list[SignedInt], wad: int = WAD) -> SignedInt:
+def horner_eval(z: SignedInt, coeffs: list[SignedInt], acc_scale: int = WAD) -> SignedInt:
     if not coeffs:
         raise RuntimeError("empty polynomial")
     acc = _canonicalize(coeffs[-1])
     for c in reversed(coeffs[:-1]):
-        acc = mul_wad(acc, z, wad)
+        acc = mul_wad(acc, z, acc_scale)
         acc = add(acc, c)
     return acc
 
 
-def horner_peak_product(z: SignedInt, coeffs: list[SignedInt], wad: int) -> int:
-    """Largest full-width magnitude product `acc.mag * z.mag` fed into a `// wad`
+def horner_peak_product(z: SignedInt, coeffs: list[SignedInt], acc_scale: int) -> int:
+    """Largest full-width magnitude product `acc.mag * z.mag` fed into a `// acc_scale`
     step over one Horner evaluation - i.e. the peak `u256` intermediate the
     on-chain evaluator must hold. Used by `validate.check_overflow_margin` to prove
-    the accumulation stays clear of `2^256` at the chosen `wad`."""
+    the accumulation stays clear of `2^256` at the chosen `acc_scale`."""
     if not coeffs:
         raise RuntimeError("empty polynomial")
     acc = _canonicalize(coeffs[-1])
@@ -78,7 +78,7 @@ def horner_peak_product(z: SignedInt, coeffs: list[SignedInt], wad: int) -> int:
         prod = acc[0] * z[0]
         if prod > peak:
             peak = prod
-        acc = _canonicalize((prod // wad, acc[1] ^ z[1]))
+        acc = _canonicalize((prod // acc_scale, acc[1] ^ z[1]))
         acc = add(acc, c)
     return peak
 
@@ -97,16 +97,15 @@ def mul_div_nearest(a: int, b: int, d: int) -> int:
 
 # --- Logarithm / square-root kernels (for inverse_cdf's tail transform) ---------
 #
-# These mirror the on-chain `common::raw_log2` + `common::apply_log2_factor`
-# (`math/fixed_point/sources/internal/common.move`) and `u256::sqrt(..., Down)`
+# These mirror the on-chain `common::raw_log2`, scale-preserving multiplication
+# by ln(2), and `u256::sqrt(..., Nearest)`
 # (`math/core`) so `inverse_cdf/validate.py` can re-run the tail change of
 # variable `r = sqrt(-2 * ln(1 - p))` in Python integer arithmetic, exactly as
-# the Move `inverse_cdf::tail_variable_raw` does.
+# the Move `inverse_cdf::tail_variable_wad` does.
 
 SCALE = constants.SCALE_DECIMAL  # 10^9
 INTERNAL_LOG_SCALE = 10**18
 LN2_E18 = 693_147_180_559_945_309  # floor(ln(2) * 10^18), == common::ln2_e18!()
-LOG_FACTOR_DENOM_E27 = 10**27
 
 
 def raw_log2(x_raw: int) -> tuple[bool, int]:
@@ -148,24 +147,27 @@ def raw_log2(x_raw: int) -> tuple[bool, int]:
     return neg, magnitude
 
 
-def apply_log2_factor(log2_mag_e18: int, factor_e18: int = LN2_E18) -> int:
-    """Mirror `common::apply_log2_factor`: `floor(log2_mag_e18 * factor_e18 / 10^27)`
-    at the `10^9` scale (Down rounding). Default factor converts `log2` to `ln`."""
-    return (log2_mag_e18 * factor_e18) // LOG_FACTOR_DENOM_E27
+def apply_log2_factor_wad(log2_mag_e18: int, factor_e18: int = LN2_E18) -> int:
+    """Convert a `raw_log2` magnitude while preserving its `10^18` scale,
+    rounding to nearest exactly like the inverse-CDF Move path."""
+    return mul_div_nearest(log2_mag_e18, factor_e18, INTERNAL_LOG_SCALE)
 
 
-def isqrt_scaled(value_raw: int) -> int:
-    """Mirror `ud30x9_base::sqrt` / `u256::sqrt(value_raw * 10^9, Down)`: the
-    square root of a `10^9`-scaled value, returned at the `10^9` scale, truncated
-    down. Python's `math.isqrt` is exact floor-sqrt, matching `Down`."""
+def isqrt_wad_nearest(value_wad: int) -> int:
+    """Mirror `u256::sqrt(value_wad * 10^18, Nearest)`."""
     from math import isqrt
 
-    return isqrt(value_raw * SCALE)
+    radicand = value_wad * INTERNAL_LOG_SCALE
+    floor = isqrt(radicand)
+    floor_squared = floor * floor
+    if floor_squared == radicand or radicand - floor_squared <= floor:
+        return floor
+    return floor + 1
 
 
-def tail_r_raw(p_raw: int) -> int:
-    """On-chain tail variable `r = sqrt(-2 * ln(1 - p))` at the `10^9` scale,
-    mirroring `inverse_cdf::tail_variable_raw`. `p_raw` is `p` at `10^9` scale
+def tail_r_wad(p_raw: int) -> int:
+    """On-chain tail variable `r = sqrt(-2 * ln(1 - p))` at the `10^18` scale,
+    mirroring `inverse_cdf::tail_variable_wad`. `p_raw` is `p` at `10^9` scale
     with `0 < p < 1`.
 
     Bit-for-bit fidelity to the Move kernel is asserted by the Move test
@@ -173,6 +175,6 @@ def tail_r_raw(p_raw: int) -> int:
     mirror is a faithful stand-in for the on-chain path in `validate.py`."""
     complement_raw = SCALE - p_raw  # 1 - p at 10^9, exact
     _, log2_mag = raw_log2(complement_raw)  # |log2(1 - p)| at 1e18 (1-p < 1)
-    ln_mag_raw = apply_log2_factor(log2_mag, LN2_E18)  # |ln(1 - p)| at 1e9
-    arg_raw = 2 * ln_mag_raw  # -2 * ln(1 - p) at 1e9
-    return isqrt_scaled(arg_raw)
+    ln_mag_wad = apply_log2_factor_wad(log2_mag, LN2_E18)
+    arg_wad = 2 * ln_mag_wad
+    return isqrt_wad_nearest(arg_wad)

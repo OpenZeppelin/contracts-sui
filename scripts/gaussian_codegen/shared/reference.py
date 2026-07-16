@@ -6,10 +6,12 @@ coefficients. The `cdf`/`pdf` *derivation* and *validation* scripts instead
 measure error against `scipy.stats.norm.cdf` / `scipy.stats.norm.pdf` (float64,
 accurate to ~1e-16 - over seven orders of magnitude tighter than the 5e-9
 error budget), so scipy is the reference there. The quantile is the exception:
-`scipy.stats.norm.ppf` is off by up to ~5e-9 in the deep tail, so
-`inverse_cdf`'s derive and validate use the mpmath `erfinv`-based `ppf` below.
-Where both are exact the two agree to float64 precision;
-`sanity_check_against_scipy()` asserts it.
+SciPy's inverse-normal function is off by up to ~5e-9 in the deep tail, so the
+authoritative continuous derivation and validation gates use the mpmath
+`erfinv`-based `ppf` below. The inverse-CDF central optimizer, proxy selection,
+and sampled integer-validation regression use SciPy's float64 `ndtri`; no float64
+tail score is treated as authoritative. Where both are exact the two agree to
+float64 precision; `sanity_check_against_scipy()` asserts it.
 """
 from __future__ import annotations
 

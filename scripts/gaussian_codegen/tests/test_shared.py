@@ -17,8 +17,8 @@ from gaussian_codegen.shared.move_emit import (
 
 def test_constants_literal_values():
     assert constants.WAD == 10**18
-    assert constants.CDF_WAD == 10**36
-    assert constants.PDF_WAD == 10**36
+    assert constants.CDF_ACC_SCALE == 10**36
+    assert constants.PDF_ACC_SCALE == 10**36
     assert constants.SCALE_DECIMAL == 10**9
     assert constants.MAX_Z == "6.109410205"
     assert constants.MAX_Z_RAW == 6_109_410_205
@@ -30,14 +30,21 @@ def test_raw_scales_are_internally_consistent():
     assert constants.WAD // constants.SCALE_DECIMAL == 10**9
     assert constants.MAX_Z_RAW_WAD == constants.MAX_Z_RAW * (constants.WAD // constants.SCALE_DECIMAL)
     # The CDF/PDF families accumulate at 10^36, so their z-promotion factor
-    # (family WAD / 10^9) is 10^27.
-    assert constants.CDF_WAD // constants.SCALE_DECIMAL == 10**27
-    assert constants.PDF_WAD // constants.SCALE_DECIMAL == 10**27
+    # (family accumulation scale / 10^9) is 10^27.
+    assert constants.CDF_ACC_SCALE // constants.SCALE_DECIMAL == 10**27
+    assert constants.PDF_ACC_SCALE // constants.SCALE_DECIMAL == 10**27
 
 
 def test_pdf_domain_bound():
     assert constants.PDF_MAX_Z == "6.402729806"
     assert constants.PDF_MAX_Z_RAW == 6_402_729_806
+
+
+def test_inverse_cdf_clamp_equals_cdf_domain_bound():
+    # The quantile's output saturation clamp is *defined as* the CDF domain
+    # bound, so `cdf`/`inverse_cdf` agree at the saturation corner.
+    assert constants.INVERSE_CDF_MAX_Z == constants.MAX_Z
+    assert constants.INVERSE_CDF_MAX_Z_RAW == constants.MAX_Z_RAW == 6_109_410_205
 
 
 # --- fmt_u128 / grouping ----------------------------------------------------

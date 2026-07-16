@@ -142,10 +142,10 @@ public fun abs(x: UD30x9): UD30x9 {
 ///
 /// Returns the probability `Φ(z) ∈ [0.5, 1]` represented as `UD30x9`. Since
 /// `UD30x9` inputs are inherently non-negative, the output is always at least
-/// `0.5`. The implementation evaluates an AAA-rational approximation
-/// `N(z) / D(z)` at WAD scale (`10^36`) via Horner's method on a sign-magnitude
-/// `u256` accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a
-/// single nearest-rounding step.
+/// `0.5`. The implementation evaluates a rounding-aware rational approximation
+/// `N(z) / D(z)` at the internal accumulation scale (`10^36`) via Horner's
+/// method on a sign-magnitude `u256` accumulator; the final ratio is cast back
+/// to `UD30x9` (`10^9`) in a single nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Non-negative input.
@@ -159,7 +159,7 @@ public fun abs(x: UD30x9): UD30x9 {
 ///   lossless.
 /// - `Φ(0)` is exactly `0.5`.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
-///   worst-case from the committed coefficients is `~7 × 10⁻¹⁰`.
+///   worst-case from the committed coefficients is `~5 × 10⁻¹⁰`.
 /// - Monotone non-decreasing between every pair of adjacent representable
 ///   inputs. The `10^36` accumulation scale holds floor-truncation noise far
 ///   below the true per-step increment, and the codegen CI gate confirms this
@@ -171,7 +171,7 @@ public fun abs(x: UD30x9): UD30x9 {
 /// #### Aborts
 /// - Does not abort for any `UD30x9` input under the committed, validated
 ///   coefficients. The evaluator carries internal integrity asserts
-///   (`cdf::EInternalNumNegative` / `cdf::EInternalDenNonPositive`) as
+///   (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
 ///
@@ -189,9 +189,10 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///
 /// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` represented
 /// as `UD30x9`, where the peak is `φ(0) = 0.398942280`. The implementation
-/// evaluates an AAA-rational approximation `N(z) / D(z)` at WAD scale (`10^36`)
-/// via Horner's method on a sign-magnitude `u256` accumulator; the final ratio is
-/// cast back to `UD30x9` (`10^9`) in a single nearest-rounding step.
+/// evaluates a rounding-aware rational approximation `N(z) / D(z)` at the internal
+/// accumulation scale (`10^36`) via Horner's method on a sign-magnitude `u256`
+/// accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a single
+/// nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Non-negative input.
@@ -209,14 +210,14 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///   which `φ` rounds to `0` at the `10⁻⁹` output resolution (`φ ≈ 5 × 10⁻¹⁰`
 ///   there), so the cut-off is lossless.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
-///   worst-case from the committed coefficients is `~6 × 10⁻¹⁰`.
+///   worst-case from the committed coefficients is `~5 × 10⁻¹⁰`.
 /// - Pure, deterministic, and object-free: identical inputs always produce
 ///   identical outputs; touches no storage or Sui objects.
 ///
 /// #### Aborts
 /// - Does not abort for any `UD30x9` input under the committed, validated
 ///   coefficients. The evaluator carries internal integrity asserts
-///   (`pdf::EInternalNumNegative` / `pdf::EInternalDenNonPositive`) as
+///   (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
 ///
@@ -236,7 +237,7 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// `UD30x9` is unsigned, only the upper half of the distribution is representable:
 /// `p` must be at least `0.5` (`Φ(0)`). For the full range including negative `z`,
 /// use `SD29x9::inverse_cdf`. The implementation evaluates a two-region
-/// AAA-rational approximation (a rational in `u = p - 0.5` near the center, and
+/// rounding-aware rational approximation (a rational in `u = p - 0.5` near the center, and
 /// one in `r = sqrt(-2 * ln(1 - p))` in the tail) at WAD scale via Horner's method
 /// on a sign-magnitude `u256` accumulator, rounded back to `UD30x9` (`10^9`) in a
 /// single nearest-rounding step.
@@ -245,17 +246,20 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// - `p`: Probability in `[0.5, 1]`.
 ///
 /// #### Returns
-/// - `Φ⁻¹(p) ∈ [0, 6.3]` at `UD30x9` scale.
+/// - `Φ⁻¹(p) ∈ [0, 6.109410205]` at `UD30x9` scale.
 ///
 /// #### Behavior
 /// - `Φ⁻¹(0.5)` is exactly `0`.
-/// - Saturates to `6.3` at `p = 1`, since `Φ⁻¹(1) = +∞` is unrepresentable. `6.3`
-///   lies beyond the CDF saturation bound (`6.109410205`), so `cdf` maps it back
-///   to exactly `1` - `cdf`/`inverse_cdf` agree at the corner.
-/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Empirical
-///   worst-case from the committed coefficients and on-chain kernels is
-///   `≈ 2 × 10⁻⁹` (2 ULP), near the central/tail seam where the `ln`/`sqrt`
-///   change of variable is most sensitive.
+/// - Saturates to `6.109410205` at `p = 1`, since `Φ⁻¹(1) = +∞` is
+///   unrepresentable. The clamp equals the CDF saturation bound (the smallest `z`
+///   `cdf` resolves to exactly `1`), so `cdf` maps it back to exactly `1` -
+///   `cdf`/`inverse_cdf` agree at the corner.
+/// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Across the
+///   deterministic offline validation grid, no result is more than 1 ULP from
+///   the correctly rounded output. The tail change of variable is carried at the
+///   internal `10¹⁸` accumulation scale with nearest rounding, so tail accuracy
+///   realizes the full precision of the `ln`/`sqrt` kernels rather than being
+///   floored at the `10⁻⁹` output resolution.
 /// - Near `p = 1` the quantile is intrinsically steep - the two largest
 ///   representable inputs differ by `≈ 0.11` in `z` - so a 1-ULP change in `p`
 ///   maps to a large change in `z`; this is a property of `Φ⁻¹`, not the
@@ -267,7 +271,7 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// #### Aborts
 /// - `EProbabilityBelowHalf` if `p < 0.5` (the quantile would be negative).
 /// - `EProbabilityOutOfRange` if `p > 1`.
-/// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
+/// - `horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`
 ///   (defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients).
 /// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`

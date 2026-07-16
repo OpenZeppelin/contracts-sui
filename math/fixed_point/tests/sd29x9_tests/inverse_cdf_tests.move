@@ -1,5 +1,7 @@
 module openzeppelin_fp_math::sd29x9_inverse_cdf_tests;
 
+use openzeppelin_fp_math::cdf_coefficients;
+use openzeppelin_fp_math::horner;
 use openzeppelin_fp_math::inverse_cdf;
 use openzeppelin_fp_math::inverse_cdf_coefficients;
 use openzeppelin_fp_math::sd29x9;
@@ -12,7 +14,7 @@ use std::unit_test::assert_eq;
 const SCALE: u128 = 1_000_000_000; // SD29x9 raw scale (10^9)
 const HALF_RAW: u128 = 500_000_000; // p = 0.5
 const ONE_RAW: u128 = 1_000_000_000; // p = 1.0
-const MAX_Z_RAW: u128 = 6_300_000_000; // 6.3 at SD29x9 scale (output saturation)
+const MAX_Z_RAW: u128 = 6_109_410_205; // 6.109410205 at SD29x9 scale (output saturation)
 const SPLIT_RAW: u128 = 975_000_000; // central/tail probability split
 const ONE_WAD: u128 = 1_000_000_000_000_000_000; // 1.0 at WAD scale (coefficient injection)
 
@@ -93,7 +95,7 @@ fun saturates_at_zero() {
 #[test]
 fun deep_tail_is_finite_below_max_z() {
     // The deepest representable interior input p = 1 − 1e-9 maps to z ≈ 5.998,
-    // strictly below the 6.3 saturation sentinel (only p = 1 exactly saturates).
+    // strictly below the saturation clamp (only p = 1 exactly saturates).
     let z = pos(ONE_RAW - 1).inverse_cdf();
     assert!(!z.is_negative());
     assert!(z.abs().unwrap() < MAX_Z_RAW);
@@ -106,6 +108,9 @@ fun domain_bounds_pinned() {
     // would slip past the behavioral tests and the Python sweep; caught here.
     assert_eq!(inverse_cdf_coefficients::max_z_raw(), MAX_Z_RAW);
     assert_eq!(inverse_cdf_coefficients::central_threshold_raw(), SPLIT_RAW);
+    // The clamp must equal the CDF domain bound so cdf/inverse_cdf agree at the
+    // saturation corner (cdf maps the clamped quantile back to exactly 1 / 0).
+    assert_eq!(inverse_cdf_coefficients::max_z_raw(), cdf_coefficients::max_z_raw());
 }
 
 // === Output range ===
@@ -231,7 +236,7 @@ fun coefficient_arrays_have_matching_lengths() {
 
 // === Integrity asserts (defense-in-depth; unreachable via the public API) ===
 
-#[test, expected_failure(abort_code = inverse_cdf::EInternalNumNegative)]
+#[test, expected_failure(abort_code = horner::EInternalNumNegative)]
 fun numerator_negative_aborts() {
     // A constant numerator of -1.0 forces N(x) < 0.
     let _ = inverse_cdf::eval_rational_for_test(
@@ -243,7 +248,7 @@ fun numerator_negative_aborts() {
     );
 }
 
-#[test, expected_failure(abort_code = inverse_cdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_nonpositive_aborts() {
     // A constant denominator of -1.0 forces D(x) < 0.
     let _ = inverse_cdf::eval_rational_for_test(
@@ -255,7 +260,7 @@ fun denominator_nonpositive_aborts() {
     );
 }
 
-#[test, expected_failure(abort_code = inverse_cdf::EInternalDenNonPositive)]
+#[test, expected_failure(abort_code = horner::EInternalDenNonPositive)]
 fun denominator_zero_aborts() {
     // A constant denominator of 0 evaluates to canonical zero, tripping the
     // `mag(d) > 0` half of the guard before the division.
@@ -283,7 +288,7 @@ fun numerator_zero_passes_guard_returns_zero() {
 
 #[test]
 fun overshoot_clamps_to_max_z() {
-    // N(x)/D(x) = 7.0 exceeds the 6.3 output bound, so the clamp must pin the
+    // N(x)/D(x) = 7.0 exceeds the output bound, so the clamp must pin the
     // result to MAX_Z_RAW. Dead for the committed coefficients; driven directly.
     let v = inverse_cdf::eval_rational_for_test(
         SCALE,
@@ -300,17 +305,17 @@ fun overshoot_clamps_to_max_z() {
 #[test]
 fun tail_transform_matches_offline_mirror() {
     // The on-chain tail variable `r = sqrt(-2 ln(1 - p))` must match the offline
-    // integer mirror (`scripts/gaussian_codegen/shared/arithmetic.py::tail_r_raw`)
+    // integer mirror (`scripts/gaussian_codegen/shared/arithmetic.py::tail_r_wad`)
     // bit-for-bit, so the codegen validator faithfully re-runs the on-chain path.
     // `r` is a pure function of the `common` log kernel and `u256::sqrt` -
     // independent of the fit coefficients - so these values are stable across
     // coefficient regeneration.
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(975_000_000), 2_716_203_031);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(980_000_000), 2_797_149_622);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(990_000_000), 3_034_854_258);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_000_000), 3_716_922_188);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_990_000), 4_798_525_911);
-    assert_eq!(inverse_cdf::tail_variable_raw_for_test(999_999_999), 6_437_898_078);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(975_000_000), 2_716_203_031_481_238_999);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(980_000_000), 2_797_149_622_536_537_127);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(990_000_000), 3_034_854_258_770_292_703);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_000_000), 3_716_922_188_849_838_448);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_990_000), 4_798_525_912_188_081_208);
+    assert_eq!(inverse_cdf::tail_variable_wad_for_test(999_999_999), 6_437_898_078_868_041_718);
 }
 
 // === Caller-facing domain aborts ===
