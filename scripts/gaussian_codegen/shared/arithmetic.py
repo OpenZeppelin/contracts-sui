@@ -41,35 +41,35 @@ def add(a: SignedInt, b: SignedInt) -> SignedInt:
     return (0, False)  # exact cancellation
 
 
-def mul_wad(a: SignedInt, b: SignedInt, wad: int = WAD) -> SignedInt:
-    """`(a * b) / wad` with floor-division on magnitudes (== mul_div with Down
-    rounding). `wad` is the accumulation scale (default the generic `10^18`; the
-    CDF and PDF families pass `10^36`), mirroring the per-call `wad` parameter on
+def mul_wad(a: SignedInt, b: SignedInt, acc_scale: int = WAD) -> SignedInt:
+    """`(a * b) / acc_scale` with floor-division on magnitudes (== mul_div with Down
+    rounding). `acc_scale` is the accumulation scale (default the generic `10^18`; the
+    CDF and PDF families pass `10^36`), mirroring the per-call `acc_scale` parameter on
     the Move `horner::mul_wad`."""
     am, an = a
     bm, bn = b
     prod = am * bm
     if prod > U256_MAX:
         raise RuntimeError(f"u256 overflow in mul_wad: {am} * {bm}")
-    mag = prod // wad
+    mag = prod // acc_scale
     return _canonicalize((mag, an ^ bn))
 
 
-def horner_eval(z: SignedInt, coeffs: list[SignedInt], wad: int = WAD) -> SignedInt:
+def horner_eval(z: SignedInt, coeffs: list[SignedInt], acc_scale: int = WAD) -> SignedInt:
     if not coeffs:
         raise RuntimeError("empty polynomial")
     acc = _canonicalize(coeffs[-1])
     for c in reversed(coeffs[:-1]):
-        acc = mul_wad(acc, z, wad)
+        acc = mul_wad(acc, z, acc_scale)
         acc = add(acc, c)
     return acc
 
 
-def horner_peak_product(z: SignedInt, coeffs: list[SignedInt], wad: int) -> int:
-    """Largest full-width magnitude product `acc.mag * z.mag` fed into a `// wad`
+def horner_peak_product(z: SignedInt, coeffs: list[SignedInt], acc_scale: int) -> int:
+    """Largest full-width magnitude product `acc.mag * z.mag` fed into a `// acc_scale`
     step over one Horner evaluation - i.e. the peak `u256` intermediate the
     on-chain evaluator must hold. Used by `validate.check_overflow_margin` to prove
-    the accumulation stays clear of `2^256` at the chosen `wad`."""
+    the accumulation stays clear of `2^256` at the chosen `acc_scale`."""
     if not coeffs:
         raise RuntimeError("empty polynomial")
     acc = _canonicalize(coeffs[-1])
@@ -78,7 +78,7 @@ def horner_peak_product(z: SignedInt, coeffs: list[SignedInt], wad: int) -> int:
         prod = acc[0] * z[0]
         if prod > peak:
             peak = prod
-        acc = _canonicalize((prod // wad, acc[1] ^ z[1]))
+        acc = _canonicalize((prod // acc_scale, acc[1] ^ z[1]))
         acc = add(acc, c)
     return peak
 

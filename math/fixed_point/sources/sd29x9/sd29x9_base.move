@@ -153,10 +153,10 @@ public fun ceil(x: SD29x9): SD29x9 {
 ///
 /// Returns the probability `Φ(z) ∈ [0, 1]` represented as a non-negative
 /// `SD29x9`. The implementation evaluates an AAA-rational approximation
-/// `N(|z|) / D(|z|)` at WAD scale (`10^36`) via Horner's method on a
-/// sign-magnitude `u256` accumulator; the final ratio is cast back to `SD29x9`
-/// (`10^9`) in a single nearest-rounding step. Negative inputs reflect via
-/// `Φ(-z) = 1 - Φ(z)`.
+/// `N(|z|) / D(|z|)` at the internal accumulation scale (`10^36`) via Horner's
+/// method on a sign-magnitude `u256` accumulator; the final ratio is cast back
+/// to `SD29x9` (`10^9`) in a single nearest-rounding step. Negative inputs
+/// reflect via `Φ(-z) = 1 - Φ(z)`.
 ///
 /// #### Parameters
 /// - `z`: Input value.
@@ -185,8 +185,8 @@ public fun ceil(x: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Does not abort for any `SD29x9` input under the committed, validated
 ///   coefficients. The implementation carries internal integrity asserts
-///   (`EInternalNegSubUnderflow` here, plus `cdf::EInternalNumNegative` /
-///   `cdf::EInternalDenNonPositive` in the evaluator) as defense-in-depth
+///   (`EInternalNegSubUnderflow` here, plus `horner::EInternalNumNegative` /
+///   `horner::EInternalDenNonPositive` in the evaluator) as defense-in-depth
 ///   against a corrupted regenerated coefficient table; these cannot fire for
 ///   the shipped coefficients.
 ///
@@ -216,9 +216,10 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// non-negative `SD29x9`, where the peak is `φ(0) = 0.398942280`. `φ` is even,
 /// so the magnitude `|z|` is taken first and the unsigned evaluator
 /// `pdf_nonneg_raw` is applied to it - there is no reflection or sign-flip. The
-/// evaluator computes an AAA-rational approximation `N(|z|) / D(|z|)` at WAD
-/// scale (`10^36`) via Horner's method on a sign-magnitude `u256` accumulator,
-/// rounding the ratio back to `SD29x9` (`10^9`) in a single nearest-rounding step.
+/// evaluator computes an AAA-rational approximation `N(|z|) / D(|z|)` at the
+/// internal accumulation scale (`10^36`) via Horner's method on a sign-magnitude
+/// `u256` accumulator, rounding the ratio back to `SD29x9` (`10^9`) in a single
+/// nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Input value.
@@ -245,7 +246,7 @@ public fun cdf(z: SD29x9): SD29x9 {
 /// #### Aborts
 /// - Does not abort for any `SD29x9` input under the committed, validated
 ///   coefficients. The evaluator carries internal integrity asserts
-///   (`pdf::EInternalNumNegative` / `pdf::EInternalDenNonPositive`) as
+///   (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
 ///
@@ -274,16 +275,17 @@ public fun pdf(z: SD29x9): SD29x9 {
 /// - `p`: Probability in `[0, 1]`, as a non-negative `SD29x9`.
 ///
 /// #### Returns
-/// - `Φ⁻¹(p) ∈ [-6.3, 6.3]` at `SD29x9` scale.
+/// - `Φ⁻¹(p) ∈ [-6.109410205, 6.109410205]` at `SD29x9` scale.
 ///
 /// #### Behavior
 /// - `Φ⁻¹(0.5)` is exactly `0`.
 /// - Odd about `p = 0.5`: `inverse_cdf(p) == inverse_cdf(one - p).negate()`; both
 ///   share the same upper-half evaluation.
-/// - Saturates to `+6.3` at `p = 1` and `-6.3` at `p = 0`, since `Φ⁻¹` is `±∞`
-///   there and unrepresentable. `|z| = 6.3` lies beyond the CDF saturation bound
-///   (`6.109410205`), so `cdf` maps both clamps back to exactly `1` and `0` - the
-///   two functions agree at the corners.
+/// - Saturates to `+6.109410205` at `p = 1` and `-6.109410205` at `p = 0`, since
+///   `Φ⁻¹` is `±∞` there and unrepresentable. The clamp equals the CDF saturation
+///   bound (the smallest `|z|` `cdf` resolves to exactly `1`, resp. `0`), so `cdf`
+///   maps both clamps back to exactly `1` and `0` - the two functions agree at
+///   the corners.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `SD29x9` scale). Across the
 ///   deterministic offline validation grid, no result is more than 1 ULP from
 ///   the correctly rounded output. The tail change of variable is carried at the
@@ -303,7 +305,7 @@ public fun pdf(z: SD29x9): SD29x9 {
 ///
 /// #### Aborts
 /// - `EProbabilityOutOfRange` if `p` is negative or exceeds `1`.
-/// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
+/// - `horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`
 ///   (defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients).
 /// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`
@@ -317,7 +319,7 @@ public fun pdf(z: SD29x9): SD29x9 {
 /// ```
 public fun inverse_cdf(p: SD29x9): SD29x9 {
     let Components { neg, mag } = decompose(p.unwrap());
-    assert!(!neg, EProbabilityOutOfRange); // p ≥ 0 (p = 0 reflects to -6.3)
+    assert!(!neg, EProbabilityOutOfRange); // p ≥ 0 (p = 0 reflects to -6.109410205)
     let p_raw = mag as u128;
     assert!(p_raw <= common::scale!(), EProbabilityOutOfRange); // p ≤ 1
     if (p_raw >= common::scale!() / 2) {

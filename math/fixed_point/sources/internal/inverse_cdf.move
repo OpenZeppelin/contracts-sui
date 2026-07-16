@@ -27,18 +27,6 @@ use openzeppelin_math::rounding;
 use openzeppelin_math::u128;
 use openzeppelin_math::u256;
 
-// === Errors ===
-
-/// Numerator polynomial returned a negative value on the domain.
-#[error(code = 0)]
-const EInternalNumNegative: vector<u8> =
-    "Inverse-CDF numerator polynomial returned a negative value on the domain";
-
-/// Denominator polynomial returned a non-positive value on the domain.
-#[error(code = 1)]
-const EInternalDenNonPositive: vector<u8> =
-    "Inverse-CDF denominator polynomial returned a non-positive value on the domain";
-
 // === Constants ===
 
 /// Internal Horner-accumulation scale (`10^18`) for the quantile rationals - the
@@ -77,6 +65,20 @@ const ONE_RAW: u128 = 1_000_000_000;
 ///
 /// Returned value is in `[0, MAX_Z_RAW]`. Caller handles `p < 0.5` via reflection
 /// (`Φ⁻¹(p) = -Φ⁻¹(1 - p)`) and rejects out-of-range probabilities.
+///
+/// #### Aborts
+/// - `EInternalNumNegative` if the numerator polynomial evaluates to a negative
+///   value (defense-in-depth against a corrupted regenerated coefficient table;
+///   unreachable with the committed coefficient tables).
+/// - `EInternalDenNonPositive` if the denominator polynomial evaluates to a
+///   non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
+/// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the
+///   `p_raw ≥ ONE_RAW` saturation guard runs first, so `1 - p` is never zero;
+///   unreachable).
 public(package) fun inverse_cdf_upper_raw(p_raw: u128): u128 {
     if (p_raw >= ONE_RAW) return inverse_cdf_coefficients::max_z_raw(); // Φ⁻¹(1) saturates
     if (p_raw == HALF_RAW) return 0; // Φ⁻¹(0.5) special case
@@ -122,10 +124,25 @@ fun tail_variable_wad(p_raw: u128): u128 {
     u256::sqrt((arg_wad as u256) * WAD, rounding::nearest()) as u128
 }
 
-/// Evaluate `N(x) / D(x)` for a transformed argument `x_wad` (`u` or `r`) at
-/// WAD, given a region's coefficient tables. Split out from
-/// `inverse_cdf_upper_raw` so its integrity asserts can be exercised with
-/// injected coefficients in tests, mirroring `cdf::eval_rational`.
+/// Evaluate `N(x) / D(x)` for a transformed argument `x_wad` (`u` or `r`)
+/// already at the `WAD` (`10^18`) accumulation scale via the shared
+/// `horner::eval_rational_scaled` evaluator, then apply the quantile-specific
+/// clamp. The `mul_wad` u256 precondition is re-established for these
+/// coefficients and domains: the peak Horner intermediate is ~1.7 × 10^39 (tail
+/// region), ~38 orders below `u256::max`. Split out from
+/// `inverse_cdf_upper_raw` so the clamp can be exercised with injected
+/// coefficients in tests, mirroring `cdf::eval_rational`.
+///
+/// #### Aborts
+/// - `horner::EInternalNumNegative` if the numerator polynomial evaluates to a
+///   negative value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - `horner::EInternalDenNonPositive` if the denominator polynomial evaluates
+///   to a non-positive value (defense-in-depth against a corrupted regenerated
+///   coefficient table; unreachable with the committed coefficient tables).
+/// - A vector index out of bounds abort if a magnitude table and its paired sign
+///   table have different lengths (unreachable with the committed coefficient
+///   tables).
 fun eval_rational_wad(
     x_wad: u256,
     num_mags: vector<u128>,
@@ -133,28 +150,14 @@ fun eval_rational_wad(
     den_mags: vector<u128>,
     den_negs: vector<bool>,
 ): u128 {
-    let x_signed = horner::from_unsigned(x_wad);
-
-    let n = horner::horner_eval!(x_signed, num_mags.length(), |i| (num_mags[i], num_negs[i]), WAD);
-    let d = horner::horner_eval!(x_signed, den_mags.length(), |i| (den_mags[i], den_negs[i]), WAD);
-
-    // Integrity guards on the generated tables. On the upper half `z ≥ 0`, so
-    // `N ≥ 0` and `D > 0`; a corrupted coefficient table would surface here
-    // rather than silently producing a garbled output. The `mul_wad` u256
-    // precondition is re-established for these coefficients and domains: the
-    // peak Horner intermediate is ~1.7 × 10^39 (tail region), ~38 orders below
-    // `u256::max`.
-    assert!(!n.is_neg(), EInternalNumNegative);
-    assert!(!d.is_neg() && d.mag() > 0, EInternalDenNonPositive);
-
-    // Final ratio: z = N(x) / D(x) at WAD, cast to 10^9 with a single
-    // nearest-rounding step.
-    let z_raw_u256 = u256::mul_div(
-        n.mag(),
-        common::scale_u256!(),
-        d.mag(),
-        rounding::nearest(),
-    ).destroy_some();
+    let z_raw_u256 = horner::eval_rational_scaled(
+        x_wad,
+        num_mags,
+        num_negs,
+        den_mags,
+        den_negs,
+        WAD,
+    );
     // Defense-in-depth clamp to the representable maximum, mirroring cdf's
     // `ONE_RAW` clamp. The committed fit peaks at `z ≈ 5.998 < MAX_Z`, so this
     // never fires with the shipped coefficients.
@@ -165,9 +168,10 @@ fun eval_rational_wad(
 
 // === Test-Only Helpers ===
 
-/// Test-only window onto `eval_rational_wad` so the `EInternalNumNegative` /
-/// `EInternalDenNonPositive` integrity asserts - unreachable through the public
-/// API with the committed coefficients - can be driven with crafted tables.
+/// Test-only window onto `eval_rational_wad` so the shared integrity asserts
+/// (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) and the
+/// clamp - unreachable through the public API with the committed
+/// coefficients - can be driven with crafted tables.
 #[test_only]
 public(package) fun eval_rational_for_test(
     x_raw: u128,

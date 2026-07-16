@@ -64,8 +64,10 @@ const CENTRAL_THRESHOLD_RAW: u128 = 975_000_000;
 
 /// Output saturation clamp `|z|` at the raw `10^9` scale: `inverse_cdf(1)` (and,
 /// reflected, `inverse_cdf(0)`) returns this instead of the unrepresentable
-/// `±∞`. Matches the CDF domain bound so `cdf`/`inverse_cdf` agree at the corner.
-const MAX_Z_RAW: u128 = 6_300_000_000;
+/// `±∞`. Equal to the CDF domain bound `cdf_coefficients::max_z_raw()` so
+/// `cdf`/`inverse_cdf` agree at the corner: the quantile saturates at the
+/// smallest `|z|` the CDF already resolves to exactly `1` (resp. `0`).
+const MAX_Z_RAW: u128 = 6_109_410_205;
 
 // === Package Functions ===
 
@@ -96,5 +98,5 @@ public(package) fun tail_den_negs(): vector<bool> { TAIL_DEN_NEGS }
 /// Central-vs-tail probability split at the raw `10^9` scale (`975_000_000`).
 public(package) fun central_threshold_raw(): u128 { CENTRAL_THRESHOLD_RAW }
 
-/// Output saturation clamp `|z|` at the raw `10^9` scale (`6_300_000_000`).
+/// Output saturation clamp `|z|` at the raw `10^9` scale (`6_109_410_205`).
 public(package) fun max_z_raw(): u128 { MAX_Z_RAW }

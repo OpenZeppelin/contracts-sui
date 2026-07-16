@@ -236,7 +236,7 @@ significant digits.
 | `max_error` / `worst_z` (`worst_x` by region) | float | Maximum error on the continuous validation grid and where it occurs |
 | `min_abs_d` | float | Per region: the smallest denominator magnitude `abs(D(x))` seen on that region's validation grid. Top level: the anti-underflow acceptance threshold (`MIN_ABS_D`) the fit had to clear |
 | `target_error` | float | The error budget the sweep had to meet |
-| `max_z` / `wad` / `scale_decimal` | str | The domain bound and scales (see `shared/constants.py`) |
+| `max_z` / `acc_scale` / `scale_decimal` | str | The domain bound and scales (see `shared/constants.py`) |
 | `num_coeffs_str` / `den_coeffs_str` | list[str] | N(z), D(z) coefficients, ascending power order |
 
 ## Layout
@@ -245,7 +245,7 @@ significant digits.
 gaussian_codegen/
 ├── Makefile             # install / regen / validate / check / ci / test
 ├── shared/
-│   ├── constants.py     # single source of truth: WAD scales, domain bounds
+│   ├── constants.py     # single source of truth: fixed-point scales, domain bounds
 │   ├── reference.py     # mpmath oracle: Φ, φ, and Φ⁻¹ (erfinv) at 100 dps
 │   ├── aaa.py           # AAA barycentric → N(z)/D(z) polynomial conversion
 │   ├── rounding_optimize.py # staged Chebyshev refinement + integer scoring

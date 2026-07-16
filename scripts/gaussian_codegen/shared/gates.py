@@ -40,9 +40,9 @@ _BOUNDARY_MARGIN = 1e-4
 MIN_HEADROOM_BITS = 4
 
 
-def _float_coeffs(coeffs: list[SignedInt], wad: int) -> np.ndarray:
-    """Ascending-power real coefficients (signed magnitude / wad) as float64."""
-    return np.array([(-m if neg else m) / wad for m, neg in coeffs], dtype=np.float64)
+def _float_coeffs(coeffs: list[SignedInt], acc_scale: int) -> np.ndarray:
+    """Ascending-power real coefficients (signed magnitude / acc_scale) as float64."""
+    return np.array([(-m if neg else m) / acc_scale for m, neg in coeffs], dtype=np.float64)
 
 
 def _proxy_output(z: np.ndarray, num_f: np.ndarray, den_f: np.ndarray, scale: int):
@@ -57,20 +57,23 @@ def _proxy_output(z: np.ndarray, num_f: np.ndarray, den_f: np.ndarray, scale: in
     return np.floor(val + 0.5), np.abs(frac - 0.5)
 
 
-def _eval_int(z_raw: int, num, den, wad: int, scale: int) -> int:
+def _eval_int(z_raw: int, num, den, acc_scale: int, scale: int) -> int:
     """Exact integer central-domain output `round(N(z)/D(z) * scale)` at the
-    family WAD. No saturation or reflection - callers scan strictly inside the
-    central domain, so the raw rational is what ships there."""
-    z_wad: SignedInt = (z_raw * (wad // scale), False)  # 10^9 -> wad
-    n = horner_eval(z_wad, num, wad)
-    d = horner_eval(z_wad, den, wad)
+    external `scale` (10^9). Horner evaluation runs at the family `acc_scale`,
+    which cancels in the `N / D` quotient; only the final nearest-rounding step
+    lands the result on the external grid. No saturation or reflection - callers
+    scan strictly inside the central domain, so the raw rational is what ships
+    there."""
+    z_acc: SignedInt = (z_raw * (acc_scale // scale), False)  # 10^9 -> acc_scale
+    n = horner_eval(z_acc, num, acc_scale)
+    d = horner_eval(z_acc, den, acc_scale)
     return mul_div_nearest(n[0], scale, d[0])
 
 
 def check_neighbor_monotonicity(
     num,
     den,
-    wad: int,
+    acc_scale: int,
     scale: int,
     onset_raw: int,
     max_z_raw: int,
@@ -85,8 +88,8 @@ def check_neighbor_monotonicity(
     `onset_raw` starts well below the tail where the true per-step increment first
     approaches the output resolution; below it the increment dwarfs any truncation
     noise, so an inversion is impossible there."""
-    num_f = _float_coeffs(num, wad)
-    den_f = _float_coeffs(den, wad)
+    num_f = _float_coeffs(num, acc_scale)
+    den_f = _float_coeffs(den, acc_scale)
     last_k = max_z_raw - 2  # largest k with k+1 still strictly inside the central domain
     pairs = 0
     rechecks = 0
@@ -100,8 +103,8 @@ def check_neighbor_monotonicity(
         ambiguous = (dist[:-1] < _BOUNDARY_MARGIN) | (dist[1:] < _BOUNDARY_MARGIN)
         for i in np.nonzero(bad | ambiguous)[0]:
             kk = int(idx[i])
-            a = _eval_int(kk, num, den, wad, scale)
-            b = _eval_int(kk + 1, num, den, wad, scale)
+            a = _eval_int(kk, num, den, acc_scale, scale)
+            b = _eval_int(kk + 1, num, den, acc_scale, scale)
             rechecks += 1
             if (increasing and b < a) or (not increasing and b > a):
                 raise RuntimeError(
@@ -116,7 +119,7 @@ def check_neighbor_monotonicity(
 def check_overflow_margin(
     num,
     den,
-    wad: int,
+    acc_scale: int,
     scale: int,
     max_z_raw: int,
     n: int = 100_000,
@@ -130,8 +133,8 @@ def check_overflow_margin(
     step = max(1, max_z_raw // n)
     peak = 0
     for z_raw in list(range(0, max_z_raw, step)) + [max_z_raw - 1]:
-        z_wad: SignedInt = (z_raw * (wad // scale), False)
-        p = max(horner_peak_product(z_wad, num, wad), horner_peak_product(z_wad, den, wad))
+        z_acc: SignedInt = (z_raw * (acc_scale // scale), False)
+        p = max(horner_peak_product(z_acc, num, acc_scale), horner_peak_product(z_acc, den, acc_scale))
         if p > peak:
             peak = p
     bits = peak.bit_length()

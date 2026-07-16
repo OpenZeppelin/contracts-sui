@@ -15,7 +15,7 @@ full per-degree AAA sweep (informational only; the shipped degree stays pinned).
 Polynomial form is N(z)/D(z) with coefficients in **ascending power order**
 (constant term first). The fit is normalized so that D(0) = 1 - this keeps
 constant terms near `(0.5, 1)` and higher-order terms close to O(1), which
-makes them comfortably fit u128 after WAD scaling.
+makes them comfortably fit u128 after scaling to the accumulation scale.
 """
 from __future__ import annotations
 
@@ -291,15 +291,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     # Coefficient magnitude check at the CDF accumulation scale before serialization.
-    wad = mpf(constants.CDF_WAD)
+    acc_scale = mpf(constants.CDF_ACC_SCALE)
     max_mag = mpf(0)
     for c in num + den:
-        m = abs(c) * wad
+        m = abs(c) * acc_scale
         if m > max_mag:
             max_mag = m
-    print(f"Max |coeff| × CDF_WAD = {float(max_mag):.3e} (must be < 2^128 ≈ 3.4e38)")
+    print(f"Max |coeff| x CDF_ACC_SCALE = {float(max_mag):.3e} (must be < 2^128 ≈ 3.4e38)")
     if max_mag >= mpf(2) ** 128:
-        print("FAIL: at least one coefficient does not fit u128 at CDF_WAD scale", file=sys.stderr)
+        print("FAIL: at least one coefficient does not fit u128 at CDF_ACC_SCALE", file=sys.stderr)
         return 1
 
     output = {
@@ -309,7 +309,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "worst_z": worst_z,
         "target_error": TARGET_ERROR,
         "max_z": constants.MAX_Z,
-        "wad": str(constants.CDF_WAD),
+        "acc_scale": str(constants.CDF_ACC_SCALE),
         "scale_decimal": str(constants.SCALE_DECIMAL),
         "num_coeffs_str": num_strings,
         "den_coeffs_str": den_strings,

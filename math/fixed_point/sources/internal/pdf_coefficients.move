@@ -3,8 +3,8 @@
 
 /// Numerator and denominator coefficients for the generated standard-normal
 /// PDF rational on `[0, 6.402729806]`. All values are
-/// sign-magnitude pairs at PDF WAD (`10^36`) scale, indexed in ascending power
-/// order (index 0 is the constant term).
+/// sign-magnitude pairs at the PDF accumulation scale (`10^36`), indexed in
+/// ascending power order (index 0 is the constant term).
 ///
 /// Accessors return the underlying `vector<u128>` / `vector<bool>` constants so
 /// callers can bind them to a local once per PDF evaluation and index locally

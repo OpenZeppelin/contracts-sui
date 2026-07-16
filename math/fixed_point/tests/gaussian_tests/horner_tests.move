@@ -6,7 +6,7 @@ use openzeppelin_fp_math::horner::{
     from_coeff,
     from_unsigned,
     horner_eval,
-    zero,
+    zero
 };
 use std::unit_test::assert_eq;
 
@@ -219,9 +219,9 @@ fun mul_wad_respects_scale_argument() {
     // The divisor scale is a per-call argument. Same operands, finer scale ->
     // smaller magnitude: (1e18 · 1e18) / 1e18 = 1e18, but / 1e36 = 1.
     let one = pos(WAD);
-    let wad36: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
+    let scale36: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000; // 10^36
     assert_eq!(one.mul_wad(one, WAD), pos(WAD));
-    assert_eq!(one.mul_wad(one, wad36).mag(), 1);
+    assert_eq!(one.mul_wad(one, scale36).mag(), 1);
 }
 
 // === horner_eval! ===

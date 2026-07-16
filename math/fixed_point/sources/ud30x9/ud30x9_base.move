@@ -143,9 +143,9 @@ public fun abs(x: UD30x9): UD30x9 {
 /// Returns the probability `Φ(z) ∈ [0.5, 1]` represented as `UD30x9`. Since
 /// `UD30x9` inputs are inherently non-negative, the output is always at least
 /// `0.5`. The implementation evaluates an AAA-rational approximation
-/// `N(z) / D(z)` at WAD scale (`10^36`) via Horner's method on a sign-magnitude
-/// `u256` accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a
-/// single nearest-rounding step.
+/// `N(z) / D(z)` at the internal accumulation scale (`10^36`) via Horner's
+/// method on a sign-magnitude `u256` accumulator; the final ratio is cast back
+/// to `UD30x9` (`10^9`) in a single nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Non-negative input.
@@ -171,7 +171,7 @@ public fun abs(x: UD30x9): UD30x9 {
 /// #### Aborts
 /// - Does not abort for any `UD30x9` input under the committed, validated
 ///   coefficients. The evaluator carries internal integrity asserts
-///   (`cdf::EInternalNumNegative` / `cdf::EInternalDenNonPositive`) as
+///   (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
 ///
@@ -189,9 +189,10 @@ public fun cdf(z: UD30x9): UD30x9 {
 ///
 /// Returns the density `φ(z) = e^(-z^2/2) / sqrt(2*pi) ∈ [0, φ(0)]` represented
 /// as `UD30x9`, where the peak is `φ(0) = 0.398942280`. The implementation
-/// evaluates an AAA-rational approximation `N(z) / D(z)` at WAD scale (`10^36`)
-/// via Horner's method on a sign-magnitude `u256` accumulator; the final ratio is
-/// cast back to `UD30x9` (`10^9`) in a single nearest-rounding step.
+/// evaluates an AAA-rational approximation `N(z) / D(z)` at the internal
+/// accumulation scale (`10^36`) via Horner's method on a sign-magnitude `u256`
+/// accumulator; the final ratio is cast back to `UD30x9` (`10^9`) in a single
+/// nearest-rounding step.
 ///
 /// #### Parameters
 /// - `z`: Non-negative input.
@@ -216,7 +217,7 @@ public fun cdf(z: UD30x9): UD30x9 {
 /// #### Aborts
 /// - Does not abort for any `UD30x9` input under the committed, validated
 ///   coefficients. The evaluator carries internal integrity asserts
-///   (`pdf::EInternalNumNegative` / `pdf::EInternalDenNonPositive`) as
+///   (`horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`) as
 ///   defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients.
 ///
@@ -245,13 +246,14 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// - `p`: Probability in `[0.5, 1]`.
 ///
 /// #### Returns
-/// - `Φ⁻¹(p) ∈ [0, 6.3]` at `UD30x9` scale.
+/// - `Φ⁻¹(p) ∈ [0, 6.109410205]` at `UD30x9` scale.
 ///
 /// #### Behavior
 /// - `Φ⁻¹(0.5)` is exactly `0`.
-/// - Saturates to `6.3` at `p = 1`, since `Φ⁻¹(1) = +∞` is unrepresentable. `6.3`
-///   lies beyond the CDF saturation bound (`6.109410205`), so `cdf` maps it back
-///   to exactly `1` - `cdf`/`inverse_cdf` agree at the corner.
+/// - Saturates to `6.109410205` at `p = 1`, since `Φ⁻¹(1) = +∞` is
+///   unrepresentable. The clamp equals the CDF saturation bound (the smallest `z`
+///   `cdf` resolves to exactly `1`), so `cdf` maps it back to exactly `1` -
+///   `cdf`/`inverse_cdf` agree at the corner.
 /// - Max absolute error `≤ 5 × 10⁻⁹` (5 ULP at the `UD30x9` scale). Across the
 ///   deterministic offline validation grid, no result is more than 1 ULP from
 ///   the correctly rounded output. The tail change of variable is carried at the
@@ -269,7 +271,7 @@ public fun pdf(z: UD30x9): UD30x9 {
 /// #### Aborts
 /// - `EProbabilityBelowHalf` if `p < 0.5` (the quantile would be negative).
 /// - `EProbabilityOutOfRange` if `p > 1`.
-/// - `inverse_cdf::EInternalNumNegative` / `inverse_cdf::EInternalDenNonPositive`
+/// - `horner::EInternalNumNegative` / `horner::EInternalDenNonPositive`
 ///   (defense-in-depth against a corrupted regenerated coefficient table; these
 ///   cannot fire for the shipped coefficients).
 /// - `common::ELogOfZero` from the tail transform's `ln(1 - p)` (the `p = 1`

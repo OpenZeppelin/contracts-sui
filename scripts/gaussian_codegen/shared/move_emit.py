@@ -43,19 +43,19 @@ def _grouped(digits: str) -> str:
     return "_".join(reversed(chunks))
 
 
-def quantize(c_str: str, wad: int = constants.WAD) -> tuple[int, bool]:
+def quantize(c_str: str, acc_scale: int = constants.WAD) -> tuple[int, bool]:
     """Quantize a high-precision coefficient string at unit scale to a
-    `(u128 magnitude, bool is_negative)` pair at `wad` scale, half-up rounding.
-    `wad` defaults to the generic `10^18`; each family passes its own accumulation
-    scale (`CDF_WAD` / `PDF_WAD` = `10^36`).
+    `(u128 magnitude, bool is_negative)` pair at `acc_scale` scale, half-up rounding.
+    `acc_scale` defaults to the generic `10^18`; each family passes its own accumulation
+    scale (`CDF_ACC_SCALE` / `PDF_ACC_SCALE` = `10^36`).
 
     The u128 range is enforced downstream by `fmt_u128` when the literal is
     rendered, so it is not re-checked here."""
     c = Decimal(c_str)
     is_neg = c < 0
     with localcontext() as context:
-        context.prec = constants.DPS + len(str(wad))
-        mag_real = (-c if is_neg else c) * Decimal(wad)
+        context.prec = constants.DPS + len(str(acc_scale))
+        mag_real = (-c if is_neg else c) * Decimal(acc_scale)
         mag = int(mag_real.to_integral_value(rounding=ROUND_HALF_UP))
     if mag == 0:
         is_neg = False  # canonicalize zero

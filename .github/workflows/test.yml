@@ -29,7 +29,7 @@ jobs:
       - name: Set package matrix
         id: set-matrix
         run: |
-          PACKAGES='["contracts/access", "contracts/allowance", "contracts/finance", "contracts/timelock", "contracts/utils", "math/core", "math/fixed_point"]'
+          PACKAGES='["contracts/access", "contracts/allowance", "contracts/finance", "contracts/timelock", "contracts/utils", "math/core", "math/fixed_point", "collections"]'
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
       - name: Cache Sui binary
@@ -135,7 +135,7 @@ jobs:
     # green fast run so we never trace a broken build.
     needs: [setup, test]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     continue-on-error: true
     permissions:
       contents: read

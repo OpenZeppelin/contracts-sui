@@ -448,7 +448,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "tail_min_p": constants.INVERSE_CDF_TAIL_MIN_P,
         "r_min": float(R_MIN),
         "r_max": float(R_MAX),
-        "wad": str(constants.WAD),
+        "acc_scale": str(constants.WAD),
         "scale_decimal": str(constants.SCALE_DECIMAL),
     }
     OUTPUT_PATH.write_text(json.dumps(output, indent=2), encoding="utf-8")
