@@ -6,7 +6,7 @@ use openzeppelin_fp_math::horner::{
     from_coeff,
     from_unsigned,
     horner_eval,
-    zero
+    zero,
 };
 use std::unit_test::assert_eq;
 
