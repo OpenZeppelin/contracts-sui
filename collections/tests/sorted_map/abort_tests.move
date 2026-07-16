@@ -1,0 +1,157 @@
+/// The abort carve-outs and the total-API contract.
+///
+/// Every `#[expected_failure]` pins `location = openzeppelin_collections::sorted_map`: the
+/// abort must originate in the library, never in the consumer's inlined macro body
+/// and never in `std::vector`. The interior-gap borrow case (idx < n) is what distinguishes
+/// a real EKeyNotFound from a silent successor-read. The total-API tests assert the
+/// complement: every non-carve-out op returns none/false/empty on a miss instead of aborting.
+module openzeppelin_collections::sorted_map_abort_tests;
+
+use openzeppelin_collections::sorted_map as sm;
+use openzeppelin_collections::sorted_map_test_util as u;
+use std::unit_test::assert_eq;
+
+// === borrow / borrow_mut on an absent key -> EKeyNotFound ===
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun borrow_absent_below_head() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::get(&m, 5); // below head
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun borrow_absent_above_tail() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 20, 2);
+    u::get(&m, 99); // above tail: idx == n, assert must precede the OOB read
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun borrow_absent_interior_gap() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 30, 3);
+    u::get(&m, 20); // interior gap: idx < n; a pre-assert read would return 30 silently
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun borrow_empty_map() {
+    let m = sm::new<u64, u64>();
+    u::get(&m, 1);
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun borrow_mut_absent() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::set(&mut m, 7, 0); // borrow_mut on an absent key (idx == n, above tail)
+}
+
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
+fun borrow_mut_absent_interior_gap() {
+    // The interior-gap (idx < n) companion to borrow_mut_absent: a pre-assert &mut read
+    // would hand back a live &mut to the SUCCESSOR (30) instead of aborting.
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 10, 1);
+    u::ins(&mut m, 30, 3);
+    u::set(&mut m, 20, 0); // absent interior key
+}
+
+// === add / add_by on a present key -> EKeyAlreadyExists ===
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_duplicate_aborts() {
+    let mut m = sm::new<u64, u64>();
+    u::add(&mut m, 10, 1);
+    u::add(&mut m, 10, 2); // re-add an existing key: strict insert refuses to overwrite
+}
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_by_duplicate_aborts() {
+    // Same contract under a custom comparator (reverse `>`).
+    let mut m = sm::new<u64, u64>();
+    u::add_rev(&mut m, 10, 1);
+    u::add_rev(&mut m, 10, 2);
+}
+
+#[test, expected_failure(abort_code = sm::EKeyAlreadyExists, location = sm)]
+fun add_coarse_equal_key_aborts() {
+    // A COMPARE-EQUAL key is a duplicate: same id, different tag compares equal under
+    // id-order, so the second add aborts even though the key bytes differ.
+    let mut m = sm::new<u::CoarseKey, u64>();
+    u::add_ck(&mut m, u::ck(1, 100), 10);
+    u::add_ck(&mut m, u::ck(1, 200), 20); // id=1 already present -> EKeyAlreadyExists
+}
+
+// === destroy_empty on a non-empty map -> ENotEmpty ===
+
+#[test, expected_failure(abort_code = sm::ENotEmpty, location = sm)]
+fun destroy_empty_nonempty() {
+    let mut m = sm::new<u64, u64>();
+    u::ins(&mut m, 1, 1);
+    m.destroy_empty();
+}
+
+// === pop_front / pop_back on an empty map -> EEmpty ===
+
+#[test, expected_failure(abort_code = sm::EEmpty, location = sm)]
+fun pop_front_empty() {
+    let mut m = sm::new<u64, u64>();
+    let (_k, _v) = m.pop_front();
+}
+
+#[test, expected_failure(abort_code = sm::EEmpty, location = sm)]
+fun pop_back_empty() {
+    let mut m = sm::new<u64, u64>();
+    let (_k, _v) = m.pop_back(); // n-1 underflow guarded by the empty check
+}
+
+#[test]
+fun ptb_chain_no_abort() {
+    // A PTB-style chain (contains -> find_next -> insert -> remove -> keys_from) must run
+    // end to end with no abort. `remove` aborts on an absent key, so each remove here targets a
+    // key the chain just inserted; the point is that no command unwinds an earlier one.
+    let mut m = sm::new<u64, u64>();
+    let _ = u::has(&m, 1);
+    let _ = u::fnext(&m, 1, true);
+    let _ = u::ins(&mut m, 1, 10);
+    let (_, _) = u::rm(&mut m, 1); // remove the key just inserted
+    let _ = u::kfrom(&m, 0, true, 5);
+    u::ins(&mut m, 1, 10);
+    u::ins(&mut m, 2, 20);
+    u::ins(&mut m, 3, 30);
+    let _ = u::has(&m, 2);
+    let _ = u::fnext(&m, 2, false);
+    let (_, _) = u::rm(&mut m, 2);
+    let _ = u::ins(&mut m, 2, 22);
+    assert_eq!(u::kfrom(&m, 0, true, 5), vector[1, 2, 3]);
+}
+
+// === from_sorted_keys_values -> EUnequalLengths / EKeysNotStrictlyIncreasing ===
+
+#[test, expected_failure(abort_code = sm::EUnequalLengths, location = sm)]
+fun from_sorted_unequal_lengths() {
+    let _m = sm::from_sorted_keys_values!(vector<u64>[1, 2, 3], vector<u64>[10, 20]);
+}
+
+#[test, expected_failure(abort_code = sm::EKeysNotStrictlyIncreasing, location = sm)]
+fun from_sorted_out_of_order() {
+    let _m = sm::from_sorted_keys_values!(vector<u64>[1, 3, 2], vector<u64>[10, 30, 20]);
+}
+
+#[test, expected_failure(abort_code = sm::EKeysNotStrictlyIncreasing, location = sm)]
+fun from_sorted_first_pair_not_increasing() {
+    // The out-of-order step is the FIRST comparison (i == 1), not a later pair as in [1,3,2] - so
+    // the abort fires on the very first adjacent check.
+    let _m = sm::from_sorted_keys_values!(vector<u64>[2, 1], vector<u64>[20, 10]);
+}
+
+#[test, expected_failure(abort_code = sm::EKeysNotStrictlyIncreasing, location = sm)]
+fun from_sorted_duplicate_key() {
+    // A duplicate compares equal, so it is NOT strictly increasing - aborts rather than
+    // de-duplicating (a resource `V` cannot be silently displaced).
+    let _m = sm::from_sorted_keys_values!(vector<u64>[1, 2, 2], vector<u64>[10, 20, 21]);
+}
