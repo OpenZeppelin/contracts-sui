@@ -83,6 +83,53 @@ fun create_sale_rejects_inverted_time_range() {
     abort
 }
 
+// A window longer than the maximum allowed duration is rejected.
+#[test, expected_failure(abort_code = prefunded_sale::ESaleDurationTooLong)]
+fun create_sale_rejects_window_over_max_duration() {
+    let mut ctx = tx_context::dummy();
+    let (_sale, _cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        100,
+        0,
+        0,
+        prefunded_sale::max_sale_duration_ms() + 1,
+        &mut ctx,
+    );
+    abort
+}
+
+// A window exactly at the maximum allowed duration is accepted.
+#[test]
+fun create_sale_accepts_window_at_max_duration() {
+    let mut ctx = tx_context::dummy();
+    let (sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        100,
+        0,
+        1_000,
+        1_000 + prefunded_sale::max_sale_duration_ms(),
+        &mut ctx,
+    );
+
+    assert!(sale.phase().is_init());
+    destroy(sale);
+    destroy(cap);
+}
+
 // Happy path: a well-formed sale starts in Init with zeroed accounting and the
 // cap bound to the sale id.
 #[test]

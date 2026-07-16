@@ -105,9 +105,18 @@
 ///    and unsold inventory.
 ///
 /// 3. **`AllowlistAdmin<SaleCoin>` controls compliance.** Issued by
-///    `enable_allowlist`. Loses-the-key implications: no entries can
-///    be minted, every `purchase` aborts. Hold in a recoverable
-///    container.
+///    `enable_allowlist`, at most once, and never replaceable. Losing it
+///    stops all minting, so every `purchase` aborts. On a sale that has
+///    **already met its soft cap** (but not its hard cap) this does more
+///    than block future purchases: raising to the hard cap is the only
+///    admin-driven exit, and purchases are the only way to raise, so the
+///    admin-only exits (`finalize`, `cancel_after_close`, `cancel_emergency`)
+///    all wait on the close of the window. Until `closes_at_ms`, the
+///    payments already taken (in `proceeds`), every buyer's allocation
+///    (behind claiming's `Finalized` guard), and the unsold inventory are
+///    all locked, with no party able to release them. `MAX_SALE_DURATION_MS`
+///    bounds how long that lasts; a shorter window shortens it. Hold the
+///    admin in a recoverable container.
 ///
 /// 4. **Every sale requires a paired `RefundVault<PaymentCoin>`.** Even sales
 ///    with `soft_cap == 0` need a vault - `cancel_emergency` always
@@ -376,6 +385,19 @@ const ENotCancelled: vector<u8> = "The sale must have been cancelled";
 /// A phase-gated operation required a terminal phase (`Finalized` or `Cancelled`).
 #[error(code = 40)]
 const ENotTerminal: vector<u8> = "The sale must have ended";
+
+/// `create_sale` was given a window longer than `MAX_SALE_DURATION_MS`.
+#[error(code = 41)]
+const ESaleDurationTooLong: vector<u8> =
+    "The sale window cannot exceed the maximum allowed duration";
+
+// === Constants ===
+
+/// Maximum purchase-window length, in milliseconds (365 days). `create_sale` bounds
+/// `closes_at_ms - opens_at_ms` by this so a far-future close cannot strand funds: on
+/// a soft-cap-met sale the close of the window is the only terminator for the
+/// admin-only exits (see footgun 3), and this caps how long that wait can last.
+const MAX_SALE_DURATION_MS: u64 = 31_536_000_000;
 
 // === Structs ===
 
@@ -679,6 +701,7 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// - `EHardCapZero` if `hard_cap == 0`.
 /// - `EInvalidCapsOrdering` if `soft_cap > hard_cap`.
 /// - `EInvalidTimeRange` if `opens_at_ms >= closes_at_ms`.
+/// - `ESaleDurationTooLong` if `closes_at_ms - opens_at_ms > MAX_SALE_DURATION_MS`.
 public fun create_sale<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -700,6 +723,7 @@ public fun create_sale<
     assert!(hard_cap > 0, EHardCapZero);
     assert!(soft_cap <= hard_cap, EInvalidCapsOrdering);
     assert!(opens_at_ms < closes_at_ms, EInvalidTimeRange);
+    assert!(closes_at_ms - opens_at_ms <= MAX_SALE_DURATION_MS, ESaleDurationTooLong);
 
     let sale = PrefundedSale {
         id: object::new(ctx),
@@ -2630,4 +2654,10 @@ public fun test_new_inventory_withdrawn<SaleCoin, PaymentCoin>(
     amount: u64,
 ): InventoryWithdrawn<SaleCoin, PaymentCoin> {
     InventoryWithdrawn { sale_id, amount }
+}
+
+/// Expose `MAX_SALE_DURATION_MS` so tests can exercise the window-duration bound.
+#[test_only]
+public fun max_sale_duration_ms(): u64 {
+    MAX_SALE_DURATION_MS
 }
