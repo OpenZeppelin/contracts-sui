@@ -158,9 +158,7 @@ use sui::clock::Clock;
 use sui::event;
 use sui::table::{Self, Table};
 
-// === Errors ===
-
-// Auth
+// === Errors ===Auth
 
 /// The supplied `SaleAdminCap` was issued for a different sale.
 #[error(code = 0)]
@@ -177,8 +175,6 @@ const EBuyerOnly: vector<u8> = "Only the buyer who made this purchase can perfor
 const EEmergencyCancelAfterClose: vector<u8> =
     "Emergency cancellation is only allowed while the sale is still open";
 
-// Time
-
 /// `create_sale` was given `opens_at_ms >= closes_at_ms`.
 #[error(code = 3)]
 const EInvalidTimeRange: vector<u8> = "The sale must open before it closes";
@@ -187,18 +183,17 @@ const EInvalidTimeRange: vector<u8> = "The sale must open before it closes";
 #[error(code = 4)]
 const ESaleWindowClosed: vector<u8> = "The sale is not open for purchases at this time";
 
-/// A close (`finalize` / `cancel_after_close`) was attempted while the window is
-/// still open and the hard cap has not been reached.
+/// `finalize` was attempted while the window is still open and the hard cap has not
+/// been reached.
 #[error(code = 5)]
 const ESaleWindowStillOpen: vector<u8> =
     "The sale cannot be closed yet: it is still open and has not sold out";
 
-/// `share_and_activate` was called after `closes_at_ms` had already passed.
+/// `share_and_activate` was called at or after `closes_at_ms` (`now >= closes_at_ms`);
+/// activation is only allowed strictly before the close.
 #[error(code = 6)]
 const EActivationAfterClose: vector<u8> =
-    "The sale cannot be activated after its closing time has passed";
-
-// Pricing & accounting
+    "The sale cannot be activated at or after its closing time";
 
 /// `create_sale` was given `hard_cap == 0`; every sale must have a bounded raise.
 #[error(code = 7)]
@@ -235,8 +230,6 @@ const EAllocationOverflow: vector<u8> = "The token allocation would be too large
 #[error(code = 14)]
 const EInsufficientInventory: vector<u8> = "Not enough tokens remain available for this purchase";
 
-// Caps
-
 /// A purchase would push the buyer's cumulative payment past the configured
 /// per-buyer cap.
 #[error(code = 15)]
@@ -251,20 +244,16 @@ const EPerEntryCapExceeded: vector<u8> =
 #[error(code = 17)]
 const ESoftCapNotMet: vector<u8> = "The sale cannot be finalized: the minimum raise was not met";
 
-/// A cancel was attempted on a sale that has met its goal: `cancel_after_close` with
-/// the soft cap reached or no soft cap configured, or `cancel_emergency` with the
-/// soft cap reached.
+/// `cancel_after_close` was attempted on a sale with no soft cap (`soft_cap == 0`);
+/// with no minimum to miss, such a sale can only `finalize`.
 #[error(code = 18)]
-const ESoftCapMet: vector<u8> =
-    "The sale cannot be cancelled: it has met its minimum raise, or none was set";
+const ESoftCapNotSet: vector<u8> = "The sale cannot be cancelled: the minimum raise was never set";
 
 /// `cancel_emergency` was called on a sold-out sale (`raised >= hard_cap`); it must
 /// `finalize`.
 #[error(code = 19)]
 const ESaleAlreadyComplete: vector<u8> =
     "The sale cannot be cancelled: it has sold out and must be finalized";
-
-// Allowlist coupling
 
 /// The sale requires an `AllowEntry` but `purchase` was called without one.
 #[error(code = 20)]
@@ -280,8 +269,6 @@ const EAllowlistNotRequired: vector<u8> =
 #[error(code = 22)]
 const EAllowlistAlreadyEnabled: vector<u8> = "The allowlist has already been enabled for this sale";
 
-// Vault coupling
-
 /// `pair_refund_vault` was called after a vault had already been paired.
 #[error(code = 23)]
 const EVaultAlreadyPaired: vector<u8> = "A refund vault has already been paired with this sale";
@@ -291,8 +278,7 @@ const EVaultAlreadyPaired: vector<u8> = "A refund vault has already been paired 
 const EVaultRequiredForActivate: vector<u8> =
     "The sale cannot be activated without a paired refund vault";
 
-/// The vault passed to a sale operation is not the one paired with this sale; at
-/// pairing time, the cap does not control the supplied vault.
+/// The vault passed to a sale operation is not the one paired with this sale.
 #[error(code = 25)]
 const EWrongVault: vector<u8> = "The provided refund vault is not the one paired with this sale";
 
@@ -306,26 +292,18 @@ const EVaultNotActive: vector<u8> = "The refund vault must be active when paired
 const EVaultNotEmpty: vector<u8> =
     "The refund vault must be empty when paired, otherwise existing funds would be stranded";
 
-// Receipts
-
 /// A receipt passed to `claim` / `refund` was issued by a different sale.
 #[error(code = 28)]
 const EReceiptSaleMismatch: vector<u8> = "This receipt was issued by a different sale";
-
-// Quote / curve coupling
 
 /// A quote passed to `purchase` was minted for a different sale.
 #[error(code = 29)]
 const EQuoteSaleMismatch: vector<u8> = "This quote was issued for a different sale";
 
-// Activation ticket
-
 /// An activation ticket passed to `share_and_activate` was minted for a different
 /// sale.
 #[error(code = 30)]
 const ETicketSaleMismatch: vector<u8> = "This activation ticket was issued for a different sale";
-
-// Per-buyer cap configuration
 
 /// `set_per_buyer_cap` was called a second time on the same sale.
 #[error(code = 31)]
@@ -334,8 +312,6 @@ const EPerBuyerCapAlreadySet: vector<u8> = "The per-buyer limit has already been
 /// `set_per_buyer_cap` was given `0`; a zero cap would block every buyer.
 #[error(code = 32)]
 const EPerBuyerCapZero: vector<u8> = "The per-buyer limit must be greater than zero";
-
-// Vesting schedule configuration
 
 /// `set_vesting_schedule_params` was called a second time on the same sale.
 #[error(code = 33)]
@@ -351,8 +327,6 @@ const EClaimRequiresVesting: vector<u8> =
 #[error(code = 35)]
 const ENoVestingScheduleAttached: vector<u8> =
     "This sale does not use vesting; claim the tokens directly";
-
-// Phase
 
 /// A phase-gated operation required the `Init` phase but the sale was past it.
 #[error(code = 36)]
@@ -376,6 +350,24 @@ const ENotCancelled: vector<u8> = "The sale must have been cancelled";
 /// A phase-gated operation required a terminal phase (`Finalized` or `Cancelled`).
 #[error(code = 40)]
 const ENotTerminal: vector<u8> = "The sale must have ended";
+
+/// `cancel_after_close` was attempted while the sale window was still open
+/// (`now <= closes_at_ms`). Distinct from `ESaleWindowStillOpen`, the compound
+/// `finalize` guard that also requires the hard cap to be unmet.
+#[error(code = 41)]
+const ESaleWindowNotClosed: vector<u8> = "The sale window has not closed yet";
+
+/// A cancel (`cancel_after_close` or `cancel_emergency`) was attempted on a sale that
+/// has met its soft cap (`soft_cap > 0` and `raised >= soft_cap`); a successful raise
+/// must `finalize`.
+#[error(code = 42)]
+const ESoftCapReached: vector<u8> = "The sale cannot be cancelled: it has met its minimum raise";
+
+/// `pair_refund_vault` was given a `RefundVaultCap` that does not control the supplied
+/// vault. Distinct from `EWrongVault`, the later-lifecycle check that a supplied vault
+/// is the one paired with the sale.
+#[error(code = 43)]
+const EWrongVaultCap: vector<u8> = "This capability does not control the provided refund vault";
 
 // === Structs ===
 
@@ -878,7 +870,7 @@ public fun set_vesting_schedule_params<
 /// #### Aborts
 /// - `ENotInit` if the sale is not in `Init` phase.
 /// - `EVaultAlreadyPaired` if a vault has already been paired.
-/// - `EWrongVault` if `vault_cap` does not control `vault`.
+/// - `EWrongVaultCap` if `vault_cap` does not control `vault`.
 /// - `EVaultNotActive` if `vault` is not in the `Active` state.
 /// - `EVaultNotEmpty` if `vault` holds a non-zero balance.
 public fun pair_refund_vault<
@@ -902,7 +894,7 @@ public fun pair_refund_vault<
 ) {
     assert!(sale.phase.is_init(), ENotInit);
     assert!(sale.refund_vault_cap.is_none(), EVaultAlreadyPaired);
-    assert!(vault_cap.cap_vault_id() == object::id(vault), EWrongVault);
+    assert!(vault_cap.cap_vault_id() == object::id(vault), EWrongVaultCap);
     assert!(vault.is_active(), EVaultNotActive);
     assert!(vault.value() == 0, EVaultNotEmpty);
 
@@ -1305,8 +1297,9 @@ public fun finalize<
 ///
 /// #### Aborts
 /// - `ENotActive` if the sale is not in `Active` phase.
-/// - `ESaleWindowStillOpen` if the window has not yet closed.
-/// - `ESoftCapMet` if no soft cap is configured or `raised >= soft_cap`.
+/// - `ESaleWindowNotClosed` if the window has not yet closed.
+/// - `ESoftCapNotSet` if no soft cap is configured.
+/// - `ESoftCapReached` if a soft cap was reached (`raised >= soft_cap`).
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
 ///
 /// Propagated through the internal cancel path (guarded by the sale's invariants, so
@@ -1334,8 +1327,9 @@ public fun cancel_after_close<
 ) {
     assert!(sale.phase.is_active(), ENotActive);
     let now = clock.timestamp_ms();
-    assert!(now > sale.closes_at_ms, ESaleWindowStillOpen);
-    assert!(sale.soft_cap > 0 && sale.raised < sale.soft_cap, ESoftCapMet);
+    assert!(now > sale.closes_at_ms, ESaleWindowNotClosed);
+    assert!(sale.soft_cap > 0, ESoftCapNotSet);
+    assert!(sale.raised < sale.soft_cap, ESoftCapReached);
 
     sale.do_cancel(vault, CancelReason::SoftCapMissed, now);
 }
@@ -1361,7 +1355,7 @@ public fun cancel_after_close<
 /// - `ENotActive` if the sale is not in `Active` phase.
 /// - `EEmergencyCancelAfterClose` if `now > closes_at_ms`.
 /// - `ESaleAlreadyComplete` if `raised >= hard_cap`.
-/// - `ESoftCapMet` if a soft cap is configured and `raised >= soft_cap`.
+/// - `ESoftCapReached` if a soft cap is configured and `raised >= soft_cap`.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
 ///
 /// Propagated through the internal cancel path (guarded by the sale's invariants, so
@@ -1393,7 +1387,7 @@ public fun cancel_emergency<
     let now = clock.timestamp_ms();
     assert!(now <= sale.closes_at_ms, EEmergencyCancelAfterClose);
     assert!(sale.raised < sale.hard_cap, ESaleAlreadyComplete);
-    assert!(sale.soft_cap == 0 || sale.raised < sale.soft_cap, ESoftCapMet);
+    assert!(sale.soft_cap == 0 || sale.raised < sale.soft_cap, ESoftCapReached);
 
     sale.do_cancel(vault, CancelReason::AdminEmergency, now);
 }

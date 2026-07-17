@@ -352,7 +352,7 @@ fun pair_rejects_nonempty_vault() {
 }
 
 // A cap that does not match the provided vault is rejected.
-#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVaultCap)]
 fun pair_rejects_mismatched_cap() {
     let mut test = ts::begin(u::admin());
     let ctx = test.ctx();
@@ -373,7 +373,7 @@ fun pair_rejects_mismatched_cap() {
     );
     let (vault, _vault_cap) = refund_vault::new<USDC>(ctx);
     let (_other_vault, other_cap) = refund_vault::new<USDC>(ctx);
-    sale.pair_refund_vault(&vault, other_cap); // cap is for other_vault -> EWrongVault
+    sale.pair_refund_vault(&vault, other_cap); // cap is for other_vault -> EWrongVaultCap
     abort
 }
 
