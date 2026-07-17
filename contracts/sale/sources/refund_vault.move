@@ -149,7 +149,7 @@ public struct VaultRelease<phantom P> has copy, drop {
 public fun new<P>(ctx: &mut TxContext): (RefundVault<P>, RefundVaultCap<P>) {
     let vault = RefundVault {
         id: object::new(ctx),
-        locked: balance::zero<P>(),
+        locked: balance::zero(),
         state: VaultState::Active,
     };
     let vault_id = object::id(&vault);

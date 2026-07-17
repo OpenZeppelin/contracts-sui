@@ -729,9 +729,9 @@ public fun create_sale<
 
     let sale = PrefundedSale {
         id: object::new(ctx),
-        inventory: balance::zero<SaleCoin>(),
+        inventory: balance::zero(),
         total_allocated: 0,
-        proceeds: balance::zero<PaymentCoin>(),
+        proceeds: balance::zero(),
         curve_params,
         hard_cap,
         soft_cap,
@@ -2637,7 +2637,7 @@ fun claim_all_internal<
     ctx: &TxContext,
 ): Balance<SaleCoin> {
     assert!(sale.is_finalized(), ENotFinalized);
-    let mut total = balance::zero<SaleCoin>();
+    let mut total = balance::zero();
     while (!receipts.is_empty()) {
         let r = receipts.pop_back();
         total.join(sale.claim_internal(r, ctx));
