@@ -10,17 +10,18 @@
 /// ```text
 ///   create_sale --+
 ///   deposit --+
-///   set_per_buyer_cap   |  (Init phase - sale is owned by caller;
-///   pair_refund_vault   +   holding it by &mut is the authority)
-///   enable_allowlist    |
-///                       |
-///   share_and_activate -+-->  (Active phase - sale is shared)
+///   set_per_buyer_cap           |  (Init phase - sale is owned by caller;
+///   set_vesting_schedule_params +   holding it by &mut is the authority)
+///   pair_refund_vault           |
+///   enable_allowlist            |
+///                               |
+///   share_and_activate ---------+-->  (Active phase - sale is shared)
 ///                                  |
 ///                              purchase xN
 ///                                  |
 ///                                  +--> finalize          (permissionless;
-///                                  |      claim, withdraw_proceeds,        successful close)
-///                                  |      withdraw_unsold_inventory
+///                                  |      claim / claim_into_vesting,       successful close)
+///                                  |      withdraw_proceeds, withdraw_unsold_inventory
 ///                                  |
 ///                                  +--> cancel_after_close (permissionless;
 ///                                  |      refund,                            soft-cap miss)
@@ -39,7 +40,8 @@
 /// authority needed for setup functions. After `share_and_activate`,
 /// the sale is shared and operations split into three categories:
 ///
-/// - **Permissionless:** `purchase`, `claim`, `claim_all`, `refund`,
+/// - **Permissionless:** `purchase`, `claim`, `claim_all`,
+///   `claim_into_vesting`, `claim_all_into_vesting`, `refund`,
 ///   `finalize`, `cancel_after_close`. Buyers and any caller with
 ///   visibility to the sale can drive these flows once their
 ///   conditions hold. **Buyer claims and refunds do not depend on
@@ -52,7 +54,7 @@
 ///
 /// ### Choosing a sale shape
 ///
-/// The sale supports four orthogonal configuration axes. Each is
+/// The sale supports five orthogonal configuration axes. Each is
 /// independent; combine as needed.
 ///
 /// - **Hard cap (required).** `hard_cap > 0` is enforced at
@@ -77,6 +79,12 @@
 ///   mode: every `purchase` must consume an `AllowEntry<SaleCoin>` minted by
 ///   the consumer's compliance module. Configure with
 ///   `enable_allowlist`.
+/// - **Vesting (optional).** Switches redemption from direct `claim` /
+///   `claim_all` - which then abort with `EClaimRequiresVesting` - to the
+///   permissionless `claim_into_vesting` / `claim_all_into_vesting`, each
+///   delivering the buyer's allocation inside a `VestingWallet` on the
+///   sale's fixed schedule. Configure with `set_vesting_schedule_params`;
+///   one-shot and irreversible.
 ///
 /// The three common shapes a fixed-price sale takes:
 ///
@@ -85,6 +93,10 @@
 /// | Public round | no | no | no | Open public sale, FCFS |
 /// | Capped public round | no | optional | yes | Anti-whale public sale |
 /// | Strategic round | yes | yes | yes | Compliance-gated raise |
+///
+/// Vesting is orthogonal to all three shapes: any of them can attach a
+/// schedule with `set_vesting_schedule_params` to stream each buyer's
+/// allocation instead of releasing it in full at `claim`.
 ///
 /// **What this primitive is not:** not a bonding curve, not an LBP,
 /// not a Dutch / English / sealed-bid auction, not a fair launch.
@@ -227,6 +239,14 @@ const EInsufficientInventoryAtActivate: vector<u8> =
     "Not enough tokens have been deposited to back the sale";
 
 /// A quote's `allocation` (`paid * rate`) would exceed `u64::MAX`.
+///
+/// This guard lives in `mint_quote`, which runs before `purchase` reaches its hard-cap
+/// check. On a sale configured at the boundary `hard_cap == u64::MAX / rate` (which the
+/// activation guard permits), a payment whose own value exceeds `hard_cap` therefore
+/// aborts here with `EAllocationOverflow` rather than the more intuitive
+/// `EHardCapExceeded`. A payment within the cap can never reach this: the activation
+/// guard (`hard_cap * rate <= u64::MAX`) rules the overflow out. So this only surfaces
+/// as a misleading abort at that extreme configuration.
 #[error(code = 13)]
 const EAllocationOverflow: vector<u8> = "The token allocation would be too large to represent";
 
@@ -1103,6 +1123,13 @@ public fun share_and_activate<
 /// can do. Near sell-out, buyers must size their payment to the remaining capacity -
 /// `hard_cap() - raised()` - off-chain before minting the quote. A payment for the exact
 /// remaining capacity closes the sale (`raised == hard_cap`); anything larger reverts.
+///
+/// The `raised` this sizing reads is a snapshot of a shared object and is stale by
+/// construction: a concurrent `purchase` that lands first can push an otherwise
+/// correctly sized payment over the cap, aborting the whole transaction with
+/// `EHardCapExceeded`. The payment is not consumed on the abort - the cost is gas only -
+/// and there is no slippage or partial-fill mechanism to absorb the race. Near a
+/// contested sell-out, under-size the payment or be prepared to retry.
 ///
 /// All arithmetic on user-controlled inputs (`raised + paid`, `contribution + paid`)
 /// is widened to `u128` and bounds-checked before downcasting, so oversized payments

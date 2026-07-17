@@ -163,7 +163,7 @@ the wallet.
 
 ## Choosing a sale shape
 
-Four orthogonal, independent configuration axes:
+Five orthogonal, independent configuration axes:
 
 - **Hard cap (required, `> 0`).** Bounds the maximum raise. Inventory backing is
   enforced at activation, so *sold-out* and *hard-cap-reached* coincide.
@@ -173,6 +173,11 @@ Four orthogonal, independent configuration axes:
   Configure with `set_per_buyer_cap`.
 - **Allowlist (optional).** Compliance-gated mode: every `purchase` must consume an
   `AllowEntry`. Configure with `enable_allowlist`.
+- **Vesting (optional).** Redemption streams each allocation through a `VestingWallet`
+  instead of releasing it at `claim`; the plain `claim` / `claim_all` paths then abort
+  and buyers redeem via `claim_into_vesting` / `claim_all_into_vesting`. Configure with
+  `set_vesting_schedule_params` (one-shot, irreversible); see
+  [Optional vesting](#optional-vesting) above.
 
 The three shapes a fixed-price sale typically takes:
 
@@ -181,6 +186,9 @@ The three shapes a fixed-price sale typically takes:
 | Public round | no | no | no | Open public sale, FCFS |
 | Capped public round | no | optional | yes | Anti-whale public sale |
 | Strategic round | yes | yes | yes | Compliance-gated raise |
+
+Vesting is orthogonal to all three shapes - any can attach a schedule with
+`set_vesting_schedule_params`.
 
 This primitive is **not** a bonding curve, LBP, auction (Dutch / English / sealed-bid),
 or fair launch - those have different mechanics and belong in separate standards.
