@@ -83,6 +83,18 @@ by no other code - the curve is first-party, trusted, and audited alongside the 
 > sell out before the hard cap). Treat any custom curve as security-critical and audit
 > it with the sale. The provided `fixed_rate_curve` is honest by construction.
 
+> [!NOTE]
+> **Quote freshness (custom curves).** A `Quote` is priced against the sale state at
+> mint time and applied verbatim; `purchase` never reprices. Within one PTB, several
+> quotes can be minted up front and another purchase can land between a quote's mint and
+> its consumption, advancing `raised` / `total_allocated`. A curve that prices from that
+> mutable state (a bonding curve) must mint via `prefunded_sale::mint_quote`, which
+> stamps the sale's `state_version`; `purchase` then aborts (`EStaleQuote`) if an
+> intervening purchase advanced it, so the quote can never fill at a stale price. A
+> rate-immune curve like `fixed_rate_curve` mints via `mint_quote_unversioned`, opting
+> out so several quotes can be batched in one PTB. **Choosing `mint_quote_unversioned`
+> for a state-dependent curve reintroduces the staleness gap.**
+
 ### Hot potatoes: `Quote` and `AllowEntry`
 
 Two carrier types have **no abilities** - they cannot be stored, copied, transferred,

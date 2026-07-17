@@ -18,9 +18,9 @@
 ///
 /// Struct fields are module-private, so only this module can construct a
 /// `FixedRateCurve` witness, and therefore only this module can mint a
-/// `Quote<FixedRateCurve>` (via `prefunded_sale::mint_quote`). A sale parameterized by
-/// `FixedRateCurve` can be driven by no other pricing logic. The public
-/// `params` constructor is the seam an external protocol can use to build the
+/// `Quote<FixedRateCurve>` (via `prefunded_sale::mint_quote_unversioned`). A sale
+/// parameterized by `FixedRateCurve` can be driven by no other pricing logic. The
+/// public `params` constructor is the seam an external protocol can use to build the
 /// config without surrendering the witness.
 ///
 /// ### Purchase
@@ -127,6 +127,11 @@ public fun activation_ticket<
 /// `balance.value() * rate`, u128-widened to detect overflow. The `Quote` carries
 /// the balance through to `purchase`.
 ///
+/// The rate is fixed at construction, so the quote is minted via
+/// `prefunded_sale::mint_quote_unversioned`: it opts out of freshness, letting a buyer
+/// mint and purchase several quotes in one PTB. A state-dependent curve would use the
+/// freshness-enforced `prefunded_sale::mint_quote` instead.
+///
 /// #### Parameters
 /// - `sale`: The sale being purchased from, read for its configured `rate`.
 /// - `balance`: The buyer's payment, moved into the returned `Quote`.
@@ -156,7 +161,7 @@ public fun quote<
     balance: Balance<PaymentCoin>,
 ): Quote<PaymentCoin> {
     let rate = sale.curve_params().rate;
-    sale.mint_quote(FixedRateCurve {}, balance, rate)
+    sale.mint_quote_unversioned(FixedRateCurve {}, balance, rate)
 }
 
 // === View helpers ===

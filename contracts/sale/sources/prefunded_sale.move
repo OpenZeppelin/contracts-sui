@@ -377,6 +377,11 @@ const ENotCancelled: vector<u8> = "The sale must have been cancelled";
 #[error(code = 40)]
 const ENotTerminal: vector<u8> = "The sale must have ended";
 
+/// A freshness-enforced quote was consumed after a purchase advanced the sale's
+/// `state_version` since the quote was minted, so its price is stale.
+#[error(code = 41)]
+const EStaleQuote: vector<u8> = "The sale state changed after this quote was minted";
+
 // === Structs ===
 
 /// A fixed-price, pre-funded token sale. Generic over a pricing `Curve` (and its
@@ -420,6 +425,10 @@ public struct PrefundedSale<
     soft_cap: u64,
     /// Total payment raised so far.
     raised: u64,
+    /// Monotonic marker of pricing-relevant sale state, currently bumped by each
+    /// `purchase`. A freshness-enforced `Quote` stamps this at mint and is rejected
+    /// at consumption if it has since advanced. See the `Quote` section.
+    state_version: u64,
     /// Start of the purchase window (ms).
     opens_at_ms: u64,
     /// End of the purchase window (ms).
@@ -512,17 +521,30 @@ public struct ActivationTicket<phantom Curve: drop> {
 // sale's only independent protections are inventory backing
 // (`allocation <= inventory - total_allocated`) and u128 overflow guards.
 //
-// Freshness is NOT a carrier guarantee. A quote's `allocation` is fixed
-// at mint time: `mint_quote` reads the sale by `&`, so several quotes can
-// be minted up front, and `purchase` (which takes `&mut`) can run between
-// mint and consumption within one PTB, advancing `raised` and
-// `total_allocated`. `purchase` never reprices - it accepts the carried
-// `allocation` verbatim. For `fixed_rate_curve` this is harmless (the
-// rate is fixed at construction and read from immutable `curve_params`),
-// but a curve pricing from mutable sale state must not assume a quote is
-// fresh at consumption: any buyer can mint in a cheap region and spend
-// after an earlier same-PTB purchase moved the sale into a costlier one,
-// executing at the stale price at the issuer's expense.
+// Freshness is an OPT-IN carrier guarantee. A quote's `allocation` is
+// fixed at mint time: `mint_quote` reads the sale by `&`, so several
+// quotes can be minted up front, and `purchase` (which takes `&mut`) can
+// run between mint and consumption within one PTB, advancing the sale's
+// `state_version`. `purchase` never reprices - it accepts the carried
+// `allocation` verbatim - so without a guard a quote minted in a cheap
+// pricing region could be consumed after an earlier same-PTB purchase
+// moved the sale into a costlier one, executing at the stale price at the
+// issuer's expense. The carrier closes this at consumption, not by
+// repricing: `minted_at_version` stamps the sale's `state_version` at mint, and
+// `purchase` rejects the quote (`EStaleQuote`) if the version has since
+// advanced.
+//
+// The two mint paths let each curve choose:
+//
+// - `mint_quote` stamps the version (freshness-enforced). A curve pricing
+//   from mutable sale state (a bonding curve reading `raised` /
+//   `total_allocated`) uses this to expose a composable `quote` +
+//   `purchase` pair safely: an intervening purchase aborts the stale
+//   quote rather than filling it at the old price.
+// - `mint_quote_unversioned` leaves `minted_at_version` as `None` (never stale).
+//   A rate-immune curve (`fixed_rate_curve`, whose rate is fixed at
+//   construction) uses this so several quotes can be minted and purchased
+//   in one PTB - batching that the version check would otherwise reject.
 
 /// Hot-potato carrying a curve-priced quote for a single purchase.
 public struct Quote<phantom PaymentCoin> {
@@ -532,6 +554,10 @@ public struct Quote<phantom PaymentCoin> {
     payment: Balance<PaymentCoin>,
     /// Curve-computed sale-token allocation for this payment.
     allocation: u64,
+    /// `Some(state_version)` if freshness-enforced: `purchase` aborts if the sale's
+    /// `state_version` has advanced since mint. `None` if the curve opted out (see
+    /// `mint_quote` vs `mint_quote_unversioned`).
+    minted_at_version: Option<u64>,
 }
 
 /// The reason a sale was cancelled, carried by `SaleCancelled`.
@@ -722,6 +748,7 @@ public fun create_sale<
         hard_cap,
         soft_cap,
         raised: 0,
+        state_version: 0,
         opens_at_ms,
         closes_at_ms,
         phase: Phase::Init,
@@ -1108,6 +1135,14 @@ public fun share_and_activate<
 /// declaring curve can mint a `Quote` for its sale type) is what makes this safe.
 /// See the `Quote` section below.
 ///
+/// **Freshness (opt-in).** A quote is priced against the sale state at mint time and
+/// is not repriced here. If the curve minted it via `mint_quote` (freshness-enforced),
+/// `purchase` aborts with `EStaleQuote` when the sale's `state_version` has advanced -
+/// i.e. another purchase landed between mint and consumption in the same PTB - so a
+/// state-dependent curve can never be filled at a stale price. Quotes minted via
+/// `mint_quote_unversioned` (e.g. `fixed_rate_curve`, whose price is constant) skip
+/// this check. Every purchase advances `state_version`.
+///
 /// **Hard cap is all-or-nothing.** The sale never partially fills a purchase up to the
 /// remaining capacity and refunds the rest. This is deliberate: the `Quote` carries a
 /// single curve-computed `allocation` priced for the exact `paid` amount, and honoring
@@ -1133,6 +1168,8 @@ public fun share_and_activate<
 /// #### Aborts
 /// - `ENotActive` if the sale is not in `Active` phase.
 /// - `EQuoteSaleMismatch` if `quote` was minted for a different sale.
+/// - `EStaleQuote` if `quote` is freshness-enforced and the sale's `state_version`
+///   advanced since it was minted (an intervening purchase in the same PTB).
 /// - `ESaleWindowClosed` if `now` is outside `[opens_at_ms, closes_at_ms]`.
 /// - `EAllowlistRequired` if the sale requires an entry but `allow` is `None`.
 /// - `EAllowlistNotRequired` if the sale does not require an entry but `allow` is
@@ -1169,9 +1206,14 @@ public fun purchase<
     assert!(sale.phase.is_active(), ENotActive);
 
     let sale_id = object::id(sale);
-    let Quote { sale_id: quote_sale_id, payment, allocation } = quote;
+    let Quote { sale_id: quote_sale_id, payment, allocation, minted_at_version } = quote;
 
     assert!(quote_sale_id == sale_id, EQuoteSaleMismatch);
+    // Freshness-enforced quotes are valid only against the state they were priced
+    // from: any intervening purchase bumps `state_version` and staleness aborts.
+    if (minted_at_version.is_some()) {
+        assert!(*minted_at_version.borrow() == sale.state_version, EStaleQuote);
+    };
 
     let now = clock.timestamp_ms();
     assert!(now >= sale.opens_at_ms && now <= sale.closes_at_ms, ESaleWindowClosed);
@@ -1215,6 +1257,9 @@ public fun purchase<
 
     sale.total_allocated = sale.total_allocated + allocation;
     sale.raised = new_raised;
+    // Advance the freshness marker so any quote priced against the pre-purchase
+    // state is now stale. Bounded by the purchase count, so it cannot overflow.
+    sale.state_version = sale.state_version + 1;
     sale.proceeds.join(payment);
 
     let receipt = receipt::new_receipt<SaleCoin>(sale_id, buyer, paid, allocation, now, ctx);
@@ -1802,24 +1847,21 @@ public fun refund<
 
 // === Quote ===
 
-/// Witness-gated quote constructor. The curve module declaring `Curve` calls this
-/// from its `quote(..)` function after running whatever pricing math it owns. The
-/// witness is taken by value (`_w: Curve`), so a caller cannot mint a quote without
-/// the declaring curve module's cooperation.
+/// Witness-gated quote constructor, **freshness-enforced**. The curve module declaring
+/// `Curve` calls this from its `quote(..)` function after running whatever pricing math
+/// it owns. The witness is taken by value (`_w: Curve`), so a caller cannot mint a quote
+/// without the declaring curve module's cooperation.
 ///
-/// **Freshness.** The returned quote's `allocation` reflects the sale state read at
-/// mint time. `sale` is taken by `&`, so several quotes can be minted before any is
-/// consumed, and `purchase` (which takes `&mut`) can run between this call and
-/// consumption in the same PTB, advancing `raised` and `total_allocated`. `purchase`
-/// never reprices - it accepts the carried `allocation` verbatim. A curve that prices
-/// from mutable sale state (e.g. `raised` / `total_allocated`, as a bonding curve
-/// would) therefore must not depend on a quote being fresh at consumption: a buyer
-/// can mint in a cheap pricing region and consume after an earlier same-PTB purchase
-/// moved the sale into a costlier one, executing at the stale price. The shipped
-/// `fixed_rate_curve` is immune - its `rate` is fixed at construction.
+/// The returned quote stamps the sale's current `state_version`. `purchase` rejects it
+/// with `EStaleQuote` if that version has since advanced - i.e. another purchase landed
+/// between mint and consumption in the same PTB - so a curve pricing from mutable sale
+/// state (`raised` / `total_allocated`, e.g. a bonding curve) is never filled at a stale
+/// price and can safely expose a composable `quote` + `purchase` pair. A rate-immune
+/// curve that instead wants to mint and purchase several quotes in one PTB should use
+/// `mint_quote_unversioned`, which skips the check. See the `Quote` section.
 ///
 /// #### Parameters
-/// - `sale`: The sale the quote is bound to (by id).
+/// - `sale`: The sale the quote is bound to (by id) and whose `state_version` is stamped.
 /// - `_w`: The curve witness `Curve`; proves the caller is the declaring curve
 ///   module.
 /// - `payment`: The buyer's payment, moved into the returned `Quote`.
@@ -1827,8 +1869,8 @@ public fun refund<
 ///   allocation is `payment.value() * rate`.
 ///
 /// #### Returns
-/// - A single-use `Quote<PaymentCoin>` pinned to this sale, carrying `payment` and
-///   the computed allocation.
+/// - A single-use, freshness-enforced `Quote<PaymentCoin>` pinned to this sale, carrying
+///   `payment` and the computed allocation.
 ///
 /// #### Aborts
 /// - `EZeroPayment` if `payment` has zero value.
@@ -1853,10 +1895,66 @@ public fun mint_quote<
     payment: Balance<PaymentCoin>,
     rate: u64,
 ): Quote<PaymentCoin> {
+    new_quote(object::id(sale), payment, rate, option::some(sale.state_version))
+}
+
+/// Witness-gated quote constructor that **opts out of freshness**. Identical to
+/// `mint_quote` except the returned quote carries no `state_version` stamp, so `purchase`
+/// never rejects it as stale. Use this only for a curve whose price does not depend on
+/// mutable sale state (e.g. `fixed_rate_curve`): it lets several quotes be minted and
+/// purchased in one PTB - batching the freshness check would otherwise reject. A
+/// state-dependent curve must use `mint_quote`.
+///
+/// #### Parameters
+/// - `sale`: The sale the quote is bound to (by id).
+/// - `_w`: The curve witness `Curve`; proves the caller is the declaring curve
+///   module.
+/// - `payment`: The buyer's payment, moved into the returned `Quote`.
+/// - `rate`: Sale tokens allocated per payment unit, supplied by the curve; the
+///   allocation is `payment.value() * rate`.
+///
+/// #### Returns
+/// - A single-use `Quote<PaymentCoin>` pinned to this sale, not freshness-enforced,
+///   carrying `payment` and the computed allocation.
+///
+/// #### Aborts
+/// - `EZeroPayment` if `payment` has zero value.
+/// - `EAllocationOverflow` if `payment.value() * rate` would exceed `u64::MAX`.
+public fun mint_quote_unversioned<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingWitness: drop,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
+    _w: Curve,
+    payment: Balance<PaymentCoin>,
+    rate: u64,
+): Quote<PaymentCoin> {
+    new_quote(object::id(sale), payment, rate, option::none())
+}
+
+/// Shared quote builder. `minted_at_version` is `Some(state_version)` for a freshness-enforced
+/// quote, `None` to opt out.
+fun new_quote<PaymentCoin>(
+    sale_id: ID,
+    payment: Balance<PaymentCoin>,
+    rate: u64,
+    minted_at_version: Option<u64>,
+): Quote<PaymentCoin> {
     assert!(payment.value() > 0, EZeroPayment);
     let allocation = (payment.value() as u128) * (rate as u128);
     assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
-    Quote { sale_id: object::id(sale), payment, allocation: allocation as u64 }
+    Quote { sale_id, payment, allocation: allocation as u64, minted_at_version }
 }
 
 // === View helpers ===
