@@ -8,13 +8,17 @@
 /// ### State machine
 ///
 /// ```text
-///   Active  --cap-->  Refunding   (depositors claim individually)
+///   Active  --cap-->  Refunding   (controller releases per-amount, cap-gated)
 ///   Active  --cap-->  Closed      (controller withdraws all)
 /// ```
 ///
 /// One-way transitions. `Active` accepts deposits; the terminal states
 /// do not. `Refunding` supports targeted per-amount releases; `Closed`
-/// supports a single full withdrawal.
+/// supports a single full withdrawal. Every egress is gated on the
+/// `RefundVaultCap`; the vault keeps no per-depositor ledger and
+/// `release_balance` takes no claimant. Per-depositor accounting, when
+/// needed, lives in the layer holding the cap - in the paired-sale flow,
+/// the sale, which authorizes each buyer's `refund` against a `Receipt`.
 ///
 /// ### Pairing with a sale
 ///
@@ -68,7 +72,8 @@ const EInsufficientLocked: vector<u8> = "The requested amount exceeds the funds 
 public enum VaultState has copy, drop, store {
     /// Accepting deposits.
     Active,
-    /// Depositors claim back individually via `release_balance`.
+    /// The controller releases funds per-amount via `release_balance`
+    /// (cap-gated; no per-depositor ledger, no claimant argument).
     Refunding,
     /// The controller withdraws the whole balance via `withdraw_all`.
     Closed,
@@ -131,9 +136,10 @@ public struct VaultRelease<phantom P> has copy, drop {
 /// Create a fresh vault in `Active` state. Returns the vault (caller shares it) and
 /// the controller cap.
 ///
-/// The typical paired-sale flow is `new` -> pair with a sale -> `share`, in that
-/// order, so the sale can take the vault by reference before the vault becomes
-/// shared.
+/// The typical paired-sale flow is `new` -> `prefunded_sale::pair_refund_vault` (which
+/// takes the vault by reference) -> `prefunded_sale::share_and_activate` (which consumes
+/// the vault by value and shares it alongside the sale). The paired flow never calls
+/// `share` itself; that function is for using a vault standalone, outside a sale.
 ///
 /// #### Parameters
 /// - `ctx`: Transaction context, used to allocate the vault and cap `UID`s.

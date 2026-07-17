@@ -43,7 +43,7 @@ are supporting types you will see in signatures.
 | --- | --- |
 | [`prefunded_sale`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#prefunded_sale) | The sale itself. Create + configure (Init), `share_and_activate`, `purchase`, close (`finalize` / `cancel_*`), and redeem (`claim*` / `refund` / `withdraw_*`). **Start here.** |
 | [`fixed_rate_curve`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#fixed_rate_curve) | The built-in pricing curve: `allocation = paid * rate`, fixed for the whole sale. Mints the `Quote` and `ActivationTicket` a `FixedRateCurve` sale needs. **Most sales use this.** |
-| [`refund_vault`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#refund_vault) | A generic refundable escrow over `Balance<P>`. Every sale is paired with one; on cancel it holds the proceeds and pays buyers back individually. Usable standalone. |
+| [`refund_vault`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#refund_vault) | A generic, cap-gated refundable escrow over `Balance<P>`. Every sale is paired with one; on cancel it holds the proceeds, and each buyer recovers their payment through the sale's `Receipt`-authorized `refund` (the vault itself keeps no per-depositor ledger). Usable standalone. |
 | [`allowlist`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#allowlist) | A typed compliance slot (`AllowlistAdmin` + single-use `AllowEntry`). The library ships **no** KYC logic - you wire your own scheme against these types. |
 | [`receipt`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#receipt) | The non-transferable, buyer-bound claim ticket minted by `purchase` and consumed by `claim` / `refund`. |
 
@@ -174,7 +174,9 @@ the wallet.
 Four orthogonal, independent configuration axes:
 
 - **Hard cap (required, `> 0`).** Bounds the maximum raise. Inventory backing is
-  enforced at activation, so *sold-out* and *hard-cap-reached* coincide.
+  enforced at activation, so a `purchase` never runs out of inventory before the hard
+  cap is reached. Depositing more than the backing is allowed, and the surplus stays
+  withdrawable, so *hard-cap-reached* does not imply the inventory is exhausted.
 - **Soft cap (optional, `0 = none`).** Minimum raise required to `finalize`. If the
   window closes below it, anyone can `cancel_after_close` and every buyer can refund.
 - **Per-buyer cap (optional).** Cumulative cap on a single buyer's total payment.
@@ -187,8 +189,12 @@ The three shapes a fixed-price sale typically takes:
 | Shape | KYC | Soft cap | Per-buyer cap | Typical use |
 | --- | --- | --- | --- | --- |
 | Public round | no | no | no | Open public sale, FCFS |
-| Capped public round | no | optional | yes | Anti-whale public sale |
+| Capped public round | no | optional | yes | Public sale with a per-address spend cap |
 | Strategic round | yes | yes | yes | Compliance-gated raise |
+
+The per-buyer cap is keyed by sender address, so it bounds spend **per address**, not
+per actor. Without KYC (the strategic round), one actor buying from many addresses
+defeats it - a per-address cap is not, on its own, whale resistance.
 
 This primitive is **not** a bonding curve, LBP, auction (Dutch / English / sealed-bid),
 or fair launch - those have different mechanics and belong in separate standards.
@@ -386,7 +392,7 @@ in a wallet.
 | Mistake | What happens | Fix |
 | --- | --- | --- |
 | Configuring (deposit / caps / allowlist / vesting) after `share_and_activate` | Aborts (`ENotInit`) | Do all setup in `Init`, before activating. |
-| Pairing a vault that already holds funds, or is shared/closed | Aborts (`EVaultNotEmpty` / `EVaultNotActive`) | Pair a fresh, empty `Active` vault, then `share` it after activation. |
+| Pairing a vault that already holds funds, or is not `Active` (already `Refunding` / `Closed`) | Aborts (`EVaultNotEmpty` / `EVaultNotActive`) | Pair a fresh, empty `Active` vault; `share_and_activate` then consumes and shares it for you (don't `share` it yourself first). |
 | Activating with under-provisioned inventory | Aborts (`EInsufficientInventoryAtActivate`) | Deposit `≥ hard_cap * rate` before activating (the curve's `activation_ticket` computes the requirement). |
 | Plain `claim` on a vesting sale (or `claim_into_vesting` on a non-vesting sale) | Aborts (`EClaimRequiresVesting` / `ENoVestingScheduleAttached`) | Match the redemption path to whether a schedule is attached. |
 | Buying then redeeming from a different wallet | Aborts (`EBuyerOnly`) | Redeem from the purchasing address - receipts are buyer-bound. |

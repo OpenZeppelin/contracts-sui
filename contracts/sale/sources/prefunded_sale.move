@@ -59,8 +59,11 @@
 ///   `create_sale`. Bounds the maximum raise. At activation the sale
 ///   asserts `inventory >= required_inventory`, the backing amount the
 ///   curve commits to via its `ActivationTicket` (a fixed-rate curve
-///   sets it to `hard_cap * rate`), so sold-out and hard-cap-reached
-///   coincide. The cap is enforced **all-or-nothing**: a `purchase`
+///   sets it to `hard_cap * rate`), so inventory always covers the full
+///   raise and a `purchase` can never run out of inventory before the
+///   hard cap is reached. Depositing more than the backing is allowed;
+///   the surplus stays withdrawable, so hard-cap-reached does not imply
+///   the inventory is exhausted. The cap is enforced **all-or-nothing**: a `purchase`
 ///   whose payment would push `raised` past `hard_cap` aborts in full
 ///   with `EHardCapExceeded` - there is no partial fill up to the
 ///   remaining capacity. See `purchase` for how buyers size a payment
@@ -84,8 +87,12 @@
 /// | Shape | KYC | Soft cap | Per-buyer cap | Typical use |
 /// |---|---|---|---|---|
 /// | Public round | no | no | no | Open public sale, FCFS |
-/// | Capped public round | no | optional | yes | Anti-whale public sale |
+/// | Capped public round | no | optional | yes | Public sale with a per-address spend cap |
 /// | Strategic round | yes | yes | yes | Compliance-gated raise |
+///
+/// The per-buyer cap is keyed by sender address, so it bounds spend **per address**,
+/// not per actor: without KYC (the strategic round), one actor buying from many
+/// addresses defeats it. It is not, on its own, whale resistance.
 ///
 /// **What this primitive is not:** not a bonding curve, not an LBP,
 /// not a Dutch / English / sealed-bid auction, not a fair launch.
@@ -134,8 +141,11 @@
 ///      amount in the vault's locked balance and its `allocation`
 ///      counted against `total_allocated`. The vault stays in
 ///      `Refunding` indefinitely; `withdraw_all` requires `Closed`,
-///      which `Cancelled` cannot reach. Buyer's tokens and payment
-///      both stay locked until they call `refund`.
+///      which `Cancelled` cannot reach. The buyer's payment stays locked
+///      in the vault until they call `refund`, which returns it and
+///      releases the pinned `allocation` back into the unallocated pool
+///      that admin's `withdraw_unsold_inventory` pays out. A cancelled
+///      sale never distributes sale tokens.
 ///
 /// 7. **No teardown path; the sale object is permanent.** Once shared,
 ///    the `PrefundedSale` is never deleted - there is no `destroy` and
@@ -255,7 +265,8 @@ const EInsufficientInventory: vector<u8> = "Not enough tokens remain available f
 #[error(code = 15)]
 const EPerBuyerCapExceeded: vector<u8> = "This purchase would exceed the per-buyer limit";
 
-/// A purchase's payment exceeded the consumed `AllowEntry`'s `max_amount`.
+/// A purchase's payment exceeded the consumed `AllowEntry`'s non-zero `max_amount`;
+/// `max_amount == 0` is the "no per-entry cap" sentinel and never triggers this.
 #[error(code = 16)]
 const EPerEntryCapExceeded: vector<u8> =
     "This purchase would exceed the amount permitted by the allowlist entry";
@@ -441,7 +452,8 @@ public struct PrefundedSale<
     phase: Phase,
     /// Whether each purchase must consume an allowlist entry.
     requires_allowlist: bool,
-    /// Id of the paired refund vault. `Some` once activated.
+    /// Id of the paired refund vault. `Some` once a vault is paired via
+    /// `pair_refund_vault` during Init, i.e. before activation.
     refund_vault_id: Option<ID>,
     /// Controller cap for the paired vault, wrapped so it never leaves the sale.
     refund_vault_cap: Option<RefundVaultCap<PaymentCoin>>,
@@ -452,8 +464,8 @@ public struct PrefundedSale<
     remaining_allowance: Option<Table<address, u64>>,
     /// Optional issuer-defined vesting policy. When `Some`, redemption is via
     /// `claim_into_vesting` (which returns a funded `VestingWallet` and its
-    /// `DestroyCap`) rather than `claim`. Fixed at construction; the buyer cannot
-    /// influence it.
+    /// `DestroyCap`) rather than `claim`. Set during Init via
+    /// `set_vesting_schedule_params`; the buyer cannot influence it.
     vesting_schedule_params: Option<VestingScheduleParams>,
 }
 
@@ -501,7 +513,7 @@ public struct ActivationTicket<phantom Curve: drop> {
     required_inventory: u64,
 }
 
-// A `Quote<C>` is the only way to drive `purchase` on a `PrefundedSale`.
+// A `Quote` is the only way to drive `purchase` on a `PrefundedSale<C, ..>`.
 // The hot-potato has no abilities, so:
 //
 // - It can only be produced by `mint_quote`, which requires a value
@@ -1034,8 +1046,10 @@ public fun mint_activation_ticket<
 ///
 /// The `required_inventory` carried by the ticket is the backing the curve commits
 /// to (a fixed-rate curve sets it to `hard_cap * rate`, overflow-checked when the
-/// ticket is minted). Provisioned honestly, sold-out and hard-cap-reached coincide,
-/// so `purchase` never aborts with "out of inventory" before "exceeds cap".
+/// ticket is minted). Provisioned honestly, inventory covers the full hard-cap raise,
+/// so `purchase` never aborts with "out of inventory" before "exceeds cap". Depositing
+/// more than the backing is allowed; the surplus stays withdrawable, so
+/// hard-cap-reached does not imply the inventory is exhausted.
 /// Activation before `opens_at_ms` is allowed; activation after `closes_at_ms` is
 /// not, since it would share a stale sale that is immediately finalizable or
 /// cancellable with no purchase opportunity.
@@ -1155,7 +1169,8 @@ public fun share_and_activate<
 ///   issued for a different sale or buyer.
 /// - `ERaisedOverflow` if `raised + paid` would exceed `u64::MAX`.
 /// - `EHardCapExceeded` if `raised + paid` would exceed `hard_cap`.
-/// - `EPerEntryCapExceeded` if `paid` exceeds the entry's `max_amount`.
+/// - `EPerEntryCapExceeded` if the entry sets a non-zero `max_amount` and `paid`
+///   exceeds it (`max_amount == 0` means no per-entry cap).
 /// - `EPerBuyerCapExceeded` if `paid` exceeds the buyer's remaining per-buyer cap.
 /// - `EInsufficientInventory` if `allocation` exceeds unallocated inventory (only
 ///   reachable via a dishonest curve).
@@ -1370,8 +1385,9 @@ public fun cancel_after_close<
 /// Allowed when the phase is `Active` and the window has not yet closed
 /// (`now <= closes_at_ms`); pre-open cancel (`now < opens_at_ms`) is permitted, which
 /// is useful when a bug or compliance issue is found before any purchase. The guards
-/// prevent rugging a successful sale: a sold-out sale (`raised >= hard_cap`) or one
-/// that has met its soft cap must `finalize` instead.
+/// prevent rugging a successful sale: a sold-out sale (`raised >= hard_cap`), or one
+/// that has reached a configured soft cap, must `finalize` instead. A sale with no
+/// soft cap (`soft_cap == 0`) stays emergency-cancellable at any `raised < hard_cap`.
 ///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Active` phase.
@@ -1514,8 +1530,9 @@ public fun claim_all<
 ///
 /// The wallet is constructed with the sale's issuer-defined schedule params and
 /// `beneficiary == ctx.sender()` (the asserted buyer), then funded with exactly the
-/// claimed `allocation`. The buyer cannot influence the schedule - it is fixed at
-/// sale construction. The vesting curve is **not** caller-chosen: the wallet's schedule
+/// claimed `allocation`. The buyer cannot influence the schedule - it is set during
+/// Init by the issuer via `set_vesting_schedule_params`. The vesting curve is **not**
+/// caller-chosen: the wallet's schedule
 /// witness is the sale's own `VestingWitness` type parameter, fixed at
 /// `create_sale`. Because the `&mut sale` argument unifies this function's
 /// `VestingWitness` with the sale's pinned witness, a buyer cannot substitute a
@@ -1639,7 +1656,9 @@ public fun claim_all_into_vesting<
         SaleCoin,
     >(
         *sale.vesting_schedule_params.borrow(),
-        ctx.sender(), // only buyer can claim
+        // beneficiary = sender; each receipt's `buyer == sender` is checked per-receipt
+        // inside `claim_all_internal` (vacuously true for an empty `receipts` vector)
+        ctx.sender(),
         ctx,
     );
     wallet.deposit(payout);
