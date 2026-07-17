@@ -63,10 +63,14 @@
 ///   curve commits to via its `ActivationTicket` (a fixed-rate curve
 ///   sets it to `hard_cap * rate`), so sold-out and hard-cap-reached
 ///   coincide. The cap is enforced **all-or-nothing**: a `purchase`
-///   whose payment would push `raised` past `hard_cap` aborts in full
-///   with `EHardCapExceeded` - there is no partial fill up to the
-///   remaining capacity. See `purchase` for how buyers size a payment
-///   near sell-out.
+///   whose payment would push `raised` past `hard_cap` normally aborts
+///   in full with `EHardCapExceeded` - there is no partial fill up to
+///   the remaining capacity. The one exception is the boundary
+///   configuration `hard_cap == u64::MAX / rate` (which the activation
+///   guard permits): there an over-cap payment can trip `mint_quote`'s
+///   allocation check first and abort with `EAllocationOverflow` before
+///   `purchase` reaches its hard-cap check (see `EAllocationOverflow`).
+///   See `purchase` for how buyers size a payment near sell-out.
 /// - **Soft cap (optional, `0 = none`).** Minimum raise required for
 ///   `finalize`. If the window closes with `raised < soft_cap`,
 ///   `cancel_after_close` is callable by anyone; refunds become
