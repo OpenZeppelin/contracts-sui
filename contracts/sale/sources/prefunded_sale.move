@@ -158,7 +158,7 @@ use sui::clock::Clock;
 use sui::event;
 use sui::table::{Self, Table};
 
-// === Errors ===Auth
+// === Errors ===
 
 /// The supplied `SaleAdminCap` was issued for a different sale.
 #[error(code = 0)]
