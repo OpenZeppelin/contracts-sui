@@ -652,6 +652,8 @@ public struct Refunded<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     buyer: address,
     receipt_id: ID,
     amount: u64,
+    /// Allocation released back to the unallocated pool by this refund.
+    allocation: u64,
 }
 
 /// Emitted by `withdraw_proceeds` when the admin withdraws collected proceeds.
@@ -1830,6 +1832,7 @@ public fun refund<
         buyer,
         receipt_id,
         amount: paid,
+        allocation,
     });
 
     payment
@@ -2804,8 +2807,9 @@ public fun test_new_refunded<SaleCoin, PaymentCoin>(
     buyer: address,
     receipt_id: ID,
     amount: u64,
+    allocation: u64,
 ): Refunded<SaleCoin, PaymentCoin> {
-    Refunded { sale_id, buyer, receipt_id, amount }
+    Refunded { sale_id, buyer, receipt_id, amount, allocation }
 }
 
 /// Build a `ProceedsWithdrawn` event value for asserting against `event::events_by_type`.

@@ -421,6 +421,7 @@ fun refund_returns_paid_and_draws_vault() {
             u::buyer(),
             receipt_id,
             300,
+            300,
         ),
     );
     // refund releases the payment out of the vault (VaultRelease 300, nothing left).
