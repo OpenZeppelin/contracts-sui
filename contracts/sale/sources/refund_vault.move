@@ -176,6 +176,7 @@ public fun share<P>(vault: RefundVault<P>) {
 /// #### Aborts
 /// - `EWrongVaultCap` if `cap` does not control `vault`.
 /// - `ENotActiveState` if `vault` is not in `Active` state.
+/// - Arithmetic overflow if the deposit would push the locked balance past `u64::MAX`.
 public fun deposit<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>, funds: Balance<P>) {
     assert_cap(vault, cap);
     assert!(vault.state.is_active_state(), ENotActiveState);

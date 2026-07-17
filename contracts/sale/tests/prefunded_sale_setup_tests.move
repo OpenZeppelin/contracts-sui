@@ -114,7 +114,7 @@ fun create_sale_initializes_in_init_phase() {
     assert!(sale.vesting_schedule_params().is_none());
     assert_eq!(cap.cap_sale_id(), object::id(&sale));
 
-    let created = event::events_by_type<prefunded_sale::SaleCreated<FrcParams, SALE, USDC>>();
+    let created = event::events_by_type<prefunded_sale::SaleCreated<SALE, USDC, FrcParams>>();
     assert_eq!(created.length(), 1);
     assert_eq!(
         created[0],

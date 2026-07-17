@@ -533,7 +533,7 @@ public enum CancelReason has copy, drop, store {
 // === Events ===
 
 /// Emitted by `create_sale` when a sale is created.
-public struct SaleCreated<CurveParams, phantom SaleCoin, phantom PaymentCoin> has copy, drop {
+public struct SaleCreated<phantom SaleCoin, phantom PaymentCoin, CurveParams> has copy, drop {
     sale_id: ID,
     hard_cap: u64,
     soft_cap: u64,
@@ -609,8 +609,8 @@ public struct SaleCancelled<phantom SaleCoin, phantom PaymentCoin> has copy, dro
     closed_at_ms: u64,
 }
 
-/// Emitted for each receipt redeemed through `claim` / `claim_all` (and the vesting
-/// variants).
+/// Emitted by `claim`, `claim_all`, `claim_into_vesting`, and
+/// `claim_all_into_vesting` when a receipt is redeemed.
 public struct Claimed<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
     buyer: address,
@@ -723,7 +723,7 @@ public fun create_sale<
     let sale_id = object::id(&sale);
     let cap = SaleAdminCap<SaleCoin, PaymentCoin> { id: object::new(ctx), sale_id };
 
-    event::emit(SaleCreated<CurveParams, SaleCoin, PaymentCoin> {
+    event::emit(SaleCreated<SaleCoin, PaymentCoin, CurveParams> {
         sale_id,
         hard_cap,
         soft_cap,
@@ -2475,7 +2475,7 @@ public fun test_new_sale_created<CurveParams: copy + drop, SaleCoin, PaymentCoin
     opens_at_ms: u64,
     closes_at_ms: u64,
     curve_params: CurveParams,
-): SaleCreated<CurveParams, SaleCoin, PaymentCoin> {
+): SaleCreated<SaleCoin, PaymentCoin, CurveParams> {
     SaleCreated { sale_id, hard_cap, soft_cap, opens_at_ms, closes_at_ms, curve_params }
 }
 
