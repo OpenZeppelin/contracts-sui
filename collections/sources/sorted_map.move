@@ -730,8 +730,9 @@ public macro fun find_next_by<$K: copy, $V>(
     $lt: |&$K, &$K| -> bool,
 ): Option<$K> {
     let map = $map;
+    let key = $key;
     let include = $include;
-    let (found, idx) = map.search!($key, $lt);
+    let (found, idx) = map.search!(key, $lt);
     let es = map.entries();
     let n = es.length();
     if (found) {
@@ -782,8 +783,9 @@ public macro fun find_prev_by<$K: copy, $V>(
     $lt: |&$K, &$K| -> bool,
 ): Option<$K> {
     let map = $map;
+    let key = $key;
     let include = $include;
-    let (found, idx) = map.search!($key, $lt);
+    let (found, idx) = map.search!(key, $lt);
     let es = map.entries();
     if (found) {
         if (include) {
@@ -900,9 +902,10 @@ public macro fun keys_from_by<$K: copy, $V>(
     $lt: |&$K, &$K| -> bool,
 ): vector<$K> {
     let map = $map;
+    let from = $from;
     let include = $include;
     let limit = $limit;
-    let (found, idx) = map.search!($from, $lt);
+    let (found, idx) = map.search!(from, $lt);
     // First qualifying index = the insertion point, skipping an exact hit only when the
     // boundary is exclusive. On a miss `idx` is already the first key > from (the
     // ceiling), so `include` does not shift it.
