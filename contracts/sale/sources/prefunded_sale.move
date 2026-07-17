@@ -40,7 +40,7 @@
 /// the sale is shared and operations split into three categories:
 ///
 /// - **Permissionless:** `purchase`, `claim`, `claim_all`, `refund`,
-///   `finalize`, `cancel_after_close`. Buyers and any caller with
+///   `refund_all`, `finalize`, `cancel_after_close`. Buyers and any caller with
 ///   visibility to the sale can drive these flows once their
 ///   conditions hold. **Buyer claims and refunds do not depend on
 ///   admin liveness.**
@@ -127,8 +127,9 @@
 ///
 /// 5. **Receipts are non-transferable and buyer-bound.** A buyer with
 ///    multiple purchases holds multiple receipts; `claim_all` batches
-///    them. Wallet rotation between purchase and redemption is not
-///    supported. `claim` and `refund` assert
+///    redemption on a finalized sale and `refund_all` batches recovery
+///    on a cancelled one. Wallet rotation between purchase and
+///    redemption is not supported. `claim` and `refund` assert
 ///    `ctx.sender() == receipt.buyer`.
 ///
 /// 6. **Stale receipts pin both inventory and refund funds.** No
@@ -1281,11 +1282,10 @@ public fun purchase<
 ///   reached.
 /// - `ESoftCapNotMet` if `raised < soft_cap`.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-///
-/// Propagated from the paired vault via `flip_to_closed` (guarded by the sale's
-/// invariants - the paired vault always matches and is active while the sale is
-/// open - so unreachable in normal operation):
-/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotActiveState`.
+/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState`, propagated from
+///   the paired vault via `flip_to_closed` (guarded by the sale's invariants - the paired
+///   vault always matches and is active while the sale is open - so unreachable in normal
+///   operation).
 public fun finalize<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1347,11 +1347,10 @@ public fun finalize<
 /// - `ESaleWindowStillOpen` if the window has not yet closed.
 /// - `ESoftCapMet` if no soft cap is configured or `raised >= soft_cap`.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-///
-/// Propagated through the internal cancel path (guarded by the sale's invariants, so
-/// unreachable in normal operation):
-/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState` (depositing
-///   proceeds into the vault and flipping it to refunding).
+/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState`, propagated
+///   through the internal cancel path when depositing proceeds into the vault and
+///   flipping it to refunding (guarded by the sale's invariants, so unreachable in
+///   normal operation).
 public fun cancel_after_close<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1403,11 +1402,10 @@ public fun cancel_after_close<
 /// - `ESaleAlreadyComplete` if `raised >= hard_cap`.
 /// - `ESoftCapMet` if a soft cap is configured and `raised >= soft_cap`.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-///
-/// Propagated through the internal cancel path (guarded by the sale's invariants, so
-/// unreachable in normal operation):
-/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState` (depositing
-///   proceeds into the vault and flipping it to refunding).
+/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState`, propagated
+///   through the internal cancel path when depositing proceeds into the vault and
+///   flipping it to refunding (guarded by the sale's invariants, so unreachable in
+///   normal operation).
 public fun cancel_emergency<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1780,11 +1778,10 @@ public fun withdraw_unsold_inventory<
 /// - `EReceiptSaleMismatch` if `receipt` was issued by a different sale.
 /// - `EBuyerOnly` if `ctx.sender()` is not the receipt's buyer.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-///
-/// Propagated from the paired vault via `release_balance` (guarded by the sale's
-/// refund-solvency invariant, so unreachable in normal operation):
-/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`,
-///   `refund_vault::EInsufficientLocked`.
+/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`, and
+///   `refund_vault::EInsufficientLocked`, propagated from the paired vault via
+///   `release_balance` (guarded by the sale's refund-solvency invariant, so unreachable
+///   in normal operation).
 public fun refund<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1829,6 +1826,58 @@ public fun refund<
     });
 
     payment
+}
+
+/// Batch helper: refund several receipts in one call, summing their payments into one
+/// `Balance<PaymentCoin>`. Aborts the whole call (releasing nothing) if any receipt
+/// is invalid.
+///
+/// #### Parameters
+/// - `sale`: The shared sale, in `Cancelled` phase.
+/// - `vault`: The paired refund vault, in `Refunding` state.
+/// - `receipts`: The buyer's receipts. All consumed.
+/// - `ctx`: Transaction context; `ctx.sender()` must equal each receipt's buyer.
+///
+/// #### Returns
+/// - A `Balance<PaymentCoin>` summing every receipt's `paid` amount.
+///
+/// #### Aborts
+/// - `ENotCancelled` if the sale is not in `Cancelled` phase.
+/// - `EReceiptSaleMismatch` if any receipt was issued by a different sale.
+/// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt.
+/// - `EWrongVault` if `vault` is not the one paired with this sale.
+/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`, and
+///   `refund_vault::EInsufficientLocked`, propagated from the paired vault via
+///   `release_balance` (guarded by the sale's refund-solvency invariant, so unreachable
+///   in normal operation).
+public fun refund_all<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingWitness: drop,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
+    vault: &mut RefundVault<PaymentCoin>,
+    mut receipts: vector<Receipt<SaleCoin>>,
+    ctx: &mut TxContext,
+): Balance<PaymentCoin> {
+    assert!(sale.is_cancelled(), ENotCancelled);
+    let mut total = balance::zero();
+    while (!receipts.is_empty()) {
+        let r = receipts.pop_back();
+        total.join(sale.refund(vault, r, ctx));
+    };
+    receipts.destroy_empty();
+    total
 }
 
 // === Quote ===

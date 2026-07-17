@@ -507,6 +507,72 @@ fun refund_wrong_vault_aborts() {
     abort
 }
 
+// === refund_all ===
+
+// refund_all sums the paid amounts of several receipts into one payment and
+// releases exactly that much from the vault.
+#[test]
+fun refund_all_sums_receipts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 100);
+    buy_once(&mut test, &clk, 250); // raised 350 < soft cap 500
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let r1 = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let r2 = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let payment = sale.refund_all(&mut vault, vector[r1, r2], test.ctx());
+    assert_eq!(payment.value(), 350);
+    assert_eq!(vault.value(), 0); // drained exactly
+    assert_eq!(sale.total_allocated(), 0);
+    destroy(payment);
+    u::return_sale(sale);
+    u::return_vault(vault);
+
+    destroy(clk);
+    test.end();
+}
+
+// refund_all before the sale is cancelled is rejected (the batch's own phase guard,
+// ahead of the per-receipt guard in `refund`).
+#[test, expected_failure(abort_code = prefunded_sale::ENotCancelled)]
+fun refund_all_before_cancel_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 100);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let _payment = sale.refund_all(&mut vault, vector[r], test.ctx()); // aborts: ENotCancelled
+    abort
+}
+
+// refund_all with no receipts returns an empty balance (the batch loop is a no-op).
+#[test]
+fun refund_all_empty_returns_zero() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let payment = sale.refund_all(&mut vault, vector<Receipt<SALE>>[], test.ctx());
+    assert_eq!(payment.value(), 0);
+    destroy(payment);
+    u::return_sale(sale);
+    u::return_vault(vault);
+
+    destroy(clk);
+    test.end();
+}
+
 // === withdraw_proceeds ===
 
 #[test]

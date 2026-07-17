@@ -118,10 +118,10 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
                                        │      withdraw_unsold_inventory
                                        │
                                        ├──▶ cancel_after_close   (permissionless; soft-cap miss)
-                                       │      refund, withdraw_unsold_inventory
+                                       │      refund / refund_all, withdraw_unsold_inventory
                                        │
                                        └──▶ cancel_emergency     (admin-only; in-window emergency)
-                                              refund, withdraw_unsold_inventory
+                                              refund / refund_all, withdraw_unsold_inventory
 ```
 
 `Finalized` and `Cancelled` are terminal. During `Init` the sale is an owned value and
@@ -139,7 +139,8 @@ Each `purchase` delivers one `Receipt<SaleCoin>` to the buyer. It has `key` only
 - **KYC enforced at purchase carries through to distribution** - a verified buyer
   cannot forward a claim to an unverified address.
 
-A buyer with several purchases holds several receipts; `claim_all` batches them.
+A buyer with several purchases holds several receipts; `claim_all` batches redemption
+on a finalized sale and `refund_all` batches recovery on a cancelled one.
 
 ### Every sale needs a refund vault
 
