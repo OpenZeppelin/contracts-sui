@@ -1,5 +1,6 @@
 /// Scenario walkthroughs for `order_book` - the embed pattern (integer keys, bare +
-/// reverse-`_by`, pagination, the EKeyNotFound abort).
+/// reverse-`_by`, pagination, the EKeyNotFound abort, and the integrator's own zero-size
+/// guard).
 module openzeppelin_collections::sorted_map_order_book_tests;
 
 use openzeppelin_collections::sorted_map as sm;
@@ -106,6 +107,48 @@ fun ask_size_at_absent_aborts() {
     {
         let book = scenario.take_shared<OrderBook>();
         book.ask_size_at(555); // aborts here
+        ts::return_shared(book); // unreachable; satisfies the type checker
+    };
+    scenario.end();
+}
+
+// === Scenario 4 - zero-size placements are rejected, on both sides ===
+//
+// `place_ask`/`place_bid` require a positive size. An accepted zero-size level would rest
+// indefinitely and could become the reported top of book (`best_ask`/`best_bid` read the head
+// key without inspecting the level), misleading integrators into phantom quotes. The abort is
+// the integrator's OWN `EZeroSize`, at this example module's location - not a library abort.
+#[test, expected_failure(abort_code = order_book::EZeroSize, location = order_book)]
+fun place_ask_zero_size_aborts() {
+    let mut scenario = ts::begin(ALICE);
+
+    // Tx1 - ALICE: deploy.
+    {
+        order_book::deploy_and_share(scenario.ctx());
+    };
+    // Tx2 - ALICE: post a zero-size ask - aborts EZeroSize.
+    scenario.next_tx(ALICE);
+    {
+        let mut book = scenario.take_shared<OrderBook>();
+        book.place_ask(100, 0); // aborts here
+        ts::return_shared(book); // unreachable; satisfies the type checker
+    };
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = order_book::EZeroSize, location = order_book)]
+fun place_bid_zero_size_aborts() {
+    let mut scenario = ts::begin(ALICE);
+
+    // Tx1 - ALICE: deploy.
+    {
+        order_book::deploy_and_share(scenario.ctx());
+    };
+    // Tx2 - ALICE: post a zero-size bid - aborts EZeroSize.
+    scenario.next_tx(ALICE);
+    {
+        let mut book = scenario.take_shared<OrderBook>();
+        book.place_bid(99, 0); // aborts here
         ts::return_shared(book); // unreachable; satisfies the type checker
     };
     scenario.end();
