@@ -121,6 +121,7 @@ fun create_sale_initializes_in_init_phase() {
         created[0],
         prefunded_sale::test_new_sale_created<FrcParams, SALE, USDC>(
             object::id(&sale),
+            object::id(&cap),
             1_000,
             500,
             1_000,

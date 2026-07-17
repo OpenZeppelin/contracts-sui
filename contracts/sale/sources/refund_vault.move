@@ -102,6 +102,8 @@ public struct RefundVaultCap<phantom P> has key, store {
 /// Emitted by `new` when a vault is created.
 public struct RefundVaultCreated<phantom P> has copy, drop {
     vault_id: ID,
+    /// Id of the controller cap minted alongside the vault.
+    cap_id: ID,
 }
 
 /// Emitted by `deposit` when funds are added to the locked balance.
@@ -154,7 +156,7 @@ public fun new<P>(ctx: &mut TxContext): (RefundVault<P>, RefundVaultCap<P>) {
     };
     let vault_id = object::id(&vault);
     let cap = RefundVaultCap { id: object::new(ctx), vault_id };
-    event::emit(RefundVaultCreated<P> { vault_id });
+    event::emit(RefundVaultCreated<P> { vault_id, cap_id: object::id(&cap) });
     (vault, cap)
 }
 
@@ -404,8 +406,8 @@ public fun test_state_closed(): VaultState { VaultState::Closed }
 
 /// Build a `RefundVaultCreated` event value for asserting against `event::events_by_type`.
 #[test_only]
-public fun test_new_refund_vault_created<P>(vault_id: ID): RefundVaultCreated<P> {
-    RefundVaultCreated { vault_id }
+public fun test_new_refund_vault_created<P>(vault_id: ID, cap_id: ID): RefundVaultCreated<P> {
+    RefundVaultCreated { vault_id, cap_id }
 }
 
 /// Build a `VaultDeposit` event value for asserting against `event::events_by_type`.

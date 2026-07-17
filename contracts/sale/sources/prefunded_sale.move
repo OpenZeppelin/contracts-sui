@@ -561,6 +561,8 @@ public enum CancelReason has copy, drop, store {
 /// Emitted by `create_sale` when a sale is created.
 public struct SaleCreated<phantom SaleCoin, phantom PaymentCoin, CurveParams> has copy, drop {
     sale_id: ID,
+    /// Id of the admin cap minted alongside the sale.
+    admin_cap_id: ID,
     hard_cap: u64,
     soft_cap: u64,
     opens_at_ms: u64,
@@ -751,6 +753,7 @@ public fun create_sale<
 
     event::emit(SaleCreated<SaleCoin, PaymentCoin, CurveParams> {
         sale_id,
+        admin_cap_id: object::id(&cap),
         hard_cap,
         soft_cap,
         opens_at_ms,
@@ -2660,13 +2663,14 @@ fun claim_all_internal<
 #[test_only]
 public fun test_new_sale_created<CurveParams: copy + drop, SaleCoin, PaymentCoin>(
     sale_id: ID,
+    admin_cap_id: ID,
     hard_cap: u64,
     soft_cap: u64,
     opens_at_ms: u64,
     closes_at_ms: u64,
     curve_params: CurveParams,
 ): SaleCreated<SaleCoin, PaymentCoin, CurveParams> {
-    SaleCreated { sale_id, hard_cap, soft_cap, opens_at_ms, closes_at_ms, curve_params }
+    SaleCreated { sale_id, admin_cap_id, hard_cap, soft_cap, opens_at_ms, closes_at_ms, curve_params }
 }
 
 /// Build an `InventoryDeposited` event value for asserting against `event::events_by_type`.

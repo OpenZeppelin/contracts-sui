@@ -22,7 +22,10 @@ fun new_starts_active_and_empty() {
 
     let created = event::events_by_type<refund_vault::RefundVaultCreated<USDC>>();
     assert_eq!(created.length(), 1);
-    assert_eq!(created[0], refund_vault::test_new_refund_vault_created<USDC>(object::id(&vault)));
+    assert_eq!(
+        created[0],
+        refund_vault::test_new_refund_vault_created<USDC>(object::id(&vault), object::id(&cap)),
+    );
 
     destroy(vault);
     destroy(cap);
