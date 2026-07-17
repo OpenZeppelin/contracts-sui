@@ -608,6 +608,7 @@ public struct AllowlistEnabled<phantom SaleCoin, phantom PaymentCoin> has copy, 
 /// Emitted by `share_and_activate` when the sale goes live.
 public struct SaleActivated<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
+    required_inventory: u64,
     activated_at_ms: u64,
 }
 
@@ -1129,6 +1130,7 @@ public fun share_and_activate<
     vault.share();
     event::emit(SaleActivated<SaleCoin, PaymentCoin> {
         sale_id,
+        required_inventory,
         activated_at_ms,
     });
 }
@@ -2744,9 +2746,10 @@ public fun test_new_allowlist_enabled<SaleCoin, PaymentCoin>(
 #[test_only]
 public fun test_new_sale_activated<SaleCoin, PaymentCoin>(
     sale_id: ID,
+    required_inventory: u64,
     activated_at_ms: u64,
 ): SaleActivated<SaleCoin, PaymentCoin> {
-    SaleActivated { sale_id, activated_at_ms }
+    SaleActivated { sale_id, required_inventory, activated_at_ms }
 }
 
 /// Build a `Purchased` event value for asserting against `event::events_by_type`.

@@ -855,7 +855,7 @@ fun share_and_activate_emits_pairing_and_activation_events() {
     assert_eq!(activated.length(), 1);
     assert_eq!(
         activated[0],
-        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, u::opens()),
+        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, 1_000, u::opens()),
     );
 
     destroy(cap);
