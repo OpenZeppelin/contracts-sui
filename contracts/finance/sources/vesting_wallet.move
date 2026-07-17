@@ -403,11 +403,13 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     // id won't match the target.
     //
     // What the stamp CANNOT check is whether `amount` is honest for *this* wallet. The
-    // curve module is responsible for that: `amount` must be a monotonically
-    // non-decreasing, `balance + released`-bounded function of this wallet's
-    // `schedule_params`, and non-expansive in `balance + released` - a deposit of `d`
-    // may raise `amount` by at most `d`, or a deposit pays for itself and defeats the
-    // lockup (see the module doc). The wallet trusts the witness `S` and never
+    // curve module is responsible for that: `amount` is a function of the current clock,
+    // this wallet's `schedule_params`, and its total `balance + released`, and it must be
+    // (a) monotonically non-decreasing in time when `schedule_params` and the total are
+    // fixed, (b) bounded above by `balance + released`, and (c) non-expansive in the
+    // total when `schedule_params` and time are fixed - a deposit of `d` may raise
+    // `amount` by at most `d`, or a deposit pays for itself and defeats the lockup (see
+    // the module doc). The wallet trusts the witness `S` and never
     // re-derives the curve; a curve module that mints a dishonest amount against its own
     // wallet would over-release (bounded only by the wallet's balance). Curve modules
     // MUST uphold these invariants.
