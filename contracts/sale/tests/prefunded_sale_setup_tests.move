@@ -273,7 +273,7 @@ fun set_vesting_schedule_fills_option() {
     assert!(sale.vesting_schedule().is_some());
 
     let set = event::events_by_type<
-        prefunded_sale::VestingScheduleParamsSet<SALE, USDC, VParams>,
+        prefunded_sale::VestingScheduleSet<SALE, USDC, Linear, VParams>,
     >();
     assert_eq!(set.length(), 1);
     assert_eq!(
