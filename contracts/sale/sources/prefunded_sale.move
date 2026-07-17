@@ -2535,7 +2535,7 @@ public fun test_new_vesting_schedule_set<
     SaleCoin,
     PaymentCoin,
     VestingWitness: drop,
-    VestingScheduleParams: copy + drop
+    VestingScheduleParams: copy + drop,
 >(
     sale_id: ID,
     params: VestingScheduleParams,
