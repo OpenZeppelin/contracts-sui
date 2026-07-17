@@ -8,7 +8,7 @@ a `PaymentCoin` during a time window and each receives a non-transferable `Recei
 After the window the sale resolves one of two ways: **finalize** (success - buyers
 claim their tokens, the issuer withdraws proceeds) or **cancel** (failure - buyers
 recover their payment from an escrow vault). Use it for capped public rounds,
-anti-whale public rounds, and compliance-gated strategic rounds.
+per-address-capped public rounds, and compliance-gated strategic rounds.
 
 Pricing is not baked in. The sale is generic over a **witness-gated curve module**
 that computes each buyer's allocation; a built-in **fixed-rate curve**
