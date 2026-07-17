@@ -511,6 +511,18 @@ public struct ActivationTicket<phantom Curve: drop> {
 // `Quote` for a `PrefundedSale<C, ..>`) is the security boundary. The
 // sale's only independent protections are inventory backing
 // (`allocation <= inventory - total_allocated`) and u128 overflow guards.
+//
+// Freshness is NOT a carrier guarantee. A quote's `allocation` is fixed
+// at mint time: `mint_quote` reads the sale by `&`, so several quotes can
+// be minted up front, and `purchase` (which takes `&mut`) can run between
+// mint and consumption within one PTB, advancing `raised` and
+// `total_allocated`. `purchase` never reprices - it accepts the carried
+// `allocation` verbatim. For `fixed_rate_curve` this is harmless (the
+// rate is fixed at construction and read from immutable `curve_params`),
+// but a curve pricing from mutable sale state must not assume a quote is
+// fresh at consumption: any buyer can mint in a cheap region and spend
+// after an earlier same-PTB purchase moved the sale into a costlier one,
+// executing at the stale price at the issuer's expense.
 
 /// Hot-potato carrying a curve-priced quote for a single purchase.
 public struct Quote<phantom PaymentCoin> {
@@ -1794,6 +1806,17 @@ public fun refund<
 /// from its `quote(..)` function after running whatever pricing math it owns. The
 /// witness is taken by value (`_w: Curve`), so a caller cannot mint a quote without
 /// the declaring curve module's cooperation.
+///
+/// **Freshness.** The returned quote's `allocation` reflects the sale state read at
+/// mint time. `sale` is taken by `&`, so several quotes can be minted before any is
+/// consumed, and `purchase` (which takes `&mut`) can run between this call and
+/// consumption in the same PTB, advancing `raised` and `total_allocated`. `purchase`
+/// never reprices - it accepts the carried `allocation` verbatim. A curve that prices
+/// from mutable sale state (e.g. `raised` / `total_allocated`, as a bonding curve
+/// would) therefore must not depend on a quote being fresh at consumption: a buyer
+/// can mint in a cheap pricing region and consume after an earlier same-PTB purchase
+/// moved the sale into a costlier one, executing at the stale price. The shipped
+/// `fixed_rate_curve` is immune - its `rate` is fixed at construction.
 ///
 /// #### Parameters
 /// - `sale`: The sale the quote is bound to (by id).
