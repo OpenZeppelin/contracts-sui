@@ -991,6 +991,11 @@ public fun enable_allowlist<
 ///
 /// #### Returns
 /// - An `ActivationTicket<Curve>` pinned to this sale.
+///
+/// #### Aborts
+/// - `ENotInit` if the sale is not in `Init` phase; a ticket is only ever consumed by
+///   `share_and_activate`, which requires `Init`, so minting one against a live sale
+///   serves no purpose and is rejected here.
 public fun mint_activation_ticket<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1009,7 +1014,10 @@ public fun mint_activation_ticket<
     >,
     _w: Curve,
     required_inventory: u64,
-): ActivationTicket<Curve> { ActivationTicket { sale_id: object::id(sale), required_inventory } }
+): ActivationTicket<Curve> {
+    assert!(sale.is_init(), ENotInit);
+    ActivationTicket { sale_id: object::id(sale), required_inventory }
+}
 
 /// Transition `Init -> Active` and share both the sale and its paired refund vault.
 /// Consumes the sale, the vault, and the activation ticket.
@@ -1072,8 +1080,15 @@ public fun share_and_activate<
 
     assert!(sale_id == ticket_sale_id, ETicketSaleMismatch);
 
-    // The only way to hold a `PrefundedSale` by value is straight out of `create_sale`,
-    // so this is a purely defensive check.
+    // Rejects a shared, non-Init sale passed back in by value. `PrefundedSale` is
+    // `key`-only, so it can never return to owned status, but a transaction may take a
+    // shared object by value when the call consumes it - and re-sharing at its original
+    // version does not abort, so `transfer::share_object` below would not catch it. This
+    // check is load-bearing, not redundant: the module's other guards cover every
+    // terminal sale whose window has closed (via `EActivationAfterClose`), but not an
+    // in-window terminal transition - a hard-cap `finalize` or `cancel_emergency`. For
+    // such a sale every other guard here passes, and only this assert stops the phase
+    // being reset to `Active`, which would permanently brick the sale.
     assert!(sale.is_init(), ENotInit);
     assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
     assert!(object::id(&vault) == *sale.refund_vault_id.borrow(), EWrongVault);

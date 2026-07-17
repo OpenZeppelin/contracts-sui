@@ -484,6 +484,19 @@ fun enable_allowlist_after_activate_aborts() {
     abort
 }
 
+// A ticket can only be minted while the sale is in Init: minting one against a live,
+// shared sale (here via the curve wrapper, which takes the sale by reference) aborts.
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
+fun mint_activation_ticket_after_activate_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(u::admin());
+    let sale = u::take_sale(&test);
+    let _ticket = fixed_rate_curve::activation_ticket(&sale); // aborts: ENotInit
+    abort
+}
+
 // === share_and_activate ===
 
 // Activation requires a paired vault.
