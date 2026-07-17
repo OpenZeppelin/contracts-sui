@@ -125,7 +125,7 @@ fun coin_value_roundtrip() {
     assert_eq!(old.value(), 100);
     old.burn_for_testing();
     assert_eq!(m.borrow!(&1).value(), 999);
-    // remove returns the value (coin); the key is dropped
+    // remove returns both the key and coin; the caller consumes both.
     let (k, r1) = m.remove!(&1);
     assert_eq!(k, 1);
     assert_eq!(r1.value(), 999);
