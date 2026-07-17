@@ -75,7 +75,7 @@ fun nonstrict_comparator_duplicates() {
 
 // === Footgun (b): mixing `<` (build) and `>` (remove) strands a present key ===
 
-#[test, expected_failure(abort_code = sm::EKeyNotFound)]
+#[test, expected_failure(abort_code = sm::EKeyNotFound, location = sm)]
 fun remove_with_mixed_comparator_aborts() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1); // ascending build under `<`
@@ -101,10 +101,10 @@ fun insert_at_wrong_index_corrupts() {
     assert!(!u::wf(&m)); // the well-formedness check catches what production never re-checks
 }
 
-// === remove_at misuse still returns the value (no silent loss) ===
+// === remove_at misuse still returns the entry (no silent loss) ===
 
 #[test]
-fun remove_at_misuse_returns_value() {
+fun remove_at_misuse_returns_entry() {
     let mut m = sm::new<u64, u64>();
     u::ins(&mut m, 10, 1);
     u::ins(&mut m, 20, 2);
