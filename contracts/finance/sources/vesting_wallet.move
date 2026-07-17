@@ -85,8 +85,10 @@
 /// early. A threshold curve that vests nothing below some total and everything at or
 /// above it is the trap: it is constant in time (so trivially monotone) and equals the
 /// total at the threshold (so bounded), yet a single deposit clears the threshold and
-/// releases the lot. The reference linear curve is safe because it releases a
-/// time-fraction of the total, so a deposit only accelerates by a fraction of itself.
+/// releases the lot. The reference linear curve is safe because a deposit of `d` raises
+/// the releasable amount by at most `d`: in the ideal pre-rounding model it releases a
+/// time-fraction of the total, so the increase is a fraction of `d`, and integer
+/// rounding keeps the actual increase bounded by `d`.
 /// `release` enforces only the failure modes that threaten funds: a regression *below*
 /// `released` aborts with `EVestedBelowReleased`, and exceeding `balance + released`
 /// aborts with `EInsufficientBalance` - in both cases before any state mutation, so

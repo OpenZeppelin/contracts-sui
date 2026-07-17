@@ -14,9 +14,11 @@
 /// The curve is `vested = total * (elapsed / duration)^2`, clamped to `total` at the
 /// end: it vests slowly early and accelerates toward the deadline. It is
 /// monotonically non-decreasing, bounded above by `total = balance + released`, and
-/// non-expansive in the total (a deposit of `d` adds at most `d * (elapsed/duration)^2
-/// <= d` to what is releasable) - the properties the primitive requires of a curve. The
-/// specific shape is incidental; the point is the integration boundary.
+/// non-expansive in the total (a deposit of `d` raises the releasable amount by at most
+/// `d`) - the properties the primitive requires of a curve. The ideal fractional model
+/// vests `d * (elapsed/duration)^2 <= d` per deposit; after integer rounding the actual
+/// increase can differ but is still bounded by `d`. The specific shape is incidental;
+/// the point is the integration boundary.
 ///
 /// # Teardown is the one lifecycle step that can't be fully composed
 ///
