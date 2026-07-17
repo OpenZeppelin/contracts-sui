@@ -201,11 +201,11 @@ public fun cdf(z: UD30x9): UD30x9 {
 /// - `φ(z) ∈ [0, 0.398942280]` at `UD30x9` scale.
 ///
 /// #### Behavior
-/// - Monotone non-increasing in `z` between every pair of adjacent representable
-///   inputs; the peak `φ(0) = 0.398942280` is returned exactly. The `10^36`
-///   accumulation scale holds floor-truncation noise far below the true per-step
-///   decrement, and the codegen CI gate confirms this exhaustively over the
-///   at-risk tail (`z ≥ 4`), so no 1-ULP inversion occurs.
+/// - Monotone non-increasing in `|z|` between every pair of adjacent
+///   representable inputs; the peak `φ(0) = 0.398942280` is returned exactly. The
+///   `10^36` accumulation scale holds floor-truncation noise far below the true
+///   per-step decrement, and the codegen CI gate confirms this exhaustively over
+///   the at-risk tail (`|z| ≥ 4`), so no 1-ULP inversion occurs.
 /// - Saturates exactly to `0` for `z ≥ 6.402729806` - the analytical point at
 ///   which `φ` rounds to `0` at the `10⁻⁹` output resolution (`φ ≈ 5 × 10⁻¹⁰`
 ///   there), so the cut-off is lossless.
