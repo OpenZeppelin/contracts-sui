@@ -591,7 +591,7 @@ public macro fun next_key_by<$K: copy>(
 /// #### Returns
 /// - The strict-next key, or `none`.
 public macro fun next_key<$K: copy>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
-    find_next_by!($set, $key, false, |a, b| *a < *b)
+    next_key_by!($set, $key, |a, b| *a < *b)
 }
 
 /// Largest key strictly less than `key`, or `none`. Sugar for `find_prev_by(.., false)`.
@@ -617,7 +617,7 @@ public macro fun prev_key_by<$K: copy>(
 /// #### Returns
 /// - The strict-prev key, or `none`.
 public macro fun prev_key<$K: copy>($set: &SortedSet<$K>, $key: &$K): Option<$K> {
-    find_prev_by!($set, $key, false, |a, b| *a < *b)
+    prev_key_by!($set, $key, |a, b| *a < *b)
 }
 
 // === Bounded iteration / pagination (macros: bare + `_by`) ===
