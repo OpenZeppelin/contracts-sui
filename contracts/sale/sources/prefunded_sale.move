@@ -571,10 +571,11 @@ public struct PerBuyerCapSet<phantom SaleCoin, phantom PaymentCoin> has copy, dr
 }
 
 /// Emitted by `set_vesting_schedule` when a vesting policy is attached.
-public struct VestingScheduleParamsSet<
+public struct VestingScheduleSet<
     phantom SaleCoin,
     phantom PaymentCoin,
-    VestingScheduleParams: copy + drop,
+    phantom VestingWitness,
+    VestingScheduleParams,
 > has copy, drop {
     sale_id: ID,
     params: VestingScheduleParams,
@@ -887,7 +888,7 @@ public fun set_vesting_schedule<
     assert!(sale.phase.is_init(), ENotInit);
     assert!(sale.vesting_schedule.is_none(), EVestingScheduleAlreadySet);
     sale.vesting_schedule.fill(schedule);
-    event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
+    event::emit(VestingScheduleSet<SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams> {
         sale_id: object::id(sale),
         params: schedule.params(),
     });
@@ -2527,14 +2528,19 @@ public fun test_new_per_buyer_cap_set<SaleCoin, PaymentCoin>(
     PerBuyerCapSet { sale_id, cap }
 }
 
-/// Build a `VestingScheduleParamsSet` event value for asserting against
+/// Build a `VestingScheduleSet` event value for asserting against
 /// `event::events_by_type`.
 #[test_only]
-public fun test_new_vesting_schedule_set<SaleCoin, PaymentCoin, VestingScheduleParams: copy + drop>(
+public fun test_new_vesting_schedule_set<
+    SaleCoin,
+    PaymentCoin,
+    VestingWitness: drop,
+    VestingScheduleParams: copy + drop
+>(
     sale_id: ID,
     params: VestingScheduleParams,
-): VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
-    VestingScheduleParamsSet { sale_id, params }
+): VestingScheduleSet<SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams> {
+    VestingScheduleSet { sale_id, params }
 }
 
 /// Build a `RefundVaultPaired` event value for asserting against `event::events_by_type`.
