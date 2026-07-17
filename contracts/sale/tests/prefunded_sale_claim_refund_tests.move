@@ -528,6 +528,12 @@ fun refund_all_sums_receipts() {
     assert_eq!(payment.value(), 350);
     assert_eq!(vault.value(), 0); // drained exactly
     assert_eq!(sale.total_allocated(), 0);
+
+    // One Refunded + one vault release per receipt (the loop redeems each individually).
+    let refunded = event::events_by_type<prefunded_sale::Refunded<SALE, USDC>>();
+    assert_eq!(refunded.length(), 2);
+    let releases = event::events_by_type<refund_vault::VaultRelease<USDC>>();
+    assert_eq!(releases.length(), 2);
     destroy(payment);
     u::return_sale(sale);
     u::return_vault(vault);
@@ -571,6 +577,75 @@ fun refund_all_empty_returns_zero() {
 
     destroy(clk);
     test.end();
+}
+
+// A batch containing a receipt from a different sale aborts the whole call
+// (all-or-nothing) - the per-receipt receipt-sale check in `refund` fires inside the
+// loop, so the valid receipt alongside it is never released.
+#[test, expected_failure(abort_code = prefunded_sale::EReceiptSaleMismatch)]
+fun refund_all_foreign_receipt_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    // A receipt minted against a foreign sale id (package-internal helper).
+    let foreign = receipt::new_receipt<SALE>(
+        object::id_from_address(@0xDEAD),
+        u::buyer(),
+        300,
+        300,
+        1_000,
+        test.ctx(),
+    );
+    let _payment = sale.refund_all(&mut vault, vector[r, foreign], test.ctx()); // aborts: EReceiptSaleMismatch
+    abort
+}
+
+// A batch that folds in another buyer's receipt aborts: the per-receipt buyer check in
+// `refund` rejects it even though the caller owns the other receipts in the batch.
+#[test, expected_failure(abort_code = prefunded_sale::EBuyerOnly)]
+fun refund_all_wrong_buyer_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 1_000, 1_000);
+    buy_once(&mut test, &clk, 100); // buyer
+    // buyer2 also purchases, so their receipt exists to smuggle into buyer's batch.
+    test.next_tx(u::buyer2());
+    {
+        let mut sale = u::take_sale(&test);
+        u::buy(&mut sale, 100, &clk, test.ctx());
+        u::return_sale(sale);
+    };
+    cancel_now(&mut test, &mut clk); // raised 200 < soft cap 1_000
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let r_buyer = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let r_other = test.take_from_address<Receipt<SALE>>(u::buyer2());
+    let _payment = sale.refund_all(&mut vault, vector[r_buyer, r_other], test.ctx()); // aborts: EBuyerOnly
+    abort
+}
+
+// refund_all rejects a vault that is not the paired one, just like `refund` (the check
+// runs per receipt inside the loop).
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+fun refund_all_wrong_vault_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let (mut foreign_vault, _foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let _payment = sale.refund_all(&mut foreign_vault, vector[r], test.ctx()); // aborts: EWrongVault
+    abort
 }
 
 // === withdraw_proceeds ===
