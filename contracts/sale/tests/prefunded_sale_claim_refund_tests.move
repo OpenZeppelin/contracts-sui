@@ -134,9 +134,40 @@ fun claim_all_sums_receipts() {
     let mut sale = u::take_sale(&test);
     let r1 = test.take_from_address<Receipt<SALE>>(u::buyer());
     let r2 = test.take_from_address<Receipt<SALE>>(u::buyer());
+    // Snapshot each receipt's id and allocation before they are consumed, so the
+    // per-event assertions below hold regardless of the take order.
+    let (r1_id, r1_alloc) = (object::id(&r1), r1.allocation());
+    let (r2_id, r2_alloc) = (object::id(&r2), r2.allocation());
+    let sale_id = object::id(&sale);
     let payout = sale.claim_all(vector[r1, r2], test.ctx());
     assert_eq!(payout.value(), 350);
     assert_eq!(sale.total_allocated(), 0);
+
+    // One Claimed event per receipt, each self-contained. `claim_all` pops the vector
+    // from the back, so r2 is claimed first and r1 second; `total_allocated_after`
+    // steps down 350 -> 350 - r2_alloc -> 0 across the two events.
+    let claimed = event::events_by_type<prefunded_sale::Claimed<SALE, USDC>>();
+    assert_eq!(claimed.length(), 2);
+    assert_eq!(
+        claimed[0],
+        prefunded_sale::test_new_claimed<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            r2_id,
+            r2_alloc,
+            350 - r2_alloc, // total_allocated_after
+        ),
+    );
+    assert_eq!(
+        claimed[1],
+        prefunded_sale::test_new_claimed<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            r1_id,
+            r1_alloc,
+            0, // total_allocated_after
+        ),
+    );
     destroy(payout);
     u::return_sale(sale);
 
@@ -527,14 +558,44 @@ fun refund_all_sums_receipts() {
     let mut vault = u::take_vault(&test);
     let r1 = test.take_from_address<Receipt<SALE>>(u::buyer());
     let r2 = test.take_from_address<Receipt<SALE>>(u::buyer());
+    // Snapshot each receipt's id, paid amount, and allocation before they are consumed,
+    // so the per-event assertions below hold regardless of the take order.
+    let (r1_id, r1_paid, r1_alloc) = (object::id(&r1), r1.paid(), r1.allocation());
+    let (r2_id, r2_paid, r2_alloc) = (object::id(&r2), r2.paid(), r2.allocation());
+    let sale_id = object::id(&sale);
     let payment = sale.refund_all(&mut vault, vector[r1, r2], test.ctx());
     assert_eq!(payment.value(), 350);
     assert_eq!(vault.value(), 0); // drained exactly
     assert_eq!(sale.total_allocated(), 0);
 
     // One Refunded + one vault release per receipt (the loop redeems each individually).
+    // `refund_all` pops the vector from the back, so r2 is refunded first and r1 second;
+    // each Refunded carries its own `allocation`, and `total_allocated_after` steps down
+    // 350 -> 350 - r2_alloc -> 0 across the two events.
     let refunded = event::events_by_type<prefunded_sale::Refunded<SALE, USDC>>();
     assert_eq!(refunded.length(), 2);
+    assert_eq!(
+        refunded[0],
+        prefunded_sale::test_new_refunded<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            r2_id,
+            r2_paid,
+            r2_alloc,
+            350 - r2_alloc, // total_allocated_after
+        ),
+    );
+    assert_eq!(
+        refunded[1],
+        prefunded_sale::test_new_refunded<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            r1_id,
+            r1_paid,
+            r1_alloc,
+            0, // total_allocated_after
+        ),
+    );
     let releases = event::events_by_type<refund_vault::VaultRelease<USDC>>();
     assert_eq!(releases.length(), 2);
     destroy(payment);
