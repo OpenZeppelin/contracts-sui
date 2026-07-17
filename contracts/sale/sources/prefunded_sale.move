@@ -1943,20 +1943,6 @@ public fun mint_quote_unversioned<
     new_quote(object::id(sale), payment, rate, option::none())
 }
 
-/// Shared quote builder. `minted_at_version` is `Some(state_version)` for a freshness-enforced
-/// quote, `None` to opt out.
-fun new_quote<PaymentCoin>(
-    sale_id: ID,
-    payment: Balance<PaymentCoin>,
-    rate: u64,
-    minted_at_version: Option<u64>,
-): Quote<PaymentCoin> {
-    assert!(payment.value() > 0, EZeroPayment);
-    let allocation = (payment.value() as u128) * (rate as u128);
-    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
-    Quote { sale_id, payment, allocation: allocation as u64, minted_at_version }
-}
-
 // === View helpers ===
 
 /// The sale's current lifecycle phase.
@@ -2579,6 +2565,20 @@ fun claim_all_internal<
     };
     receipts.destroy_empty();
     total
+}
+
+/// Shared quote builder. `minted_at_version` is `Some(state_version)` for a freshness-enforced
+/// quote, `None` to opt out.
+fun new_quote<PaymentCoin>(
+    sale_id: ID,
+    payment: Balance<PaymentCoin>,
+    rate: u64,
+    minted_at_version: Option<u64>,
+): Quote<PaymentCoin> {
+    assert!(payment.value() > 0, EZeroPayment);
+    let allocation = (payment.value() as u128) * (rate as u128);
+    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
+    Quote { sale_id, payment, allocation: allocation as u64, minted_at_version }
 }
 
 // === Test-Only Helpers ===
