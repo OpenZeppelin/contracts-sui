@@ -39,7 +39,12 @@ fun membership_lifecycle() {
 
         let added = list.approve(5);
         assert!(added); // newly added -> true
-        assert_eq!(event::events_by_type<Approved>().length(), 1); // emitted once
+        // Emitted once, carrying THIS allowlist's id - consumers watching another (permissionless)
+        // instance can tell the events apart.
+        assert_eq!(
+            event::events_by_type<Approved>(),
+            vector[allowlist::approved_event(object::id(&list), 5)],
+        );
         assert_eq!(list.count(), 3);
         scenario.return_to_sender(list);
     };
@@ -53,8 +58,11 @@ fun membership_lifecycle() {
         assert_eq!(event::events_by_type<Approved>().length(), 0); // polarity: no emit on re-add
         assert_eq!(list.count(), 3); // unchanged
 
-        list.revoke(3); // was present -> succeeds and emits
-        assert_eq!(event::events_by_type<Revoked>().length(), 1);
+        list.revoke(3); // was present -> succeeds and emits, bound to this list's id
+        assert_eq!(
+            event::events_by_type<Revoked>(),
+            vector[allowlist::revoked_event(object::id(&list), 3)],
+        );
         assert!(!list.is_approved(3));
         assert!(list.members_well_formed()); // order oracle: still sorted
 
@@ -116,6 +124,34 @@ fun approve_strict_rejects_duplicate() {
         let mut list = scenario.take_from_sender<Allowlist>();
         list.approve_strict(1); // aborts here: 1 is already approved
         scenario.return_to_sender(list); // unreachable; satisfies the type checker
+    };
+
+    scenario.end();
+}
+
+// === Scenario 2b - strict approval of a NEW id succeeds and emits ===
+//
+// The abort above is the exceptional path; on a fresh id `approve_strict` behaves like
+// `approve`: membership flips and one `Approved` is emitted, bound to this list's id.
+#[test]
+fun approve_strict_new_id_approves_and_emits() {
+    let mut scenario = ts::begin(ALICE);
+
+    // Tx1 - ALICE: seed an allowlist with {1, 2}.
+    allowlist::create_and_keep(vector[1, 2], scenario.ctx());
+
+    // Tx2 - ALICE: strict-approve a fresh id - succeeds and emits, bound to this list's id.
+    scenario.next_tx(ALICE);
+    {
+        let mut list = scenario.take_from_sender<Allowlist>();
+        list.approve_strict(3);
+        assert!(list.is_approved(3));
+        assert_eq!(list.count(), 3);
+        assert_eq!(
+            event::events_by_type<Approved>(),
+            vector[allowlist::approved_event(object::id(&list), 3)],
+        );
+        scenario.return_to_sender(list);
     };
 
     scenario.end();
