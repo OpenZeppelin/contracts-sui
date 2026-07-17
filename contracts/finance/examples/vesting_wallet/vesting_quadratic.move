@@ -13,9 +13,10 @@
 ///
 /// The curve is `vested = total * (elapsed / duration)^2`, clamped to `total` at the
 /// end: it vests slowly early and accelerates toward the deadline. It is
-/// monotonically non-decreasing and bounded above by `total = balance + released` -
-/// the two properties the primitive requires of a curve. The specific shape is
-/// incidental; the point is the integration boundary.
+/// monotonically non-decreasing, bounded above by `total = balance + released`, and
+/// non-expansive in the total (a deposit of `d` adds at most `d * (elapsed/duration)^2
+/// <= d` to what is releasable) - the properties the primitive requires of a curve. The
+/// specific shape is incidental; the point is the integration boundary.
 ///
 /// # Teardown is the one lifecycle step that can't be fully composed
 ///

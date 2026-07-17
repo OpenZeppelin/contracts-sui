@@ -304,7 +304,8 @@ fun claim_all_into_vesting_sums_into_one_wallet() {
     test.end();
 }
 
-// Regression (H-1): the vesting lockup cannot be bypassed. `claim_into_vesting` pins
+// Regression (H-1): the vesting lockup cannot be bypassed by substituting a witness.
+// `claim_into_vesting` pins
 // the sale's `Linear` witness (the `&mut sale` argument unifies the function's
 // `VestingWitness` with the sale's), so the buyer must release through the honest
 // curve, which enforces the cliff. Right after finalize nothing is releasable; only

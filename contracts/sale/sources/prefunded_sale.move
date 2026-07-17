@@ -388,12 +388,14 @@ const ENotTerminal: vector<u8> = "The sale must have ended";
 ///
 /// `VestingWitness` is the `drop`-only schedule witness of the curve module that
 /// interprets `VestingScheduleParams` (e.g. `vesting_wallet_linear::Linear` pairs
-/// with its `Params`). Pinning it in the sale's type is what makes the vesting
-/// lockup unbypassable: `claim_into_vesting` builds a
+/// with its `Params`). Pinning it in the sale's type is what stops a buyer from
+/// swapping in a permissive curve of their own: `claim_into_vesting` builds a
 /// `VestingWallet<VestingWitness, ..>`, and only the module declaring
 /// `VestingWitness` can mint the `VestedAmount` that releases it - so a buyer cannot
-/// substitute a permissive witness of their own to release early. For a non-vesting
-/// sale the slot is inert (any `drop` type); no schedule is ever attached.
+/// substitute a permissive witness of their own to release early. The lockup then
+/// holds as long as the pinned curve is well-behaved (see `claim_into_vesting`); the
+/// shipped linear curve is. For a non-vesting sale the slot is inert (any `drop`
+/// type); no schedule is ever attached.
 public struct PrefundedSale<
     phantom Curve: drop,
     CurveParams: copy + drop + store,
@@ -660,7 +662,9 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// witness/params pair of the intended schedule curve (e.g.
 /// `vesting_wallet_linear::{Linear, Params}`); `set_vesting_schedule_params` then
 /// attaches a concrete schedule, and `claim_into_vesting` builds the wallet under this
-/// pinned witness so the lockup cannot be bypassed. For a non-vesting sale both slots
+/// pinned witness so a buyer cannot swap in a permissive curve; the lockup then holds
+/// as long as that pinned curve is well-behaved (see `claim_into_vesting`), which the
+/// shipped linear curve is. For a non-vesting sale both slots
 /// are inert - pick any `drop` witness and any `copy + drop + store` params type and
 /// never attach a schedule.
 ///
@@ -821,10 +825,14 @@ public fun set_per_buyer_cap<
 ///
 /// Once a schedule is attached, the plain `claim` path aborts and buyers must redeem
 /// through `claim_into_vesting`, which returns a funded `VestingWallet` and its
-/// `DestroyCap`. The schedule cannot be bypassed: `claim_into_vesting` builds the
-/// wallet under the sale's pinned `VestingWitness` type parameter, so only the curve
-/// module that owns that witness can mint the `VestedAmount` needed to release - a
-/// buyer cannot supply a permissive witness of their own. The schedule is
+/// `DestroyCap`. A buyer cannot bypass the schedule by supplying a permissive witness
+/// of their own: `claim_into_vesting` builds the wallet under the sale's pinned
+/// `VestingWitness` type parameter, so only the curve module that owns that witness can
+/// mint the `VestedAmount` needed to release. The lockup then holds as long as that
+/// pinned curve is well-behaved - in particular non-expansive in the wallet's total,
+/// since the buyer receives the wallet by value and can `deposit` into it (see
+/// `claim_into_vesting` and `vesting_wallet`'s curve requirements; the shipped linear
+/// curve satisfies them). The schedule is
 /// **issuer-defined**: the buyer is the caller of the redemption path and cannot
 /// supply or override these values, nor the witness that interprets them.
 ///
@@ -1404,8 +1412,9 @@ public fun cancel_emergency<
 /// Destroys the receipt. The buyer wraps the balance into a `Coin` and transfers it.
 ///
 /// A sale with a vesting schedule must redeem via `claim_into_vesting` instead; this
-/// is the library's enforcement that the schedule cannot be bypassed by the
-/// immediate-distribution path.
+/// closes the immediate-distribution path so it cannot be used to bypass the schedule.
+/// (The lockup itself holds only if the pinned curve is well-behaved - see
+/// `claim_into_vesting`.)
 ///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Finalized` phase.
@@ -1496,8 +1505,19 @@ public fun claim_all<
 /// `create_sale`. Because the `&mut sale` argument unifies this function's
 /// `VestingWitness` with the sale's pinned witness, a buyer cannot substitute a
 /// permissive witness declared in their own package to mint a full `VestedAmount` and
-/// release the whole allocation immediately - the lockup holds. Only the module
-/// declaring the pinned `VestingWitness` can advance the returned wallet.
+/// release the whole allocation immediately. Only the module declaring the pinned
+/// `VestingWitness` can advance the returned wallet.
+///
+/// Witness-pinning closes the substitution attack, but not the schedule on its own: the
+/// wallet is returned **by value**, so the buyer can `deposit` into it, and curve
+/// modules read `balance + released` as the total. The lockup therefore holds only if
+/// the pinned curve is **non-expansive in that total** - a deposit of `d` may raise the
+/// releasable amount by at most `d`, so topping the wallet up can never buy early
+/// release (see `vesting_wallet`'s curve requirements). A curve that vests by a fraction
+/// of the total, like the shipped `vesting_wallet_linear`, satisfies this; a threshold
+/// curve that releases everything once the total crosses a level does not, and an
+/// under-threshold buyer could deposit the shortfall and unlock immediately. The issuer
+/// pins the curve, so this is a constraint on issuer configuration, not a buyer lever.
 ///
 /// Alongside the wallet, `vesting_wallet::new` mints a `DestroyCap` bound to it - the
 /// teardown authority, deliberately decoupled from `beneficiary`. This call returns
