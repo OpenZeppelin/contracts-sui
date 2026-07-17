@@ -112,6 +112,7 @@ fun claim_returns_allocation_and_draws_inventory() {
             u::buyer(),
             receipt_id,
             200,
+            0, // total_allocated_after
         ),
     );
     destroy(payout);
@@ -422,6 +423,7 @@ fun refund_returns_paid_and_draws_vault() {
             receipt_id,
             300,
             300,
+            0, // total_allocated_after
         ),
     );
     // refund releases the payment out of the vault (VaultRelease 300, nothing left).

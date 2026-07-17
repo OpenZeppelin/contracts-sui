@@ -619,6 +619,7 @@ public struct Purchased<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     paid: u64,
     allocation: u64,
     raised_after: u64,
+    total_allocated_after: u64,
     purchased_at_ms: u64,
 }
 
@@ -644,6 +645,7 @@ public struct Claimed<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     buyer: address,
     receipt_id: ID,
     amount: u64,
+    total_allocated_after: u64,
 }
 
 /// Emitted by `refund` when a buyer recovers their payment.
@@ -652,8 +654,8 @@ public struct Refunded<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     buyer: address,
     receipt_id: ID,
     amount: u64,
-    /// Allocation released back to the unallocated pool by this refund.
     allocation: u64,
+    total_allocated_after: u64,
 }
 
 /// Emitted by `withdraw_proceeds` when the admin withdraws collected proceeds.
@@ -1265,6 +1267,7 @@ public fun purchase<
         paid,
         allocation,
         raised_after: sale.raised,
+        total_allocated_after: sale.total_allocated,
         purchased_at_ms: now,
     });
 }
@@ -1833,6 +1836,7 @@ public fun refund<
         receipt_id,
         amount: paid,
         allocation,
+        total_allocated_after: sale.total_allocated,
     });
 
     payment
@@ -2622,6 +2626,7 @@ fun claim_internal<
         buyer,
         receipt_id,
         amount: allocation,
+        total_allocated_after: sale.total_allocated,
     });
 
     payout
@@ -2673,7 +2678,15 @@ public fun test_new_sale_created<CurveParams: copy + drop, SaleCoin, PaymentCoin
     closes_at_ms: u64,
     curve_params: CurveParams,
 ): SaleCreated<SaleCoin, PaymentCoin, CurveParams> {
-    SaleCreated { sale_id, admin_cap_id, hard_cap, soft_cap, opens_at_ms, closes_at_ms, curve_params }
+    SaleCreated {
+        sale_id,
+        admin_cap_id,
+        hard_cap,
+        soft_cap,
+        opens_at_ms,
+        closes_at_ms,
+        curve_params,
+    }
 }
 
 /// Build an `InventoryDeposited` event value for asserting against `event::events_by_type`.
@@ -2745,9 +2758,19 @@ public fun test_new_purchased<SaleCoin, PaymentCoin>(
     paid: u64,
     allocation: u64,
     raised_after: u64,
+    total_allocated_after: u64,
     purchased_at_ms: u64,
 ): Purchased<SaleCoin, PaymentCoin> {
-    Purchased { sale_id, buyer, receipt_id, paid, allocation, raised_after, purchased_at_ms }
+    Purchased {
+        sale_id,
+        buyer,
+        receipt_id,
+        paid,
+        allocation,
+        raised_after,
+        total_allocated_after,
+        purchased_at_ms,
+    }
 }
 
 /// Read the `receipt_id` off a `Purchased` event. The receipt is delivered inside the
@@ -2796,8 +2819,9 @@ public fun test_new_claimed<SaleCoin, PaymentCoin>(
     buyer: address,
     receipt_id: ID,
     amount: u64,
+    total_allocated_after: u64,
 ): Claimed<SaleCoin, PaymentCoin> {
-    Claimed { sale_id, buyer, receipt_id, amount }
+    Claimed { sale_id, buyer, receipt_id, amount, total_allocated_after }
 }
 
 /// Build a `Refunded` event value for asserting against `event::events_by_type`.
@@ -2808,8 +2832,9 @@ public fun test_new_refunded<SaleCoin, PaymentCoin>(
     receipt_id: ID,
     amount: u64,
     allocation: u64,
+    total_allocated_after: u64,
 ): Refunded<SaleCoin, PaymentCoin> {
-    Refunded { sale_id, buyer, receipt_id, amount, allocation }
+    Refunded { sale_id, buyer, receipt_id, amount, allocation, total_allocated_after }
 }
 
 /// Build a `ProceedsWithdrawn` event value for asserting against `event::events_by_type`.
