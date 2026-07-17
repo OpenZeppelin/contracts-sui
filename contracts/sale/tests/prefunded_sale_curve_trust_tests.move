@@ -69,7 +69,7 @@ fun activation_trusts_undersized_required_inventory() {
 
     test.next_tx(u::admin());
     let sale = take_bad_sale(&test);
-    assert!(sale.phase().is_active());
+    assert!(sale.is_active());
     assert_eq!(sale.inventory_total(), 10); // < hard_cap, yet active
     ts::return_shared(sale);
 

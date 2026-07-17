@@ -104,7 +104,7 @@ fun create_sale_initializes_in_init_phase() {
         &mut ctx,
     );
 
-    assert!(sale.phase().is_init());
+    assert!(sale.is_init());
     assert_eq!(sale.hard_cap(), 1_000);
     assert_eq!(sale.soft_cap(), 500);
     assert_eq!(sale.raised(), 0);
@@ -112,6 +112,7 @@ fun create_sale_initializes_in_init_phase() {
     assert_eq!(sale.total_allocated(), 0);
     assert!(!sale.requires_allowlist());
     assert!(sale.vesting_schedule_params().is_none());
+    assert!(sale.refund_vault_id().is_none());
     assert_eq!(cap.cap_sale_id(), object::id(&sale));
 
     let created = event::events_by_type<prefunded_sale::SaleCreated<SALE, USDC, FrcParams>>();
@@ -585,9 +586,27 @@ fun activate_at_exact_required_inventory_ok() {
 
     test.next_tx(u::admin());
     let sale = u::take_sale(&test);
-    assert!(sale.phase().is_active());
+    assert!(sale.is_active());
     assert_eq!(sale.inventory_total(), 2_000);
     u::return_sale(sale);
+
+    destroy(clk);
+    test.end();
+}
+
+// Once activated, `refund_vault_id` reports the paired vault - the id a router uses to
+// confirm the vault it was handed is this sale's own.
+#[test]
+fun refund_vault_id_reports_paired_vault() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 2, 1_000, 0, 2_000);
+
+    test.next_tx(u::admin());
+    let sale = u::take_sale(&test);
+    let vault = u::take_vault(&test);
+    assert!(sale.refund_vault_id() == option::some(object::id(&vault)));
+    u::return_sale(sale);
+    u::return_vault(vault);
 
     destroy(clk);
     test.end();

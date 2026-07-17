@@ -41,7 +41,7 @@ fun finalize_after_close_succeeds() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
-    assert!(sale.phase().is_finalized());
+    assert!(sale.is_finalized());
     assert!(vault.is_closed());
     assert_eq!(sale.proceeds_amount(), 500); // proceeds stay until withdrawn
 
@@ -81,7 +81,7 @@ fun finalize_early_when_hard_cap_reached() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
-    assert!(sale.phase().is_finalized());
+    assert!(sale.is_finalized());
     u::return_sale(sale);
     u::return_vault(vault);
 
@@ -165,7 +165,7 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert!(vault.is_refunding());
     assert_eq!(vault.value(), 300); // locked == raised
     assert_eq!(sale.proceeds_amount(), 0); // proceeds drained
@@ -265,7 +265,7 @@ fun cancel_emergency_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert_eq!(vault.value(), 100);
 
     let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
@@ -301,7 +301,7 @@ fun cancel_emergency_zero_raised_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert!(vault.is_refunding());
     assert_eq!(vault.value(), 0);
 
@@ -344,7 +344,7 @@ fun cancel_emergency_at_exact_close_soft_cap_unmet_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert_eq!(vault.value(), 300);
 
     u::return_sale(sale);
