@@ -176,6 +176,42 @@ fun deposit_accumulates_inventory() {
     destroy(cap);
 }
 
+// A zero-value deposit is a no-op: inventory is unchanged and no
+// InventoryDeposited event is emitted. The sale still accepts real deposits after.
+#[test]
+fun deposit_zero_is_noop() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+
+    sale.deposit(u::sale_balance(0));
+    assert_eq!(sale.inventory_total(), 0);
+    // The zero-value deposit emitted no InventoryDeposited event.
+    assert_eq!(event::events_by_type<prefunded_sale::InventoryDeposited<SALE, USDC>>().length(), 0);
+
+    // Still accepts real deposits after the no-op.
+    sale.deposit(u::sale_balance(500));
+    assert_eq!(sale.inventory_total(), 500);
+    // Only the non-zero deposit produced an event.
+    assert_eq!(event::events_by_type<prefunded_sale::InventoryDeposited<SALE, USDC>>().length(), 1);
+
+    destroy(sale);
+    destroy(cap);
+}
+
 // deposit is Init-only: it aborts once the sale is Active.
 #[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
 fun deposit_after_activate_aborts() {

@@ -765,6 +765,9 @@ public fun create_sale<
 /// Authority is implicit: the sale is owned, so only the caller that created it can
 /// pass it as `&mut`.
 ///
+/// A deposit of a zero-value balance is a no-op: the balance is consumed but no
+/// `InventoryDeposited` event is emitted.
+///
 /// #### Parameters
 /// - `sale`: The sale to fund, in `Init` phase.
 /// - `inventory`: Sale tokens to add to the inventory balance.
@@ -793,6 +796,7 @@ public fun deposit<
     assert!(sale.is_init(), ENotInit);
     let amount = inventory.value();
     sale.inventory.join(inventory);
+    if (amount == 0) return;
     event::emit(InventoryDeposited<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount,

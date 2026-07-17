@@ -272,6 +272,9 @@ public fun release_balance<P>(
 
 /// Withdraw the entire locked balance. Vault must be in `Closed`.
 ///
+/// Idempotent: a second call (or one against an empty vault) returns an empty balance
+/// and emits no `VaultRelease` event.
+///
 /// #### Parameters
 /// - `vault`: The vault to drain.
 /// - `cap`: The vault's controller cap.
@@ -287,11 +290,13 @@ public fun withdraw_all<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>):
     assert!(vault.state.is_closed_state(), ENotClosedState);
     let amount = vault.locked.value();
     let part = vault.locked.split(amount);
-    event::emit(VaultRelease<P> {
-        vault_id: object::id(vault),
-        amount,
-        locked_after: 0,
-    });
+    if (amount > 0) {
+        event::emit(VaultRelease<P> {
+            vault_id: object::id(vault),
+            amount,
+            locked_after: 0,
+        });
+    };
     part
 }
 

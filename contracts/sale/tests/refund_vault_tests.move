@@ -129,6 +129,23 @@ fun deposit_zero_is_noop() {
     destroy(cap);
 }
 
+// withdraw_all on an empty (closed) vault is idempotent: it returns an empty
+// balance and emits no VaultRelease event.
+#[test]
+fun withdraw_all_empty_emits_no_event() {
+    let mut ctx = tx_context::dummy();
+    let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
+
+    vault.flip_to_closed(&cap);
+    let out = vault.withdraw_all(&cap);
+    assert_eq!(out.value(), 0);
+    assert_eq!(event::events_by_type<refund_vault::VaultRelease<USDC>>().length(), 0);
+
+    destroy(out);
+    destroy(vault);
+    destroy(cap);
+}
+
 // === Cap-gating ===
 
 #[test, expected_failure(abort_code = refund_vault::EWrongVaultCap)]
