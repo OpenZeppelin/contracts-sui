@@ -20,7 +20,9 @@
 ///                              purchase xN
 ///                                  |
 ///                                  +--> finalize          (permissionless;
-///                                  |      claim / claim_into_vesting,       successful close)
+///                                  |      claim / claim_all /               successful close)
+///                                  |      claim_into_vesting /
+///                                  |      claim_all_into_vesting,
 ///                                  |      withdraw_proceeds, withdraw_unsold_inventory
 ///                                  |
 ///                                  +--> cancel_after_close (permissionless;
@@ -40,12 +42,20 @@
 /// authority needed for setup functions. After `share_and_activate`,
 /// the sale is shared and operations split into three categories:
 ///
-/// - **Permissionless:** `purchase`, `claim`, `claim_all`,
-///   `claim_into_vesting`, `claim_all_into_vesting`, `refund`,
-///   `finalize`, `cancel_after_close`. Buyers and any caller with
-///   visibility to the sale can drive these flows once their
-///   conditions hold. **Buyer claims and refunds do not depend on
-///   admin liveness.**
+/// - **Permissionless (no admin cap required):** `purchase`, `claim`,
+///   `claim_all`, `claim_into_vesting`, `claim_all_into_vesting`,
+///   `refund`, `finalize`, `cancel_after_close`. None of these need the
+///   `SaleAdminCap`, so **buyer claims and refunds do not depend on
+///   admin liveness.** Authorization within this category is not
+///   uniform, though:
+///     - `finalize` and `cancel_after_close` are open to any caller
+///       with visibility to the sale, once their conditions hold.
+///     - The redemption paths - `claim`, `claim_all`,
+///       `claim_into_vesting`, `claim_all_into_vesting`, and `refund` -
+///       are **buyer-bound**: each asserts `ctx.sender() ==
+///       receipt.buyer` (`EBuyerOnly`), so only the buyer who made a
+///       purchase can redeem its receipt.
+///     - `purchase` delivers its receipt to `ctx.sender()`.
 /// - **Admin-only (via `SaleAdminCap<SaleCoin, PaymentCoin>`):** `cancel_emergency`
 ///   (in-window), `withdraw_proceeds`, `withdraw_unsold_inventory`.
 /// - **None (type-level):** `Receipt<SaleCoin>` cannot be transferred or
