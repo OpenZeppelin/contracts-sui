@@ -70,9 +70,10 @@
 ///   `cancel_after_close` is callable by anyone; refunds become
 ///   available to all buyers.
 /// - **Per-buyer cap (optional).** Cumulative cap on a single buyer's
-///   payment to this sale. Enforced inside `purchase` against the
-///   running `contributions[buyer]` total. Configure with
-///   `set_per_buyer_cap`.
+///   payment to this sale. Enforced inside `purchase` against the buyer's
+///   remaining allowance in `remaining_allowance[buyer]`, seeded at the
+///   cap on the buyer's first purchase and counted down by each payment.
+///   Configure with `set_per_buyer_cap`.
 /// - **Allowlist (optional).** Switches the sale into compliance-gated
 ///   mode: every `purchase` must consume an `AllowEntry<SaleCoin>` minted by
 ///   the consumer's compliance module. Configure with
@@ -141,7 +142,7 @@
 ///    a terminal phase is not a delete. Even a fully-redeemed sale (all
 ///    receipts claimed/refunded, proceeds and unsold inventory
 ///    withdrawn) remains a shared object forever, and its
-///    `contributions` table (when a per-buyer cap was set) persists with
+///    `remaining_allowance` table (when a per-buyer cap was set) persists with
 ///    one entry per buyer. This is the same buyer-protective stance as
 ///    footgun 6: the sale cannot self-destruct because doing so safely
 ///    would require proving no receipt is still outstanding, which it
@@ -436,7 +437,7 @@ public struct PrefundedSale<
     per_buyer_cap: Option<u64>,
     /// Remaining per-buyer allowance, counting down from the cap. `Some` only when a
     /// per-buyer cap is set.
-    contributions: Option<Table<address, u64>>,
+    remaining_allowance: Option<Table<address, u64>>,
     /// Optional issuer-defined vesting policy. When `Some`, redemption is via
     /// `claim_into_vesting` (which returns a funded `VestingWallet` and its
     /// `DestroyCap`) rather than `claim`. Fixed at construction; the buyer cannot
@@ -717,7 +718,7 @@ public fun create_sale<
         refund_vault_id: option::none(),
         refund_vault_cap: option::none(),
         per_buyer_cap: option::none(),
-        contributions: option::none(),
+        remaining_allowance: option::none(),
         vesting_schedule_params: option::none(),
     };
     let sale_id = object::id(&sale);
@@ -776,12 +777,14 @@ public fun deposit<
 
 /// Configure a cumulative per-buyer cap. The sum of every `purchase` payment a
 /// single buyer makes to this sale must not exceed `per_buyer_cap`, enforced inside
-/// `purchase` against the running `contributions[buyer]` total. One-shot.
+/// `purchase` against the buyer's remaining allowance in `remaining_allowance[buyer]`,
+/// seeded at the cap on the buyer's first purchase and counted down by each payment.
+/// One-shot.
 ///
 /// #### Parameters
 /// - `sale`: The sale to configure, in `Init` phase.
 /// - `per_buyer_cap`: Cumulative payment cap per buyer.
-/// - `ctx`: Transaction context, used to allocate the `contributions` table.
+/// - `ctx`: Transaction context, used to allocate the `remaining_allowance` table.
 ///
 /// #### Aborts
 /// - `ENotInit` if the sale is not in `Init` phase.
@@ -810,7 +813,7 @@ public fun set_per_buyer_cap<
     assert!(sale.per_buyer_cap.is_none(), EPerBuyerCapAlreadySet);
     assert!(per_buyer_cap > 0, EPerBuyerCapZero);
     sale.per_buyer_cap.fill(per_buyer_cap);
-    sale.contributions.fill(table::new<address, u64>(ctx));
+    sale.remaining_allowance.fill(table::new<address, u64>(ctx));
     event::emit(PerBuyerCapSet<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         cap: per_buyer_cap,
@@ -1104,10 +1107,6 @@ public fun share_and_activate<
 /// `hard_cap() - raised()` - off-chain before minting the quote. A payment for the exact
 /// remaining capacity closes the sale (`raised == hard_cap`); anything larger reverts.
 ///
-/// All arithmetic on user-controlled inputs (`raised + paid`, `contribution + paid`)
-/// is widened to `u128` and bounds-checked before downcasting, so oversized payments
-/// abort with a typed error rather than a native arithmetic overflow.
-///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Active` phase.
 /// - `quote`: A `Quote<PaymentCoin>` minted by the sale's curve module, carrying the
@@ -1185,17 +1184,15 @@ public fun purchase<
 
     assert!(entry_max == 0 || paid <= entry_max, EPerEntryCapExceeded);
 
-    // `contributions[buyer]` holds the buyer's *remaining* allowance: seeded at the
-    // cap on first purchase, then counted down.
     if (sale.per_buyer_cap.is_some()) {
-        let contributions = sale.contributions.borrow_mut();
-        if (!contributions.contains(buyer)) {
+        let remaining_allowance = sale.remaining_allowance.borrow_mut();
+        if (!remaining_allowance.contains(buyer)) {
             let per_cap = *sale.per_buyer_cap.borrow();
-            contributions.add(buyer, per_cap);
+            remaining_allowance.add(buyer, per_cap);
         };
-        let cap = contributions.borrow_mut(buyer);
-        assert!(paid <= *cap, EPerBuyerCapExceeded);
-        *cap = *cap - paid;
+        let remaining = remaining_allowance.borrow_mut(buyer);
+        assert!(paid <= *remaining, EPerBuyerCapExceeded);
+        *remaining = *remaining - paid;
     };
 
     let unallocated = sale.inventory.value() - sale.total_allocated;
