@@ -278,7 +278,7 @@ fun set_vesting_schedule_fills_option() {
     assert_eq!(set.length(), 1);
     assert_eq!(
         set[0],
-        prefunded_sale::test_new_vesting_schedule_set<SALE, USDC, VParams>(
+        prefunded_sale::test_new_vesting_schedule_set<SALE, USDC, Linear, VParams>(
             object::id(&sale),
             vesting_wallet_linear::params(0, 0, 1_000, 4),
         ),
