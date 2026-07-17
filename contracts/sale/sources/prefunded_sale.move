@@ -1586,6 +1586,14 @@ public fun claim_into_vesting<
 /// `VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>`, summing their
 /// allocations. Aborts the whole call if any receipt is invalid.
 ///
+/// The same top-up caveat as `claim_into_vesting` applies: the wallet is returned
+/// **by value** to the buyer, so they can `deposit` into it, and curve modules read
+/// `balance + released` as the total. Early release is prevented only if the
+/// issuer-pinned curve is **non-expansive in `balance + released`** - a deposit of `d`
+/// may raise the releasable amount by at most `d` (see `vesting_wallet`'s curve
+/// requirements). Curve selection is the issuer's security responsibility, fixed at
+/// `create_sale`, not a buyer lever.
+///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Finalized` phase, with a vesting schedule attached.
 /// - `receipts`: The buyer's receipts. All consumed.
