@@ -103,7 +103,9 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
 - **`Quote<PaymentCoin>`** - carries the buyer's payment `Balance` *and* the
   curve-computed allocation. The curve module's `quote(...)` mints it; the sale's
   `purchase(...)` is its only legal consumer. Pricing and funds stay welded together
-  and cannot be replayed across transactions.
+  and cannot be replayed across transactions. *Within* a PTB, a quote can optionally
+  carry a freshness stamp (see the note above) so it cannot be consumed at a price
+  staled by an intervening purchase.
 - **`AllowEntry<SaleCoin>`** - a single-use compliance ticket (allowlist sales only).
   Your compliance module mints one per approved buyer; `purchase` consumes it,
   asserting it was issued for *this* sale and *this* buyer. No warehousing, no replay.
@@ -402,6 +404,10 @@ in a wallet.
   only by inventory and overflow. The witness gate makes a `FixedRateCurve` sale
   un-priceable by anything but the fixed-rate module; a *custom* curve is
   security-critical and must be audited with the sale.
+- **Quotes are freshness-safe only when versioned.** A state-dependent curve must mint
+  via `mint_quote`, so `purchase` rejects (`EStaleQuote`) a quote staled by an
+  intervening same-PTB purchase. `mint_quote_unversioned` opts out and is safe only for
+  a rate-immune curve like `fixed_rate_curve`.
 - **Buyer redemption never depends on admin liveness.** `purchase`, `claim`, `refund`,
   `finalize`, and `cancel_after_close` are permissionless. Losing the `SaleAdminCap`
   forfeits only `cancel_emergency`, `withdraw_proceeds`, and `withdraw_unsold_inventory`
