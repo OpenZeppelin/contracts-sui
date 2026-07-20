@@ -199,14 +199,14 @@ public fun quote<
     balance: Balance<PaymentCoin>,
 ): Quote<PaymentCoin> {
     let params = sale.curve_params();
-    let required_inventory = u64::mul_div(
+    let allocation = u64::mul_div(
         balance.value(),
         params.rate_numerator,
         params.rate_denominator,
         rounding::down(),
     );
-    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
-    sale.mint_quote(FixedRateCurve {}, balance, allocation as u64)
+    assert!(allocation.is_some(), EAllocationOverflow);
+    sale.mint_quote(FixedRateCurve {}, balance, allocation.destroy_some())
 }
 
 // === View helpers ===
