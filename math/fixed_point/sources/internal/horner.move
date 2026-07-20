@@ -189,7 +189,7 @@ public(package) fun assert_polynomial_nonempty(len: u64) {
 /// for the CDF and PDF by their saturation guards at `$acc_scale = 10^36` (see `mul_wad`).
 ///
 /// #### Aborts
-/// - Aborts with `EEmptyPolynomial` if `$len == 0`.
+/// - `EEmptyPolynomial` if `$len == 0`.
 public(package) macro fun horner_eval(
     $z: SignedScaled256,
     $len: u64,
