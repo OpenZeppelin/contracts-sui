@@ -6,8 +6,8 @@
 /// lattice (each op instantiated at the minimal K/V abilities its body needs). The NEGATIVE
 /// half (a resource-V map cannot be copied/dropped, `e.key` cannot be read, `entries_mut`
 /// does not exist, a bare macro rejects `address`, a bare `SortedMap` cannot be transferred)
-/// is a build-time fact - documented as the commented non-compiling snippets at the bottom,
-/// to be exercised by review/CI, not a runnable `#[test]`.
+/// is a build-time fact - documented as reviewed non-compiling snippets at the bottom, not a
+/// runnable `#[test]`. Positive counterparts above pin the supported side of each boundary.
 module openzeppelin_collections::sorted_map_type_tests;
 
 use openzeppelin_collections::sorted_map::{Self as sm, SortedMap};
@@ -239,7 +239,8 @@ fun ops_leave_value_unconstrained() {
 
 // ===========================================================================
 // NEGATIVE compile-facts (NOT runnable `#[test]`s - they must FAIL to compile).
-// Kept as commented snippets; exercised by review / a CI compile-fail harness.
+// Kept as commented snippets for review; the positive counterparts above exercise the minimal
+// ability bounds without requiring a compile-fail harness.
 // ===========================================================================
 //
 // A resource-V map is NOT copyable / droppable:
@@ -276,16 +277,16 @@ fun ops_leave_value_unconstrained() {
 //
 // A bare macro on a non-integer key is a hard compile error:
 //   let mut m = sm::new<address, u64>();
-//   sm::upsert!(&mut m, &@0x1, 1);   // E04003: `<` not defined for address -> use upsert_by!
+//   sm::upsert!(&mut m, @0x1, 1);    // E04003: `<` not defined for address -> use upsert_by!
 //
 // A bare (UID-less) map cannot be transferred:
 //   sui::transfer::public_transfer(sm::new<u64, u64>(), @0x1); // needs T: key
 //
 // A comparator cannot re-enter to mutate the map mid-search:
-//   sm::upsert_by!(&mut m, &1, 1, |a, b| { sm::upsert!(&mut m, &9, 9); *a < *b }); // borrow conflict
+//   sm::upsert_by!(&mut m, 1, 1, |a, b| { sm::upsert!(&mut m, 9, 9); *a < *b }); // borrow conflict
 //
 // is_well_formed[_by] is `#[test_only]`, absent from the published module: a
 // PRODUCTION (non-#[test_only]) consumer function cannot resolve it (zero on-chain cost; an
-// O(n) per-op walk would erase the single-object thesis). Build-time/visibility fact,
-// exercised by review / a CI compile-fail harness, not a runnable `#[test]`:
+// O(n) per-op walk would erase the single-object thesis). This is a review-only
+// build-time/visibility fact, not a runnable `#[test]`:
 //   public fun prod_check(m: &SortedMap<u64, u64>): bool { sm::is_well_formed!(m) } // unresolved: test-only
