@@ -146,7 +146,7 @@ fun activation_ticket_floors_fractional_backing() {
     let mut ctx = tx_context::dummy();
     let (sale, cap) = new_sale(10, 3, 100, &mut ctx);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
-    assert_eq!(ticket.test_required_inventory(), 333); // floor(1000 / 3)
+    assert_eq!(ticket.required_inventory(), 333); // floor(1000 / 3)
     destroy(ticket);
     destroy(sale);
     destroy(cap);

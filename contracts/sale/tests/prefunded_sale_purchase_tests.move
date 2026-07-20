@@ -50,6 +50,42 @@ fun setup_with_per_buyer_cap(test: &mut Scenario, clk: &Clock, per_buyer: u64) {
     transfer::public_transfer(cap, u::admin());
 }
 
+// Build an Active sale with a fractional rate (rate_numerator / rate_denominator),
+// depositing `inventory` (pass the curve's floored required_inventory for a tight
+// cover). No soft cap, no per-buyer cap, no allowlist. Leaves sale + vault shared,
+// cap with ADMIN.
+fun setup_frac(
+    test: &mut Scenario,
+    clk: &Clock,
+    rate_numerator: u64,
+    rate_denominator: u64,
+    hard_cap: u64,
+    inventory: u64,
+) {
+    let ctx = test.ctx();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(rate_numerator, rate_denominator),
+        hard_cap,
+        0,
+        u::opens(),
+        u::closes(),
+        ctx,
+    );
+    sale.deposit(u::sale_balance(inventory));
+    let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
+    sale.pair_refund_vault(&vault, vault_cap);
+    let ticket = fixed_rate_curve::activation_ticket(&sale);
+    sale.share_and_activate(vault, ticket, clk);
+    transfer::public_transfer(cap, u::admin());
+}
+
 // Purchase `paid` via an allowlist entry minted for `buyer` with `max_amount`.
 // Must run in a tx whose sender is `buyer`.
 fun buy_with_entry(
@@ -128,6 +164,60 @@ fun purchase_at_exact_hard_cap_ok() {
     u::buy(&mut sale, 1_000, &clk, test.ctx());
     assert_eq!(sale.raised(), 1_000);
     assert!(sale.has_reached_hard_cap());
+    assert_eq!(sale.inventory_remaining(), 0);
+    u::return_sale(sale);
+
+    destroy(clk);
+    test.end();
+}
+
+// === Fractional rate (floored pricing end to end) ===
+
+// A fractional rate floors the allocation through a real purchase, not just at
+// quote time: at 10/3 a payment of 5 allocates floor(50 / 3) = 16, the sale's
+// inventory drains by exactly that, and the delivered receipt carries the same value.
+#[test]
+fun purchase_floors_fractional_allocation() {
+    let (mut test, clk) = u::setup();
+    // required_inventory = floor(100 * 10 / 3) = 333; deposit exactly that.
+    setup_frac(&mut test, &clk, 10, 3, 100, 333);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 5, &clk, test.ctx());
+    assert_eq!(sale.raised(), 5);
+    assert_eq!(sale.total_allocated(), 16); // floor(50 / 3)
+    assert_eq!(sale.inventory_remaining(), 317); // 333 - 16
+    u::return_sale(sale);
+
+    test.next_tx(u::buyer());
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    assert_eq!(r.allocation(), 16);
+    assert_eq!(r.paid(), 5);
+    destroy(r);
+
+    destroy(clk);
+    test.end();
+}
+
+// Tight cover: with required_inventory = floor(hard_cap * num / den) deposited,
+// fractional purchases summing to hard_cap never run out of inventory. At 10/3,
+// hard_cap 100 backs floor(1000 / 3) = 333; payments 33 + 33 + 34 (= hard_cap)
+// allocate 110 + 110 + 113 = 333, draining inventory to exactly zero as raised
+// hits the cap. A per-purchase floor that outran the floored backing would trip
+// EInsufficientInventory here.
+#[test]
+fun fractional_purchases_summing_to_hard_cap_stay_within_backing() {
+    let (mut test, clk) = u::setup();
+    setup_frac(&mut test, &clk, 10, 3, 100, 333);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 33, &clk, test.ctx()); // floor(330 / 3) = 110
+    u::buy(&mut sale, 33, &clk, test.ctx()); // 110
+    u::buy(&mut sale, 34, &clk, test.ctx()); // floor(340 / 3) = 113
+    assert_eq!(sale.raised(), 100); // == hard_cap
+    assert_eq!(sale.total_allocated(), 333); // == required_inventory, exact tight cover
     assert_eq!(sale.inventory_remaining(), 0);
     u::return_sale(sale);
 
