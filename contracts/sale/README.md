@@ -421,7 +421,7 @@ The full unit suite under [`tests/`](tests) doubles as an executable specificati
 `test_utils.move` shows the canonical `Init -> Active` setup, and the thematic files
 exercise every purchase, close, redemption, and failure path.
 
-Standalone integration examples live in [`examples/prefunded_sale/`](examples/prefunded_sale):
+Standalone integration examples live under [`examples/`](examples):
 
 - [`example_tiered_rate_curve`](examples/prefunded_sale/tiered_rate_curve.move) - the
   **custom pricing curve** pattern: a tranched (supply-tiered) curve whose
@@ -433,6 +433,15 @@ Standalone integration examples live in [`examples/prefunded_sale/`](examples/pr
   hard_cap)` and sold-out coincides with hard-cap-reached, making the trusted-curve
   boundary concrete: the committed inventory is exactly what a dishonest curve would
   have to respect.
+- [`example_escrow_crowdfund`](examples/refund_vault/escrow_crowdfund.move) - the
+  **standalone `refund_vault`** pattern, with no `prefunded_sale` involved: an
+  all-or-nothing (Kickstarter-style) crowdfund. It shows that the vault is a *dumb
+  escrow* - one pooled balance plus a lifecycle state, no per-depositor accounting - so
+  the campaign keeps its own `backer -> amount` ledger to drive exact refunds, owns the
+  `RefundVaultCap` internally (cap loss designed out), and drives the vault's
+  `Active -> Closed` (goal met, pot to the beneficiary) vs `Active -> Refunding` (goal
+  missed, backers reclaim) fork. Funds move as `Balance` and settle into
+  [address balances](https://docs.sui.io/onchain-finance/asset-custody/address-balances/using-address-balances) via `balance::send_funds` - no coin objects.
 
 ## Learn More
 
