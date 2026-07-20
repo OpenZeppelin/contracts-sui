@@ -419,8 +419,20 @@ in a wallet.
 
 The full unit suite under [`tests/`](tests) doubles as an executable specification -
 `test_utils.move` shows the canonical `Init -> Active` setup, and the thematic files
-exercise every purchase, close, redemption, and failure path. Standalone integration
-examples will live in [`examples/`](examples).
+exercise every purchase, close, redemption, and failure path.
+
+Standalone integration examples live in [`examples/prefunded_sale/`](examples/prefunded_sale):
+
+- [`example_tiered_rate_curve`](examples/prefunded_sale/tiered_rate_curve.move) - the
+  **custom pricing curve** pattern: a tranched (supply-tiered) curve whose
+  token-per-payment rate steps as the sale fills, so early buyers get a better rate.
+  It declares its own witness and `Params` and implements the three witness-gated seam
+  points (`params`, `activation_ticket`, `quote`) against `prefunded_sale` - the shape
+  `fixed_rate_curve` cannot teach because its witness constructor is private. Because
+  its step-rate allocation is exactly additive, `required_inventory = integrate(0,
+  hard_cap)` and sold-out coincides with hard-cap-reached, making the trusted-curve
+  boundary concrete: the committed inventory is exactly what a dishonest curve would
+  have to respect.
 
 ## Learn More
 
