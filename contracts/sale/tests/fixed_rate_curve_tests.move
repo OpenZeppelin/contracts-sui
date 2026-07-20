@@ -125,6 +125,22 @@ fun quote_allocation_overflow_aborts() {
     abort
 }
 
+// Boundary of the overflow guard: an allocation equal to u64::MAX is representable,
+// so the guard admits it (no off-by-one). Pins quote / when paid * numerator /
+// denominator == u64::MAX / it succeeds.
+#[test]
+fun quote_allocation_at_u64_max_succeeds() {
+    let mut ctx = tx_context::dummy();
+    let (sale, cap) = new_sale(MAX_U64, 1, 1_000, &mut ctx);
+
+    let q = fixed_rate_curve::quote(&sale, u::pay_balance(1)); // 1 * MAX / 1 == MAX, fits
+    assert_eq!(q.allocation(), MAX_U64);
+
+    destroy(q);
+    destroy(sale);
+    destroy(cap);
+}
+
 // === activation ticket sizing + guard ===
 
 #[test]
@@ -134,6 +150,7 @@ fun activation_ticket_requires_hard_cap_times_rate() {
     // required_inventory = 1_000 * 4 / 1 = 4_000; mint succeeds (carrier has no
     // abilities so we just dispose of it).
     let ticket = fixed_rate_curve::activation_ticket(&sale);
+    assert_eq!(ticket.required_inventory(), 4_000); // 1_000 * 4 / 1
     destroy(ticket);
     destroy(sale);
     destroy(cap);
@@ -159,6 +176,20 @@ fun activation_ticket_overflow_aborts() {
     let (sale, _cap) = new_sale(2, 1, MAX_U64, &mut ctx); // MAX * 2 overflows
     let _ticket = fixed_rate_curve::activation_ticket(&sale);
     abort
+}
+
+// Boundary of the overflow guard: a required inventory equal to u64::MAX is
+// representable, so the guard admits it (no off-by-one). Pins activation_ticket /
+// when hard_cap * numerator / denominator == u64::MAX / it succeeds.
+#[test]
+fun activation_ticket_at_u64_max_succeeds() {
+    let mut ctx = tx_context::dummy();
+    let (sale, cap) = new_sale(1, 1, MAX_U64, &mut ctx); // MAX * 1 / 1 == MAX, fits
+    let ticket = fixed_rate_curve::activation_ticket(&sale);
+    assert_eq!(ticket.required_inventory(), MAX_U64);
+    destroy(ticket);
+    destroy(sale);
+    destroy(cap);
 }
 
 // === rate view ===
