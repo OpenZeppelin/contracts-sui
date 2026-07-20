@@ -155,7 +155,7 @@ fun claim_all_sums_receipts() {
             u::buyer(),
             r2_id,
             r2_alloc,
-            350 - r2_alloc, // total_allocated_after
+            r1_alloc, // total_allocated_after
         ),
     );
     assert_eq!(
@@ -582,7 +582,7 @@ fun refund_all_sums_receipts() {
             r2_id,
             r2_paid,
             r2_alloc,
-            350 - r2_alloc, // total_allocated_after
+            r1_alloc, // total_allocated_after
         ),
     );
     assert_eq!(
