@@ -2340,6 +2340,11 @@ public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> {
 /// - The allocation in `SaleCoin`'s smallest units.
 public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
 
+/// Maximum sale duration in milliseconds.
+public fun max_sale_duration_ms(): u64 {
+    MAX_SALE_DURATION_MS
+}
+
 // === Package Functions ===
 
 /// True if the phase is `Init`.
@@ -2656,10 +2661,4 @@ public fun test_new_inventory_withdrawn<SaleCoin, PaymentCoin>(
     amount: u64,
 ): InventoryWithdrawn<SaleCoin, PaymentCoin> {
     InventoryWithdrawn { sale_id, amount }
-}
-
-/// Expose `MAX_SALE_DURATION_MS` so tests can exercise the window-duration bound.
-#[test_only]
-public fun max_sale_duration_ms(): u64 {
-    MAX_SALE_DURATION_MS
 }
