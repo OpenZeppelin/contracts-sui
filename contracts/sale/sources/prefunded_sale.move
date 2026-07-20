@@ -351,11 +351,11 @@ const ENotCancelled: vector<u8> = "The sale must have been cancelled";
 #[error(code = 40)]
 const ENotTerminal: vector<u8> = "The sale must have ended";
 
-/// `cancel_after_close` was attempted while the sale window was still open
+/// `cancel_after_close` was attempted before the sale reached its closing time
 /// (`now <= closes_at_ms`). Distinct from `ESaleWindowStillOpen`, the compound
 /// `finalize` guard that also requires the hard cap to be unmet.
 #[error(code = 41)]
-const ESaleWindowNotClosed: vector<u8> = "The sale window has not closed yet";
+const ESaleNotClosed: vector<u8> = "The sale is still open";
 
 /// A cancel (`cancel_after_close` or `cancel_emergency`) was attempted on a sale that
 /// has met its soft cap (`soft_cap > 0` and `raised >= soft_cap`); a successful raise
@@ -1297,7 +1297,7 @@ public fun finalize<
 ///
 /// #### Aborts
 /// - `ENotActive` if the sale is not in `Active` phase.
-/// - `ESaleWindowNotClosed` if the window has not yet closed.
+/// - `ESaleNotClosed` if the sale has not yet closed.
 /// - `ESoftCapNotSet` if no soft cap is configured.
 /// - `ESoftCapReached` if a soft cap was reached (`raised >= soft_cap`).
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
@@ -1327,7 +1327,7 @@ public fun cancel_after_close<
 ) {
     assert!(sale.phase.is_active(), ENotActive);
     let now = clock.timestamp_ms();
-    assert!(now > sale.closes_at_ms, ESaleWindowNotClosed);
+    assert!(now > sale.closes_at_ms, ESaleNotClosed);
     assert!(sale.soft_cap > 0, ESoftCapNotSet);
     assert!(sale.raised < sale.soft_cap, ESoftCapReached);
 

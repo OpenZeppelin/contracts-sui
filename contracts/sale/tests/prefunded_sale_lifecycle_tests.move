@@ -237,7 +237,7 @@ fun cancel_after_close_no_soft_cap_aborts() {
 }
 
 // Window still open -> cannot cancel_after_close.
-#[test, expected_failure(abort_code = prefunded_sale::ESaleWindowNotClosed)]
+#[test, expected_failure(abort_code = prefunded_sale::ESaleNotClosed)]
 fun cancel_after_close_window_open_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
@@ -251,10 +251,10 @@ fun cancel_after_close_window_open_aborts() {
 }
 
 // A sold-out sale still inside its window aborts on the window guard
-// (ESaleWindowNotClosed), not a sold-out/soft-cap message: the window must close
+// (ESaleNotClosed), not a sold-out/soft-cap message: the window must close
 // first, and then finalize - not cancel - is the legal path. Regression for the audit
 // finding that the shared message falsely claimed the sale "has not sold out".
-#[test, expected_failure(abort_code = prefunded_sale::ESaleWindowNotClosed)]
+#[test, expected_failure(abort_code = prefunded_sale::ESaleNotClosed)]
 fun cancel_after_close_sold_out_in_window_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
