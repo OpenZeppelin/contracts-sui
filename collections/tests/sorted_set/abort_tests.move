@@ -3,8 +3,9 @@
 /// non-empty set) - each asserted at THIS module's location/code; two more are DELEGATED and
 /// surface at the wrapped MAP - `remove!` on an absent key (`sorted_map::EKeyNotFound`) and `add!` /
 /// `add_by!` on a duplicate key (`sorted_map::EKeyAlreadyExists`). The rest is the affirmative
-/// total-API contract for mid-PTB chaining: every op except `remove!`, `add!` / `add_by!`,
-/// `destroy_empty`, and the pops is total.
+/// total-API contract for mid-PTB chaining: every supported op except `remove!`, `add!` /
+/// `add_by!`, `from_sorted_keys!` / `from_sorted_keys_by!`, `destroy_empty`, and the pops is total
+/// (assuming the caller-supplied comparator itself does not abort).
 ///
 /// Every set-owned `#[expected_failure]` pins BOTH `abort_code = ...sorted_set::E*` AND
 /// `location = openzeppelin_collections::sorted_set` - the SET's location. The bypass and
@@ -17,7 +18,7 @@ use openzeppelin_collections::sorted_set as ss;
 use openzeppelin_collections::sorted_set_test_util as u;
 use std::unit_test::assert_eq;
 
-// === the ONE abort: pop_front/pop_back on empty -> set-owned EEmpty ===
+// === Empty pop aborts: pop_front/pop_back -> set-owned EEmpty ===
 
 #[test, expected_failure(abort_code = ss::EEmpty, location = ss)]
 fun pop_front_empty_aborts_at_set() {
@@ -139,7 +140,7 @@ fun add_coarse_equal_key_aborts_at_map() {
     u::add_k(&mut s, u::mk(1, 200)); // id=1 already present -> EKeyAlreadyExists at the map
 }
 
-// === affirmative total API: every op except remove!/pop returns none/false/empty, never aborts ===
+// === Affirmative total API: selected empty/miss operations are total ===
 
 #[test]
 fun total_api_no_abort_on_empty() {

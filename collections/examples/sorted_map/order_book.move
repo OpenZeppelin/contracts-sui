@@ -30,11 +30,19 @@ module openzeppelin_collections::sorted_map_order_book;
 
 use openzeppelin_collections::sorted_map::{Self, SortedMap};
 
+// === Errors ===
+
+/// `place_ask`/`place_bid` was called with a zero size. Rejected up front so an empty level
+/// can never exist - and can never become the reported top of book via `best_ask`/`best_bid`.
+#[error(code = 0)]
+const EZeroSize: vector<u8> = "Size must be greater than zero";
+
 // === Structs ===
 
 /// Aggregate resting size at one price.
 public struct Level has copy, drop, store {
-    /// Total resting size aggregated at this price level.
+    /// Total resting size aggregated at this price level. Always positive: zero-size
+    /// placements are rejected and merges only add.
     size: u64,
 }
 
@@ -61,13 +69,15 @@ public fun deploy_and_share(ctx: &mut TxContext): ID {
     id
 }
 
-/// Add `size` at `price` on the ask side, merging into an existing level if present.
+/// Add positive `size` at `price` on the ask side, merging into an existing level if present.
 ///
 /// #### Aborts
+/// - `EZeroSize` if `size` is zero.
 /// - Arithmetic overflow if merging `size` into an existing level exceeds `u64`.
 /// - `sorted_map::EKeyNotFound` from `borrow_mut!` (guarded by the `contains!` branch;
 ///   unreachable in normal operation).
 public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
+    assert!(size > 0, EZeroSize);
     if (book.asks.contains!(&price)) {
         let lvl = book.asks.borrow_mut!(&price);
         lvl.size = lvl.size + size;
@@ -76,14 +86,16 @@ public fun place_ask(book: &mut OrderBook, price: u64, size: u64) {
     }
 }
 
-/// Add `size` at `price` on the bid side, merging if present. Bids descend, so every
+/// Add positive `size` at `price` on the bid side, merging if present. Bids descend, so every
 /// call threads the same `|a, b| outbids(a, b)`.
 ///
 /// #### Aborts
+/// - `EZeroSize` if `size` is zero.
 /// - Arithmetic overflow if merging `size` into an existing level exceeds `u64`.
 /// - `sorted_map::EKeyNotFound` from `borrow_mut_by!` (guarded by the `contains_by!` branch;
 ///   unreachable in normal operation).
 public fun place_bid(book: &mut OrderBook, price: u64, size: u64) {
+    assert!(size > 0, EZeroSize);
     if (book.bids.contains_by!(&price, |a, b| outbids(a, b))) {
         let lvl = book.bids.borrow_mut_by!(&price, |a, b| outbids(a, b));
         lvl.size = lvl.size + size;
@@ -106,16 +118,19 @@ public fun best_bid(book: &OrderBook): Option<u64> {
 /// Level-2 ask snapshot: up to `limit` ask prices, ascending, starting at the first
 /// price `>= from` (when `include`) or `> from` (strict). Page a deep book by reading
 /// the first page with `include = true`, then resuming from the last returned price
-/// with `include = false` - the pages tile with no gap or overlap.
+/// with `include = false`. Pages tile with no gap or overlap while the ordered ask-price key set is
+/// unchanged. A cursor reused across transactions has keyset semantics over the current asks:
+/// prices inserted at or before the cursor are skipped, prices inserted after it can appear, and
+/// removed prices do not appear. With a positive `limit`, an empty page means no later price exists
+/// at that moment, not that a persisted scan is complete.
 public fun ask_levels(book: &OrderBook, from: u64, include: bool, limit: u64): vector<u64> {
     book.asks.keys_from!(&from, include, limit)
 }
 
-/// Resting size at a specific ask `price` - gate with `contains!`, or read live prices via
-/// `best_ask` / `ask_levels`.
+/// Resting size at a specific ask `price`.
 ///
 /// #### Aborts
-/// - `EKeyNotFound` if no level rests at `price`.
+/// - `sorted_map::EKeyNotFound` if no level rests at `price`.
 public fun ask_size_at(book: &OrderBook, price: u64): u64 {
     let lvl = book.asks.borrow!(&price);
     lvl.size
@@ -124,7 +139,7 @@ public fun ask_size_at(book: &OrderBook, price: u64): u64 {
 /// Remove and return the best (lowest) ask as `(price, size)`.
 ///
 /// #### Aborts
-/// - `EEmpty` if the ask side is empty - guard with `best_ask` first.
+/// - `sorted_map::EEmpty` if the ask side is empty - guard with `best_ask` first.
 public fun fill_best_ask(book: &mut OrderBook): (u64, u64) {
     let (price, lvl) = book.asks.pop_front();
     let Level { size } = lvl;
