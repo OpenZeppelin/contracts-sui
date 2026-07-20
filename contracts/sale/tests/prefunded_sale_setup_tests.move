@@ -617,7 +617,7 @@ fun refund_vault_id_reports_paired_vault() {
     test.next_tx(u::admin());
     let sale = u::take_sale(&test);
     let vault = u::take_vault(&test);
-    assert!(sale.refund_vault_id() == option::some(object::id(&vault)));
+    assert_eq!(sale.refund_vault_id(), option::some(object::id(&vault)));
     u::return_sale(sale);
     u::return_vault(vault);
 
