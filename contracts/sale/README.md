@@ -157,9 +157,17 @@ When set, the plain `claim` path aborts and the only redemption route is
 `claim_into_vesting`, which returns a funded
 [`VestingWallet`](../finance) (from `openzeppelin_finance`) - with `beneficiary` forced
 to the buyer and the sale's fixed schedule params - plus the wallet's `DestroyCap`
-(teardown authority). The buyer cannot influence or bypass the schedule. Releases pay
-into the beneficiary's address balance, so the buyer receives funds without holding
-the wallet.
+(teardown authority). The buyer cannot supply or override the schedule, nor swap in a
+permissive curve of their own: the wallet is built under the sale's pinned
+`VestingWitness`, so only that curve module can release it. The lockup then holds only
+as long as the issuer-pinned curve is **non-expansive in the wallet's total**
+(`balance + released`) - the wallet is returned by value, so the buyer can `deposit`
+into it, and a deposit of `d` must raise the releasable amount by at most `d` or a
+top-up buys early release. The shipped `vesting_wallet_linear` satisfies this; a
+threshold curve that unlocks everything once the total crosses a level does not. Curve
+selection is the issuer's responsibility, fixed at `create_sale`, not a buyer lever.
+Releases pay into the beneficiary's address balance, so the buyer receives funds
+without holding the wallet.
 
 ## Choosing a sale shape
 
