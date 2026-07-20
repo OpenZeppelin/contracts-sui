@@ -79,6 +79,35 @@ public struct Params has copy, drop, store {
 /// module (its field is module-private), so a protocol that drives
 /// `prefunded_sale::create_sale` directly can build the config itself.
 ///
+/// #### Price envelope
+///
+/// This curve prices every purchase as `allocation = paid * rate` with an integer
+/// `rate >= 1`, so the allocation is never smaller than the payment measured in
+/// smallest units. In human terms, the price of one sale token denominated in
+/// payment coin is `10^(sale_decimals - payment_decimals) / rate`. Two limits
+/// follow, and an integrator must configure `rate` around both:
+///
+/// - Ceiling: `rate` cannot drop below 1, so the price cannot exceed
+///   `10^(sale_decimals - payment_decimals)`. For a sale/payment pair with equal
+///   decimals that ceiling is exactly 1 payment token per sale token.
+/// - Grid: only reciprocal-integer fractions of the ceiling are exact (`1/1`,
+///   `1/2`, `1/3`, ... of it). A price off that grid must be approximated by the
+///   nearest integer `rate`, which misprices every purchase silently, with no
+///   abort and no event.
+///
+/// Worked example (equal decimals, e.g. a token sold against a same-decimal
+/// stablecoin, so the ceiling is 1.00): a 5.00 target is unreachable - it sits
+/// above the ceiling, and the nearest configurable prices are 1.00 (`rate = 1`)
+/// and 0.50 (`rate = 2`). Below the ceiling, 0.20 is exact (`rate = 5`) but 0.30
+/// is not - the nearest are 0.333.. (`rate = 3`) and 0.25 (`rate = 4`).
+///
+/// An integrator needing an off-grid price on a given decimal pairing should not
+/// fork this curve but supply its own: the sale applies the curve-computed
+/// `allocation` verbatim (see `prefunded_sale::mint_quote`), so a custom curve
+/// can compute the allocation directly - e.g. with a widened division and an
+/// explicit rounding mode - and express any price on any decimal pairing, free of
+/// this grid.
+///
 /// #### Parameters
 /// - `rate`: Sale tokens (smallest units) allocated per 1 payment-coin smallest
 ///   unit.
