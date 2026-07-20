@@ -78,8 +78,8 @@ public fun contains_tick(reg: &TickRegistry, tick: u64): bool {
 /// State at an active `tick`.
 ///
 /// #### Aborts
-/// - `EKeyNotFound` if the tick is inactive - gate with `contains_tick`, or discover live
-///   ticks via the navigation ops.
+/// - `sorted_map::EKeyNotFound` if the tick is inactive - gate with `contains_tick`, or discover
+///   live ticks via the navigation ops.
 public fun borrow_tick(reg: &TickRegistry, tick: u64): &TickInfo {
     reg.ticks.borrow!(&tick)
 }
@@ -87,8 +87,9 @@ public fun borrow_tick(reg: &TickRegistry, tick: u64): &TickInfo {
 /// Accumulate fee growth into an active tick in place.
 ///
 /// #### Aborts
-/// - `EKeyNotFound` (from `borrow_mut!`) if the tick is inactive - gate with `contains_tick`.
-/// - Native `u128` overflow if `fee_growth + delta` exceeds `u128::MAX`.
+/// - `sorted_map::EKeyNotFound` (from `borrow_mut!`) if the tick is inactive - gate with
+///   `contains_tick`.
+/// - Arithmetic overflow if `fee_growth + delta` exceeds `u128::MAX`.
 public fun accrue_fees(reg: &mut TickRegistry, tick: u64, delta: u128) {
     let info = reg.ticks.borrow_mut!(&tick);
     info.fee_growth = info.fee_growth + delta;
@@ -144,6 +145,7 @@ public fun ticks_well_formed(reg: &TickRegistry): bool {
     reg.ticks.is_well_formed!()
 }
 
+/// Reconstruct a tick value for test assertions.
 #[test_only]
 public fun new_tick(liquidity_net: u64, fee_growth: u128): TickInfo {
     TickInfo {
