@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_sale`
+
+#### Fixed
+
+- `prefunded_sale`: aligned every abort message and doc comment with the guard that raises it, splitting error codes that conflated two predicates. `pair_refund_vault`'s wrong-cap check now raises a dedicated `EWrongVaultCap` (distinct from `EWrongVault`); `cancel_after_close`'s window check raises `ESaleNotClosed` (distinct from `finalize`'s `ESaleWindowStillOpen`); and the shared `ESoftCapMet` is replaced by `ESoftCapNotSet` and `ESoftCapReached`. `EActivationAfterClose`'s message now reflects its inclusive `now >= closes_at_ms` guard. (#498)
+
 ## 1.5.0 (17-07-2026)
 
 ### `openzeppelin_timelock`
