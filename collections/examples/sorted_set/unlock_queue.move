@@ -1,16 +1,17 @@
-/// Ordered-drain / priority-queue pattern - and the home of the set's `EEmpty` abort.
+/// Ordered-drain / priority-queue pattern - and the home of the set's `sorted_set::EEmpty` abort.
 ///
 /// A `SortedSet<u64>` of unique unlock TIMESTAMPS in a SHARED vesting object, drained
 /// earliest-first. Because the set keeps its keys sorted, the smallest is always at the front
 /// and the largest at the back, so it doubles as a min/max priority queue with O(1) peeks.
 ///
-/// # The one operation that aborts
-/// Every operation this queue uses is total (returns `Option` / `bool` / `vector` / `u64`)
-/// except one: popping an extreme of an EMPTY set - `pop_front` / `pop_back` abort `EEmpty`.
-/// Crucially the set asserts its OWN `EEmpty` (code 0) FIRST, before delegating to the wrapped
-/// map, so the abort surfaces at `openzeppelin_collections::sorted_set` - a consumer's
-/// `#[expected_failure]` must pin that location, NOT the map's. We expose both a guarded drain
-/// (`is_empty` first) and the raw `pop_front`/`pop_back` wrappers so a test can trigger the abort.
+/// # Operations that abort
+/// Most reads and `schedule` are total. `cancel` aborts with `sorted_map::EKeyNotFound` when the
+/// deadline is absent. `process_earliest` and `process_latest` abort with `sorted_set::EEmpty` when
+/// the queue is empty. The set asserts its own `EEmpty` (code 0) before delegating to the wrapped
+/// map. The abort surfaces at `openzeppelin_collections::sorted_set`; consumer
+/// `#[expected_failure]` tests must pin that location, not the map's. Callers can check `is_empty`
+/// before processing; the process functions intentionally expose the raw pop behavior so tests
+/// can trigger the abort.
 ///
 /// `head` / `tail` are the non-aborting counterparts: they PEEK the earliest / latest deadline
 /// as an `Option`, returning `none` on an empty queue instead of aborting.
@@ -46,7 +47,13 @@ public struct UnlockQueue has key {
 
 /// Emitted by `process_earliest` / `process_latest` when a deadline is processed (popped) off
 /// the queue.
-public struct Unlocked has copy, drop { deadline: u64 }
+public struct Unlocked has copy, drop {
+    /// ID of the queue that emitted the event. Creation is permissionless, so consumers bind
+    /// events to one instance by this id.
+    queue_id: ID,
+    /// The processed deadline.
+    deadline: u64,
+}
 
 // === Public Functions ===
 
@@ -96,22 +103,22 @@ public fun is_empty(q: &UnlockQueue): bool {
 /// Pop and process the EARLIEST deadline, returning it.
 ///
 /// #### Aborts
-/// - `EEmpty` if the queue is empty (the set's own, code 0, at
+/// - `sorted_set::EEmpty` if the queue is empty (the set's own, code 0, at
 ///   `location = openzeppelin_collections::sorted_set`) - guard with `is_empty` or peek
 ///   `next_deadline` first.
 public fun process_earliest(q: &mut UnlockQueue): u64 {
     let deadline = q.deadlines.pop_front();
-    event::emit(Unlocked { deadline });
+    event::emit(Unlocked { queue_id: object::id(q), deadline });
     deadline
 }
 
 /// Pop and process the LATEST deadline (the other extreme), returning it.
 ///
 /// #### Aborts
-/// - `EEmpty` if the queue is empty (same as `process_earliest`).
+/// - `sorted_set::EEmpty` if the queue is empty (same as `process_earliest`).
 public fun process_latest(q: &mut UnlockQueue): u64 {
     let deadline = q.deadlines.pop_back();
-    event::emit(Unlocked { deadline });
+    event::emit(Unlocked { queue_id: object::id(q), deadline });
     deadline
 }
 
@@ -121,4 +128,10 @@ public fun process_latest(q: &mut UnlockQueue): u64 {
 #[test_only]
 public fun deadlines_well_formed(q: &UnlockQueue): bool {
     q.deadlines.inner().is_well_formed!()
+}
+
+/// Reconstruct an `Unlocked` event for test assertions.
+#[test_only]
+public fun unlocked_event(queue_id: ID, deadline: u64): Unlocked {
+    Unlocked { queue_id, deadline }
 }

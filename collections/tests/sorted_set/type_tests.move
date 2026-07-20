@@ -57,10 +57,10 @@ fun destroy_empty_on_empty_droppable_set() {
 #[test]
 fun store_only_key_drain_then_destroy_empty() {
     // A store-only key makes SortedSet<NoDropKey> itself store-only - it CANNOT fall out of scope,
-    // so it must be drained then explicitly torn down. Keys leave only via pop_* (each consumed by
-    // ndk_unwrap, since NoDropKey has no `drop`); the emptied set is then closed by destroy_empty -
-    // the ONLY terminal for a non-`drop`-key set. Omitting destroy_empty would not compile, which
-    // is the structural proof that the terminal is load-bearing here.
+    // so it must be drained then explicitly torn down. Keys leave through remove! or pop_* and must
+    // be consumed because NoDropKey has no `drop`; this walkthrough drains in order with pop_front.
+    // The emptied set is then closed by destroy_empty. Omitting it would not compile, which is the
+    // structural proof that the terminal is load-bearing here.
     let mut s = ss::new<u::NoDropKey>();
     u::add_ndk(&mut s, u::ndk(2));
     u::add_ndk(&mut s, u::ndk(1));
@@ -230,7 +230,7 @@ fun pop_returns_bare_key_not_tuple() {
 #[test]
 fun from_keys_macro_depth_compiles() {
     // macro_inlining_headroom pins 3-layer BARE ops in-body; this pins the HEADLINE
-    // 4-layer from_keys expansion (do! -> set upsert -> map upsert_by! -> search!) compiling in a
+    // 4-layer from_keys expansion (fold! -> set upsert -> map upsert_by! -> search!) compiling in a
     // #[test] body directly - both the bare and a _by form - not only via test_util helpers.
     let s = ss::from_keys!(vector[3u64, 1, 2]); // bare 4-layer expansion in-body
     assert_eq!(s.keys(), vector[1u64, 2, 3]);
@@ -247,8 +247,8 @@ fun from_keys_macro_depth_compiles() {
 #[test]
 fun value_conserving_ops_need_nothing_of_key() {
     // K = NoDropKey (store only: no copy, no drop). add/contains/remove and the lifecycle ops all
-    // instantiate - they constrain K with nothing. (upsert/from_keys need drop; the reads need
-    // copy - see the negatives.)
+    // instantiate - they constrain K with nothing. (upsert/from_keys/from_sorted_keys need drop;
+    // the reads need copy - see the negatives.)
     let mut s = ss::new<u::NoDropKey>();
     u::add_ndk(&mut s, u::ndk(20));
     u::add_ndk(&mut s, u::ndk(10));
@@ -267,8 +267,8 @@ fun value_conserving_ops_need_nothing_of_key() {
 #[test]
 fun key_copying_ops_need_copy_not_drop() {
     // K = CopyKey (copy + store, NO drop). head/tail/keys and all navigation/pagination copy keys
-    // out, so `copy` alone suffices - `drop` is not required. `add` also works. (upsert/from_keys
-    // do NOT compile here - see the negatives.)
+    // out, so `copy` alone suffices - `drop` is not required. `add` also works.
+    // (upsert/from_keys/from_sorted_keys do NOT compile here - see the negatives.)
     let mut s = ss::new<u::CopyKey>();
     u::add_ck(&mut s, 10);
     u::add_ck(&mut s, 20);
@@ -290,10 +290,10 @@ fun key_copying_ops_need_copy_not_drop() {
 
 #[test]
 fun key_dropping_ops_need_drop_not_copy() {
-    // K = DropKey (drop + store, NO copy). upsert and from_keys drop a key, so `drop` alone
-    // suffices - `copy` is not required. add/contains/remove also work. (head/tail/keys/navigation
-    // do NOT compile here - see the negatives.) SortedSet<DropKey> is itself `drop`, so it falls
-    // out of scope - no destroy_empty needed.
+    // K = DropKey (drop + store, NO copy). upsert, from_keys, and from_sorted_keys can drop a key,
+    // so `drop` alone suffices - `copy` is not required. add/contains/remove also work.
+    // (head/tail/keys/navigation do NOT compile here - see the negatives.) SortedSet<DropKey> is
+    // itself `drop`, so it falls out of scope - no destroy_empty needed.
     let mut s = ss::new<u::DropKey>();
     assert!(u::ups_dk(&mut s, 10)); // newly added
     assert!(u::ups_dk(&mut s, 20));
@@ -302,10 +302,15 @@ fun key_dropping_ops_need_drop_not_copy() {
     u::add_dk(&mut s, 30); // strict insert
     assert!(u::has_dk(&s, 30));
     u::rem_dk(&mut s, 20);
-    assert!(!u::has_dk(&s, 20) && s.length() == 2);
+    assert!(!u::has_dk(&s, 20));
+    assert_eq!(s.length(), 2);
     // from_keys over a no-copy key de-duplicates (needs drop only, never copy)
     let s2 = u::fromk_dk(vector[3, 1, 2, 1, 3]);
     assert_eq!(s2.length(), 3);
+    // from_sorted_keys has the same minimal `drop` bound and de-duplicates adjacent equals.
+    let s3 = u::from_sorted_dk(vector[1, 1, 2, 3, 3]);
+    assert_eq!(s3.length(), 3);
+    assert!(u::has_dk(&s3, 1) && u::has_dk(&s3, 2) && u::has_dk(&s3, 3));
 }
 
 // ===========================================================================
@@ -326,14 +331,16 @@ fun key_dropping_ops_need_drop_not_copy() {
 //
 // Key abilities are demanded PER-OPERATION. A store-only key (`NoDropKey`: no `copy`, no `drop`)
 // works with everything that needs nothing of K - new/singleton/add_by!/contains_by!/remove_by!
-// (which RETURNS the key)/pop_*/destroy_empty (exercised positively above). Two op families
+// (which RETURNS the key)/pop_*/destroy_empty (exercised positively above). Two ability categories
 // constrain K at the expansion site:
 //     let mut s = ss::new<u::NoDropKey>();
 //     let p = u::ndk(1);
 //     // (a) key-DROPPING ops -> need K: drop. upsert drops the displaced key; from_keys is built
-//     //     on upsert. (add_by! never drops - a duplicate ABORTS; remove_by! RETURNS the key.)
+//     //     on upsert; from_sorted_keys drops adjacent duplicates. (add_by! never drops - a
+//     //     duplicate ABORTS; remove_by! RETURNS the key.)
 //     ss::upsert_by!(&mut s, u::ndk(1), |_, _| true);           // E05001: upsert needs `drop`
 //     let _ = ss::from_keys_by!(vector[u::ndk(1)], |_, _| true); // E05001: from_keys needs `drop`
+//     let _ = ss::from_sorted_keys_by!(vector[u::ndk(1)], |_, _| true); // E05001: needs `drop`
 //     // (b) key-COPYING ops copy a key OUT -> need K: copy. The comparator is irrelevant to this
 //     //     error (the copy is from returning the key), hence the trivial `|_, _| true`:
 //     s.keys(); s.head(); s.tail();                             // E05001: need `copy` (no comparator)
@@ -343,11 +350,14 @@ fun key_dropping_ops_need_drop_not_copy() {
 //     ss::prev_key_by!(&s, &p, |_, _| true);                    // E05001: need `copy`
 //     ss::keys_from_by!(&s, &p, true, 10, |_, _| true);         // E05001: need `copy`
 //
-// upsert's need is specifically `drop`, not `copy`: it fails even for a copy-but-not-`drop` key
-// (`CopyKey`), isolating `drop`, while add_by! and the copy-requiring reads all compile on that
+// These operations need specifically `drop`, not `copy`: they fail even for a copy-but-not-`drop`
+// key (`CopyKey`), isolating `drop`, while add_by! and the copy-requiring reads all compile on that
 // same key (exercised positively above):
 //     let mut sc = ss::new<u::CopyKey>();
 //     ss::upsert_by!(&mut sc, u::copy_key(1), |_, _| true);     // E05001: needs `drop`
+//     let _ = ss::from_keys_by!(vector[u::copy_key(1)], |_, _| true); // E05001: needs `drop`
+//     let _ = ss::from_sorted_keys_by!(vector[u::copy_key(1)], |_, _| true);
+//     // E05001: needs `drop`
 //
 // A bare macro on a non-integer key fails (no built-in `<`); use the _by form:
 //     let mut s = ss::new<address>();
