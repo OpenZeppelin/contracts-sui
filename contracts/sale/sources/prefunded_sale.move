@@ -82,7 +82,7 @@
 ///   cap on the buyer's first purchase and counted down by each payment.
 ///   Configure with `set_per_buyer_cap`.
 /// - **Allowlist (optional).** Switches the sale into compliance-gated
-///   mode: every `purchase` must consume an `AllowEntryCap<SaleCoin>` minted by
+///   mode: every `purchase` must consume an `AllowEntry<SaleCoin>` minted by
 ///   the consumer's compliance module. Configure with
 ///   `enable_allowlist`.
 ///
@@ -178,7 +178,7 @@
 module openzeppelin_sale::prefunded_sale;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
-use openzeppelin_sale::allowlist::{Self, AllowEntryCap, AllowlistAdminCap};
+use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdminCap};
 use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{RefundVault, RefundVaultCap};
 use sui::balance::{Self, Balance};
@@ -270,7 +270,7 @@ const EInsufficientInventory: vector<u8> = "Not enough tokens remain available f
 #[error(code = 15)]
 const EPerBuyerCapExceeded: vector<u8> = "This purchase would exceed the per-buyer limit";
 
-/// A purchase's payment exceeded the consumed `AllowEntryCap`'s non-zero `max_amount`;
+/// A purchase's payment exceeded the consumed `AllowEntry`'s non-zero `max_amount`;
 /// `max_amount == 0` is the "no per-entry cap" sentinel and never triggers this.
 #[error(code = 16)]
 const EPerEntryCapExceeded: vector<u8> =
@@ -295,12 +295,12 @@ const ESaleAlreadyComplete: vector<u8> =
 
 // Allowlist coupling
 
-/// The sale requires an `AllowEntryCap` but `purchase` was called without one.
+/// The sale requires an `AllowEntry` but `purchase` was called without one.
 #[error(code = 20)]
 const EAllowlistRequired: vector<u8> =
     "This sale requires an allowlist entry, but none was provided";
 
-/// The sale does not require an `AllowEntryCap` but `purchase` was given one.
+/// The sale does not require an `AllowEntry` but `purchase` was given one.
 #[error(code = 21)]
 const EAllowlistNotRequired: vector<u8> =
     "This sale does not use an allowlist, but an entry was provided";
@@ -961,7 +961,7 @@ public fun pair_refund_vault<
 
 /// Switch the sale into compliance-gated mode and issue the single
 /// `AllowlistAdminCap<SaleCoin>`. The caller wraps the admin inside the compliance
-/// module of their choice. After this, every `purchase` must consume an `AllowEntryCap`.
+/// module of their choice. After this, every `purchase` must consume an `AllowEntry`.
 ///
 /// One-shot: a second admin would let two compliance modules mint entries
 /// independently for the same sale, defeating the gating.
@@ -1209,7 +1209,7 @@ public fun purchase<
         VestingScheduleParams,
     >,
     quote: Quote<PaymentCoin>,
-    allow: Option<AllowEntryCap<SaleCoin>>,
+    allow: Option<AllowEntry<SaleCoin>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -2112,7 +2112,7 @@ public fun closes_at_ms<
     sale.closes_at_ms
 }
 
-/// Whether purchases require an `AllowEntryCap` (allowlist mode).
+/// Whether purchases require an `AllowEntry` (allowlist mode).
 ///
 /// #### Parameters
 /// - `sale`: The sale to query.

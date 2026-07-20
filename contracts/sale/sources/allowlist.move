@@ -7,7 +7,7 @@
 /// - `AllowlistAdminCap<S>` - owned capability. Held by the consumer's
 ///   compliance module (KYC contract, tier-checker, merkle verifier,
 ///   etc.). The sale issues exactly one per `enable_allowlist` call.
-/// - `AllowEntryCap<S>` - single-use compliance ticket. Has **no
+/// - `AllowEntry<S>` - single-use compliance ticket. Has **no
 ///   abilities**, so it cannot be stored, copied, replayed, or
 ///   transferred. The compliance module mints an entry for a verified
 ///   buyer; the sale's `purchase` consumes it in the same PTB.
@@ -21,14 +21,14 @@
 /// 3. Compliance module exposes a buyer-facing `mint_entry`-like
 ///    function that runs whatever checks it requires (KYC table lookup,
 ///    merkle proof, tier verification) and, on success, calls
-///    `allowlist::new_entry` to mint an `AllowEntryCap<S>`.
+///    `allowlist::new_entry` to mint an `AllowEntry<S>`.
 /// 4. Buyer threads `purchase` and `mint_entry` into the same PTB. The
 ///    sale's `purchase` consumes the entry, asserting it was issued for
 ///    this sale and for this buyer.
 ///
 /// ### Hot-potato guarantees
 ///
-/// Because `AllowEntryCap<S>` has no abilities:
+/// Because `AllowEntry<S>` has no abilities:
 ///
 /// - It cannot be saved across transactions (no `key`/`store`).
 /// - It cannot be cloned (no `copy`).
@@ -52,12 +52,12 @@ module openzeppelin_sale::allowlist;
 
 // === Errors ===
 
-/// The consumed `AllowEntryCap` was issued for a different sale than the one
+/// The consumed `AllowEntry` was issued for a different sale than the one
 /// consuming it.
 #[error(code = 0)]
 const EWrongSaleId: vector<u8> = "This allowlist entry was issued for a different sale";
 
-/// The consumed `AllowEntryCap`'s `buyer` does not match the transaction sender.
+/// The consumed `AllowEntry`'s `buyer` does not match the transaction sender.
 #[error(code = 1)]
 const EWrongBuyer: vector<u8> = "This allowlist entry was issued for a different buyer";
 
@@ -69,7 +69,7 @@ const EWrongBuyer: vector<u8> = "This allowlist entry was issued for a different
 /// Fields are not exposed; the integrator's compliance module
 /// constructs entries via `new_entry`, and the sale module consumes
 /// them via the package-internal `consume`.
-public struct AllowEntryCap<phantom S> {
+public struct AllowEntry<phantom S> {
     /// Id of the sale this entry authorizes a purchase on.
     sale_id: ID,
     /// Address allowed to use this entry; must match the purchase sender.
@@ -78,7 +78,7 @@ public struct AllowEntryCap<phantom S> {
     max_amount: u64,
 }
 
-/// Authority to mint `AllowEntryCap<S>` for a specific sale. Owned and
+/// Authority to mint `AllowEntry<S>` for a specific sale. Owned and
 /// transferable so the consumer can wrap it inside their own
 /// access-controlled compliance module.
 public struct AllowlistAdminCap<phantom S> has key, store {
@@ -105,13 +105,13 @@ public struct AllowlistAdminCap<phantom S> has key, store {
 ///   own per-buyer cap, if configured, still applies).
 ///
 /// #### Returns
-/// - A single-use `AllowEntryCap<S>` bound to `admin`'s sale and to `buyer`.
+/// - A single-use `AllowEntry<S>` bound to `admin`'s sale and to `buyer`.
 public fun new_entry<S>(
     admin: &AllowlistAdminCap<S>,
     buyer: address,
     max_amount: u64,
-): AllowEntryCap<S> {
-    AllowEntryCap<S> {
+): AllowEntry<S> {
+    AllowEntry<S> {
         sale_id: admin.sale_id,
         buyer,
         max_amount,
@@ -157,7 +157,7 @@ public(package) fun new_admin<S>(sale_id: ID, ctx: &mut TxContext): AllowlistAdm
 /// sale flavor's `purchase` calls this.
 ///
 /// #### Parameters
-/// - `entry`: The `AllowEntryCap<S>` to consume (destroyed by this call).
+/// - `entry`: The `AllowEntry<S>` to consume (destroyed by this call).
 /// - `expected_sale_id`: The id of the consuming sale.
 /// - `expected_buyer`: The transaction sender performing the purchase.
 ///
@@ -169,11 +169,11 @@ public(package) fun new_admin<S>(sale_id: ID, ctx: &mut TxContext): AllowlistAdm
 /// - `EWrongSaleId` if `entry.sale_id != expected_sale_id`.
 /// - `EWrongBuyer` if `entry.buyer != expected_buyer`.
 public(package) fun consume<S>(
-    entry: AllowEntryCap<S>,
+    entry: AllowEntry<S>,
     expected_sale_id: ID,
     expected_buyer: address,
 ): u64 {
-    let AllowEntryCap { sale_id, buyer, max_amount } = entry;
+    let AllowEntry { sale_id, buyer, max_amount } = entry;
     assert!(sale_id == expected_sale_id, EWrongSaleId);
     assert!(buyer == expected_buyer, EWrongBuyer);
     max_amount

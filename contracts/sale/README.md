@@ -44,7 +44,7 @@ are supporting types you will see in signatures.
 | [`prefunded_sale`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#prefunded_sale) | The sale itself. Create + configure (Init), `share_and_activate`, `purchase`, close (`finalize` / `cancel_*`), and redeem (`claim*` / `refund` / `withdraw_*`). **Start here.** |
 | [`fixed_rate_curve`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#fixed_rate_curve) | The built-in pricing curve: `allocation = paid * rate`, fixed for the whole sale. Mints the `Quote` and `ActivationTicket` a `FixedRateCurve` sale needs. **Most sales use this.** |
 | [`refund_vault`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#refund_vault) | A generic, cap-gated refundable escrow over `Balance<P>`. Every sale is paired with one; on cancel it holds the proceeds, and each buyer recovers their payment through the sale's `Receipt`-authorized `refund` (the vault itself keeps no per-depositor ledger). Usable standalone. |
-| [`allowlist`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#allowlist) | A typed compliance slot (`AllowlistAdminCap` + single-use `AllowEntryCap`). The library ships **no** KYC logic - you wire your own scheme against these types. |
+| [`allowlist`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#allowlist) | A typed compliance slot (`AllowlistAdminCap` + single-use `AllowEntry`). The library ships **no** KYC logic - you wire your own scheme against these types. |
 | [`receipt`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#receipt) | The non-transferable, buyer-bound claim ticket minted by `purchase` and consumed by `claim` / `refund`. |
 
 ## Key Concepts
@@ -83,7 +83,7 @@ by no other code - the curve is first-party, trusted, and audited alongside the 
 > sell out before the hard cap). Treat any custom curve as security-critical and audit
 > it with the sale. The provided `fixed_rate_curve` is honest by construction.
 
-### Hot potatoes: `Quote` and `AllowEntryCap`
+### Hot potatoes: `Quote` and `AllowEntry`
 
 Two carrier types have **no abilities** - they cannot be stored, copied, transferred,
 or dropped, so they must be minted and consumed **in the same transaction (PTB)**:
@@ -92,7 +92,7 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
   curve-computed allocation. The curve module's `quote(...)` mints it; the sale's
   `purchase(...)` is its only legal consumer. Pricing and funds stay welded together
   and cannot be replayed across transactions.
-- **`AllowEntryCap<SaleCoin>`** - a single-use compliance ticket (allowlist sales only).
+- **`AllowEntry<SaleCoin>`** - a single-use compliance ticket (allowlist sales only).
   Your compliance module mints one per approved buyer; `purchase` consumes it,
   asserting it was issued for *this* sale and *this* buyer. No warehousing, no replay.
 
@@ -185,7 +185,7 @@ Four orthogonal, independent configuration axes:
 - **Per-buyer cap (optional).** Cumulative cap on a single buyer's total payment.
   Configure with `set_per_buyer_cap`.
 - **Allowlist (optional).** Compliance-gated mode: every `purchase` must consume an
-  `AllowEntryCap`. Configure with `enable_allowlist`.
+  `AllowEntry`. Configure with `enable_allowlist`.
 
 The three shapes a fixed-price sale typically takes:
 
@@ -367,10 +367,10 @@ const quote = tx.moveCall({
   arguments: [tx.object(SALE_ID), payBalance],
 });
 
-// 3. allow = option::none<AllowEntryCap<SALE>>() for a non-allowlist sale.
+// 3. allow = option::none<AllowEntry<SALE>>() for a non-allowlist sale.
 const noEntry = tx.moveCall({
   target: '0x1::option::none',
-  typeArguments: [`${PKG}::allowlist::AllowEntryCap<${SALE}>`],
+  typeArguments: [`${PKG}::allowlist::AllowEntry<${SALE}>`],
   arguments: [],
 });
 
@@ -383,7 +383,7 @@ tx.moveCall({
 ```
 
 For an **allowlist** sale, replace step 3 with a call into your compliance module's
-mint function (which returns an `AllowEntryCap`) and thread that into `purchase` - minted
+mint function (which returns an `AllowEntry`) and thread that into `purchase` - minted
 and consumed in the same PTB.
 
 `claim`, `refund`, `withdraw_proceeds`, and `withdraw_unsold_inventory` all return a
