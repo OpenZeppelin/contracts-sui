@@ -432,10 +432,20 @@ in a wallet.
 > Integration examples are illustrations of how the primitive can be wired up, **not**
 > production-ready code.
 
+Complete integration examples live in [`examples/prefunded_sale/`](examples/prefunded_sale):
+
+- [`kyc_registry`](examples/prefunded_sale/kyc_registry.move) - the **compliance-gated
+  strategic round** pattern: a shared KYC allowlist that wraps the sale's
+  `AllowlistAdmin`, gates entry minting on a membership check, and lets a cleared buyer
+  self-serve their single-use `AllowEntry` inside the purchase PTB - the concrete wiring
+  for the `allowlist` slot the library ships no logic for. The
+  [tests](examples/prefunded_sale/tests/kyc_registry_tests.move) drive the full strategic
+  round end to end: KYC approval, a per-buyer-capped purchase, `finalize`, and redemption
+  into a vesting wallet, plus the soft-cap-miss refund path.
+
 The full unit suite under [`tests/`](tests) doubles as an executable specification -
 `test_utils.move` shows the canonical `Init -> Active` setup, and the thematic files
-exercise every purchase, close, redemption, and failure path. Standalone integration
-examples will live in [`examples/`](examples).
+exercise every purchase, close, redemption, and failure path.
 
 ## Learn More
 
