@@ -44,7 +44,7 @@ are supporting types you will see in signatures.
 | [`prefunded_sale`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#prefunded_sale) | The sale itself. Create + configure (Init), `share_and_activate`, `purchase`, close (`finalize` / `cancel_*`), and redeem (`claim*` / `refund` / `withdraw_*`). **Start here.** |
 | [`fixed_rate_curve`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#fixed_rate_curve) | The built-in pricing curve: `allocation = paid * rate`, fixed for the whole sale. Mints the `Quote` and `ActivationTicket` a `FixedRateCurve` sale needs. **Most sales use this.** |
 | [`refund_vault`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#refund_vault) | A generic, cap-gated refundable escrow over `Balance<P>`. Every sale is paired with one; on cancel it holds the proceeds, and each buyer recovers their payment through the sale's `Receipt`-authorized `refund` (the vault itself keeps no per-depositor ledger). Usable standalone. |
-| [`allowlist`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#allowlist) | A typed compliance slot (`AllowlistAdmin` + single-use `AllowEntry`). The library ships **no** KYC logic - you wire your own scheme against these types. |
+| [`allowlist`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#allowlist) | A typed compliance slot (`AllowlistAdminCap` + single-use `AllowEntry`). The library ships **no** KYC logic - you wire your own scheme against these types. |
 | [`receipt`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#receipt) | The non-transferable, buyer-bound claim ticket minted by `purchase` and consumed by `claim` / `refund`. |
 
 ## Key Concepts
@@ -399,7 +399,7 @@ in a wallet.
 | Activating with under-provisioned inventory | Aborts (`EInsufficientInventoryAtActivate`) | Deposit `≥ hard_cap * rate` before activating (the curve's `activation_ticket` computes the requirement). |
 | Plain `claim` on a vesting sale (or `claim_into_vesting` on a non-vesting sale) | Aborts (`EClaimRequiresVesting` / `ENoVestingScheduleAttached`) | Match the redemption path to whether a schedule is attached. |
 | Buying then redeeming from a different wallet | Aborts (`EBuyerOnly`) | Redeem from the purchasing address - receipts are buyer-bound. |
-| Losing the `AllowlistAdmin` of an allowlist sale | No entries can be minted -> every `purchase` aborts | Hold caps in a recoverable RBAC / multisig wrapper. |
+| Losing the `AllowlistAdminCap` of an allowlist sale | No entries can be minted -> every `purchase` aborts | Hold caps in a recoverable RBAC / multisig wrapper. |
 
 ## Security Notes
 
@@ -423,7 +423,7 @@ in a wallet.
   keeps its allocation pinned in inventory (Finalized) or its payment locked in the
   vault (Cancelled) indefinitely. This is buyer-protective by design.
 - **Lost caps are unrecoverable by the library** (no centralization override). A lost
-  `AllowlistAdmin` bricks purchases on an allowlist sale. Hold every cap in an
+  `AllowlistAdminCap` bricks purchases on an allowlist sale. Hold every cap in an
   access-controlled wrapper.
 
 ## Examples

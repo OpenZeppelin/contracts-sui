@@ -457,10 +457,13 @@ fun refund_returns_paid_and_draws_vault() {
             0, // total_allocated_after
         ),
     );
-    // refund releases the payment out of the vault (VaultRelease 300, nothing left).
-    let releases = event::events_by_type<refund_vault::VaultRelease<USDC>>();
+    // refund releases the payment out of the vault (VaultReleased 300, nothing left).
+    let releases = event::events_by_type<refund_vault::VaultReleased<USDC>>();
     assert_eq!(releases.length(), 1);
-    assert_eq!(releases[0], refund_vault::test_new_vault_release<USDC>(object::id(&vault), 300, 0));
+    assert_eq!(
+        releases[0],
+        refund_vault::test_new_vault_released<USDC>(object::id(&vault), 300, 0),
+    );
     destroy(payment);
     u::return_sale(sale);
     u::return_vault(vault);
@@ -596,7 +599,7 @@ fun refund_all_sums_receipts() {
             0, // total_allocated_after
         ),
     );
-    let releases = event::events_by_type<refund_vault::VaultRelease<USDC>>();
+    let releases = event::events_by_type<refund_vault::VaultReleased<USDC>>();
     assert_eq!(releases.length(), 2);
     destroy(payment);
     u::return_sale(sale);

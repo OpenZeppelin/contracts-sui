@@ -9,7 +9,7 @@
 module openzeppelin_sale::prefunded_sale_purchase_tests;
 
 use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
-use openzeppelin_sale::allowlist::{Self, AllowlistAdmin};
+use openzeppelin_sale::allowlist::{Self, AllowlistAdminCap};
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
 use openzeppelin_sale::receipt::Receipt;
@@ -60,7 +60,7 @@ fun buy_with_entry(
     paid: u64,
     clk: &Clock,
 ) {
-    let admin = test.take_from_address<AllowlistAdmin<SALE>>(u::admin());
+    let admin = test.take_from_address<AllowlistAdminCap<SALE>>(u::admin());
     let entry = admin.new_entry(buyer, max_amount);
     let quote = fixed_rate_curve::quote(sale, u::pay_balance(paid));
     sale.purchase(quote, option::some(entry), clk, test.ctx());

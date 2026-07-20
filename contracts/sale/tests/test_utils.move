@@ -86,7 +86,7 @@ public fun create_and_activate(
 }
 
 /// As `create_and_activate` but with explicit window bounds and an allowlist
-/// toggle. When `with_allowlist` is true the issued `AllowlistAdmin` is sent to
+/// toggle. When `with_allowlist` is true the issued `AllowlistAdminCap` is sent to
 /// `ADMIN` for the test to take and drive.
 public fun create_and_activate_full(
     test: &mut Scenario,

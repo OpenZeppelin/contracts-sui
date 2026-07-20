@@ -4,7 +4,7 @@
 /// defines the two types that integrators wire their own compliance
 /// scheme against:
 ///
-/// - `AllowlistAdmin<S>` - owned capability. Held by the consumer's
+/// - `AllowlistAdminCap<S>` - owned capability. Held by the consumer's
 ///   compliance module (KYC contract, tier-checker, merkle verifier,
 ///   etc.). The sale issues exactly one per `enable_allowlist` call.
 /// - `AllowEntry<S>` - single-use compliance ticket. Has **no
@@ -14,7 +14,7 @@
 ///
 /// ### Bootstrap shape
 ///
-/// 1. Sale module creates an `AllowlistAdmin<S>` via the sale flavor's
+/// 1. Sale module creates an `AllowlistAdminCap<S>` via the sale flavor's
 ///    `enable_allowlist`. The admin is returned to the caller.
 /// 2. Caller transfers the admin to a compliance module (typically a
 ///    shared object that owns the admin via a wrapping struct).
@@ -41,7 +41,7 @@
 ///
 /// ### Footgun
 ///
-/// If the consumer loses the `AllowlistAdmin<S>` (sends to a
+/// If the consumer loses the `AllowlistAdminCap<S>` (sends to a
 /// non-existent address, transfers to `0x0`, etc.), the sale becomes
 /// uncompletable: no entries can be minted, and any sale that has
 /// `requires_allowlist == true` aborts every `purchase` call. There is
@@ -81,7 +81,7 @@ public struct AllowEntry<phantom S> {
 /// Authority to mint `AllowEntry<S>` for a specific sale. Owned and
 /// transferable so the consumer can wrap it inside their own
 /// access-controlled compliance module.
-public struct AllowlistAdmin<phantom S> has key, store {
+public struct AllowlistAdminCap<phantom S> has key, store {
     id: UID,
     /// Id of the sale this admin gates entries for.
     sale_id: ID,
@@ -98,7 +98,7 @@ public struct AllowlistAdmin<phantom S> has key, store {
 /// right knob.
 ///
 /// #### Parameters
-/// - `admin`: The `AllowlistAdmin<S>` previously issued for the sale.
+/// - `admin`: The `AllowlistAdminCap<S>` previously issued for the sale.
 /// - `buyer`: The address that will perform the purchase. Must equal `ctx.sender()`
 ///   at `purchase` time - the sale asserts this.
 /// - `max_amount`: Per-entry payment cap. `0` means "no per-entry cap" (the sale's
@@ -106,7 +106,11 @@ public struct AllowlistAdmin<phantom S> has key, store {
 ///
 /// #### Returns
 /// - A single-use `AllowEntry<S>` bound to `admin`'s sale and to `buyer`.
-public fun new_entry<S>(admin: &AllowlistAdmin<S>, buyer: address, max_amount: u64): AllowEntry<S> {
+public fun new_entry<S>(
+    admin: &AllowlistAdminCap<S>,
+    buyer: address,
+    max_amount: u64,
+): AllowEntry<S> {
     AllowEntry<S> {
         sale_id: admin.sale_id,
         buyer,
@@ -123,7 +127,7 @@ public fun new_entry<S>(admin: &AllowlistAdmin<S>, buyer: address, max_amount: u
 ///
 /// #### Returns
 /// - The bound sale's id.
-public fun admin_sale_id<S>(admin: &AllowlistAdmin<S>): ID { admin.sale_id }
+public fun admin_sale_id<S>(admin: &AllowlistAdminCap<S>): ID { admin.sale_id }
 
 // === Package Functions ===
 
@@ -134,7 +138,7 @@ public fun admin_sale_id<S>(admin: &AllowlistAdmin<S>): ID { admin.sale_id }
 // and is one-shot on the sale side: a second `enable_allowlist` aborts
 // with `EAllowlistAlreadyEnabled`.
 
-/// Issue the single `AllowlistAdmin<S>` for a sale. Called once by the sale flavor's
+/// Issue the single `AllowlistAdminCap<S>` for a sale. Called once by the sale flavor's
 /// `enable_allowlist`.
 ///
 /// #### Parameters
@@ -142,9 +146,9 @@ public fun admin_sale_id<S>(admin: &AllowlistAdmin<S>): ID { admin.sale_id }
 /// - `ctx`: Transaction context, used to allocate the admin's `UID`.
 ///
 /// #### Returns
-/// - A fresh `AllowlistAdmin<S>` bound to `sale_id`.
-public(package) fun new_admin<S>(sale_id: ID, ctx: &mut TxContext): AllowlistAdmin<S> {
-    AllowlistAdmin<S> { id: object::new(ctx), sale_id }
+/// - A fresh `AllowlistAdminCap<S>` bound to `sale_id`.
+public(package) fun new_admin<S>(sale_id: ID, ctx: &mut TxContext): AllowlistAdminCap<S> {
+    AllowlistAdminCap<S> { id: object::new(ctx), sale_id }
 }
 
 // === Sale consumes entries ===
