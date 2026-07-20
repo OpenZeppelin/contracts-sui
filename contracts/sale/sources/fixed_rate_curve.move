@@ -102,6 +102,8 @@ public fun params(rate: u64): Params {
 ///
 /// #### Aborts
 /// - `ERequiredInventoryOverflow` if `hard_cap * rate` would exceed `u64::MAX`.
+/// - `prefunded_sale::ENotInit` if the sale is not in `Init` phase; ticket minting is
+///   only permitted during setup.
 public fun activation_ticket<
     SaleCoin,
     PaymentCoin,
