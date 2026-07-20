@@ -2327,7 +2327,7 @@ public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> {
 public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
 
 /// Read the `required_inventory` an `ActivationTicket` carries.
-public fun test_required_inventory<Curve: drop>(ticket: &ActivationTicket<Curve>): u64 {
+public fun required_inventory<Curve: drop>(ticket: &ActivationTicket<Curve>): u64 {
     ticket.required_inventory
 }
 
