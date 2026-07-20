@@ -743,6 +743,57 @@ fun activate_with_foreign_ticket_aborts() {
     abort
 }
 
+// share_and_activate's own ENotInit guard - the load-bearing check that a terminal
+// sale cannot be reset to Active. Two tickets are minted while the sale is in Init
+// (the only phase mint permits); the first activates it, a hard-cap purchase then lets
+// it finalize *early, in-window*, and the finalized sale is taken back by value and
+// re-passed with the second ticket. The ticket matches, a vault is paired, it is the
+// right vault, and the window is still open - every guard except the phase check passes,
+// so only ENotInit stops the reset that would brick the sale.
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
+fun reactivate_finalized_sale_aborts() {
+    let (mut test, clk) = u::setup();
+
+    // Init: build the sale and mint both tickets before activating with the first.
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        u::opens(),
+        u::closes(),
+        test.ctx(),
+    );
+    sale.deposit(u::sale_balance(1_000));
+    let (vault, vault_cap) = refund_vault::new<USDC>(test.ctx());
+    sale.pair_refund_vault(&vault, vault_cap);
+    let ticket1 = fixed_rate_curve::activation_ticket(&sale);
+    let ticket2 = fixed_rate_curve::activation_ticket(&sale); // held for the reactivation attempt
+    sale.share_and_activate(vault, ticket1, &clk);
+    transfer::public_transfer(cap, u::admin());
+
+    // Buy out the hard cap so the sale can finalize early, still inside the window.
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 1_000, &clk, test.ctx());
+    u::return_sale(sale);
+
+    // Finalize in-window (hard cap reached), then re-pass the now-terminal sale by value.
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    sale.finalize(&mut vault, &clk);
+    assert!(sale.is_finalized());
+    sale.share_and_activate(vault, ticket2, &clk); // aborts: ENotInit
+    abort
+}
+
 // === Setup event emission (happy paths) ===
 
 // set_per_buyer_cap happy path: there is no state getter for the cap, so the
