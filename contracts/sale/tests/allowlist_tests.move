@@ -1,6 +1,6 @@
 // Allowlist compliance-slot tests.
 //
-// `AllowEntry<S>` is a single-use, no-ability ticket: minted by the compliance
+// `AllowEntryCap<S>` is a single-use, no-ability ticket: minted by the compliance
 // module (gated by `AllowlistAdminCap<S>`), consumed once by the sale's `purchase`
 // with its sale_id + buyer asserted. The single-PTB consume coupling
 // and the symmetric allowlist gate are exercised end-to-end in
