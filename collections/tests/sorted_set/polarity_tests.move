@@ -8,10 +8,11 @@
 /// catches it. These tests assert both directions explicitly and cross-check every bool against
 /// `contains!` before/after.
 ///
-/// `remove!` has no bool to invert - it returns nothing and ABORTS on an absent key (the
+/// `remove!` has no bool to invert - it returns the removed key and ABORTS on an absent key (the
 /// abort itself is pinned in `abort_tests`). What can still silently break is DELEGATION: a
-/// wrapper that drops the wrong element, or none at all, still type-checks. So the remove tests
-/// here assert the EFFECT (the `contains!` flip and the length/keys delta) on every position.
+/// wrapper that returns the wrong element, or removes none at all, can still type-check. So the
+/// remove tests here intentionally discard each droppable `u64` return and assert the EFFECT (the
+/// `contains!` flip and the length/keys delta) on every position.
 module openzeppelin_collections::sorted_set_polarity_tests;
 
 use openzeppelin_collections::sorted_set as ss;
@@ -105,7 +106,8 @@ fun polarity_counters_over_sequence() {
     // deliberately ASYMMETRIC so the counter can be hit ONLY under correct polarity - an inverted
     // projection changes the total, not just which call in a pair returns true. (A symmetric
     // fresh/duplicate split would be inversion-invariant and thus vacuous.) The remove half then
-    // drains a present cohort and pins the exact length delta by EFFECT (remove! has no bool).
+    // drains a present cohort and pins the exact length delta by EFFECT (`remove!` returns the
+    // removed key, not a bool; these droppable `u64` returns are intentionally discarded).
     let mut s = ss::new<u64>();
     let mut true_inserts = 0u64;
 
