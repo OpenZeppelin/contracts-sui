@@ -108,7 +108,7 @@ public fun create_and_activate_full(
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(rate),
+        fixed_rate_curve::params(rate, 1),
         hard_cap,
         soft_cap,
         opens_at_ms,

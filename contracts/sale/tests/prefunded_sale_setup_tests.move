@@ -29,7 +29,7 @@ fun create_sale_rejects_zero_hard_cap() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         0,
         0,
         1_000,
@@ -51,7 +51,7 @@ fun create_sale_rejects_soft_cap_above_hard() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         100,
         101,
         1_000,
@@ -73,7 +73,7 @@ fun create_sale_rejects_inverted_time_range() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         100,
         0,
         5_000,
@@ -96,7 +96,7 @@ fun create_sale_initializes_in_init_phase() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(2),
+        fixed_rate_curve::params(2, 1),
         1_000,
         500,
         1_000,
@@ -124,7 +124,7 @@ fun create_sale_initializes_in_init_phase() {
             500,
             1_000,
             5_000,
-            fixed_rate_curve::params(2),
+            fixed_rate_curve::params(2, 1),
         ),
     );
 
@@ -146,7 +146,7 @@ fun deposit_accumulates_inventory() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -201,7 +201,7 @@ fun set_per_buyer_cap_rejects_zero() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -224,7 +224,7 @@ fun set_per_buyer_cap_twice_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -262,7 +262,7 @@ fun set_vesting_schedule_params_fills_option() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -299,7 +299,7 @@ fun set_vesting_schedule_params_twice_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -338,7 +338,7 @@ fun pair_rejects_nonempty_vault() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -364,7 +364,7 @@ fun pair_rejects_mismatched_cap() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -390,7 +390,7 @@ fun pair_rejects_inactive_vault() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -416,7 +416,7 @@ fun pair_twice_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -458,7 +458,7 @@ fun enable_allowlist_twice_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -500,7 +500,7 @@ fun activate_without_vault_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -531,7 +531,7 @@ fun activate_with_wrong_vault_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -547,7 +547,7 @@ fun activate_with_wrong_vault_aborts() {
     abort
 }
 
-// Activation rejects inventory below `hard_cap * rate`.
+// Activation rejects inventory below `hard_cap * rate_numerator / rate_denominator`.
 #[test, expected_failure(abort_code = prefunded_sale::EInsufficientInventoryAtActivate)]
 fun activate_insufficient_inventory_aborts() {
     let mut test = ts::begin(u::admin());
@@ -562,7 +562,7 @@ fun activate_insufficient_inventory_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(2), // requires hard_cap * 2 = 2_000
+        fixed_rate_curve::params(2, 1), // requires hard_cap * 2 = 2_000
         1_000,
         0,
         1_000,
@@ -577,7 +577,7 @@ fun activate_insufficient_inventory_aborts() {
     abort
 }
 
-// Boundary: inventory exactly equal to `hard_cap * rate` activates.
+// Boundary: inventory exactly equal to `hard_cap * rate_numerator / rate_denominator` activates.
 #[test]
 fun activate_at_exact_required_inventory_ok() {
     let (mut test, clk) = u::setup();
@@ -608,7 +608,7 @@ fun activate_after_close_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -642,7 +642,7 @@ fun activate_with_foreign_ticket_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -662,7 +662,7 @@ fun activate_with_foreign_ticket_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -690,7 +690,7 @@ fun set_per_buyer_cap_emits_event() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -721,7 +721,7 @@ fun enable_allowlist_emits_event() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,
@@ -761,7 +761,7 @@ fun share_and_activate_emits_pairing_and_activation_events() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         1_000,

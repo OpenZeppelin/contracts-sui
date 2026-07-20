@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_sale`
+
+#### Changed (Breaking)
+
+- `fixed_rate_curve`: the rate is now a fraction. `params` takes `(rate_numerator, rate_denominator)` and prices each purchase as `allocation = paid * rate_numerator / rate_denominator` (widened and floored), removing the old integer-rate price ceiling and grid so a sale can express any price on any decimal pairing. `rate` now returns `(numerator, denominator)`. Adds `EDenominatorZero`.   (#487)
+
 ## 1.5.0 (17-07-2026)
 
 ### `openzeppelin_timelock`

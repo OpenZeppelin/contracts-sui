@@ -34,7 +34,7 @@ fun setup_with_per_buyer_cap(test: &mut Scenario, clk: &Clock, per_buyer: u64) {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         u::opens(),
@@ -384,7 +384,7 @@ fun purchase_with_foreign_quote_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         u::opens(),

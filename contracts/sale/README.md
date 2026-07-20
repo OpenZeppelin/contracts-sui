@@ -12,7 +12,7 @@ anti-whale public rounds, and compliance-gated strategic rounds.
 
 Pricing is not baked in. The sale is generic over a **witness-gated curve module**
 that computes each buyer's allocation; a built-in **fixed-rate curve**
-(`allocation = paid * rate`) covers the common case, and the seam is open for custom
+(`allocation = paid * rate_numerator / rate_denominator`) covers the common case, and the seam is open for custom
 curves. The sale never holds a `TreasuryCap` - it only ever routes the inventory and
 payments deposited into it.
 
@@ -42,7 +42,7 @@ are supporting types you will see in signatures.
 | Module | What it is |
 | --- | --- |
 | [`prefunded_sale`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#prefunded_sale) | The sale itself. Create + configure (Init), `share_and_activate`, `purchase`, close (`finalize` / `cancel_*`), and redeem (`claim*` / `refund` / `withdraw_*`). **Start here.** |
-| [`fixed_rate_curve`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#fixed_rate_curve) | The built-in pricing curve: `allocation = paid * rate`, fixed for the whole sale. Mints the `Quote` and `ActivationTicket` a `FixedRateCurve` sale needs. **Most sales use this.** |
+| [`fixed_rate_curve`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#fixed_rate_curve) | The built-in pricing curve: `allocation = paid * rate_numerator / rate_denominator`, fixed for the whole sale. Mints the `Quote` and `ActivationTicket` a `FixedRateCurve` sale needs. **Most sales use this.** |
 | [`refund_vault`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#refund_vault) | A generic refundable escrow over `Balance<P>`. Every sale is paired with one; on cancel it holds the proceeds and pays buyers back individually. Usable standalone. |
 | [`allowlist`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#allowlist) | A typed compliance slot (`AllowlistAdmin` + single-use `AllowEntry`). The library ships **no** KYC logic - you wire your own scheme against these types. |
 | [`receipt`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#receipt) | The non-transferable, buyer-bound claim ticket minted by `purchase` and consumed by `claim` / `refund`. |
@@ -207,7 +207,8 @@ use sui::coin::Coin;
 /// Create a capped public round and hand the shared sale + vault to the world.
 public fun launch(
     inventory: Coin<SALE>,    // pre-acquired sale tokens
-    rate: u64,                // SALE smallest-units per 1 USDC smallest-unit
+    rate_numerator: u64,      // allocation = paid * rate_numerator / rate_denominator
+    rate_denominator: u64,    // e.g. (10, 3) prices SALE at 0.30 USDC on an equal-decimal pair
     hard_cap: u64,
     soft_cap: u64,            // 0 = none
     per_buyer_cap: u64,
@@ -220,7 +221,7 @@ public fun launch(
     let (mut sale, admin_cap) = prefunded_sale::create_sale<
         FixedRateCurve, FrcParams, SALE, USDC, Linear, VParams,
     >(
-        fixed_rate_curve::params(rate),
+        fixed_rate_curve::params(rate_numerator, rate_denominator),
         hard_cap,
         soft_cap,
         opens_at_ms,
@@ -380,7 +381,7 @@ in a wallet.
 | --- | --- | --- |
 | Configuring (deposit / caps / allowlist / vesting) after `share_and_activate` | Aborts (`ENotInit`) | Do all setup in `Init`, before activating. |
 | Pairing a vault that already holds funds, or is shared/closed | Aborts (`EVaultNotEmpty` / `EVaultNotActive`) | Pair a fresh, empty `Active` vault, then `share` it after activation. |
-| Activating with under-provisioned inventory | Aborts (`EInsufficientInventoryAtActivate`) | Deposit `≥ hard_cap * rate` before activating (the curve's `activation_ticket` computes the requirement). |
+| Activating with under-provisioned inventory | Aborts (`EInsufficientInventoryAtActivate`) | Deposit `≥ hard_cap * rate_numerator / rate_denominator` before activating (the curve's `activation_ticket` computes the requirement). |
 | Plain `claim` on a vesting sale (or `claim_into_vesting` on a non-vesting sale) | Aborts (`EClaimRequiresVesting` / `ENoVestingScheduleAttached`) | Match the redemption path to whether a schedule is attached. |
 | Buying then redeeming from a different wallet | Aborts (`EBuyerOnly`) | Redeem from the purchasing address - receipts are buyer-bound. |
 | Losing the `AllowlistAdmin` of an allowlist sale | No entries can be minted -> every `purchase` aborts | Hold caps in a recoverable RBAC / multisig wrapper. |

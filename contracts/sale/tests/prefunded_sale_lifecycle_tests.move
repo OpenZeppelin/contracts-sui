@@ -373,7 +373,7 @@ fun cancel_emergency_wrong_cap_aborts() {
         Linear,
         VParams,
     >(
-        fixed_rate_curve::params(1),
+        fixed_rate_curve::params(1, 1),
         1_000,
         0,
         u::opens(),

@@ -1,10 +1,11 @@
-/// Fixed-rate pricing curve for `prefunded_sale`: `allocation = paid * rate`
-/// for every purchase, for the whole sale.
+/// Fixed-rate pricing curve for `prefunded_sale`: `allocation = paid *
+/// rate_numerator / rate_denominator` (widened and floored) for every purchase,
+/// for the whole sale.
 ///
-/// The simplest pricing shape and the one most sales use. The rate is
-/// committed at sale construction and never changes, so the activation
-/// backing this curve commits to (`required_inventory = hard_cap * rate`,
-/// via `activation_ticket`) is a tight cover.
+/// The simplest pricing shape and the one most sales use. The rate is a fraction
+/// committed at sale construction and never changes, so the activation backing
+/// this curve commits to (`required_inventory = hard_cap * rate_numerator /
+/// rate_denominator`, via `activation_ticket`) is a tight cover.
 ///
 /// This module declares the `FixedRateCurve` witness and its `Params`, plus
 /// the integrator API around them (`params` / `activation_ticket` / `quote`
@@ -36,26 +37,33 @@
 /// ```
 module openzeppelin_sale::fixed_rate_curve;
 
+use openzeppelin_math::rounding;
+use openzeppelin_math::u64;
 use openzeppelin_sale::prefunded_sale::{PrefundedSale, ActivationTicket, Quote};
 use sui::balance::Balance;
 
 // === Errors ===
 
-/// `params` was called with `rate == 0`; a zero rate allocates nothing for any
-/// payment.
+/// `params` was called with `rate_numerator == 0`; a zero numerator allocates
+/// nothing for any payment.
 #[error(code = 0)]
-const ERateZero: vector<u8> = "The exchange rate must be greater than zero";
+const ERateZero: vector<u8> = "The exchange rate numerator must be greater than zero";
 
-/// `hard_cap * rate` would exceed `u64::MAX`, so the required inventory backing
-/// cannot be represented or guaranteed.
+/// `hard_cap * rate_numerator / rate_denominator` would exceed `u64::MAX`, so the
+/// required inventory backing cannot be represented or guaranteed.
 #[error(code = 1)]
 const ERequiredInventoryOverflow: vector<u8> =
     "The required token inventory is too large to represent";
 
-/// `paid * rate` would exceed `u64::MAX`, so the allocation this curve prices
-/// cannot be represented.
+/// `paid * rate_numerator / rate_denominator` would exceed `u64::MAX`, so the
+/// allocation this curve prices cannot be represented.
 #[error(code = 2)]
 const EAllocationOverflow: vector<u8> = "The token allocation would be too large to represent";
+
+/// `params` was called with `rate_denominator == 0`; the allocation is divided by
+/// it.
+#[error(code = 3)]
+const EDenominatorZero: vector<u8> = "The exchange rate denominator must be greater than zero";
 
 // === Structs ===
 
@@ -67,8 +75,12 @@ public struct FixedRateCurve has drop {}
 /// Fixed-rate parameters, stored on the sale via `prefunded_sale`'s
 /// `curve_params` field.
 public struct Params has copy, drop, store {
-    /// Sale tokens (smallest units) per 1 payment-coin smallest unit.
-    rate: u64,
+    /// Numerator of the exchange rate. The allocation for a payment is `paid *
+    /// rate_numerator / rate_denominator`, floored - sale tokens (smallest units)
+    /// allocated per `rate_denominator` payment-coin smallest units.
+    rate_numerator: u64,
+    /// Denominator of the exchange rate; non-zero.
+    rate_denominator: u64,
 }
 
 // === Public Functions ===
@@ -79,61 +91,48 @@ public struct Params has copy, drop, store {
 /// module (its field is module-private), so a protocol that drives
 /// `prefunded_sale::create_sale` directly can build the config itself.
 ///
-/// #### Price envelope
-///
-/// This curve prices every purchase as `allocation = paid * rate` with an integer
-/// `rate >= 1`, so the allocation is never smaller than the payment measured in
-/// smallest units. In human terms, the price of one sale token denominated in
-/// payment coin is `10^(sale_decimals - payment_decimals) / rate`. Two limits
-/// follow, and an integrator must configure `rate` around both:
-///
-/// - Ceiling: `rate` cannot drop below 1, so the price cannot exceed
-///   `10^(sale_decimals - payment_decimals)`. For a sale/payment pair with equal
-///   decimals that ceiling is exactly 1 payment token per sale token.
-/// - Grid: only reciprocal-integer fractions of the ceiling are exact (`1/1`,
-///   `1/2`, `1/3`, ... of it). A price off that grid must be approximated by the
-///   nearest integer `rate`, which misprices every purchase silently, with no
-///   abort and no event.
-///
-/// Worked example (equal decimals, e.g. a token sold against a same-decimal
-/// stablecoin, so the ceiling is 1.00): a 5.00 target is unreachable - it sits
-/// above the ceiling, and the nearest configurable prices are 1.00 (`rate = 1`)
-/// and 0.50 (`rate = 2`). Below the ceiling, 0.20 is exact (`rate = 5`) but 0.30
-/// is not - the nearest are 0.333.. (`rate = 3`) and 0.25 (`rate = 4`).
-///
-/// An integrator needing an off-grid price on a given decimal pairing should not
-/// fork this curve but supply its own: the sale applies the curve-computed
-/// `allocation` verbatim (see `prefunded_sale::mint_quote`), so a custom curve
-/// can compute the allocation directly - e.g. with a widened division and an
-/// explicit rounding mode - and express any price on any decimal pairing, free of
-/// this grid.
+/// The allocation for a payment is `paid * rate_numerator / rate_denominator`,
+/// widened to `u128` and floored. Expressing the rate as a fraction lets a sale
+/// price a sale token at any ratio to the payment coin, on any decimal pairing:
+/// e.g. a 0.30 payment-per-sale-token price on an equal-decimal pair is
+/// `params(10, 3)` (a payment of 3 smallest units allocates 10). Division floors,
+/// so a payment too small to allocate a whole smallest unit rounds down, and one
+/// that floors to zero is rejected by `prefunded_sale::EZeroAllocation`. Rounding
+/// down favors the sale's inventory backing, which `activation_ticket` sizes with
+/// the same floored arithmetic.
 ///
 /// #### Parameters
-/// - `rate`: Sale tokens (smallest units) allocated per 1 payment-coin smallest
-///   unit.
+/// - `rate_numerator`: Numerator of the sale-token-per-payment rate.
+/// - `rate_denominator`: Denominator of the rate.
 ///
 /// #### Returns
-/// - A validated `Params` carrying `rate`.
+/// - A validated `Params` carrying the rate.
 ///
 /// #### Aborts
-/// - `ERateZero` if `rate == 0`.
-public fun params(rate: u64): Params {
-    assert!(rate > 0, ERateZero);
-    Params { rate }
+/// - `ERateZero` if `rate_numerator == 0`.
+/// - `EDenominatorZero` if `rate_denominator == 0`.
+public fun params(rate_numerator: u64, rate_denominator: u64): Params {
+    assert!(rate_numerator > 0, ERateZero);
+    assert!(rate_denominator > 0, EDenominatorZero);
+    Params { rate_numerator, rate_denominator }
 }
 
 /// Mint the `ActivationTicket<FixedRateCurve>` that `share_and_activate` consumes,
-/// committing the inventory backing this curve requires: `hard_cap * rate`.
+/// committing the inventory backing this curve requires: `hard_cap *
+/// rate_numerator / rate_denominator` (floored). This is a tight cover: because
+/// each purchase's allocation floors, the sum of per-purchase allocations never
+/// exceeds this floored total.
 ///
 /// #### Parameters
-/// - `sale`: The sale to activate, read for its `hard_cap` and configured `rate`.
+/// - `sale`: The sale to activate, read for its `hard_cap` and configured rate.
 ///
 /// #### Returns
-/// - An `ActivationTicket<FixedRateCurve>` carrying `hard_cap * rate` as the required
-///   inventory.
+/// - An `ActivationTicket<FixedRateCurve>` carrying `hard_cap * rate_numerator /
+///   rate_denominator` as the required inventory.
 ///
 /// #### Aborts
-/// - `ERequiredInventoryOverflow` if `hard_cap * rate` would exceed `u64::MAX`.
+/// - `ERequiredInventoryOverflow` if `hard_cap * rate_numerator / rate_denominator`
+///   would exceed `u64::MAX`.
 public fun activation_ticket<
     SaleCoin,
     PaymentCoin,
@@ -149,21 +148,27 @@ public fun activation_ticket<
         VestingScheduleParams,
     >,
 ): ActivationTicket<FixedRateCurve> {
-    let rate = sale.curve_params().rate;
-    let required_inventory = (sale.hard_cap() as u128) * (rate as u128);
-    assert!(required_inventory <= (std::u64::max_value!() as u128), ERequiredInventoryOverflow);
-    sale.mint_activation_ticket(FixedRateCurve {}, required_inventory as u64)
+    let params = sale.curve_params();
+    let required_inventory = u64::mul_div(
+        sale.hard_cap(),
+        params.rate_numerator,
+        params.rate_denominator,
+        rounding::down(),
+    );
+    assert!(required_inventory.is_some(), ERequiredInventoryOverflow);
+    sale.mint_activation_ticket(FixedRateCurve {}, required_inventory.destroy_some())
 }
 
 // === Quote ===
 
 /// Mint a `Quote<PaymentCoin>` for a buyer's `balance`. This curve computes the
-/// allocation as `balance.value() * rate`, u128-widened to detect overflow, and
-/// hands the finished `u64` to `prefunded_sale::mint_quote`. The `Quote` carries
-/// the balance through to `purchase`.
+/// allocation as `balance.value() * rate_numerator / rate_denominator`, widened to
+/// `u128` and floored, and hands the finished `u64` to
+/// `prefunded_sale::mint_quote`. The `Quote` carries the balance through to
+/// `purchase`.
 ///
 /// #### Parameters
-/// - `sale`: The sale being purchased from, read for its configured `rate`.
+/// - `sale`: The sale being purchased from, read for its configured rate.
 /// - `balance`: The buyer's payment, moved into the returned `Quote`.
 ///
 /// #### Returns
@@ -171,11 +176,12 @@ public fun activation_ticket<
 ///   the computed allocation.
 ///
 /// #### Aborts
-/// - `EAllocationOverflow` if `balance.value() * rate` would exceed `u64::MAX`.
+/// - `EAllocationOverflow` if `balance.value() * rate_numerator / rate_denominator`
+///   would exceed `u64::MAX`.
 /// - `prefunded_sale::EZeroPayment` if `balance` has zero value.
-/// - `prefunded_sale::EZeroAllocation` if the computed allocation is zero;
-///   guarded as unreachable here since `rate > 0` and a non-zero `balance` value
-///   yield a positive product.
+/// - `prefunded_sale::EZeroAllocation` if the floored allocation is zero - a
+///   payment too small to allocate one whole sale-token smallest unit at this
+///   rate (i.e. `balance.value() * rate_numerator < rate_denominator`).
 public fun quote<
     SaleCoin,
     PaymentCoin,
@@ -192,21 +198,24 @@ public fun quote<
     >,
     balance: Balance<PaymentCoin>,
 ): Quote<PaymentCoin> {
-    let rate = sale.curve_params().rate;
-    let allocation = (balance.value() as u128) * (rate as u128);
+    let params = sale.curve_params();
+    let allocation =
+        (balance.value() as u128) * (params.rate_numerator as u128)
+            / (params.rate_denominator as u128);
     assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
     sale.mint_quote(FixedRateCurve {}, balance, allocation as u64)
 }
 
 // === View helpers ===
 
-/// The configured fixed rate: sale tokens allocated per 1 payment-coin unit.
+/// The configured fixed rate as `(rate_numerator, rate_denominator)`: the
+/// allocation for a payment is `paid * rate_numerator / rate_denominator`.
 ///
 /// #### Parameters
 /// - `sale`: The sale to query.
 ///
 /// #### Returns
-/// - The configured rate.
+/// - The configured rate as `(rate_numerator, rate_denominator)`.
 public fun rate<
     SaleCoin,
     PaymentCoin,
@@ -221,6 +230,7 @@ public fun rate<
         VestingWitness,
         VestingScheduleParams,
     >,
-): u64 {
-    sale.curve_params().rate
+): (u64, u64) {
+    let params = sale.curve_params();
+    (params.rate_numerator, params.rate_denominator)
 }

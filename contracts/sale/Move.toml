@@ -4,3 +4,4 @@ edition = "2024"
 
 [dependencies]
 openzeppelin_finance = { local = "../finance" }
+openzeppelin_math = { local = "../../math/core" }

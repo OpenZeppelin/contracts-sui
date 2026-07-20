@@ -164,9 +164,10 @@ fun purchase_raised_overflow_aborts() {
 // === zero-allocation floor ===
 
 // A curve cannot mint a quote that takes a real payment yet allocates nothing: the
-// non-zero-allocation floor (dual of EZeroPayment) rejects it at mint time. Only a
-// BadCurve can even attempt it - the fixed-rate curve's `paid * rate` is always
-// positive for a non-zero payment.
+// non-zero-allocation floor (dual of EZeroPayment) rejects it at mint time. This
+// also guards the honest fixed-rate curve, whose floored `paid * rate_numerator /
+// rate_denominator` can round a small payment down to zero; here a BadCurve passes
+// a zero allocation directly.
 #[test, expected_failure(abort_code = prefunded_sale::EZeroAllocation)]
 fun mint_quote_zero_allocation_aborts() {
     let (mut test, clk) = u::setup();

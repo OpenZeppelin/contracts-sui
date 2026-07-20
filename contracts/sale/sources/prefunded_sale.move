@@ -58,11 +58,10 @@
 /// - **Hard cap (required).** `hard_cap > 0` is enforced at
 ///   `create_sale`. Bounds the maximum raise. At activation the sale
 ///   asserts `inventory >= required_inventory`, the backing amount the
-///   curve commits to via its `ActivationTicket` (a fixed-rate curve
-///   sets it to `hard_cap * rate`), so sold-out and hard-cap-reached
-///   coincide. The cap is enforced **all-or-nothing**: a `purchase`
-///   whose payment would push `raised` past `hard_cap` aborts in full
-///   with `EHardCapExceeded` - there is no partial fill up to the
+///   curve commits to via its `ActivationTicket`, so sold-out and
+///   hard-cap-reached coincide. The cap is enforced **all-or-nothing**:
+///   a `purchase` whose payment would push `raised` past `hard_cap` aborts
+///   in full with `EHardCapExceeded` - there is no partial fill up to the
 ///   remaining capacity. See `purchase` for how buyers size a payment
 ///   near sell-out.
 /// - **Soft cap (optional, `0 = none`).** Minimum raise required for
@@ -1014,8 +1013,7 @@ public fun mint_activation_ticket<
 /// miss. Requiring the vault by value removes that failure mode entirely.
 ///
 /// The `required_inventory` carried by the ticket is the backing the curve commits
-/// to (a fixed-rate curve sets it to `hard_cap * rate`, overflow-checked when the
-/// ticket is minted). Provisioned honestly, sold-out and hard-cap-reached coincide,
+/// to. Provisioned honestly, sold-out and hard-cap-reached coincide,
 /// so `purchase` never aborts with "out of inventory" before "exceeds cap".
 /// Activation before `opens_at_ms` is allowed; activation after `closes_at_ms` is
 /// not, since it would share a stale sale that is immediately finalizable or
@@ -2327,6 +2325,11 @@ public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> {
 /// #### Returns
 /// - The allocation in `SaleCoin`'s smallest units.
 public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
+
+/// Read the `required_inventory` an `ActivationTicket` carries.
+public fun test_required_inventory<Curve: drop>(ticket: &ActivationTicket<Curve>): u64 {
+    ticket.required_inventory
+}
 
 // === Package Functions ===
 
