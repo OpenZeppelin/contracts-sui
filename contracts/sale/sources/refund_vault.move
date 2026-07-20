@@ -140,8 +140,8 @@ public struct VaultRelease<phantom P> has copy, drop {
 ///
 /// The typical paired-sale flow is `new` -> `prefunded_sale::pair_refund_vault` (which
 /// takes the vault by reference) -> `prefunded_sale::share_and_activate` (which consumes
-/// the vault by value and shares it alongside the sale). The paired flow never calls
-/// `share` itself; that function is for using a vault standalone, outside a sale.
+/// the vault by value and shares it alongside the sale). Integrators should not call
+/// `share` themselves in this flow; use `share` only when using a vault standalone, outside a sale.
 ///
 /// #### Parameters
 /// - `ctx`: Transaction context, used to allocate the vault and cap `UID`s.

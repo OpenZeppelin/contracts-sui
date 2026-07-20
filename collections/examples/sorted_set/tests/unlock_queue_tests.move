@@ -1,8 +1,13 @@
 module openzeppelin_collections::sorted_set_unlock_queue_tests;
 
 use openzeppelin_collections::sorted_set as ss;
-use openzeppelin_collections::sorted_set_unlock_queue::{Self as unlock_queue, UnlockQueue};
+use openzeppelin_collections::sorted_set_unlock_queue::{
+    Self as unlock_queue,
+    UnlockQueue,
+    Unlocked,
+};
 use std::unit_test::assert_eq;
+use sui::event;
 use sui::test_scenario as ts;
 
 const ALICE: address = @0x0A;
@@ -49,6 +54,18 @@ fun drain_earliest_first() {
         assert_eq!(q.pending(), 1); // {25}
         assert_eq!(q.process_latest(), 25); // pop_back: largest (now only)
 
+        // Each pop emitted an `Unlocked` carrying THIS queue's id - consumers watching another
+        // (permissionless) instance can tell the events apart.
+        let qid = object::id(&q);
+        assert_eq!(
+            event::events_by_type<Unlocked>(),
+            vector[
+                unlock_queue::unlocked_event(qid, 10),
+                unlock_queue::unlocked_event(qid, 20),
+                unlock_queue::unlocked_event(qid, 25),
+            ],
+        );
+
         assert!(q.is_empty());
         assert!(q.deadlines_well_formed()); // an empty set is well-formed
         ts::return_shared(q);
@@ -57,13 +74,13 @@ fun drain_earliest_first() {
     scenario.end();
 }
 
-// === Scenario 4 - the library's ONE abort: pop on an empty set ===
+// === Scenario 4 - processing an empty queue aborts at the set ===
 //
-// `pop_front`/`pop_back` are the only operations in the whole library that abort, and only on an
-// EMPTY set (`EEmpty`). The set asserts its OWN `EEmpty` (code 0) BEFORE delegating to the wrapped
-// map, so the abort surfaces at `location = openzeppelin_collections::sorted_set`. Pinning the
-// wrapped map's location (`openzeppelin_collections::sorted_map`, code 2) here would make this test
-// FAIL - that branch is never reached through the set's own `pop_*`.
+// This scenario isolates the queue's empty-pop path (`EEmpty`). The set asserts its OWN `EEmpty`
+// (code 0) BEFORE delegating to the wrapped map, so the abort surfaces at
+// `location = openzeppelin_collections::sorted_set`. Pinning the wrapped map's location
+// (`openzeppelin_collections::sorted_map`, code 2) here would make this test FAIL - that branch is
+// never reached through the set's own `pop_*`.
 #[test, expected_failure(abort_code = ss::EEmpty, location = ss)]
 fun process_empty_queue_aborts() {
     let mut scenario = ts::begin(ALICE);
