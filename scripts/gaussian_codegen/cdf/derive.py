@@ -109,8 +109,9 @@ def validate_grid() -> np.ndarray:
 
 def reference_values_float(grid: np.ndarray) -> np.ndarray:
     """Φ values at the grid points (float64 - sufficient for AAA training; the
-    article's nominal error is 3.35e-9, three orders of magnitude above float64
-    precision). mpmath at 100 dps is reserved for validation and quantization."""
+    article's nominal error is 3.35e-9, over seven orders of magnitude above
+    float64 precision). mpmath at 100 dps is reserved for validation and
+    quantization."""
     return norm.cdf(grid)
 
 
