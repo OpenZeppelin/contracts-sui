@@ -12,7 +12,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Changed (Breaking)
 
-- `fixed_rate_curve`: the rate is now a fraction. `params` takes `(rate_numerator, rate_denominator)` and prices each purchase as `allocation = paid * rate_numerator / rate_denominator` (widened and floored), removing the old integer-rate price ceiling and grid so a sale can express any price on any decimal pairing. `rate` now returns `(numerator, denominator)`. Adds `EDenominatorZero`.   (#487)
+- `fixed_rate_curve`: the rate is now a fraction. `params` takes `(rate_numerator, rate_denominator)` and prices each purchase as `allocation = paid * rate_numerator / rate_denominator` (widened and floored), removing the old integer-rate price ceiling and grid so a sale can express any price on any decimal pairing. `rate` now returns `(numerator, denominator)`. Adds `EDenominatorZero` and `EAllocationOverflow`. (#487)
+- `prefunded_sale`: `mint_quote` now takes the curve-computed `allocation` directly instead of a `rate`, so the sale performs no pricing arithmetic (the widened `paid * rate` overflow check moves into the curve). (#487)
 
 ## 1.5.0 (17-07-2026)
 
