@@ -59,9 +59,13 @@
 ///   `create_sale`. Bounds the maximum raise. At activation the sale
 ///   asserts `inventory >= required_inventory`, the backing amount the
 ///   curve commits to via its `ActivationTicket` (a fixed-rate curve
-///   sets it to `hard_cap * rate`), so inventory always covers the full
-///   raise and a `purchase` can never run out of inventory before the
-///   hard cap is reached. Depositing more than the backing is allowed;
+///   sets it to `hard_cap * rate`). For an honest curve - one whose
+///   quotes never allocate beyond the `required_inventory` it committed
+///   to (the fixed-rate curve is such a curve) - inventory always covers
+///   the full raise and a `purchase` can never run out of inventory
+///   before the hard cap is reached. A dishonest or buggy curve that
+///   over-allocates relative to its committed backing can still make a
+///   `purchase` abort with `EInsufficientInventory`. Depositing more than the backing is allowed;
 ///   the surplus stays withdrawable, so hard-cap-reached does not imply
 ///   the inventory is exhausted. The cap is enforced **all-or-nothing**: a `purchase`
 ///   whose payment would push `raised` past `hard_cap` aborts in full

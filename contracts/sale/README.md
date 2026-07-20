@@ -174,10 +174,12 @@ the wallet.
 
 Four orthogonal, independent configuration axes:
 
-- **Hard cap (required, `> 0`).** Bounds the maximum raise. Inventory backing is
-  enforced at activation, so a `purchase` never runs out of inventory before the hard
-  cap is reached. Depositing more than the backing is allowed, and the surplus stays
-  withdrawable, so *hard-cap-reached* does not imply the inventory is exhausted.
+- **Hard cap (required, `> 0`).** Bounds the maximum raise. Inventory backing for the
+  full hard cap is enforced at activation, so with an honest curve a `purchase` never
+  runs out of inventory before the hard cap is reached (a buggy or dishonest curve can
+  over-allocate and sell out early - see the curve-trust note above). Depositing more
+  than the backing is allowed, and the surplus stays withdrawable, so
+  *hard-cap-reached* does not imply the inventory is exhausted.
 - **Soft cap (optional, `0 = none`).** Minimum raise required to `finalize`. If the
   window closes below it, anyone can `cancel_after_close` and every buyer can refund.
 - **Per-buyer cap (optional).** Cumulative cap on a single buyer's total payment.
