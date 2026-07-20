@@ -355,7 +355,7 @@ fun nonstrict_comparator_misses_equal_key() {
 #[test]
 fun from_keys_by_reverse_integer() {
     // The reverse direction was only ever built via upsert_by (ups_rev); this pins the BULK builder
-    // (from_keys_by's do!-loop) threading a reverse lt - yields descending-numeric, well-formed
+    // (from_keys_by's fold!-loop) threading a reverse lt - yields descending-numeric, well-formed
     // under `>` and NOT under `<`.
     let s = ss::from_keys_by!(vector[10u64, 30, 20], |a, b| *a > *b);
     assert_eq!(s.keys(), vector[30u64, 20, 10]); // descending-numeric (ascending under >)
