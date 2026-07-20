@@ -62,10 +62,22 @@ public struct Allowlist has key {
 // === Events ===
 
 /// Emitted only on a genuine first-time approval (gated on `upsert`'s `true`).
-public struct Approved has copy, drop { id: u64 }
+public struct Approved has copy, drop {
+    /// ID of the allowlist that emitted the event. Creation is permissionless, so consumers
+    /// bind events to one instance by this id.
+    allowlist_id: ID,
+    /// The approved token id.
+    id: u64,
+}
 
 /// Emitted on every successful revocation (`remove!` aborts if the id was absent).
-public struct Revoked has copy, drop { id: u64 }
+public struct Revoked has copy, drop {
+    /// ID of the allowlist that emitted the event. Creation is permissionless, so consumers
+    /// bind events to one instance by this id.
+    allowlist_id: ID,
+    /// The revoked token id.
+    id: u64,
+}
 
 // === Public Functions ===
 
@@ -112,7 +124,7 @@ public fun transfer_to(list: Allowlist, recipient: address) {
 /// - `true` if `id` was newly approved, `false` if it was already present.
 public fun approve(list: &mut Allowlist, id: u64): bool {
     let added = list.members.upsert!(id);
-    if (added) event::emit(Approved { id });
+    if (added) event::emit(Approved { allowlist_id: object::id(list), id });
     added
 }
 
@@ -127,7 +139,7 @@ public fun approve(list: &mut Allowlist, id: u64): bool {
 /// - `EAlreadyApproved` if `id` is already present.
 public fun approve_strict(list: &mut Allowlist, id: u64) {
     assert!(list.members.upsert!(id), EAlreadyApproved);
-    event::emit(Approved { id });
+    event::emit(Approved { allowlist_id: object::id(list), id });
 }
 
 /// Revoke `id`, aborting if it is not approved (the set's `remove!` aborts on an absent key).
@@ -141,7 +153,7 @@ public fun approve_strict(list: &mut Allowlist, id: u64) {
 /// - `sorted_map::EKeyNotFound` if `id` is not approved.
 public fun revoke(list: &mut Allowlist, id: u64) {
     list.members.remove!(&id);
-    event::emit(Revoked { id });
+    event::emit(Revoked { allowlist_id: object::id(list), id });
 }
 
 /// True iff `id` is currently approved. Routes through the same search the writes use, so
@@ -186,4 +198,16 @@ public fun members(list: &Allowlist): vector<u64> {
 #[test_only]
 public fun members_well_formed(list: &Allowlist): bool {
     list.members.inner().is_well_formed!()
+}
+
+/// Reconstruct an `Approved` event for test assertions.
+#[test_only]
+public fun approved_event(allowlist_id: ID, id: u64): Approved {
+    Approved { allowlist_id, id }
+}
+
+/// Reconstruct a `Revoked` event for test assertions.
+#[test_only]
+public fun revoked_event(allowlist_id: ID, id: u64): Revoked {
+    Revoked { allowlist_id, id }
 }
