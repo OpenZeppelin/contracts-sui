@@ -260,6 +260,43 @@ public struct DestroyCap has key, store {
     wallet_id: ID,
 }
 
+/// A curve's schedule `params` bundled with its witness `W` - the safe shape to hand a
+/// schedule to any consumer that pins `W` and `P` as *separate* type parameters.
+///
+/// Constructing one via `new_schedule` requires a *value* of type `W`, and only the
+/// module that declares `W` can produce that value - so a `VestingSchedule<W, P>` can
+/// only be built by the curve that owns `W`, which fixes `P` to that same curve's
+/// parameters. A consumer that accepts this bundle (rather than a bare `P`) therefore
+/// forces its own witness and params type arguments to unify against a coherent pair: an
+/// incoherent pairing has no inhabitant and fails to type-check.
+///
+/// # Why an integrator should accept this over a bare `P`
+///
+/// A consumer that stores `W` and `P` as independent type parameters and takes the
+/// schedule as a bare `P` has nothing binding the two: a caller can instantiate it with
+/// one curve's witness and a *different* curve's params. That mispairing type-checks - a
+/// bare `P` carries no evidence of which curve it came from - but the resulting
+/// `VestingWallet<W, P, C>` can never be advanced. Only the module that owns `W` can mint
+/// the `VestedAmount<W>` that `release` needs, and a curve following the reference pattern
+/// types that minting entry to its own params, so it will not mint against a foreign `P`.
+/// The funds vest into a wallet nobody can release: locked, not lost, but permanently stuck
+/// (and, being non-empty, not even tearable down).
+///
+/// Requiring a `VestingSchedule<W, P>` makes that state unrepresentable. The bundle is the
+/// witness's testimony that `P` is *its* params, so a consumer that accepts it can only be
+/// configured with a coherent `(W, P)` pair - checked by the compiler at the call site,
+/// not left to the caller to get right. This is the recommended shape for any integration
+/// that lets a caller pick the curve. `openzeppelin_sale::prefunded_sale` is a good
+/// reference: its `set_vesting_schedule` takes a
+/// `VestingSchedule<VestingWitness, VestingScheduleParams>`, so the schedule attached to a
+/// sale is guaranteed to match the witness and params pinned in the sale's own type - an
+/// issuer cannot misconfigure a sale into one whose vesting can never be released.
+public struct VestingSchedule<phantom W: drop, P: copy + drop + store> has copy, drop, store {
+    /// The curve's stored configuration. Opaque here; only the declaring curve
+    /// interprets it.
+    params: P,
+}
+
 // === Events ===
 
 /// Emitted by `new` when a wallet is created.
@@ -356,6 +393,23 @@ public fun new<S: drop, P: copy + drop + store, C>(
     });
 
     (wallet, DestroyCap { id: object::new(ctx), wallet_id })
+}
+
+/// Bundle a curve's `schedule_params` with its witness into a `VestingSchedule<W, P>`.
+/// Witness-gated: the caller must supply a value of type `W`, and only the module that
+/// declares `W` can construct one - so the returned bundle can only pair `params` with
+/// the witness of the curve that produced it. A consumer that accepts a
+/// `VestingSchedule<W, P>` thus gets a compile-time guarantee that `W` and `P` form a
+/// coherent pair, which passing a bare `P` cannot provide.
+///
+/// #### Parameters
+/// - `_w`: The curve witness `W`; proves the caller is the declaring curve module.
+/// - `params`: The curve's schedule configuration to bundle.
+///
+/// #### Returns
+/// - A `VestingSchedule<W, P>` carrying `params`, pinned to witness `W`.
+public fun new_schedule<W: drop, P: copy + drop + store>(_w: W, params: P): VestingSchedule<W, P> {
+    VestingSchedule { params }
 }
 
 /// Mint a `VestedAmount<S>` recording `amount` as the cumulative vested total for
@@ -660,6 +714,11 @@ public fun amount<S>(vested: &VestedAmount<S>): u64 {
 /// information.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params
+}
+
+/// Read the parameters carried by a `VestingSchedule` bundle.
+public fun params<W: drop, P: copy + drop + store>(schedule: &VestingSchedule<W, P>): P {
+    schedule.params
 }
 
 /// Address that receives every `release`.

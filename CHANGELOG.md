@@ -8,6 +8,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_finance`
+
+#### Added
+
+- `vesting_wallet`: new `VestingSchedule<W, P>` type bundling a curve's schedule params with its witness, plus a `new_schedule` constructor and `params` accessor. Lets a curve-agnostic consumer accept a witness-pinned schedule that keeps its witness and params type arguments coherent. (#489)
+- `vesting_wallet_linear`: `vesting_schedule` and `vesting_schedule_continuous` constructors that validate and bundle a stepped/continuous `Params` into a `VestingSchedule<Linear, Params>`, plus `into_vesting_schedule` to wrap an already-built `Params`. (#489)
+
+### `openzeppelin_sale`
+
+#### Added
+
+- new getter `max_sale_duration_ms`. (#488)
+
+#### Changed (Breaking)
+
+- `prefunded_sale::mint_quote` now takes a precomputed `allocation: u64` instead of `rate: u64`; aborts if the curve-computed allocation is zero. (#487)
+- Moved the `allocation = paid * rate` overflow check (and the `EAllocationOverflow` error) from `prefunded_sale` into `fixed_rate_curve`, where the multiplication now lives. (#487)
+- `prefunded_sale` abort codes renumbered: `EZeroAllocation` added at code `10`; `ERaisedOverflow`, `EHardCapExceeded`, and `EInsufficientInventoryAtActivate` shifted to `11`/`12`/`13`; `EAllocationOverflow` removed. (#487)
+- `prefunded_sale`: renamed `VestingScheduleParamsSet -> VestingScheduleSet`, adding the `VestingWitness` type param; renamed `set_vesting_schedule_params -> set_vesting_schedule`, which now accepts the `VestingSchedule<VestingWitness, VestingScheduleParams>` parameter instead of just `VestingScheduleParams`; renamed getter `vesting_schedule_params -> vesting_schedule`. (#489)
+- set a maximum sale duration cap `prefunded_sale::create_sale`, aborts with `ESaleDurationTooLong`. (#488)
+
 ## 1.5.0 (17-07-2026)
 
 ### `openzeppelin_timelock`
