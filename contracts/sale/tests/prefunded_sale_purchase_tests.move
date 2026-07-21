@@ -117,6 +117,30 @@ fun purchase_delivers_receipt_and_updates_state() {
     test.end();
 }
 
+// `fixed_rate_curve` opts out of freshness (`mint_quote_unversioned`), so two quotes
+// minted up front can both be purchased in one PTB even though the first purchase
+// advances `state_version`. A constant rate makes this safe - neither quote's price
+// depends on the state the first purchase changed. A versioned curve would abort the
+// second with EStaleQuote (see `prefunded_sale_curve_trust_tests`).
+#[test]
+fun unversioned_quotes_batch_without_staleness() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let q1 = fixed_rate_curve::quote(&sale, u::pay_balance(10));
+    let q2 = fixed_rate_curve::quote(&sale, u::pay_balance(20));
+    sale.purchase(q1, option::none(), &clk, test.ctx()); // state_version 0 -> 1
+    sale.purchase(q2, option::none(), &clk, test.ctx()); // not stale: succeeds
+    assert_eq!(sale.raised(), 30);
+    assert_eq!(sale.total_allocated(), 30);
+    u::return_sale(sale);
+
+    destroy(clk);
+    test.end();
+}
+
 // Boundary: a purchase that brings raised exactly to hard_cap succeeds.
 #[test]
 fun purchase_at_exact_hard_cap_ok() {
