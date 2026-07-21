@@ -160,7 +160,7 @@
 ///    winding a sale down.
 module openzeppelin_sale::prefunded_sale;
 
-use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
+use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestingSchedule};
 use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
 use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{RefundVault, RefundVaultCap};
@@ -223,23 +223,23 @@ const EInvalidCapsOrdering: vector<u8> = "The minimum raise cannot exceed the ma
 #[error(code = 9)]
 const EZeroPayment: vector<u8> = "The payment must be greater than zero";
 
-/// A purchase would push `raised + paid` past `u64::MAX`.
+/// A quote was minted with a zero `allocation`; a paying buyer must receive tokens.
 #[error(code = 10)]
+const EZeroAllocation: vector<u8> = "The token allocation must be greater than zero";
+
+/// A purchase would push `raised + paid` past `u64::MAX`.
+#[error(code = 11)]
 const ERaisedOverflow: vector<u8> = "The total amount raised would be too large to represent";
 
 /// A purchase would push `raised` past `hard_cap`.
-#[error(code = 11)]
+#[error(code = 12)]
 const EHardCapExceeded: vector<u8> = "This purchase would exceed the maximum raise";
 
 /// At activation, `inventory` did not cover the backing the curve's
 /// `ActivationTicket` requires.
-#[error(code = 12)]
+#[error(code = 13)]
 const EInsufficientInventoryAtActivate: vector<u8> =
     "Not enough tokens have been deposited to back the sale";
-
-/// A quote's `allocation` (`paid * rate`) would exceed `u64::MAX`.
-#[error(code = 13)]
-const EAllocationOverflow: vector<u8> = "The token allocation would be too large to represent";
 
 /// A purchase's `allocation` exceeded the sale's unallocated inventory
 /// (`inventory - total_allocated`). Only reachable via a dishonest curve.
@@ -348,7 +348,7 @@ const EPerBuyerCapZero: vector<u8> = "The per-buyer limit must be greater than z
 
 // Vesting schedule configuration
 
-/// `set_vesting_schedule_params` was called a second time on the same sale.
+/// `set_vesting_schedule` was called a second time on the same sale.
 #[error(code = 33)]
 const EVestingScheduleAlreadySet: vector<u8> = "The vesting schedule has already been set";
 
@@ -412,12 +412,27 @@ const MAX_SALE_DURATION_MS: u64 = 31_536_000_000;
 ///
 /// `VestingWitness` is the `drop`-only schedule witness of the curve module that
 /// interprets `VestingScheduleParams` (e.g. `vesting_wallet_linear::Linear` pairs
-/// with its `Params`). Pinning it in the sale's type is what makes the vesting
-/// lockup unbypassable: `claim_into_vesting` builds a
-/// `VestingWallet<VestingWitness, ..>`, and only the module declaring
-/// `VestingWitness` can mint the `VestedAmount` that releases it - so a buyer cannot
-/// substitute a permissive witness of their own to release early. For a non-vesting
-/// sale the slot is inert (any `drop` type); no schedule is ever attached.
+/// with its `Params`). Pinning a genuine curve witness in the sale's type is what makes
+/// the vesting lockup unbypassable: `claim_into_vesting` builds a
+/// `VestingWallet<VestingWitness, ..>`, and `mint_vested_amount` takes the witness by
+/// value, so only the module declaring `VestingWitness` can mint the `VestedAmount` that
+/// releases it - a buyer cannot substitute a permissive witness of their own to release
+/// early. That guarantee is conditional: `VestingWitness` must be a real curve witness -
+/// a `drop` type whose declaring module is its sole constructor. Pin a public type anyone
+/// can build (e.g. `bool`) and the lockup is gone - anyone can then construct the witness
+/// and mint a releasing `VestedAmount`. For a non-vesting sale the slot is inert (any
+/// `drop` type); no schedule is ever attached.
+///
+/// The two slots must be a coherent pair, and that coherence is **enforced**, not left
+/// to convention: `set_vesting_schedule` accepts only a
+/// `VestingSchedule<VestingWitness, VestingScheduleParams>`, and only the curve module
+/// that declares `VestingWitness` can mint one (it takes the witness by value). Naming
+/// one curve's witness with another's params therefore has no schedule value to attach
+/// and fails to compile. An integrator shipping a second curve alongside the built-in
+/// linear one does not have to keep the slots in step by hand - the compiler does. This
+/// coherence check is type-matching only and is not a substitute for the witness rule
+/// above: with a public witness such as `bool`, `new_schedule<bool, _>(true, ..)` is
+/// buildable by anyone, so the pair is trivially coherent yet the lockup is bypassable.
 public struct PrefundedSale<
     phantom Curve: drop,
     CurveParams: copy + drop + store,
@@ -465,7 +480,7 @@ public struct PrefundedSale<
     /// `claim_into_vesting` (which returns a funded `VestingWallet` and its
     /// `DestroyCap`) rather than `claim`. Fixed at construction; the buyer cannot
     /// influence it.
-    vesting_schedule_params: Option<VestingScheduleParams>,
+    vesting_schedule: Option<VestingSchedule<VestingWitness, VestingScheduleParams>>,
 }
 
 /// Lifecycle phases shared by every sale flavor.
@@ -533,8 +548,12 @@ public struct ActivationTicket<phantom Curve: drop> {
 // the curve's `allocation` verbatim. The curve is a trusted, first-party
 // component: the witness gate (only the module declaring `C` can mint a
 // `Quote` for a `PrefundedSale<C, ..>`) is the security boundary. The
-// sale's only independent protections are inventory backing
-// (`allocation <= inventory - total_allocated`) and u128 overflow guards.
+// sale's only independent protections are a non-zero-allocation floor
+// (a paying buyer must receive tokens), inventory backing
+// (`allocation <= inventory - total_allocated`), and a checked-u64 raise
+// guard (`purchase` asserts `u64::MAX - paid >= raised` before summing
+// `raised + paid`). The widened allocation-product overflow check is
+// `fixed_rate_curve`'s, not the sale's.
 
 /// Hot-potato carrying a curve-priced quote for a single purchase.
 public struct Quote<phantom PaymentCoin> {
@@ -579,11 +598,12 @@ public struct PerBuyerCapSet<phantom SaleCoin, phantom PaymentCoin> has copy, dr
     cap: u64,
 }
 
-/// Emitted by `set_vesting_schedule_params` when a vesting policy is attached.
-public struct VestingScheduleParamsSet<
+/// Emitted by `set_vesting_schedule` when a vesting policy is attached.
+public struct VestingScheduleSet<
     phantom SaleCoin,
     phantom PaymentCoin,
-    VestingScheduleParams: copy + drop,
+    phantom VestingWitness,
+    VestingScheduleParams,
 > has copy, drop {
     sale_id: ID,
     params: VestingScheduleParams,
@@ -682,11 +702,19 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// The `VestingWitness` and `VestingScheduleParams` type arguments are fixed here and
 /// carried in the sale's type for its whole life. For a vesting sale they must be the
 /// witness/params pair of the intended schedule curve (e.g.
-/// `vesting_wallet_linear::{Linear, Params}`); `set_vesting_schedule_params` then
+/// `vesting_wallet_linear::{Linear, Params}`); `set_vesting_schedule` then
 /// attaches a concrete schedule, and `claim_into_vesting` builds the wallet under this
-/// pinned witness so the lockup cannot be bypassed. For a non-vesting sale both slots
-/// are inert - pick any `drop` witness and any `copy + drop + store` params type and
-/// never attach a schedule.
+/// pinned witness so the lockup cannot be bypassed - provided `VestingWitness` is a
+/// genuine curve witness whose declaring module is its sole constructor. Pin a public
+/// type anyone can construct (e.g. `bool`) and the sale has no real lockup: anyone can
+/// mint the releasing `VestedAmount`. A mismatched choice cannot be turned
+/// into a live vesting sale: `set_vesting_schedule` accepts only a curve-minted
+/// `VestingSchedule<VestingWitness, VestingScheduleParams>`, so attaching a schedule to an
+/// incoherent pair fails to compile - such a sale can only ever redeem via plain `claim`.
+/// That coherence check does not rescue a public witness: `new_schedule<bool, _>(true, ..)`
+/// is buildable by anyone, so a `bool` pair is trivially coherent yet unlocked.
+/// For a non-vesting sale both slots are inert - pick any `drop` witness and any
+/// `copy + drop + store` params type and never attach a schedule.
 ///
 /// #### Parameters
 /// - `curve_params`: The curve's stored configuration, opaque to the sale.
@@ -744,7 +772,7 @@ public fun create_sale<
         refund_vault_cap: option::none(),
         per_buyer_cap: option::none(),
         contributions: option::none(),
-        vesting_schedule_params: option::none(),
+        vesting_schedule: option::none(),
     };
     let sale_id = object::id(&sale);
     let cap = SaleAdminCap<SaleCoin, PaymentCoin> { id: object::new(ctx), sale_id };
@@ -847,21 +875,29 @@ public fun set_per_buyer_cap<
 ///
 /// Once a schedule is attached, the plain `claim` path aborts and buyers must redeem
 /// through `claim_into_vesting`, which returns a funded `VestingWallet` and its
-/// `DestroyCap`. The schedule cannot be bypassed: `claim_into_vesting` builds the
-/// wallet under the sale's pinned `VestingWitness` type parameter, so only the curve
-/// module that owns that witness can mint the `VestedAmount` needed to release - a
-/// buyer cannot supply a permissive witness of their own. The schedule is
+/// `DestroyCap`. When `VestingWitness` is a genuine curve witness - a `drop` type only
+/// its declaring module can construct - the schedule cannot be bypassed:
+/// `claim_into_vesting` builds the wallet under the sale's pinned `VestingWitness` type
+/// parameter, so only that curve module can mint the `VestedAmount` needed to release - a
+/// buyer cannot supply a permissive witness of their own. A public witness anyone can
+/// build (e.g. `bool`) removes this guarantee, and the coherence check on `schedule`
+/// below does not restore it. The schedule is
 /// **issuer-defined**: the buyer is the caller of the redemption path and cannot
 /// supply or override these values, nor the witness that interprets them.
 ///
 /// #### Parameters
 /// - `sale`: The sale to configure, in `Init` phase.
-/// - `params`: The issuer-defined vesting schedule parameters, stored on the sale.
+/// - `schedule`: The issuer-defined vesting schedule, minted by the curve module that
+///   owns `VestingWitness`. Because only that module can construct a
+///   `VestingSchedule<VestingWitness, VestingScheduleParams>`, the witness and params
+///   pinned in the sale's type are guaranteed to form a coherent pair - an incoherent
+///   pairing has no value to pass here and fails to compile. The unwrapped params are
+///   stored on the sale.
 ///
 /// #### Aborts
 /// - `ENotInit` if the sale is not in `Init` phase.
 /// - `EVestingScheduleAlreadySet` if a schedule is already configured.
-public fun set_vesting_schedule_params<
+public fun set_vesting_schedule<
     Curve: drop,
     CurveParams: copy + drop + store,
     SaleCoin,
@@ -877,14 +913,14 @@ public fun set_vesting_schedule_params<
         VestingWitness,
         VestingScheduleParams,
     >,
-    params: VestingScheduleParams,
+    schedule: VestingSchedule<VestingWitness, VestingScheduleParams>,
 ) {
     assert!(sale.phase.is_init(), ENotInit);
-    assert!(sale.vesting_schedule_params.is_none(), EVestingScheduleAlreadySet);
-    sale.vesting_schedule_params.fill(params);
-    event::emit(VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
+    assert!(sale.vesting_schedule.is_none(), EVestingScheduleAlreadySet);
+    sale.vesting_schedule.fill(schedule);
+    event::emit(VestingScheduleSet<SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams> {
         sale_id: object::id(sale),
-        params,
+        params: schedule.params(),
     });
 }
 
@@ -1117,7 +1153,8 @@ public fun share_and_activate<
 /// **The curve is trusted.** `purchase` accepts the quote's `allocation` verbatim;
 /// the sale does not re-derive or bound it against any sale-held rate (there is no
 /// `max_rate` field). The only checks on it are inventory backing
-/// (`allocation <= inventory - total_allocated`) and overflow. Correct pricing is
+/// (`allocation <= inventory - total_allocated`) and overflow; `mint_quote` has
+/// already guaranteed it is non-zero. Correct pricing is
 /// delegated to the witness-gated curve module - the witness gate (only the
 /// declaring curve can mint a `Quote` for its sale type) is what makes this safe.
 /// See the `Quote` section below.
@@ -1430,8 +1467,10 @@ public fun cancel_emergency<
 /// Destroys the receipt. The buyer wraps the balance into a `Coin` and transfers it.
 ///
 /// A sale with a vesting schedule must redeem via `claim_into_vesting` instead; this
-/// is the library's enforcement that the schedule cannot be bypassed by the
-/// immediate-distribution path.
+/// abort closes the immediate-distribution path, so redemption always flows through the
+/// vesting wallet. Whether that wallet actually locks the tokens depends on
+/// `VestingWitness` being a genuine curve witness (see `set_vesting_schedule` and the
+/// `PrefundedSale` type doc) - a public witness leaves the wallet releasable at once.
 ///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Finalized` phase.
@@ -1466,7 +1505,7 @@ public fun claim<
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
-    assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
+    assert!(sale.vesting_schedule.is_none(), EClaimRequiresVesting);
     sale.claim_internal(receipt, ctx)
 }
 
@@ -1506,7 +1545,7 @@ public fun claim_all<
     receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): Balance<SaleCoin> {
-    assert!(sale.vesting_schedule_params.is_none(), EClaimRequiresVesting);
+    assert!(sale.vesting_schedule.is_none(), EClaimRequiresVesting);
     sale.claim_all_internal(receipts, ctx)
 }
 
@@ -1522,7 +1561,11 @@ public fun claim_all<
 /// `create_sale`. Because the `&mut sale` argument unifies this function's
 /// `VestingWitness` with the sale's pinned witness, a buyer cannot substitute a
 /// permissive witness declared in their own package to mint a full `VestedAmount` and
-/// release the whole allocation immediately - the lockup holds. Only the module
+/// release the whole allocation immediately - the lockup holds so long as the pinned
+/// `VestingWitness` is itself a genuine curve witness, a `drop` type only its declaring
+/// module can construct. If the sale was created with a public witness anyone can build
+/// (e.g. `bool`), no substitution is needed - the buyer constructs the pinned witness
+/// directly, mints a full `VestedAmount`, and releases at once. Only the module
 /// declaring the pinned `VestingWitness` can advance the returned wallet.
 ///
 /// Alongside the wallet, `vesting_wallet::new` mints a `DestroyCap` bound to it - the
@@ -1571,15 +1614,11 @@ public fun claim_into_vesting<
     receipt: Receipt<SaleCoin>,
     ctx: &mut TxContext,
 ): (VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
-    assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
+    assert!(sale.vesting_schedule.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_internal(receipt, ctx);
 
-    let (mut wallet, destroy_cap) = vesting_wallet::new<
-        VestingWitness,
-        VestingScheduleParams,
-        SaleCoin,
-    >(
-        *sale.vesting_schedule_params.borrow(),
+    let (mut wallet, destroy_cap) = vesting_wallet::new(
+        sale.vesting_schedule.borrow().params(),
         ctx.sender(), // only buyer can claim
         ctx,
     );
@@ -1632,15 +1671,11 @@ public fun claim_all_into_vesting<
     receipts: vector<Receipt<SaleCoin>>,
     ctx: &mut TxContext,
 ): (VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>, vesting_wallet::DestroyCap) {
-    assert!(sale.vesting_schedule_params.is_some(), ENoVestingScheduleAttached);
+    assert!(sale.vesting_schedule.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_all_internal(receipts, ctx);
 
-    let (mut wallet, destroy_cap) = vesting_wallet::new<
-        VestingWitness,
-        VestingScheduleParams,
-        SaleCoin,
-    >(
-        *sale.vesting_schedule_params.borrow(),
+    let (mut wallet, destroy_cap) = vesting_wallet::new(
+        sale.vesting_schedule.borrow().params(),
         ctx.sender(), // only buyer can claim
         ctx,
     );
@@ -1817,25 +1852,35 @@ public fun refund<
 // === Quote ===
 
 /// Witness-gated quote constructor. The curve module declaring `Curve` calls this
-/// from its `quote(..)` function after running whatever pricing math it owns. The
-/// witness is taken by value (`_w: Curve`), so a caller cannot mint a quote without
-/// the declaring curve module's cooperation.
+/// from its `quote(..)` function after running whatever pricing math it owns,
+/// passing the fully-computed `allocation`. The witness is taken by value
+/// (`_w: Curve`), so a caller cannot mint a quote without the declaring curve
+/// module's cooperation.
+///
+/// The sale applies `allocation` verbatim - it performs no pricing arithmetic of its
+/// own. A curve is free to compute it however it likes (widened multiplication,
+/// division with an explicit rounding mode, a lookup table), so it can express any
+/// price on any `SaleCoin`/`PaymentCoin` decimal pairing. The sale's only checks on
+/// `allocation` are the witness gate here, a non-zero floor (a paying buyer must
+/// receive tokens - the dual of `EZeroPayment`, and the one bound the sale keeps
+/// against a curve that rounds a real payment down to nothing), and the
+/// unallocated-inventory bound in `purchase`.
 ///
 /// #### Parameters
 /// - `sale`: The sale the quote is bound to (by id).
 /// - `_w`: The curve witness `Curve`; proves the caller is the declaring curve
 ///   module.
 /// - `payment`: The buyer's payment, moved into the returned `Quote`.
-/// - `rate`: Sale tokens allocated per payment unit, supplied by the curve; the
-///   allocation is `payment.value() * rate`.
+/// - `allocation`: The sale-token allocation the curve computed for `payment`,
+///   carried verbatim through to `purchase`.
 ///
 /// #### Returns
 /// - A single-use `Quote<PaymentCoin>` pinned to this sale, carrying `payment` and
-///   the computed allocation.
+///   `allocation`.
 ///
 /// #### Aborts
 /// - `EZeroPayment` if `payment` has zero value.
-/// - `EAllocationOverflow` if `payment.value() * rate` would exceed `u64::MAX`.
+/// - `EZeroAllocation` if `allocation` is zero.
 public fun mint_quote<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1854,12 +1899,11 @@ public fun mint_quote<
     >,
     _w: Curve,
     payment: Balance<PaymentCoin>,
-    rate: u64,
+    allocation: u64,
 ): Quote<PaymentCoin> {
     assert!(payment.value() > 0, EZeroPayment);
-    let allocation = (payment.value() as u128) * (rate as u128);
-    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
-    Quote { sale_id: object::id(sale), payment, allocation: allocation as u64 }
+    assert!(allocation > 0, EZeroAllocation);
+    Quote { sale_id: object::id(sale), payment, allocation }
 }
 
 // === View helpers ===
@@ -2085,9 +2129,9 @@ public fun requires_allowlist<
 /// - `sale`: The sale to query.
 ///
 /// #### Returns
-/// - `Some(params)` if the issuer called `set_vesting_schedule_params` during Init,
+/// - `Some(schedule)` if the issuer called `set_vesting_schedule` during Init,
 ///   otherwise `None`.
-public fun vesting_schedule_params<
+public fun vesting_schedule<
     Curve: drop,
     CurveParams: copy + drop + store,
     SaleCoin,
@@ -2103,8 +2147,8 @@ public fun vesting_schedule_params<
         VestingWitness,
         VestingScheduleParams,
     >,
-): Option<VestingScheduleParams> {
-    sale.vesting_schedule_params
+): Option<VestingSchedule<VestingWitness, VestingScheduleParams>> {
+    sale.vesting_schedule
 }
 
 /// Total inventory currently held by the sale (allocated plus unallocated).
@@ -2529,18 +2573,19 @@ public fun test_new_per_buyer_cap_set<SaleCoin, PaymentCoin>(
     PerBuyerCapSet { sale_id, cap }
 }
 
-/// Build a `VestingScheduleParamsSet` event value for asserting against
+/// Build a `VestingScheduleSet` event value for asserting against
 /// `event::events_by_type`.
 #[test_only]
-public fun test_new_vesting_schedule_params_set<
+public fun test_new_vesting_schedule_set<
     SaleCoin,
     PaymentCoin,
+    VestingWitness: drop,
     VestingScheduleParams: copy + drop,
 >(
     sale_id: ID,
     params: VestingScheduleParams,
-): VestingScheduleParamsSet<SaleCoin, PaymentCoin, VestingScheduleParams> {
-    VestingScheduleParamsSet { sale_id, params }
+): VestingScheduleSet<SaleCoin, PaymentCoin, VestingWitness, VestingScheduleParams> {
+    VestingScheduleSet { sale_id, params }
 }
 
 /// Build a `RefundVaultPaired` event value for asserting against `event::events_by_type`.

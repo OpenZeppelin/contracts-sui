@@ -219,6 +219,35 @@ let vault = GatedVault { id: object::new(ctx), inner, /* ... */ };
 Every curve following the pattern exposes an analogous `params` constructor, so the
 protocol stays one integration wide across curves.
 
+**Keeping the `(S, P)` pair coherent.** A consumer that pins `S` and `P` as *separate*
+type parameters (rather than nesting an already-built wallet) has nothing binding the two
+on its own: a caller can instantiate it with one curve's witness and another curve's
+params. That mispairing **type-checks** - a bare `P` carries no evidence of which curve it
+came from - but the `VestingWallet<S, P, C>` it produces can never be advanced, because
+only the module that owns `S` can mint the `VestedAmount<S>` that `release` needs, and a
+curve following the reference pattern types that minting entry to its own params, not the
+foreign one. The funds vest into a wallet nobody can release: locked, not lost, but
+permanently stuck.
+
+`VestingSchedule<S, P>` closes this off. `vesting_wallet::new_schedule` bundles a `P`
+behind its witness, and since minting one takes an `S` value, only the declaring curve can
+build it - so the bundle is the witness's testimony that `P` is *its* params. A consumer
+that accepts a `VestingSchedule<S, P>` rather than a bare `P` forces its two slots to unify
+against a coherent pair at the call site; an incoherent pairing has no inhabitant and never
+compiles. The linear curve exposes `vesting_schedule` / `vesting_schedule_continuous` to
+build a bundle from raw inputs, and `into_vesting_schedule` to wrap a `Params` you already
+hold; unwrap the bundle with `.params()` when you build the wallet.
+
+> [!IMPORTANT]
+> If your integration lets a caller choose the curve by pinning `S` and `P` as separate
+> type parameters, **accept a `VestingSchedule<S, P>`, not a bare `P`.** It turns "the
+> witness and params match" from a convention the caller must uphold into a fact the
+> compiler checks. `openzeppelin_sale`'s [`prefunded_sale`](../sale) is the worked example:
+> its `set_vesting_schedule` takes a `VestingSchedule<VestingWitness, VestingScheduleParams>`,
+> so the schedule attached to a sale always matches the witness and params pinned in the
+> sale's type - an issuer cannot misconfigure a sale into one whose vesting can never be
+> released.
+
 ### Custom schedules
 
 To author a new curve, follow the `vesting_wallet_linear` pattern:
@@ -236,6 +265,10 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    MyParams>`, then `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover
    the beneficiary and parameters and destructure them. `destroy_empty` is permissionless;
    the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
+5. *(Optional)* A `vesting_schedule(..): VestingSchedule<MyCurve, MyParams>` constructor -
+   sugar over `vesting_wallet::new_schedule(MyCurve {}, params(..))` - for consumers that
+   pin the `(witness, params)` pair as separate type slots and need the compile-time
+   guarantee that the two match (see "Curve-agnostic protocols" above).
 
 The curve **must be monotonically non-decreasing in time and bounded above by
 `balance + released`.** `release` enforces only the failure modes that threaten funds:
