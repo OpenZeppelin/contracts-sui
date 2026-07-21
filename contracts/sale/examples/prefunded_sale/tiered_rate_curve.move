@@ -60,7 +60,7 @@
 /// `fixed_rate_curve`:
 ///
 /// ```move
-/// let quote = tiered_rate_curve::quote(&sale, payment.into_balance());
+/// let quote = example_tiered_rate_curve::quote(&sale, payment.into_balance());
 /// prefunded_sale::purchase(&mut sale, quote, allow, &clock, ctx);
 /// ```
 ///
