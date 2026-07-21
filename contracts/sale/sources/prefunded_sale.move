@@ -577,12 +577,6 @@ public enum CancelReason has copy, drop, store {
 // === Events ===
 
 /// Emitted by `create_sale` when a sale is created.
-///
-/// The `Curve` witness is carried as a phantom parameter so the emitted type tag
-/// names the module that prices the sale, not just the `CurveParams` payload it
-/// interprets. An event-only consumer can then filter on a specific curve
-/// implementation directly, without reading the sale object to learn which module
-/// enforces `curve_params`.
 public struct SaleCreated<
     phantom SaleCoin,
     phantom PaymentCoin,
