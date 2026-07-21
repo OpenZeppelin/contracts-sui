@@ -20,9 +20,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 #### Added
 
 - new getter `max_sale_duration_ms`. (#488)
+- `prefunded_sale::mint_quote_unversioned`: a witness-gated quote constructor that opts out of freshness, for curves whose price is immune to sale-state changes (e.g. `fixed_rate_curve`); lets several quotes be minted and purchased in one PTB. (#499)
 
 #### Changed (Breaking)
 
+- `prefunded_sale`: `Quote`s minted via `mint_quote` are now freshness-enforced. `mint_quote` stamps the sale's new `state_version`, every `purchase` advances it, and `purchase` aborts with the new `EStaleQuote` (code `41`) if an intervening same-PTB purchase advanced it since the quote was minted. Adds a `state_version` field to `PrefundedSale` and `minted_at_version` to `Quote`. (#499)
 - `prefunded_sale::mint_quote` now takes a precomputed `allocation: u64` instead of `rate: u64`; aborts if the curve-computed allocation is zero. (#487)
 - Moved the `allocation = paid * rate` overflow check (and the `EAllocationOverflow` error) from `prefunded_sale` into `fixed_rate_curve`, where the multiplication now lives. (#487)
 - `prefunded_sale` abort codes renumbered: `EZeroAllocation` added at code `10`; `ERaisedOverflow`, `EHardCapExceeded`, and `EInsufficientInventoryAtActivate` shifted to `11`/`12`/`13`; `EAllocationOverflow` removed. (#487)
