@@ -66,7 +66,7 @@ fun quote_rejects_zero_payment() {
 }
 
 // allocation = paid * rate overflowing u64 aborts with a typed error.
-#[test, expected_failure(abort_code = prefunded_sale::EAllocationOverflow)]
+#[test, expected_failure(abort_code = fixed_rate_curve::EAllocationOverflow)]
 fun quote_allocation_overflow_aborts() {
     let mut ctx = tx_context::dummy();
     let (sale, _cap) = new_sale(MAX_U64, 1_000, &mut ctx);
