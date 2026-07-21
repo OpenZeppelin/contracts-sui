@@ -224,7 +224,7 @@ Five orthogonal, independent configuration axes:
 - **Vesting (optional).** Redemption streams each allocation through a `VestingWallet`
   instead of releasing it at `claim`; the plain `claim` / `claim_all` paths then abort
   and buyers redeem via `claim_into_vesting` / `claim_all_into_vesting`. Configure with
-  `set_vesting_schedule_params` (one-shot, irreversible); see
+  `set_vesting_schedule` (one-shot, irreversible); see
   [Optional vesting](#optional-vesting) above.
 
 The three shapes a fixed-price sale typically takes:

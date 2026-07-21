@@ -11,7 +11,7 @@
 ///   create_sale --+
 ///   deposit --+
 ///   set_per_buyer_cap           |  (Init phase - sale is owned by caller;
-///   set_vesting_schedule_params +   holding it by &mut is the authority)
+///   set_vesting_schedule +   holding it by &mut is the authority)
 ///   pair_refund_vault           |
 ///   enable_allowlist            |
 ///                               |
@@ -101,7 +101,7 @@
 ///   `claim_all` - which then abort with `EClaimRequiresVesting` - to the
 ///   permissionless `claim_into_vesting` / `claim_all_into_vesting`, each
 ///   delivering the buyer's allocation inside a `VestingWallet` on the
-///   sale's fixed schedule. Configure with `set_vesting_schedule_params`;
+///   sale's fixed schedule. Configure with `set_vesting_schedule`;
 ///   one-shot and irreversible.
 ///
 /// The three common shapes a fixed-price sale takes:
@@ -1718,7 +1718,7 @@ public fun claim_all<
 /// The wallet is constructed with the sale's issuer-defined schedule params and
 /// `beneficiary == ctx.sender()` (the asserted buyer), then funded with exactly the
 /// claimed `allocation`. The buyer cannot influence the schedule - it is set during
-/// Init by the issuer via `set_vesting_schedule_params`. The vesting curve is **not**
+/// Init by the issuer via `set_vesting_schedule`. The vesting curve is **not**
 /// caller-chosen: the wallet's schedule
 /// witness is the sale's own `VestingWitness` type parameter, fixed at
 /// `create_sale`. Because the `&mut sale` argument unifies this function's
