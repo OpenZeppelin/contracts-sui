@@ -223,23 +223,23 @@ const EInvalidCapsOrdering: vector<u8> = "The minimum raise cannot exceed the ma
 #[error(code = 9)]
 const EZeroPayment: vector<u8> = "The payment must be greater than zero";
 
-/// A quote was minted with a zero `allocation`; a paying buyer must receive tokens.
-#[error(code = 10)]
-const EZeroAllocation: vector<u8> = "The token allocation must be greater than zero";
-
 /// A purchase would push `raised + paid` past `u64::MAX`.
-#[error(code = 11)]
+#[error(code = 10)]
 const ERaisedOverflow: vector<u8> = "The total amount raised would be too large to represent";
 
 /// A purchase would push `raised` past `hard_cap`.
-#[error(code = 12)]
+#[error(code = 11)]
 const EHardCapExceeded: vector<u8> = "This purchase would exceed the maximum raise";
 
 /// At activation, `inventory` did not cover the backing the curve's
 /// `ActivationTicket` requires.
-#[error(code = 13)]
+#[error(code = 12)]
 const EInsufficientInventoryAtActivate: vector<u8> =
     "Not enough tokens have been deposited to back the sale";
+
+// Code 13 held `EAllocationOverflow` (the `paid * rate` overflow check), moved to
+// `fixed_rate_curve` in #487 and no longer emitted here; retired, never reused
+// (error codes are append-only).
 
 /// A purchase's `allocation` exceeded the sale's unallocated inventory
 /// (`inventory - total_allocated`). Only reachable via a dishonest curve.
@@ -398,6 +398,10 @@ const EStaleQuote: vector<u8> = "The sale state changed after this quote was min
 const ESaleDurationTooLong: vector<u8> =
     "The sale window cannot exceed the maximum allowed duration";
 
+/// A quote was minted with a zero `allocation`; a paying buyer must receive tokens.
+#[error(code = 42)]
+const EZeroAllocation: vector<u8> = "The token allocation must be greater than zero";
+
 // === Constants ===
 
 /// Maximum purchase-window length, in milliseconds (365 days). `create_sale` bounds
@@ -493,8 +497,10 @@ public struct PrefundedSale<
     contributions: Option<Table<address, u64>>,
     /// Optional issuer-defined vesting policy. When `Some`, redemption is via
     /// `claim_into_vesting` (which returns a funded `VestingWallet` and its
-    /// `DestroyCap`) rather than `claim`. Fixed at construction; the buyer cannot
-    /// influence it.
+    /// `DestroyCap`) rather than `claim`. The `VestingWitness` and
+    /// `VestingScheduleParams` type arguments are fixed at `create_sale`; the concrete
+    /// schedule stored here is fixed when attached via `set_vesting_schedule` during
+    /// `Init`. The buyer cannot influence it.
     vesting_schedule: Option<VestingSchedule<VestingWitness, VestingScheduleParams>>,
 }
 
@@ -947,12 +953,12 @@ public fun set_per_buyer_cap<
 ///
 /// #### Parameters
 /// - `sale`: The sale to configure, in `Init` phase.
-/// - `schedule`: The issuer-defined vesting schedule, minted by the curve module that
-///   owns `VestingWitness`. Because only that module can construct a
-///   `VestingSchedule<VestingWitness, VestingScheduleParams>`, the witness and params
-///   pinned in the sale's type are guaranteed to form a coherent pair - an incoherent
-///   pairing has no value to pass here and fails to compile. The unwrapped params are
-///   stored on the sale.
+/// - `schedule`: The issuer-defined vesting schedule. Constructing a
+///   `VestingSchedule<VestingWitness, VestingScheduleParams>` requires a value of
+///   `VestingWitness`; for a genuine curve witness (a `drop` type whose declaring module
+///   is its sole constructor) this means only the curve module can mint schedules.
+///   Accepting the bundle also enforces witness/params coherence: an incoherent pairing
+///   has no inhabitant and fails to compile. The carried schedule is stored on the sale.
 ///
 /// #### Aborts
 /// - `ENotInit` if the sale is not in `Init` phase.
@@ -1633,10 +1639,10 @@ public fun claim_all<
 /// `VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>` from
 /// `openzeppelin_finance`. The only redemption path for a vesting-attached sale.
 ///
-/// The wallet is constructed with the sale's issuer-defined schedule params and
-/// `beneficiary == ctx.sender()` (the asserted buyer), then funded with exactly the
-/// claimed `allocation`. The buyer cannot influence the schedule - it is fixed at
-/// sale construction. The vesting curve is **not** caller-chosen: the wallet's schedule
+/// The wallet is constructed with the params from the sale's attached vesting schedule
+/// and `beneficiary == ctx.sender()` (the asserted buyer), then funded with exactly the
+/// claimed `allocation`. The buyer cannot influence the schedule - it is fixed when the
+/// issuer attached it during `Init`. The vesting curve is **not** caller-chosen: the wallet's schedule
 /// witness is the sale's own `VestingWitness` type parameter, fixed at
 /// `create_sale`. Because the `&mut sale` argument unifies this function's
 /// `VestingWitness` with the sale's pinned witness, a buyer cannot substitute a
@@ -2537,6 +2543,9 @@ public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> {
 public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
 
 /// Maximum sale duration in milliseconds.
+///
+/// #### Returns
+/// - The maximum sale duration, in milliseconds.
 public fun max_sale_duration_ms(): u64 {
     MAX_SALE_DURATION_MS
 }
