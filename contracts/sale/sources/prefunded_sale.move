@@ -223,23 +223,23 @@ const EInvalidCapsOrdering: vector<u8> = "The minimum raise cannot exceed the ma
 #[error(code = 9)]
 const EZeroPayment: vector<u8> = "The payment must be greater than zero";
 
-/// A quote was minted with a zero `allocation`; a paying buyer must receive tokens.
-#[error(code = 10)]
-const EZeroAllocation: vector<u8> = "The token allocation must be greater than zero";
-
 /// A purchase would push `raised + paid` past `u64::MAX`.
-#[error(code = 11)]
+#[error(code = 10)]
 const ERaisedOverflow: vector<u8> = "The total amount raised would be too large to represent";
 
 /// A purchase would push `raised` past `hard_cap`.
-#[error(code = 12)]
+#[error(code = 11)]
 const EHardCapExceeded: vector<u8> = "This purchase would exceed the maximum raise";
 
 /// At activation, `inventory` did not cover the backing the curve's
 /// `ActivationTicket` requires.
-#[error(code = 13)]
+#[error(code = 12)]
 const EInsufficientInventoryAtActivate: vector<u8> =
     "Not enough tokens have been deposited to back the sale";
+
+// Code 13 held `EAllocationOverflow` (the `paid * rate` overflow check), moved to
+// `fixed_rate_curve` in #487 and no longer emitted here; retired, never reused
+// (error codes are append-only).
 
 /// A purchase's `allocation` exceeded the sale's unallocated inventory
 /// (`inventory - total_allocated`). Only reachable via a dishonest curve.
@@ -392,6 +392,10 @@ const ENotTerminal: vector<u8> = "The sale must have ended";
 #[error(code = 41)]
 const ESaleDurationTooLong: vector<u8> =
     "The sale window cannot exceed the maximum allowed duration";
+
+/// A quote was minted with a zero `allocation`; a paying buyer must receive tokens.
+#[error(code = 42)]
+const EZeroAllocation: vector<u8> = "The token allocation must be greater than zero";
 
 // === Constants ===
 
