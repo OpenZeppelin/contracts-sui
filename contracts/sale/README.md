@@ -304,10 +304,10 @@ transfer::public_transfer(coin::from_balance(money_back, ctx), ctx.sender());
 
 ### Redeem into vesting
 
-For a sale created with `set_vesting_schedule`, redemption must go through
-`claim_into_vesting`. The vesting schedule - both its `VestingWitness` (here
-`vesting_wallet_linear::Linear`) and its `VestingScheduleParams` - is fixed at
-`create_sale`, so `claim_into_vesting` infers **every** type argument from the `sale`
+For a sale configured with `set_vesting_schedule` during `Init`, redemption must go through
+`claim_into_vesting`. The vesting witness/params type pair (here
+`vesting_wallet_linear::Linear` and `vesting_wallet_linear::Params`) is fixed at
+`create_sale`; `set_vesting_schedule` attaches the concrete schedule values, so `claim_into_vesting` infers **every** type argument from the `sale`
 it takes by `&mut`. The turbofish below is written out only to name the wallet's type;
 you can drop it entirely and let inference fill it in:
 
