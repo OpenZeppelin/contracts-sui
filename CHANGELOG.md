@@ -21,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - new getter `max_sale_duration_ms`. (#488)
 - `prefunded_sale::mint_quote_unversioned`: a witness-gated quote constructor that opts out of freshness, for curves whose price is immune to sale-state changes (e.g. `fixed_rate_curve`); lets several quotes be minted and purchased in one PTB. (#499)
+- `prefunded_sale`: the phase predicates `is_init`, `is_active`, `is_finalized`, and `is_cancelled` are now `public` (previously package-private), plus a new `refund_vault_id` getter returning the paired refund vault's `Option<ID>`. (#504)
 
 #### Changed (Breaking)
 
@@ -32,6 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - set a maximum sale duration cap `prefunded_sale::create_sale`, aborts with `ESaleDurationTooLong`. (#488)
 - `prefunded_sale::SaleCreated` event's `CurveParams` type parameter moved to the end, and added `Curve` type parameter. (#491)
 - `prefunded_sale`: aligned every abort message and doc comment with the guard that raises it, splitting error codes that conflated two predicates. `pair_refund_vault`'s wrong-cap check now raises a dedicated `EWrongVaultCap` (distinct from `EWrongVault`); `cancel_after_close`'s window check raises `ESaleNotClosed` (distinct from `finalize`'s `ESaleWindowStillOpen`); and the shared `ESoftCapMet` is replaced by `ESoftCapNotSet` and `ESoftCapReached`. `EActivationAfterClose`'s message now reflects its inclusive `now >= closes_at_ms` guard. (#498)
+- `prefunded_sale`: removed the `phase` getter (which returned the internal `Phase` value); query the phase through the `is_init` / `is_active` / `is_finalized` / `is_cancelled` predicates instead. (#504)
 
 ## 1.5.0 (17-07-2026)
 
