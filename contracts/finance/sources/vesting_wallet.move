@@ -735,6 +735,12 @@ public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingW
 }
 
 /// Read the parameters carried by a `VestingSchedule` bundle.
+///
+/// #### Parameters
+/// - `schedule`: The vesting-schedule bundle to read.
+///
+/// #### Returns
+/// - The schedule parameters `P` carried by the bundle.
 public fun params<W: drop, P: copy + drop + store>(schedule: &VestingSchedule<W, P>): P {
     schedule.params
 }

@@ -128,11 +128,11 @@ fun overallocating_quote_within_inventory_is_accepted() {
 
 // === raised overflow guard ===
 
-// ERaisedOverflow fires before the hard-cap check when `raised + paid` would exceed
-// u64::MAX. The raised-overflow check runs before the inventory bound, so a tiny
-// allocation 1 (the minimum `mint_quote` permits) never gets in the way: a first buy
-// of u64::MAX pushes raised to u64::MAX (== hard_cap), then any further non-zero
-// payment overflows.
+// ERaisedOverflow fires before the hard-cap and inventory-bound checks when
+// `raised + paid` would exceed u64::MAX. A first buy of u64::MAX pushes raised to
+// u64::MAX (== hard_cap); a second non-zero payment then overflows before the
+// inventory bound is ever consulted - so even a second allocation that exceeds the
+// remaining inventory aborts with ERaisedOverflow, not EInsufficientInventory.
 #[test, expected_failure(abort_code = prefunded_sale::ERaisedOverflow)]
 fun purchase_raised_overflow_aborts() {
     let (mut test, clk) = u::setup();
@@ -149,13 +149,14 @@ fun purchase_raised_overflow_aborts() {
         1,
     );
     sale.purchase(q1, option::none(), &clk, test.ctx());
-    // Second buy: paid = 1 -> u64::MAX - 1 >= u64::MAX is false -> ERaisedOverflow, which
-    // fires before the inventory bound, so allocation 1 is never checked against it.
+    // Second buy: paid = 1 -> u64::MAX - 1 >= u64::MAX is false -> ERaisedOverflow. The
+    // allocation 10 exceeds the remaining inventory (10 - 1 = 9), but ERaisedOverflow
+    // fires before the inventory bound, so that allocation is never checked against it.
     let q2 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
         &sale,
         BadCurve {},
         u::pay_balance(1),
-        1,
+        10,
     );
     sale.purchase(q2, option::none(), &clk, test.ctx()); // aborts: ERaisedOverflow
     abort
