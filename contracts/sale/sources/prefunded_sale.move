@@ -189,14 +189,14 @@
 /// ### Routing claim vs. refund (integrators)
 ///
 /// An external router that dispatches a buyer to `claim` or `refund` reads the
-/// sale's terminal phase directly from the sale: `is_finalized` selects the claim
-/// path, `is_cancelled` selects the refund path. The full predicate set -
-/// `is_init`, `is_active`, `is_finalized`, `is_cancelled` - is `public`. Do **not**
+/// sale's terminal phase directly from the sale: `sale.is_finalized()` selects the claim
+/// path, `sale.is_cancelled()` selects the refund path. The full predicate set -
+/// `sale.is_init()`, `sale.is_active()`, `sale.is_finalized()`, `sale.is_cancelled()` - is `public`. Do **not**
 /// infer the phase from the paired vault's `is_refunding` / `is_closed` state: that
 /// flip is an internal consequence of the sale's transition, not a supported phase
 /// signal, and a caller could hand the router an unrelated vault of the right coin
 /// type. When a flow does read vault state, first confirm the vault is the sale's
-/// own via `refund_vault_id`.
+/// own via `sale.refund_vault_id()`.
 module openzeppelin_sale::prefunded_sale;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet, VestingSchedule};
