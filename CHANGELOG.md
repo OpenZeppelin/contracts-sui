@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - new getter `max_sale_duration_ms`. (#488)
 - `prefunded_sale::mint_quote_unversioned`: a witness-gated quote constructor that opts out of freshness, for curves whose price is immune to sale-state changes (e.g. `fixed_rate_curve`); lets several quotes be minted and purchased in one PTB. (#499)
 - `prefunded_sale`: the phase predicates `is_init`, `is_active`, `is_finalized`, and `is_cancelled` are now `public` (previously package-private), plus a new `refund_vault_id` getter returning the paired refund vault's `Option<ID>`. (#504)
+- `prefunded_sale::refund_all` batch helper. (#507)
 
 #### Changed (Breaking)
 
