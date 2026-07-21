@@ -866,7 +866,7 @@ public fun set_per_buyer_cap<
 ///   `VestingWitness`; for a genuine curve witness (a `drop` type whose declaring module
 ///   is its sole constructor) this means only the curve module can mint schedules.
 ///   Accepting the bundle also enforces witness/params coherence: an incoherent pairing
-///   has no inhabitant and fails to compile. The carried params are stored on the sale.
+///   has no inhabitant and fails to compile. The carried schedule is stored on the sale.
 ///
 /// #### Aborts
 /// - `ENotInit` if the sale is not in `Init` phase.
