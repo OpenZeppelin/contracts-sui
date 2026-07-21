@@ -8,27 +8,28 @@
 /// ### Lifecycle
 ///
 /// ```text
-///   create_sale --+
-///   deposit --+
-///   set_per_buyer_cap   |  (Init phase - sale is owned by caller;
-///   pair_refund_vault   +   holding it by &mut is the authority)
-///   enable_allowlist    |
-///                       |
-///   share_and_activate -+-->  (Active phase - sale is shared)
+///   create_sale          +
+///   deposit              |
+///   set_per_buyer_cap    |   (Init phase - sale is owned by caller;
+///   pair_refund_vault    |    holding it by &mut is the authority)
+///   enable_allowlist     |
+///                        |
+///   share_and_activate   +-->  (Active phase - sale is shared)
 ///                                  |
 ///                              purchase xN
 ///                                  |
-///                                  +--> finalize          (permissionless;
-///                                  |      claim, withdraw_proceeds,        successful close)
+///                                  +--> finalize             (permissionless;
+///                                  |      claim,              successful close)
+///                                  |      withdraw_proceeds,
 ///                                  |      withdraw_unsold_inventory
 ///                                  |
-///                                  +--> cancel_after_close (permissionless;
-///                                  |      refund,                            soft-cap miss)
+///                                  +--> cancel_after_close   (permissionless;
+///                                  |      refund, refund_all, soft-cap miss)
 ///                                  |      withdraw_unsold_inventory
 ///                                  |
-///                                  +--> cancel_emergency   (admin-only;
-///                                          refund,                            in-window emergency)
-///                                          withdraw_unsold_inventory
+///                                  +--> cancel_emergency     (admin-only;
+///                                         refund, refund_all, in-window emergency)
+///                                         withdraw_unsold_inventory
 /// ```
 ///
 /// `Finalized` and `Cancelled` are terminal.
