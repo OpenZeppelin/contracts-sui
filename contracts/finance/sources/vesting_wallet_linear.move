@@ -175,9 +175,10 @@ public fun params_continuous(start_ms: u64, cliff_ms: u64, duration_ms: u64): Pa
 }
 
 /// Bundle a validated stepped `Params` with the `Linear` witness into a
-/// `VestingSchedule<Linear, Params>`. This is the only way to obtain such a bundle,
-/// since only this module can construct the `Linear` witness - so a consumer that
-/// accepts the bundle is guaranteed the witness and params come from this curve. Use
+/// `VestingSchedule<Linear, Params>`. This is the raw-input constructor for such a
+/// bundle (see also `vesting_schedule_continuous` and `into_vesting_schedule`); since
+/// only this module can construct the `Linear` witness, a consumer that accepts the
+/// bundle is guaranteed the witness and params come from this curve. Use
 /// it to configure a curve-agnostic consumer (e.g. a sale's vesting policy) that pins
 /// both the witness and params type arguments and must keep them coherent.
 ///
