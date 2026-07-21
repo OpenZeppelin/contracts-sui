@@ -1083,11 +1083,17 @@ public fun share_and_activate<
     // Rejects a shared, non-Init sale passed back in by value. `PrefundedSale` is
     // `key`-only, so it can never return to owned status, but a transaction may take a
     // shared object by value when the call consumes it - and re-sharing at its original
-    // version does not abort, so `transfer::share_object` below would not catch it. This
-    // check is load-bearing, not redundant: the module's other guards cover every
-    // terminal sale whose window has closed (via `EActivationAfterClose`), but not an
-    // in-window terminal transition - a hard-cap `finalize` or `cancel_emergency`. For
-    // such a sale every other guard here passes, and only this assert stops the phase
+    // version does not abort, so `transfer::share_object` below would not catch it.
+    //
+    // Two barriers guard the phase reset that such a call would otherwise cause, and
+    // this check is one of them. The other is the `Init` gate on
+    // `mint_activation_ticket`, which stops a fresh ticket being minted against a live
+    // sale; but a spare ticket minted during `Init` can be held across activation, so
+    // the mint gate alone does not close the hole. This assert closes it for the
+    // states the window guard misses: the module's other guards cover every terminal
+    // sale whose window has closed (via `EActivationAfterClose`), but not an in-window
+    // terminal transition - a hard-cap `finalize` or `cancel_emergency`. For such a sale
+    // with a held ticket every other guard here passes, and this assert stops the phase
     // being reset to `Active`, which would permanently brick the sale.
     assert!(sale.is_init(), ENotInit);
     assert!(sale.refund_vault_cap.is_some(), EVaultRequiredForActivate);
