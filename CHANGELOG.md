@@ -34,6 +34,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `prefunded_sale::SaleCreated` event's `CurveParams` type parameter moved to the end, and added `Curve` type parameter. (#491)
 - `prefunded_sale`: aligned every abort message and doc comment with the guard that raises it, splitting error codes that conflated two predicates. `pair_refund_vault`'s wrong-cap check now raises a dedicated `EWrongVaultCap` (distinct from `EWrongVault`); `cancel_after_close`'s window check raises `ESaleNotClosed` (distinct from `finalize`'s `ESaleWindowStillOpen`); and the shared `ESoftCapMet` is replaced by `ESoftCapNotSet` and `ESoftCapReached`. `EActivationAfterClose`'s message now reflects its inclusive `now >= closes_at_ms` guard. (#498)
 - `prefunded_sale`: removed the `phase` getter (which returned the internal `Phase` value); query the phase through the `is_init` / `is_active` / `is_finalized` / `is_cancelled` predicates instead. (#504)
+- `prefunded_sale::mint_activation_ticket` and `fixed_rate_curve::activation_ticket` now abort with `ENotInit` unless the sale is in the `Init` phase. (#505)
 
 ## 1.5.0 (17-07-2026)
 
