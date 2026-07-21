@@ -28,6 +28,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `prefunded_sale` abort codes renumbered: `EZeroAllocation` added at code `10`; `ERaisedOverflow`, `EHardCapExceeded`, and `EInsufficientInventoryAtActivate` shifted to `11`/`12`/`13`; `EAllocationOverflow` removed. (#487)
 - `prefunded_sale`: renamed `VestingScheduleParamsSet -> VestingScheduleSet`, adding the `VestingWitness` type param; renamed `set_vesting_schedule_params -> set_vesting_schedule`, which now accepts the `VestingSchedule<VestingWitness, VestingScheduleParams>` parameter instead of just `VestingScheduleParams`; renamed getter `vesting_schedule_params -> vesting_schedule`. (#489)
 - set a maximum sale duration cap `prefunded_sale::create_sale`, aborts with `ESaleDurationTooLong`. (#488)
+- `prefunded_sale::SaleCreated` event's `CurveParams` type parameter moved to the end, and added `Curve` type parameter. (#491)
 
 ## 1.5.0 (17-07-2026)
 
