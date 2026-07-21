@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 #### Changed (Breaking)
 
-- Renamed `AllowlistAdmin` to `AllowlistAdminCap` and events `VaultDeposit`/`VaultRelease` to `VaultDeposited`/`VaultReleased` for naming consistency. (#515)
+- Renamed events `VaultDeposit`/`VaultRelease` to `VaultDeposited`/`VaultReleased` for naming consistency. (#515)
 
 ## 1.5.0 (17-07-2026)
 

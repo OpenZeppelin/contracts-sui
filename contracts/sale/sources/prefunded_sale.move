@@ -116,7 +116,7 @@
 ///    emergency-cancel power and the ability to withdraw proceeds
 ///    and unsold inventory.
 ///
-/// 3. **`AllowlistAdminCap<SaleCoin>` controls compliance.** Issued by
+/// 3. **`AllowlistAdmin<SaleCoin>` controls compliance.** Issued by
 ///    `enable_allowlist`. Loses-the-key implications: no entries can
 ///    be minted, every `purchase` aborts. Hold in a recoverable
 ///    container.
@@ -178,7 +178,7 @@
 module openzeppelin_sale::prefunded_sale;
 
 use openzeppelin_finance::vesting_wallet::{Self, VestingWallet};
-use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdminCap};
+use openzeppelin_sale::allowlist::{Self, AllowEntry, AllowlistAdmin};
 use openzeppelin_sale::receipt::{Self, Receipt};
 use openzeppelin_sale::refund_vault::{RefundVault, RefundVaultCap};
 use sui::balance::{Self, Balance};
@@ -960,7 +960,7 @@ public fun pair_refund_vault<
 }
 
 /// Switch the sale into compliance-gated mode and issue the single
-/// `AllowlistAdminCap<SaleCoin>`. The caller wraps the admin inside the compliance
+/// `AllowlistAdmin<SaleCoin>`. The caller wraps the admin inside the compliance
 /// module of their choice. After this, every `purchase` must consume an `AllowEntry`.
 ///
 /// One-shot: a second admin would let two compliance modules mint entries
@@ -971,7 +971,7 @@ public fun pair_refund_vault<
 /// - `ctx`: Transaction context, used to allocate the admin's `UID`.
 ///
 /// #### Returns
-/// - The `AllowlistAdminCap<SaleCoin>` for this sale, to be wrapped in a compliance
+/// - The `AllowlistAdmin<SaleCoin>` for this sale, to be wrapped in a compliance
 ///   module.
 ///
 /// #### Aborts
@@ -994,7 +994,7 @@ public fun enable_allowlist<
         VestingScheduleParams,
     >,
     ctx: &mut TxContext,
-): AllowlistAdminCap<SaleCoin> {
+): AllowlistAdmin<SaleCoin> {
     assert!(sale.is_init(), ENotInit);
     assert!(!sale.requires_allowlist, EAllowlistAlreadyEnabled);
     sale.requires_allowlist = true;

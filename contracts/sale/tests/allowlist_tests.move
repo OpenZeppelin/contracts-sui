@@ -1,7 +1,7 @@
 // Allowlist compliance-slot tests.
 //
 // `AllowEntry<S>` is a single-use, no-ability ticket: minted by the compliance
-// module (gated by `AllowlistAdminCap<S>`), consumed once by the sale's `purchase`
+// module (gated by `AllowlistAdmin<S>`), consumed once by the sale's `purchase`
 // with its sale_id + buyer asserted. The single-PTB consume coupling
 // and the symmetric allowlist gate are exercised end-to-end in
 // `prefunded_sale_purchase_tests`; here we pin the entry's own consume asserts.
