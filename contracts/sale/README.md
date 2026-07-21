@@ -67,9 +67,10 @@ PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingWitness, Vesting
 | `VestingScheduleParams` | The vesting params type. Filled only if you attach a schedule, but the slot must always be instantiated. | `vesting_wallet_linear::Params` |
 
 The sale never prices a purchase itself. It accepts a `Quote` - carrying a
-curve-computed `allocation` - and applies it **verbatim**, bounded only by unallocated
-inventory and `u64` overflow guards. There is **no `max_rate` field and no
-independent per-payment rate check**: correct pricing is delegated to the curve.
+curve-computed `allocation` - and applies it **verbatim**, bounded only by a
+non-zero floor (a paying buyer must receive tokens), unallocated inventory, and
+`u64` overflow guards. There is **no `max_rate` field and no independent
+per-payment rate check**: correct pricing is delegated to the curve.
 
 What keeps this safe is the **witness gate**. A `Quote` for a `PrefundedSale<C, …>`
 can only be minted by passing a value of type `C`, and `C`'s constructor is private to
@@ -119,7 +120,7 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
   create_sale ─┐
   deposit       │
   set_per_buyer_cap          │  Init phase - sale is an OWNED value;
-  set_vesting_schedule_params├   holding it by &mut is the authority.
+  set_vesting_schedule       ├   holding it by &mut is the authority.
   enable_allowlist           │   All setup happens here.
   pair_refund_vault          │
                              │
@@ -166,14 +167,26 @@ directly from the vault; this never depends on admin liveness.
 
 ### Optional vesting
 
-Attach an issuer-defined schedule with `set_vesting_schedule_params` during `Init`.
+Attach an issuer-defined schedule with `set_vesting_schedule` during `Init`. The
+schedule is supplied as a `VestingSchedule<VestingWitness, VestingScheduleParams>` that
+only the curve module can mint (e.g. `vesting_wallet_linear::vesting_schedule(..)`), so
+the witness and params pinned in the sale's type are guaranteed to be a matching pair -
+naming one curve's witness with another's params simply fails to compile.
 When set, the plain `claim` path aborts and the only redemption route is
 `claim_into_vesting`, which returns a funded
 [`VestingWallet`](../finance) (from `openzeppelin_finance`) - with `beneficiary` forced
 to the buyer and the sale's fixed schedule params - plus the wallet's `DestroyCap`
-(teardown authority). The buyer cannot influence or bypass the schedule. Releases pay
-into the beneficiary's address balance, so the buyer receives funds without holding
-the wallet.
+(teardown authority). The buyer cannot supply or override the schedule, nor swap in a
+permissive curve of their own: the wallet is built under the sale's pinned
+`VestingWitness`, so only that curve module can release it. The lockup then holds only
+as long as the issuer-pinned curve is **non-expansive in the wallet's total**
+(`balance + released`) - the wallet is returned by value, so the buyer can `deposit`
+into it, and a deposit of `d` must raise the releasable amount by at most `d` or a
+top-up buys early release. The shipped `vesting_wallet_linear` satisfies this; a
+threshold curve that unlocks everything once the total crosses a level does not. Curve
+selection is the issuer's responsibility, fixed at `create_sale`, not a buyer lever.
+Releases pay into the beneficiary's address balance, so the buyer receives funds
+without holding the wallet.
 
 ## Choosing a sale shape
 
@@ -247,7 +260,7 @@ public fun launch(
     // 3. Optional knobs - all Init-only and one-shot.
     sale.set_per_buyer_cap(per_buyer_cap, ctx);
     // let allow_admin = sale.enable_allowlist(ctx);  // for a strategic round
-    // sale.set_vesting_schedule_params(vesting_wallet_linear::params(...));
+    // sale.set_vesting_schedule(vesting_wallet_linear::vesting_schedule(...));
 
     // 4. Pair a fresh, empty, Active vault, then activate. share_and_activate takes
     //    the vault by value and shares it together with the sale, so the
@@ -312,7 +325,7 @@ transfer::public_transfer(coin::from_balance(money_back, ctx), ctx.sender());
 
 ### Redeem into vesting
 
-For a sale created with `set_vesting_schedule_params`, redemption must go through
+For a sale created with `set_vesting_schedule`, redemption must go through
 `claim_into_vesting`. The vesting schedule - both its `VestingWitness` (here
 `vesting_wallet_linear::Linear`) and its `VestingScheduleParams` - is fixed at
 `create_sale`, so `claim_into_vesting` infers **every** type argument from the `sale`
@@ -400,8 +413,9 @@ in a wallet.
 
 ## Security Notes
 
-- **The curve is trusted.** The sale applies the curve's allocation verbatim, bounded
-  only by inventory and overflow. The witness gate makes a `FixedRateCurve` sale
+- **The curve is trusted.** The sale applies the curve's allocation verbatim,
+  bounded only by a non-zero floor (a paying buyer must receive tokens),
+  inventory, and overflow. The witness gate makes a `FixedRateCurve` sale
   un-priceable by anything but the fixed-rate module; a *custom* curve is
   security-critical and must be audited with the sale.
 - **Quotes are freshness-safe only when versioned.** A state-dependent curve must mint
