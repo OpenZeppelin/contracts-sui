@@ -8,6 +8,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_finance`
+
+#### Added
+
+- `vesting_wallet`: new `VestingSchedule<W, P>` type bundling a curve's schedule params with its witness, plus a `new_schedule` constructor and `params` accessor. Lets a curve-agnostic consumer accept a witness-pinned schedule that keeps its witness and params type arguments coherent. (#489)
+- `vesting_wallet_linear`: `vesting_schedule` and `vesting_schedule_continuous` constructors that validate and bundle a stepped/continuous `Params` into a `VestingSchedule<Linear, Params>`, plus `into_vesting_schedule` to wrap an already-built `Params`. (#489)
+
+### `openzeppelin_sale`
+
+#### Changed (Breaking)
+
+- `prefunded_sale::mint_quote` now takes a precomputed `allocation: u64` instead of `rate: u64`; aborts if the curve-computed allocation is zero. (#487)
+- Moved the `allocation = paid * rate` overflow check (and the `EAllocationOverflow` error) from `prefunded_sale` into `fixed_rate_curve`, where the multiplication now lives. (#487)
+- `prefunded_sale` abort codes renumbered: `EZeroAllocation` added at code `10`; `ERaisedOverflow`, `EHardCapExceeded`, and `EInsufficientInventoryAtActivate` shifted to `11`/`12`/`13`; `EAllocationOverflow` removed. (#487)
+
 ## 1.5.0 (17-07-2026)
 
 ### `openzeppelin_timelock`
@@ -33,13 +48,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `prefunded_sale` module: a fixed-price, pre-funded token sale (presale / IDO) over a fixed inventory, generic over a witness-gated pricing curve, with an `Init -> Active -> Finalized | Cancelled` lifecycle and permissionless buyer redemption (`purchase`, `finalize`, `cancel_after_close`, `claim` / `refund`). (#414)
 - `fixed_rate_curve` module: the built-in `allocation = paid * rate` curve, minting the `Quote` and `ActivationTicket` a `FixedRateCurve` sale requires. (#414)
 - `refund_vault` module: a generic refundable escrow over `Balance<P>` that holds proceeds on cancel and pays buyers back individually; usable standalone. (#414)
-
-### `openzeppelin_finance`
-
-#### Added
-
-- `vesting_wallet`: new `VestingSchedule<W, P>` type bundling a curve's schedule params with its witness, plus a `new_schedule` constructor and `params` accessor. Lets a curve-agnostic consumer accept a witness-pinned schedule that keeps its witness and params type arguments coherent. (#489)
-- `vesting_wallet_linear`: `vesting_schedule` and `vesting_schedule_continuous` constructors that validate and bundle a stepped/continuous `Params` into a `VestingSchedule<Linear, Params>`, plus `into_vesting_schedule` to wrap an already-built `Params`. (#489)
 
 ### `openzeppelin_collections`
 

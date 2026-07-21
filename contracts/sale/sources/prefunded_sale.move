@@ -212,23 +212,23 @@ const EInvalidCapsOrdering: vector<u8> = "The minimum raise cannot exceed the ma
 #[error(code = 9)]
 const EZeroPayment: vector<u8> = "The payment must be greater than zero";
 
-/// A purchase would push `raised + paid` past `u64::MAX`.
+/// A quote was minted with a zero `allocation`; a paying buyer must receive tokens.
 #[error(code = 10)]
+const EZeroAllocation: vector<u8> = "The token allocation must be greater than zero";
+
+/// A purchase would push `raised + paid` past `u64::MAX`.
+#[error(code = 11)]
 const ERaisedOverflow: vector<u8> = "The total amount raised would be too large to represent";
 
 /// A purchase would push `raised` past `hard_cap`.
-#[error(code = 11)]
+#[error(code = 12)]
 const EHardCapExceeded: vector<u8> = "This purchase would exceed the maximum raise";
 
 /// At activation, `inventory` did not cover the backing the curve's
 /// `ActivationTicket` requires.
-#[error(code = 12)]
+#[error(code = 13)]
 const EInsufficientInventoryAtActivate: vector<u8> =
     "Not enough tokens have been deposited to back the sale";
-
-/// A quote's `allocation` (`paid * rate`) would exceed `u64::MAX`.
-#[error(code = 13)]
-const EAllocationOverflow: vector<u8> = "The token allocation would be too large to represent";
 
 /// A purchase's `allocation` exceeded the sale's unallocated inventory
 /// (`inventory - total_allocated`). Only reachable via a dishonest curve.
@@ -524,8 +524,12 @@ public struct ActivationTicket<phantom Curve: drop> {
 // the curve's `allocation` verbatim. The curve is a trusted, first-party
 // component: the witness gate (only the module declaring `C` can mint a
 // `Quote` for a `PrefundedSale<C, ..>`) is the security boundary. The
-// sale's only independent protections are inventory backing
-// (`allocation <= inventory - total_allocated`) and u128 overflow guards.
+// sale's only independent protections are a non-zero-allocation floor
+// (a paying buyer must receive tokens), inventory backing
+// (`allocation <= inventory - total_allocated`), and a checked-u64 raise
+// guard (`purchase` asserts `u64::MAX - paid >= raised` before summing
+// `raised + paid`). The widened allocation-product overflow check is
+// `fixed_rate_curve`'s, not the sale's.
 
 /// Hot-potato carrying a curve-priced quote for a single purchase.
 public struct Quote<phantom PaymentCoin> {
@@ -1123,7 +1127,8 @@ public fun share_and_activate<
 /// **The curve is trusted.** `purchase` accepts the quote's `allocation` verbatim;
 /// the sale does not re-derive or bound it against any sale-held rate (there is no
 /// `max_rate` field). The only checks on it are inventory backing
-/// (`allocation <= inventory - total_allocated`) and overflow. Correct pricing is
+/// (`allocation <= inventory - total_allocated`) and overflow; `mint_quote` has
+/// already guaranteed it is non-zero. Correct pricing is
 /// delegated to the witness-gated curve module - the witness gate (only the
 /// declaring curve can mint a `Quote` for its sale type) is what makes this safe.
 /// See the `Quote` section below.
@@ -1821,25 +1826,35 @@ public fun refund<
 // === Quote ===
 
 /// Witness-gated quote constructor. The curve module declaring `Curve` calls this
-/// from its `quote(..)` function after running whatever pricing math it owns. The
-/// witness is taken by value (`_w: Curve`), so a caller cannot mint a quote without
-/// the declaring curve module's cooperation.
+/// from its `quote(..)` function after running whatever pricing math it owns,
+/// passing the fully-computed `allocation`. The witness is taken by value
+/// (`_w: Curve`), so a caller cannot mint a quote without the declaring curve
+/// module's cooperation.
+///
+/// The sale applies `allocation` verbatim - it performs no pricing arithmetic of its
+/// own. A curve is free to compute it however it likes (widened multiplication,
+/// division with an explicit rounding mode, a lookup table), so it can express any
+/// price on any `SaleCoin`/`PaymentCoin` decimal pairing. The sale's only checks on
+/// `allocation` are the witness gate here, a non-zero floor (a paying buyer must
+/// receive tokens - the dual of `EZeroPayment`, and the one bound the sale keeps
+/// against a curve that rounds a real payment down to nothing), and the
+/// unallocated-inventory bound in `purchase`.
 ///
 /// #### Parameters
 /// - `sale`: The sale the quote is bound to (by id).
 /// - `_w`: The curve witness `Curve`; proves the caller is the declaring curve
 ///   module.
 /// - `payment`: The buyer's payment, moved into the returned `Quote`.
-/// - `rate`: Sale tokens allocated per payment unit, supplied by the curve; the
-///   allocation is `payment.value() * rate`.
+/// - `allocation`: The sale-token allocation the curve computed for `payment`,
+///   carried verbatim through to `purchase`.
 ///
 /// #### Returns
 /// - A single-use `Quote<PaymentCoin>` pinned to this sale, carrying `payment` and
-///   the computed allocation.
+///   `allocation`.
 ///
 /// #### Aborts
 /// - `EZeroPayment` if `payment` has zero value.
-/// - `EAllocationOverflow` if `payment.value() * rate` would exceed `u64::MAX`.
+/// - `EZeroAllocation` if `allocation` is zero.
 public fun mint_quote<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1858,12 +1873,11 @@ public fun mint_quote<
     >,
     _w: Curve,
     payment: Balance<PaymentCoin>,
-    rate: u64,
+    allocation: u64,
 ): Quote<PaymentCoin> {
     assert!(payment.value() > 0, EZeroPayment);
-    let allocation = (payment.value() as u128) * (rate as u128);
-    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
-    Quote { sale_id: object::id(sale), payment, allocation: allocation as u64 }
+    assert!(allocation > 0, EZeroAllocation);
+    Quote { sale_id: object::id(sale), payment, allocation }
 }
 
 // === View helpers ===
