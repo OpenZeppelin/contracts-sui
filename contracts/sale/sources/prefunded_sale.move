@@ -1786,10 +1786,11 @@ public fun withdraw_unsold_inventory<
 /// - `EReceiptSaleMismatch` if `receipt` was issued by a different sale.
 /// - `EBuyerOnly` if `ctx.sender()` is not the receipt's buyer.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`, and
-///   `refund_vault::EInsufficientLocked`, propagated from the paired vault via
-///   `release_balance` (guarded by the sale's refund-solvency invariant, so unreachable
-///   in normal operation).
+/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`,
+///   `refund_vault::EZeroRelease`, and `refund_vault::EInsufficientLocked`, propagated
+///   from the paired vault via `release_balance` (guarded by the sale's refund-solvency
+///   invariant and the nonzero-payment check at purchase, so unreachable in normal
+///   operation).
 public fun refund<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1854,10 +1855,11 @@ public fun refund<
 /// - `EReceiptSaleMismatch` if any receipt was issued by a different sale.
 /// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`, and
-///   `refund_vault::EInsufficientLocked`, propagated from the paired vault via
-///   `release_balance` (guarded by the sale's refund-solvency invariant, so unreachable
-///   in normal operation).
+/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`,
+///   `refund_vault::EZeroRelease`, and `refund_vault::EInsufficientLocked`, propagated
+///   from the paired vault via `release_balance` (guarded by the sale's refund-solvency
+///   invariant and the nonzero-payment check at purchase, so unreachable in normal
+///   operation).
 public fun refund_all<
     Curve: drop,
     CurveParams: copy + drop + store,
