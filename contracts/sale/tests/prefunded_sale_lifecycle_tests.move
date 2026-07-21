@@ -207,7 +207,7 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
 }
 
 // Soft cap met -> cannot cancel after close (must finalize).
-#[test, expected_failure(abort_code = prefunded_sale::ESoftCapMet)]
+#[test, expected_failure(abort_code = prefunded_sale::ESoftCapReached)]
 fun cancel_after_close_soft_cap_met_aborts() {
     let (mut test, mut clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
@@ -221,8 +221,23 @@ fun cancel_after_close_soft_cap_met_aborts() {
     abort
 }
 
+// No soft cap configured -> cannot cancel after close (nothing to miss; must finalize).
+#[test, expected_failure(abort_code = prefunded_sale::ESoftCapNotSet)]
+fun cancel_after_close_no_soft_cap_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000); // soft_cap == 0
+    buy_once(&mut test, &clk, 300);
+    clk.set_for_testing(5_001);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    sale.cancel_after_close(&mut vault, &clk); // aborts
+    abort
+}
+
 // Window still open -> cannot cancel_after_close.
-#[test, expected_failure(abort_code = prefunded_sale::ESaleWindowStillOpen)]
+#[test, expected_failure(abort_code = prefunded_sale::ESaleNotClosed)]
 fun cancel_after_close_window_open_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
@@ -232,6 +247,23 @@ fun cancel_after_close_window_open_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk); // aborts
+    abort
+}
+
+// A sold-out sale still inside its window aborts on the window guard
+// (ESaleNotClosed), not a sold-out/soft-cap message: the window must close
+// first, and then finalize - not cancel - is the legal path. Regression for the audit
+// finding that the shared message falsely claimed the sale "has not sold out".
+#[test, expected_failure(abort_code = prefunded_sale::ESaleNotClosed)]
+fun cancel_after_close_sold_out_in_window_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 1_000); // raised == hard_cap, still in window
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    sale.cancel_after_close(&mut vault, &clk); // aborts: window still open
     abort
 }
 
@@ -416,7 +448,7 @@ fun cancel_emergency_hard_cap_reached_aborts() {
 }
 
 // A sale that has met its soft cap cannot be emergency-cancelled.
-#[test, expected_failure(abort_code = prefunded_sale::ESoftCapMet)]
+#[test, expected_failure(abort_code = prefunded_sale::ESoftCapReached)]
 fun cancel_emergency_soft_cap_met_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
