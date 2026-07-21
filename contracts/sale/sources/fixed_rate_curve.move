@@ -113,7 +113,7 @@ public struct Params has copy, drop, store {
 /// rate_denominator` (widening the multiplication before the division to avoid
 /// overflow, and choosing a rounding mode). The denominator lets the price land on
 /// any rational rather than only reciprocal-integer fractions, which removes the
-/// grid; a numerator above the denominator raises the price past the old ceiling.
+/// grid; a numerator below the denominator raises the price past the old ceiling.
 ///
 /// #### Parameters
 /// - `rate`: Sale tokens (smallest units) allocated per 1 payment-coin smallest
