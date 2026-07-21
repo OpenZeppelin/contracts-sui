@@ -219,6 +219,35 @@ let vault = GatedVault { id: object::new(ctx), inner, /* ... */ };
 Every curve following the pattern exposes an analogous `params` constructor, so the
 protocol stays one integration wide across curves.
 
+**Keeping the `(S, P)` pair coherent.** A consumer that pins `S` and `P` as *separate*
+type parameters (rather than nesting an already-built wallet) has nothing binding the two
+on its own: a caller can instantiate it with one curve's witness and another curve's
+params. That mispairing **type-checks** - a bare `P` carries no evidence of which curve it
+came from - but the `VestingWallet<S, P, C>` it produces can never be advanced, because
+only the module that owns `S` can mint the `VestedAmount<S>` that `release` needs, and a
+curve following the reference pattern types that minting entry to its own params, not the
+foreign one. The funds vest into a wallet nobody can release: locked, not lost, but
+permanently stuck.
+
+`VestingSchedule<S, P>` closes this off. `vesting_wallet::new_schedule` bundles a `P`
+behind its witness, and since minting one takes an `S` value, only the declaring curve can
+build it - so the bundle is the witness's testimony that `P` is *its* params. A consumer
+that accepts a `VestingSchedule<S, P>` rather than a bare `P` forces its two slots to unify
+against a coherent pair at the call site; an incoherent pairing has no inhabitant and never
+compiles. The linear curve exposes `vesting_schedule` / `vesting_schedule_continuous` to
+build a bundle from raw inputs, and `into_vesting_schedule` to wrap a `Params` you already
+hold; unwrap the bundle with `.params()` when you build the wallet.
+
+> [!IMPORTANT]
+> If your integration lets a caller choose the curve by pinning `S` and `P` as separate
+> type parameters, **accept a `VestingSchedule<S, P>`, not a bare `P`.** It turns "the
+> witness and params match" from a convention the caller must uphold into a fact the
+> compiler checks. `openzeppelin_sale`'s [`prefunded_sale`](../sale) is the worked example:
+> its `set_vesting_schedule` takes a `VestingSchedule<VestingWitness, VestingScheduleParams>`,
+> so the schedule attached to a sale always matches the witness and params pinned in the
+> sale's type - an issuer cannot misconfigure a sale into one whose vesting can never be
+> released.
+
 ### Custom schedules
 
 To author a new curve, follow the `vesting_wallet_linear` pattern:
@@ -236,14 +265,30 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    MyParams>`, then `vesting_wallet::consume_receipt(receipt, MyCurve {})` to recover
    the beneficiary and parameters and destructure them. `destroy_empty` is permissionless;
    the witness-gated `consume_receipt` is what lets the curve run teardown logic or veto.
+5. *(Optional)* A `vesting_schedule(..): VestingSchedule<MyCurve, MyParams>` constructor -
+   sugar over `vesting_wallet::new_schedule(MyCurve {}, params(..))` - for consumers that
+   pin the `(witness, params)` pair as separate type slots and need the compile-time
+   guarantee that the two match (see "Curve-agnostic protocols" above).
 
 The curve **must be monotonically non-decreasing in time and bounded above by
-`balance + released`.** `release` enforces only the failure modes that threaten funds:
-a regression *below* `released` aborts with `EVestedBelowReleased`, and exceeding
-`balance + released` aborts with `EInsufficientBalance` - in both cases before any state
-changes, so funds stay safe. An in-range regression (the attested cumulative dips but
-stays `>= released`) does **not** abort: `release` silently pays the smaller increment
-`vested - released`. Keep the curve monotone so releases only ever move forward.
+`balance + released`, and non-expansive in the total.** The last property is easy to
+miss: `deposit` is permissionless and curve modules read `balance + released` as the
+current total, so a deposit of `d` must raise the vested (hence releasable) amount by
+at most `d`. Otherwise a deposit pays for itself - a party who can fund the wallet tops
+the total up to where more than the deposit unlocks and drains the difference early. A threshold curve that vests nothing below some total and everything at or above it is
+the trap: it is constant in time (so trivially monotone) and equals the total at the
+threshold (so bounded), yet a single deposit clears the threshold and releases the lot.
+
+The reference linear curve is safe because it releases a time-fraction of the total, so
+a deposit only accelerates by a fraction of itself. `release` enforces only the failure
+modes that threaten funds: a regression *below* `released` aborts with
+`EVestedBelowReleased`, and exceeding `balance + released` aborts with
+`EInsufficientBalance` - in both cases before any state changes, so funds stay safe.
+
+An in-range regression (the attested cumulative dips but stays `>= released`) does **not**
+abort, and non-expansiveness is not checked at all: `release` silently pays the smaller
+increment `vested - released`, so a well-behaved curve must stay monotone and
+non-expansive on its own.
 
 ### The `VestedAmount` attestation
 
@@ -289,8 +334,10 @@ one per integration boundary described above:
   data, not a capability.
 - **A custom curve must stay honest.** The wallet trusts the witness and never
   re-derives the curve. A curve that mints a dishonest amount against its own wallet
-  can over-release up to the wallet's balance. Keep curves monotonic and bounded by
-  `balance + released`.
+  can over-release up to the wallet's balance. Keep curves monotonic, bounded by
+  `balance + released`, and non-expansive in that total - a deposit of `d` must raise
+  the releasable amount by at most `d`, or a top-up buys early release (see *Custom
+  schedules*).
 - **Coins sent to a destroyed wallet are stranded.** After `destroy`/`destroy_empty`
   the object address has no claim path. `vesting_wallet_linear::destroy` requires the
   schedule to have ended, which blocks front-running a pending deposit; pair teardown
