@@ -362,33 +362,33 @@ const ENotCancelled: vector<u8> = "The sale must have been cancelled";
 #[error(code = 40)]
 const ENotTerminal: vector<u8> = "The sale must have ended";
 
+/// A freshness-enforced quote was consumed after a purchase advanced the sale's
+/// `state_version` since the quote was minted, so its price is stale.
+#[error(code = 41)]
+const EStaleQuote: vector<u8> = "The sale state changed after this quote was minted";
+
+/// `create_sale` was given a window longer than `MAX_SALE_DURATION_MS`.
+#[error(code = 42)]
+const ESaleDurationTooLong: vector<u8> =
+    "The sale window cannot exceed the maximum allowed duration";
+
 /// `cancel_after_close` was attempted before the sale reached its closing time
 /// (`now <= closes_at_ms`). Distinct from `ESaleWindowStillOpen`, the compound
 /// `finalize` guard that also requires the hard cap to be unmet.
-#[error(code = 41)]
+#[error(code = 43)]
 const ESaleNotClosed: vector<u8> = "The sale is still open";
 
 /// A cancel (`cancel_after_close` or `cancel_emergency`) was attempted on a sale that
 /// has met its soft cap (`soft_cap > 0` and `raised >= soft_cap`); a successful raise
 /// must `finalize`.
-#[error(code = 42)]
+#[error(code = 44)]
 const ESoftCapReached: vector<u8> = "The sale cannot be cancelled: it has met its minimum raise";
 
 /// `pair_refund_vault` was given a `RefundVaultCap` that does not control the supplied
 /// vault. Distinct from `EWrongVault`, the later-lifecycle check that a supplied vault
 /// is the one paired with the sale.
-#[error(code = 43)]
-const EWrongVaultCap: vector<u8> = "This capability does not control the provided refund vault";
-
-/// A freshness-enforced quote was consumed after a purchase advanced the sale's
-/// `state_version` since the quote was minted, so its price is stale.
-#[error(code = 44)]
-const EStaleQuote: vector<u8> = "The sale state changed after this quote was minted";
-
-/// `create_sale` was given a window longer than `MAX_SALE_DURATION_MS`.
 #[error(code = 45)]
-const ESaleDurationTooLong: vector<u8> =
-    "The sale window cannot exceed the maximum allowed duration";
+const EWrongVaultCap: vector<u8> = "This capability does not control the provided refund vault";
 
 // === Constants ===
 
