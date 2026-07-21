@@ -277,10 +277,10 @@ public struct DestroyCap has key, store {
 /// A curve's schedule `params` bundled with its witness `W` - the safe shape to hand a
 /// schedule to any consumer that pins `W` and `P` as *separate* type parameters.
 ///
-/// Constructing one via `new_schedule` requires a *value* of type `W`, and only the
-/// module that declares `W` can produce that value - so a `VestingSchedule<W, P>` can
-/// only be built by the curve that owns `W`, which fixes `P` to that same curve's
-/// parameters. A consumer that accepts this bundle (rather than a bare `P`) therefore
+/// Constructing one via `new_schedule` requires a *value* of type `W`. For a proper
+/// curve witness (a `drop` type whose declaring module is its sole constructor), only the
+/// declaring module can produce that value - so a `VestingSchedule<W, P>` can only be
+/// built by the curve that owns `W`, which fixes `P` to that same curve's parameters.
 /// forces its own witness and params type arguments to unify against a coherent pair: an
 /// incoherent pairing has no inhabitant and fails to type-check.
 ///
@@ -735,6 +735,12 @@ public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingW
 }
 
 /// Read the parameters carried by a `VestingSchedule` bundle.
+///
+/// #### Parameters
+/// - `schedule`: The vesting-schedule bundle to read.
+///
+/// #### Returns
+/// - The schedule parameters `P` carried by the bundle.
 public fun params<W: drop, P: copy + drop + store>(schedule: &VestingSchedule<W, P>): P {
     schedule.params
 }

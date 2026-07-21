@@ -169,13 +169,9 @@ public fun activation_ticket<
 
 /// Mint a `Quote<PaymentCoin>` for a buyer's `balance`. This curve computes the
 /// allocation as `balance.value() * rate`, u128-widened to detect overflow, and
-/// hands the finished `u64` to `prefunded_sale::mint_quote`. The `Quote` carries
-/// the balance through to `purchase`.
-///
-/// The rate is fixed at construction, so the quote is minted via
-/// `prefunded_sale::mint_quote_unversioned`: it opts out of freshness, letting a buyer
-/// mint and purchase several quotes in one PTB. A state-dependent curve would use the
-/// freshness-enforced `prefunded_sale::mint_quote` instead.
+/// hands the finished `u64` to `prefunded_sale::mint_quote_unversioned`, letting
+/// a buyer mint and purchase several quotes in one PTB. The `Quote` carries the
+/// balance through to `purchase`.
 ///
 /// #### Parameters
 /// - `sale`: The sale being purchased from, read for its configured `rate`.
