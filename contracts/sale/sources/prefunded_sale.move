@@ -2040,7 +2040,7 @@ public fun mint_quote<
 ///
 /// #### Aborts
 /// - `EZeroPayment` if `payment` has zero value.
-/// - `EAllocationOverflow` if `payment.value() * rate` would exceed `u64::MAX`.
+/// - `EAllocationOverflow` if `allocation` is zero.
 public fun mint_quote_unversioned<
     Curve: drop,
     CurveParams: copy + drop + store,
