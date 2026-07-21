@@ -186,7 +186,7 @@ public fun revoke<SaleCoin>(self: &mut KycRegistry<SaleCoin>, cap: &KycAdminCap,
 /// - `EBuyerNotApproved` if `ctx.sender()` is not on the allowlist.
 public fun request_entry<SaleCoin>(
     self: &KycRegistry<SaleCoin>,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ): AllowEntry<SaleCoin> {
     let buyer = ctx.sender();
     assert!(self.approved.contains(&buyer), EBuyerNotApproved);
