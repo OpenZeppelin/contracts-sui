@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### `openzeppelin_sale`
+
+#### Changed
+
+- `prefunded_sale::deposit` no longer emits `InventoryDeposited` on zero amount. (#508)
+- `refund_vault::release_balance` now rejects a zero `amount` (`EZeroRelease`). (#508)
+- `refund_vault::withdraw_all` no longer emits `VaultRelease` on zero amount. (#508)
+
 ## 1.5.0 (17-07-2026)
 
 ### `openzeppelin_timelock`

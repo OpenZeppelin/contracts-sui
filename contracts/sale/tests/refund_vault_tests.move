@@ -191,6 +191,17 @@ fun release_over_locked_aborts() {
     abort
 }
 
+// release rejects a zero amount.
+#[test, expected_failure(abort_code = refund_vault::EZeroRelease)]
+fun release_zero_aborts() {
+    let mut ctx = tx_context::dummy();
+    let (mut vault, cap) = refund_vault::new<USDC>(&mut ctx);
+    vault.deposit(&cap, u::pay_balance(100));
+    vault.flip_to_refunding(&cap);
+    let _part = vault.release_balance(&cap, 0); // aborts
+    abort
+}
+
 // withdraw_all requires Closed.
 #[test, expected_failure(abort_code = refund_vault::ENotClosedState)]
 fun withdraw_all_in_active_aborts() {
