@@ -388,19 +388,19 @@ const ENotCancelled: vector<u8> = "The sale must have been cancelled";
 #[error(code = 40)]
 const ENotTerminal: vector<u8> = "The sale must have ended";
 
-/// A freshness-enforced quote was consumed after a purchase advanced the sale's
-/// `state_version` since the quote was minted, so its price is stale.
-#[error(code = 41)]
-const EStaleQuote: vector<u8> = "The sale state changed after this quote was minted";
-
 /// `create_sale` was given a window longer than `MAX_SALE_DURATION_MS`.
-#[error(code = 42)]
+#[error(code = 41)]
 const ESaleDurationTooLong: vector<u8> =
     "The sale window cannot exceed the maximum allowed duration";
 
 /// A quote was minted with a zero `allocation`; a paying buyer must receive tokens.
 #[error(code = 42)]
 const EZeroAllocation: vector<u8> = "The token allocation must be greater than zero";
+
+/// A freshness-enforced quote was consumed after a purchase advanced the sale's
+/// `state_version` since the quote was minted, so its price is stale.
+#[error(code = 43)]
+const EStaleQuote: vector<u8> = "The sale state changed after this quote was minted";
 
 // === Constants ===
 
