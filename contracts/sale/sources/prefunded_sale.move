@@ -484,8 +484,10 @@ public struct PrefundedSale<
     contributions: Option<Table<address, u64>>,
     /// Optional issuer-defined vesting policy. When `Some`, redemption is via
     /// `claim_into_vesting` (which returns a funded `VestingWallet` and its
-    /// `DestroyCap`) rather than `claim`. Fixed at construction; the buyer cannot
-    /// influence it.
+    /// `DestroyCap`) rather than `claim`. The `VestingWitness` and
+    /// `VestingScheduleParams` type arguments are fixed at `create_sale`; the concrete
+    /// schedule stored here is fixed when attached via `set_vesting_schedule` during
+    /// `Init`. The buyer cannot influence it.
     vesting_schedule: Option<VestingSchedule<VestingWitness, VestingScheduleParams>>,
 }
 
@@ -908,12 +910,12 @@ public fun set_per_buyer_cap<
 ///
 /// #### Parameters
 /// - `sale`: The sale to configure, in `Init` phase.
-/// - `schedule`: The issuer-defined vesting schedule, minted by the curve module that
-///   owns `VestingWitness`. Because only that module can construct a
-///   `VestingSchedule<VestingWitness, VestingScheduleParams>`, the witness and params
-///   pinned in the sale's type are guaranteed to form a coherent pair - an incoherent
-///   pairing has no value to pass here and fails to compile. The unwrapped params are
-///   stored on the sale.
+/// - `schedule`: The issuer-defined vesting schedule. Constructing a
+///   `VestingSchedule<VestingWitness, VestingScheduleParams>` requires a value of
+///   `VestingWitness`; for a genuine curve witness (a `drop` type whose declaring module
+///   is its sole constructor) this means only the curve module can mint schedules.
+///   Accepting the bundle also enforces witness/params coherence: an incoherent pairing
+///   has no inhabitant and fails to compile. The carried schedule is stored on the sale.
 ///
 /// #### Aborts
 /// - `ENotInit` if the sale is not in `Init` phase.
@@ -1576,10 +1578,10 @@ public fun claim_all<
 /// `VestingWallet<VestingWitness, VestingScheduleParams, SaleCoin>` from
 /// `openzeppelin_finance`. The only redemption path for a vesting-attached sale.
 ///
-/// The wallet is constructed with the sale's issuer-defined schedule params and
-/// `beneficiary == ctx.sender()` (the asserted buyer), then funded with exactly the
-/// claimed `allocation`. The buyer cannot influence the schedule - it is fixed at
-/// sale construction. The vesting curve is **not** caller-chosen: the wallet's schedule
+/// The wallet is constructed with the params from the sale's attached vesting schedule
+/// and `beneficiary == ctx.sender()` (the asserted buyer), then funded with exactly the
+/// claimed `allocation`. The buyer cannot influence the schedule - it is fixed when the
+/// issuer attached it during `Init`. The vesting curve is **not** caller-chosen: the wallet's schedule
 /// witness is the sale's own `VestingWitness` type parameter, fixed at
 /// `create_sale`. Because the `&mut sale` argument unifies this function's
 /// `VestingWitness` with the sale's pinned witness, a buyer cannot substitute a
@@ -2429,6 +2431,9 @@ public fun payment<PaymentCoin>(q: &Quote<PaymentCoin>): &Balance<PaymentCoin> {
 public fun allocation<PaymentCoin>(q: &Quote<PaymentCoin>): u64 { q.allocation }
 
 /// Maximum sale duration in milliseconds.
+///
+/// #### Returns
+/// - The maximum sale duration, in milliseconds.
 public fun max_sale_duration_ms(): u64 {
     MAX_SALE_DURATION_MS
 }

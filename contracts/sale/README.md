@@ -155,23 +155,32 @@ directly from the vault; this never depends on admin liveness.
 
 Attach an issuer-defined schedule with `set_vesting_schedule` during `Init`. The
 schedule is supplied as a `VestingSchedule<VestingWitness, VestingScheduleParams>` that
-only the curve module can mint (e.g. `vesting_wallet_linear::vesting_schedule(..)`), so
-the witness and params pinned in the sale's type are guaranteed to be a matching pair -
-naming one curve's witness with another's params simply fails to compile.
+(for a genuine curve witness: a `drop` type whose declaring module is its sole constructor)
+only the curve module can mint (e.g. `vesting_wallet_linear::vesting_schedule(..)`), so the
+witness and params pinned in the sale's type are guaranteed to be a matching pair - naming
+one curve's witness with another's params simply fails to compile.
 When set, the plain `claim` path aborts and the only redemption route is
 `claim_into_vesting`, which returns a funded
 [`VestingWallet`](../finance) (from `openzeppelin_finance`) - with `beneficiary` forced
 to the buyer and the sale's fixed schedule params - plus the wallet's `DestroyCap`
 (teardown authority). The buyer cannot supply or override the schedule, nor swap in a
 permissive curve of their own: the wallet is built under the sale's pinned
-`VestingWitness`, so only that curve module can release it. The lockup then holds only
-as long as the issuer-pinned curve is **non-expansive in the wallet's total**
-(`balance + released`) - the wallet is returned by value, so the buyer can `deposit`
-into it, and a deposit of `d` must raise the releasable amount by at most `d` or a
-top-up buys early release. The shipped `vesting_wallet_linear` satisfies this; a
-threshold curve that unlocks everything once the total crosses a level does not. Curve
-selection is the issuer's responsibility, fixed at `create_sale`, not a buyer lever.
-Releases pay into the beneficiary's address balance, so the buyer receives funds
+`VestingWitness`, so only that curve module can release it. Two conditions on the
+issuer-pinned curve make that guarantee real:
+
+- **Private witness.** `VestingWitness` must be a private curve witness only its
+  declaring module can build (e.g. `Linear`). A publicly constructible witness (e.g.
+  `bool`) lets the buyer mint the pinned witness themselves and release the whole
+  allocation immediately, so integrators must pin a private witness type to enforce the
+  fixed schedule.
+- **Non-expansive in the wallet's total** (`balance + released`). The wallet is
+  returned by value, so the buyer can `deposit` into it, and a deposit of `d` must raise
+  the releasable amount by at most `d` or a top-up buys early release. The shipped
+  `vesting_wallet_linear` satisfies this; a threshold curve that unlocks everything once
+  the total crosses a level does not.
+
+Curve selection is the issuer's responsibility, fixed at `create_sale`, not a buyer
+lever. Releases pay into the beneficiary's address balance, so the buyer receives funds
 without holding the wallet.
 
 ## Choosing a sale shape
@@ -212,7 +221,7 @@ implicit - the sale is an owned value, so only its holder can pass it by `&mut`.
 use openzeppelin_sale::prefunded_sale;
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::refund_vault;
-use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
+use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params as VParams};
 use sui::clock::Clock;
 use sui::coin::Coin;
 
@@ -311,10 +320,10 @@ transfer::public_transfer(coin::from_balance(money_back, ctx), ctx.sender());
 
 ### Redeem into vesting
 
-For a sale created with `set_vesting_schedule`, redemption must go through
-`claim_into_vesting`. The vesting schedule - both its `VestingWitness` (here
-`vesting_wallet_linear::Linear`) and its `VestingScheduleParams` - is fixed at
-`create_sale`, so `claim_into_vesting` infers **every** type argument from the `sale`
+For a sale configured with `set_vesting_schedule` during `Init`, redemption must go through
+`claim_into_vesting`. The vesting witness/params type pair (here
+`vesting_wallet_linear::Linear` and `vesting_wallet_linear::Params`) is fixed at
+`create_sale`; `set_vesting_schedule` attaches the concrete schedule values, so `claim_into_vesting` infers **every** type argument from the `sale`
 it takes by `&mut`. The turbofish below is written out only to name the wallet's type;
 you can drop it entirely and let inference fill it in:
 
