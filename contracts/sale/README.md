@@ -155,9 +155,10 @@ directly from the vault; this never depends on admin liveness.
 
 Attach an issuer-defined schedule with `set_vesting_schedule` during `Init`. The
 schedule is supplied as a `VestingSchedule<VestingWitness, VestingScheduleParams>` that
-only the curve module can mint (e.g. `vesting_wallet_linear::vesting_schedule(..)`), so
-the witness and params pinned in the sale's type are guaranteed to be a matching pair -
-naming one curve's witness with another's params simply fails to compile.
+(for a genuine curve witness: a `drop` type whose declaring module is its sole constructor)
+only the curve module can mint (e.g. `vesting_wallet_linear::vesting_schedule(..)`), so the
+witness and params pinned in the sale's type are guaranteed to be a matching pair - naming
+one curve's witness with another's params simply fails to compile.
 When set, the plain `claim` path aborts and the only redemption route is
 `claim_into_vesting`, which returns a funded
 [`VestingWallet`](../finance) (from `openzeppelin_finance`) - with `beneficiary` forced
