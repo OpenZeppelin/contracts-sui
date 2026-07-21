@@ -10,7 +10,7 @@
 // that can mint quotes/tickets for them) and use `vesting_wallet_linear::{Params,
 // Linear}` as the `VestingScheduleParams` and `VestingWitness` slots. Vesting and
 // non-vesting sales therefore share one concrete type; the difference is only
-// whether the schedule Option is filled via `set_vesting_schedule_params`.
+// whether the schedule Option is filled via `set_vesting_schedule`.
 module openzeppelin_sale::test_utils;
 
 use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};

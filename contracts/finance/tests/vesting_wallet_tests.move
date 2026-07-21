@@ -892,3 +892,13 @@ fun owned_handoff_does_not_redirect_cashflow() {
 
     scenario.end();
 }
+
+// === Schedule bundle ===
+
+// `new_schedule` bundles params behind a witness gate, and `params` reads them back
+// unchanged. The witness value proves only the declaring module can build the bundle.
+#[test]
+fun new_schedule_bundles_and_returns_params() {
+    let schedule = vesting_wallet::new_schedule(TestCurve {}, TestParams { tag: PARAMS_TAG });
+    assert_eq!(schedule.params(), TestParams { tag: PARAMS_TAG });
+}
