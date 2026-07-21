@@ -65,6 +65,10 @@ const EWrongVaultCap: vector<u8> = "This capability does not control this refund
 #[error(code = 4)]
 const EInsufficientLocked: vector<u8> = "The requested amount exceeds the funds held in the vault";
 
+/// `release_balance` was called with a zero amount.
+#[error(code = 5)]
+const EZeroRelease: vector<u8> = "The release amount must be greater than zero";
+
 // === Structs ===
 
 /// The refund vault's lifecycle state. Transitions are one-way:
@@ -254,6 +258,7 @@ public fun flip_to_closed<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>
 /// #### Aborts
 /// - `EWrongVaultCap` if `cap` does not control `vault`.
 /// - `ENotRefundingState` if `vault` is not in `Refunding` state.
+/// - `EZeroRelease` if `amount` is zero.
 /// - `EInsufficientLocked` if `amount` exceeds the locked balance.
 public fun release_balance<P>(
     vault: &mut RefundVault<P>,
@@ -262,6 +267,7 @@ public fun release_balance<P>(
 ): Balance<P> {
     assert_cap(vault, cap);
     assert!(vault.state.is_refunding_state(), ENotRefundingState);
+    assert!(amount > 0, EZeroRelease);
     assert!(vault.locked.value() >= amount, EInsufficientLocked);
     let part = vault.locked.split(amount);
     event::emit(VaultRelease<P> {
