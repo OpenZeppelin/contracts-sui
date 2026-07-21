@@ -252,7 +252,7 @@ public fun open<P>(
 /// - `vault`: The campaign's paired refund vault.
 /// - `payment`: The backer's pledge, escrowed in full.
 /// - `clock`: Sui `Clock`, read for the current timestamp.
-/// - `ctx`: Transaction context; `ctx.sender()` is the backer credited.
+/// - `ctx`: Transaction context.
 ///
 /// #### Aborts
 /// - `EWrongVault` if `vault` is not the one paired with this campaign.
@@ -267,7 +267,7 @@ public fun pledge<P>(
     vault: &mut RefundVault<P>,
     payment: Balance<P>,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(object::id(vault) == campaign.vault_id, EWrongVault);
     assert!(clock.timestamp_ms() <= campaign.deadline_ms, ECampaignClosed);
@@ -371,7 +371,7 @@ public fun cancel<P>(campaign: &mut Campaign<P>, vault: &mut RefundVault<P>, clo
 /// #### Parameters
 /// - `campaign`: The shared, cancelled campaign.
 /// - `vault`: The campaign's paired refund vault, in the refunding state.
-/// - `ctx`: Transaction context; `ctx.sender()` is the backer refunded.
+/// - `ctx`: Transaction context.
 ///
 /// #### Aborts
 /// - `EWrongVault` if `vault` is not the one paired with this campaign.
@@ -383,7 +383,7 @@ public fun cancel<P>(campaign: &mut Campaign<P>, vault: &mut RefundVault<P>, clo
 ///   propagated from the vault release (guarded by the campaign's invariants -
 ///   the cap always matches and the ledger never exceeds the pooled balance - so
 ///   unreachable in normal operation).
-public fun refund<P>(campaign: &mut Campaign<P>, vault: &mut RefundVault<P>, ctx: &TxContext) {
+public fun refund<P>(campaign: &mut Campaign<P>, vault: &mut RefundVault<P>, ctx: &mut TxContext) {
     assert!(object::id(vault) == campaign.vault_id, EWrongVault);
     let backer = ctx.sender();
     assert!(campaign.pledges.contains(backer), ENoPledge);
