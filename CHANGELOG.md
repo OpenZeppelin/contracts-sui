@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `prefunded_sale::mint_quote` now takes a precomputed `allocation: u64` instead of `rate: u64`; aborts if the curve-computed allocation is zero. (#487)
 - Moved the `allocation = paid * rate` overflow check (and the `EAllocationOverflow` error) from `prefunded_sale` into `fixed_rate_curve`, where the multiplication now lives. (#487)
 - `prefunded_sale` abort codes renumbered: `EZeroAllocation` added at code `10`; `ERaisedOverflow`, `EHardCapExceeded`, and `EInsufficientInventoryAtActivate` shifted to `11`/`12`/`13`; `EAllocationOverflow` removed. (#487)
+- `prefunded_sale`: renamed `VestingScheduleParamsSet -> VestingScheduleSet`, adding the `VestingWitness` type param; renamed `set_vesting_schedule_params -> set_vesting_schedule`, which now accepts the `VestingSchedule<VestingWitness, VestingScheduleParams>` parameter instead of just `VestingScheduleParams`; renamed getter `vesting_schedule_params -> vesting_schedule`. (#489)
 
 ## 1.5.0 (17-07-2026)
 
