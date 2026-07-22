@@ -1047,3 +1047,29 @@ fun overflowing_refund_is_rejected_at_deposit() {
     wallet.fund(1);
     abort
 }
+
+// === Schedule bundles ===
+
+// `vesting_schedule` bundles a validated stepped `Params` pinned to the `Linear`
+// witness; unwrapping it yields the same `Params` the bare `params` constructor builds.
+#[test]
+fun vesting_schedule_carries_validated_params() {
+    let schedule = vesting_wallet_linear::vesting_schedule(100, 250, 1_000, 4);
+    assert_eq!(schedule.params(), vesting_wallet_linear::params(100, 250, 1_000, 4));
+}
+
+// `vesting_schedule_continuous` is the `period_ms = 1` analog, matching
+// `params_continuous`.
+#[test]
+fun vesting_schedule_continuous_carries_validated_params() {
+    let schedule = vesting_wallet_linear::vesting_schedule_continuous(100, 250, 1_000);
+    assert_eq!(schedule.params(), vesting_wallet_linear::params_continuous(100, 250, 1_000));
+}
+
+// `into_vesting_schedule` bundles a `Params` already in hand; unwrapping the bundle
+// returns that same `Params`.
+#[test]
+fun into_vesting_schedule_wraps_existing_params() {
+    let params = vesting_wallet_linear::params(100, 250, 1_000, 4);
+    assert_eq!(params.into_vesting_schedule().params(), params);
+}

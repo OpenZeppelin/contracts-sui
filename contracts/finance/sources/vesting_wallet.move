@@ -77,13 +77,25 @@
 ///    object beneficiary is never a sender, so that check could never be satisfied.
 ///
 /// The curve must be monotonically non-decreasing in time and bounded above by
-/// `balance + released`. `release` enforces only the failure modes that threaten
-/// funds: a regression *below* `released` aborts with `EVestedBelowReleased`, and
-/// exceeding `balance + released` aborts with `EInsufficientBalance` - in both cases
-/// before any state mutation, so funds stay safe. An in-range regression (the
-/// attested cumulative dips but stays `>= released`) does *not* abort: `release`
-/// silently pays the smaller increment `vested - released`. A well-behaved curve
-/// therefore stays monotone so releases only ever move forward.
+/// `balance + released`, and it must be **non-expansive in the total**: because
+/// `deposit` is permissionless and curve modules read `balance + released` as the
+/// current total, a deposit of `d` must raise the vested (hence releasable) amount by
+/// at most `d`. Otherwise a deposit pays for itself - a party who can fund the wallet
+/// tops the total up to where more than the deposit unlocks and drains the difference
+/// early. A threshold curve that vests nothing below some total and everything at or
+/// above it is the trap: it is constant in time (so trivially monotone) and equals the
+/// total at the threshold (so bounded), yet a single deposit clears the threshold and
+/// releases the lot. The reference linear curve is safe because a deposit of `d` raises
+/// the releasable amount by at most `d`: in the ideal pre-rounding model it releases a
+/// time-fraction of the total, so the increase is a fraction of `d`, and integer
+/// rounding keeps the actual increase bounded by `d`.
+/// `release` enforces only the failure modes that threaten funds: a regression *below*
+/// `released` aborts with `EVestedBelowReleased`, and exceeding `balance + released`
+/// aborts with `EInsufficientBalance` - in both cases before any state mutation, so
+/// funds stay safe. An in-range regression (the attested cumulative dips but stays
+/// `>= released`) does *not* abort, and the non-expansive property is not checked at
+/// all: `release` silently pays the smaller increment `vested - released`, so a
+/// well-behaved curve must stay monotone and non-expansive on its own.
 ///
 /// # Topologies
 ///
@@ -159,7 +171,9 @@ const EUnsweptFunds: vector<u8> = "Wallet has unswept settled funds at its addre
 /// construction; only `balance` and `released` change over time. Curve modules
 /// read `balance + released` as the wallet's "current total" when evaluating the
 /// schedule, so deposits made after the schedule starts can participate
-/// retroactively (the reference linear curve does this).
+/// retroactively (the reference linear curve does this) - which is exactly why a curve
+/// must be non-expansive in the total (see the module doc): a deposit may add at most
+/// its own amount to what is releasable.
 public struct VestingWallet<phantom S: drop, P: copy + drop + store, phantom C> has key, store {
     id: UID,
     /// Recipient of every `release`, read fresh from this field at call time.
@@ -260,6 +274,43 @@ public struct DestroyCap has key, store {
     wallet_id: ID,
 }
 
+/// A curve's schedule `params` bundled with its witness `W` - the safe shape to hand a
+/// schedule to any consumer that pins `W` and `P` as *separate* type parameters.
+///
+/// Constructing one via `new_schedule` requires a *value* of type `W`. For a proper
+/// curve witness (a `drop` type whose declaring module is its sole constructor), only the
+/// declaring module can produce that value - so a `VestingSchedule<W, P>` can only be
+/// built by the curve that owns `W`, which fixes `P` to that same curve's parameters.
+/// This forces its own witness and params type arguments to unify against a coherent pair:
+/// an incoherent pairing has no inhabitant and fails to type-check.
+///
+/// # Why an integrator should accept this over a bare `P`
+///
+/// A consumer that stores `W` and `P` as independent type parameters and takes the
+/// schedule as a bare `P` has nothing binding the two: a caller can instantiate it with
+/// one curve's witness and a *different* curve's params. That mispairing type-checks - a
+/// bare `P` carries no evidence of which curve it came from - but the resulting
+/// `VestingWallet<W, P, C>` can never be advanced. Only the module that owns `W` can mint
+/// the `VestedAmount<W>` that `release` needs, and a curve following the reference pattern
+/// types that minting entry to its own params, so it will not mint against a foreign `P`.
+/// The funds vest into a wallet nobody can release: locked, not lost, but permanently stuck
+/// (and, being non-empty, not even tearable down).
+///
+/// Requiring a `VestingSchedule<W, P>` makes that state unrepresentable. The bundle is the
+/// witness's testimony that `P` is *its* params, so a consumer that accepts it can only be
+/// configured with a coherent `(W, P)` pair - checked by the compiler at the call site,
+/// not left to the caller to get right. This is the recommended shape for any integration
+/// that lets a caller pick the curve. `openzeppelin_sale::prefunded_sale` is a good
+/// reference: its `set_vesting_schedule` takes a
+/// `VestingSchedule<VestingWitness, VestingScheduleParams>`, so the schedule attached to a
+/// sale is guaranteed to match the witness and params pinned in the sale's own type - an
+/// issuer cannot misconfigure a sale into one whose vesting can never be released.
+public struct VestingSchedule<phantom W: drop, P: copy + drop + store> has copy, drop, store {
+    /// The curve's stored configuration. Opaque here; only the declaring curve
+    /// interprets it.
+    params: P,
+}
+
 // === Events ===
 
 /// Emitted by `new` when a wallet is created.
@@ -344,7 +395,7 @@ public fun new<S: drop, P: copy + drop + store, C>(
         id: object::new(ctx),
         beneficiary,
         released: 0,
-        balance: balance::zero<C>(),
+        balance: balance::zero(),
         schedule_params,
     };
     let wallet_id = object::id(&wallet);
@@ -356,6 +407,23 @@ public fun new<S: drop, P: copy + drop + store, C>(
     });
 
     (wallet, DestroyCap { id: object::new(ctx), wallet_id })
+}
+
+/// Bundle a curve's `schedule_params` with its witness into a `VestingSchedule<W, P>`.
+/// Witness-gated: the caller must supply a value of type `W`, and only the module that
+/// declares `W` can construct one - so the returned bundle can only pair `params` with
+/// the witness of the curve that produced it. A consumer that accepts a
+/// `VestingSchedule<W, P>` thus gets a compile-time guarantee that `W` and `P` form a
+/// coherent pair, which passing a bare `P` cannot provide.
+///
+/// #### Parameters
+/// - `_w`: The curve witness `W`; proves the caller is the declaring curve module.
+/// - `params`: The curve's schedule configuration to bundle.
+///
+/// #### Returns
+/// - A `VestingSchedule<W, P>` carrying `params`, pinned to witness `W`.
+public fun new_schedule<W: drop, P: copy + drop + store>(_w: W, params: P): VestingSchedule<W, P> {
+    VestingSchedule { params }
 }
 
 /// Mint a `VestedAmount<S>` recording `amount` as the cumulative vested total for
@@ -389,12 +457,16 @@ public fun mint_vested_amount<S: drop, P: copy + drop + store, C>(
     // id won't match the target.
     //
     // What the stamp CANNOT check is whether `amount` is honest for *this* wallet. The
-    // curve module is responsible for that: `amount` must be a monotonically
-    // non-decreasing, `balance + released`-bounded function of this wallet's
-    // `schedule_params`. The wallet trusts the witness `S` and never re-derives the
-    // curve; a curve module that mints a dishonest amount against its own wallet would
-    // over-release (bounded only by the wallet's balance). Curve modules MUST uphold
-    // this invariant.
+    // curve module is responsible for that: `amount` is a function of the current clock,
+    // this wallet's `schedule_params`, and its total `balance + released`, and it must be
+    // (a) monotonically non-decreasing in time when `schedule_params` and the total are
+    // fixed, (b) bounded above by `balance + released`, and (c) non-expansive in the
+    // total when `schedule_params` and time are fixed - a deposit of `d` may raise
+    // `amount` by at most `d`, or a deposit pays for itself and defeats the lockup (see
+    // the module doc). The wallet trusts the witness `S` and never
+    // re-derives the curve; a curve module that mints a dishonest amount against its own
+    // wallet would over-release (bounded only by the wallet's balance). Curve modules
+    // MUST uphold these invariants.
     VestedAmount { wallet_id: object::id(wallet), amount }
 }
 
@@ -660,6 +732,17 @@ public fun amount<S>(vested: &VestedAmount<S>): u64 {
 /// information.
 public fun schedule_params<S: drop, P: copy + drop + store, C>(wallet: &VestingWallet<S, P, C>): P {
     wallet.schedule_params
+}
+
+/// Read the parameters carried by a `VestingSchedule` bundle.
+///
+/// #### Parameters
+/// - `schedule`: The vesting-schedule bundle to read.
+///
+/// #### Returns
+/// - The schedule parameters `P` carried by the bundle.
+public fun params<W: drop, P: copy + drop + store>(schedule: &VestingSchedule<W, P>): P {
+    schedule.params
 }
 
 /// Address that receives every `release`.
