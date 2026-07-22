@@ -22,7 +22,10 @@ fun new_starts_active_and_empty() {
 
     let created = event::events_by_type<refund_vault::RefundVaultCreated<USDC>>();
     assert_eq!(created.length(), 1);
-    assert_eq!(created[0], refund_vault::test_new_refund_vault_created<USDC>(object::id(&vault)));
+    assert_eq!(
+        created[0],
+        refund_vault::test_new_refund_vault_created<USDC>(object::id(&vault), object::id(&cap)),
+    );
 
     destroy(vault);
     destroy(cap);
@@ -45,10 +48,10 @@ fun deposit_then_close_then_withdraw_all() {
 
     // Events: two deposits (300 then 700), one Active->Closed transition, one full release.
     let vid = object::id(&vault);
-    let deposits = event::events_by_type<refund_vault::VaultDeposit<USDC>>();
+    let deposits = event::events_by_type<refund_vault::VaultDeposited<USDC>>();
     assert_eq!(deposits.length(), 2);
-    assert_eq!(deposits[0], refund_vault::test_new_vault_deposit<USDC>(vid, 300, 300));
-    assert_eq!(deposits[1], refund_vault::test_new_vault_deposit<USDC>(vid, 700, 1_000));
+    assert_eq!(deposits[0], refund_vault::test_new_vault_deposited<USDC>(vid, 300, 300));
+    assert_eq!(deposits[1], refund_vault::test_new_vault_deposited<USDC>(vid, 700, 1_000));
     let changes = event::events_by_type<refund_vault::VaultStateChanged<USDC>>();
     assert_eq!(changes.length(), 1);
     assert_eq!(
@@ -59,9 +62,9 @@ fun deposit_then_close_then_withdraw_all() {
             refund_vault::test_state_closed(),
         ),
     );
-    let releases = event::events_by_type<refund_vault::VaultRelease<USDC>>();
+    let releases = event::events_by_type<refund_vault::VaultReleased<USDC>>();
     assert_eq!(releases.length(), 1);
-    assert_eq!(releases[0], refund_vault::test_new_vault_release<USDC>(vid, 1_000, 0));
+    assert_eq!(releases[0], refund_vault::test_new_vault_released<USDC>(vid, 1_000, 0));
 
     destroy(out);
     destroy(vault);
@@ -83,9 +86,9 @@ fun deposit_then_refunding_then_release_partial() {
 
     // Events: one deposit, one Active->Refunding transition, one partial release.
     let vid = object::id(&vault);
-    let deposits = event::events_by_type<refund_vault::VaultDeposit<USDC>>();
+    let deposits = event::events_by_type<refund_vault::VaultDeposited<USDC>>();
     assert_eq!(deposits.length(), 1);
-    assert_eq!(deposits[0], refund_vault::test_new_vault_deposit<USDC>(vid, 1_000, 1_000));
+    assert_eq!(deposits[0], refund_vault::test_new_vault_deposited<USDC>(vid, 1_000, 1_000));
     let changes = event::events_by_type<refund_vault::VaultStateChanged<USDC>>();
     assert_eq!(changes.length(), 1);
     assert_eq!(
@@ -96,9 +99,9 @@ fun deposit_then_refunding_then_release_partial() {
             refund_vault::test_state_refunding(),
         ),
     );
-    let releases = event::events_by_type<refund_vault::VaultRelease<USDC>>();
+    let releases = event::events_by_type<refund_vault::VaultReleased<USDC>>();
     assert_eq!(releases.length(), 1);
-    assert_eq!(releases[0], refund_vault::test_new_vault_release<USDC>(vid, 400, 600));
+    assert_eq!(releases[0], refund_vault::test_new_vault_released<USDC>(vid, 400, 600));
 
     destroy(part);
     destroy(vault);
@@ -106,7 +109,7 @@ fun deposit_then_refunding_then_release_partial() {
 }
 
 // A zero-value deposit is a no-op: the balance is consumed, but the locked
-// amount and state are unchanged (and no VaultDeposit event is emitted). The
+// amount and state are unchanged (and no VaultDeposited event is emitted). The
 // vault stays fully usable afterwards.
 #[test]
 fun deposit_zero_is_noop() {
@@ -116,21 +119,21 @@ fun deposit_zero_is_noop() {
     vault.deposit(&cap, u::pay_balance(0));
     assert_eq!(vault.value(), 0);
     assert!(vault.is_active());
-    // The zero-value deposit emitted no VaultDeposit event.
-    assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 0);
+    // The zero-value deposit emitted no VaultDeposited event.
+    assert_eq!(event::events_by_type<refund_vault::VaultDeposited<USDC>>().length(), 0);
 
     // Still accepts real deposits after the no-op.
     vault.deposit(&cap, u::pay_balance(500));
     assert_eq!(vault.value(), 500);
     // Only the non-zero deposit produced an event.
-    assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 1);
+    assert_eq!(event::events_by_type<refund_vault::VaultDeposited<USDC>>().length(), 1);
 
     destroy(vault);
     destroy(cap);
 }
 
 // withdraw_all on an empty (closed) vault is idempotent: it returns an empty
-// balance and emits no VaultRelease event.
+// balance and emits no VaultReleased event.
 #[test]
 fun withdraw_all_empty_emits_no_event() {
     let mut ctx = tx_context::dummy();
@@ -139,7 +142,7 @@ fun withdraw_all_empty_emits_no_event() {
     vault.flip_to_closed(&cap);
     let out = vault.withdraw_all(&cap);
     assert_eq!(out.value(), 0);
-    assert_eq!(event::events_by_type<refund_vault::VaultRelease<USDC>>().length(), 0);
+    assert_eq!(event::events_by_type<refund_vault::VaultReleased<USDC>>().length(), 0);
 
     destroy(out);
     destroy(vault);

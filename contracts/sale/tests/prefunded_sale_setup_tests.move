@@ -171,6 +171,7 @@ fun create_sale_initializes_in_init_phase() {
         created[0],
         prefunded_sale::test_new_sale_created<SALE, USDC, FixedRateCurve, FrcParams>(
             object::id(&sale),
+            object::id(&cap),
             1_000,
             500,
             1_000,
@@ -955,7 +956,7 @@ fun share_and_activate_emits_pairing_and_activation_events() {
     assert_eq!(activated.length(), 1);
     assert_eq!(
         activated[0],
-        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, u::opens()),
+        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, 1_000, u::opens()),
     );
 
     destroy(cap);

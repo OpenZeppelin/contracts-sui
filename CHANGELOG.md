@@ -39,6 +39,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `prefunded_sale::deposit` no longer emits `InventoryDeposited` on zero amount. (#508)
 - `refund_vault::release_balance` now rejects a zero `amount` (`EZeroRelease`). (#508)
 - `refund_vault::withdraw_all` no longer emits `VaultRelease` on zero amount. (#508)
+- `prefunded_sale::SaleCreated` now carries the `admin_cap_id` of the admin cap minted alongside the sale, and `refund_vault::RefundVaultCreated` now carries the `cap_id` of the controller cap minted alongside the vault. (#511)
+- `prefunded_sale::SaleActivated` now carries the `required_inventory` computed at activation. (#511)
+- `prefunded_sale`: `Purchased`, `Claimed`, and `Refunded` now carry `total_allocated_after` (the sale's total allocated after the operation), and `Refunded` additionally carries `allocation` (the allocation released back to the unallocated pool by the refund). (#511)
+- Renamed events `VaultDeposit`/`VaultRelease` to `VaultDeposited`/`VaultReleased` for naming consistency. (#515)
 
 ## 1.5.0 (17-07-2026)
 

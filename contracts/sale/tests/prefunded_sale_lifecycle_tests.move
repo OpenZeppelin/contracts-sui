@@ -181,12 +181,12 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
             5_001,
         ),
     );
-    // do_cancel routes proceeds into the vault (VaultDeposit 300) then flips Active -> Refunding.
-    let deposits = event::events_by_type<refund_vault::VaultDeposit<USDC>>();
+    // do_cancel routes proceeds into the vault (VaultDeposited 300) then flips Active -> Refunding.
+    let deposits = event::events_by_type<refund_vault::VaultDeposited<USDC>>();
     assert_eq!(deposits.length(), 1);
     assert_eq!(
         deposits[0],
-        refund_vault::test_new_vault_deposit<USDC>(object::id(&vault), 300, 300),
+        refund_vault::test_new_vault_deposited<USDC>(object::id(&vault), 300, 300),
     );
     let changed = event::events_by_type<refund_vault::VaultStateChanged<USDC>>();
     assert_eq!(changed.length(), 1);
@@ -337,9 +337,9 @@ fun cancel_emergency_zero_raised_succeeds() {
     assert!(vault.is_refunding());
     assert_eq!(vault.value(), 0);
 
-    // Zero proceeds -> the vault deposit is a no-op and emits no VaultDeposit; the sale
+    // Zero proceeds -> the vault deposit is a no-op and emits no VaultDeposited; the sale
     // still cancels (SaleCancelled with raised == 0) and the vault still flips to Refunding.
-    assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 0);
+    assert_eq!(event::events_by_type<refund_vault::VaultDeposited<USDC>>().length(), 0);
     let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
     assert_eq!(cancelled.length(), 1);
     assert_eq!(
