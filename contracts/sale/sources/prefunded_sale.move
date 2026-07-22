@@ -2093,6 +2093,9 @@ public fun refund_all<
     ctx: &mut TxContext,
 ): Balance<PaymentCoin> {
     assert!(sale.is_cancelled(), ENotCancelled);
+    let paired_vault_id = *sale.refund_vault_id.borrow();
+    assert!(object::id(vault) == paired_vault_id, EWrongVault);
+
     let mut total = balance::zero();
     while (!receipts.is_empty()) {
         let r = receipts.pop_back();
