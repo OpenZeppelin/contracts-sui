@@ -395,7 +395,7 @@ public fun new<S: drop, P: copy + drop + store, C>(
         id: object::new(ctx),
         beneficiary,
         released: 0,
-        balance: balance::zero<C>(),
+        balance: balance::zero(),
         schedule_params,
     };
     let wallet_id = object::id(&wallet);
