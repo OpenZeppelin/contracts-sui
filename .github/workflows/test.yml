@@ -170,8 +170,11 @@ jobs:
             trap 'git checkout -- $files' EXIT
             perl -0pi -e 's/#\[test\]\nfun differential_1200_ops/#[allow(unused_function)]\nfun differential_1200_ops/g' $files
             # Fail loudly if the disable didn't happen (e.g. after a reformat),
-            # otherwise the traced run silently hangs again.
-            if sui move test --list 2>/dev/null | grep -q '::differential_1200_ops:'; then
+            # otherwise the traced run silently hangs again. Capture the list
+            # first so `sui move test` can't die from SIGPIPE (which under
+            # pipefail would mask a match and skip this guard).
+            test_list=$(sui move test --list 2>/dev/null || true)
+            if grep -q '::differential_1200_ops:' <<<"$test_list"; then
               echo "::error::failed to disable differential_1200_ops before tracing" >&2
               exit 1
             fi
