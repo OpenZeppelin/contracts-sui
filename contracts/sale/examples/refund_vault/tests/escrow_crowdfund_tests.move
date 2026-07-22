@@ -20,7 +20,7 @@ use openzeppelin_sale::example_escrow_crowdfund::{
     Self as crowdfund,
     Campaign,
     CampaignFinalized,
-    Refunded
+    Refunded,
 };
 use openzeppelin_sale::refund_vault::{Self, RefundVault};
 use std::unit_test::{assert_eq, destroy};
