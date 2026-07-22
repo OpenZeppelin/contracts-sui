@@ -41,7 +41,7 @@ fun finalize_after_close_succeeds() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
-    assert!(sale.phase().is_finalized());
+    assert!(sale.is_finalized());
     assert!(vault.is_closed());
     assert_eq!(sale.proceeds_amount(), 500); // proceeds stay until withdrawn
 
@@ -81,7 +81,7 @@ fun finalize_early_when_hard_cap_reached() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
-    assert!(sale.phase().is_finalized());
+    assert!(sale.is_finalized());
     u::return_sale(sale);
     u::return_vault(vault);
 
@@ -165,7 +165,7 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert!(vault.is_refunding());
     assert_eq!(vault.value(), 300); // locked == raised
     assert_eq!(sale.proceeds_amount(), 0); // proceeds drained
@@ -181,12 +181,12 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
             5_001,
         ),
     );
-    // do_cancel routes proceeds into the vault (VaultDeposit 300) then flips Active -> Refunding.
-    let deposits = event::events_by_type<refund_vault::VaultDeposit<USDC>>();
+    // do_cancel routes proceeds into the vault (VaultDeposited 300) then flips Active -> Refunding.
+    let deposits = event::events_by_type<refund_vault::VaultDeposited<USDC>>();
     assert_eq!(deposits.length(), 1);
     assert_eq!(
         deposits[0],
-        refund_vault::test_new_vault_deposit<USDC>(object::id(&vault), 300, 300),
+        refund_vault::test_new_vault_deposited<USDC>(object::id(&vault), 300, 300),
     );
     let changed = event::events_by_type<refund_vault::VaultStateChanged<USDC>>();
     assert_eq!(changed.length(), 1);
@@ -207,7 +207,7 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
 }
 
 // Soft cap met -> cannot cancel after close (must finalize).
-#[test, expected_failure(abort_code = prefunded_sale::ESoftCapMet)]
+#[test, expected_failure(abort_code = prefunded_sale::ESoftCapReached)]
 fun cancel_after_close_soft_cap_met_aborts() {
     let (mut test, mut clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
@@ -221,8 +221,23 @@ fun cancel_after_close_soft_cap_met_aborts() {
     abort
 }
 
+// No soft cap configured -> cannot cancel after close (nothing to miss; must finalize).
+#[test, expected_failure(abort_code = prefunded_sale::ESoftCapNotSet)]
+fun cancel_after_close_no_soft_cap_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000); // soft_cap == 0
+    buy_once(&mut test, &clk, 300);
+    clk.set_for_testing(5_001);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    sale.cancel_after_close(&mut vault, &clk); // aborts
+    abort
+}
+
 // Window still open -> cannot cancel_after_close.
-#[test, expected_failure(abort_code = prefunded_sale::ESaleWindowStillOpen)]
+#[test, expected_failure(abort_code = prefunded_sale::ESaleNotClosed)]
 fun cancel_after_close_window_open_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
@@ -232,6 +247,23 @@ fun cancel_after_close_window_open_aborts() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk); // aborts
+    abort
+}
+
+// A sold-out sale still inside its window aborts on the window guard
+// (ESaleNotClosed), not a sold-out/soft-cap message: the window must close
+// first, and then finalize - not cancel - is the legal path. Regression for the audit
+// finding that the shared message falsely claimed the sale "has not sold out".
+#[test, expected_failure(abort_code = prefunded_sale::ESaleNotClosed)]
+fun cancel_after_close_sold_out_in_window_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 1_000); // raised == hard_cap, still in window
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    sale.cancel_after_close(&mut vault, &clk); // aborts: window still open
     abort
 }
 
@@ -265,7 +297,7 @@ fun cancel_emergency_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert_eq!(vault.value(), 100);
 
     let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
@@ -301,13 +333,13 @@ fun cancel_emergency_zero_raised_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert!(vault.is_refunding());
     assert_eq!(vault.value(), 0);
 
-    // Zero proceeds -> the vault deposit is a no-op and emits no VaultDeposit; the sale
+    // Zero proceeds -> the vault deposit is a no-op and emits no VaultDeposited; the sale
     // still cancels (SaleCancelled with raised == 0) and the vault still flips to Refunding.
-    assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 0);
+    assert_eq!(event::events_by_type<refund_vault::VaultDeposited<USDC>>().length(), 0);
     let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
     assert_eq!(cancelled.length(), 1);
     assert_eq!(
@@ -344,7 +376,7 @@ fun cancel_emergency_at_exact_close_soft_cap_unmet_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert_eq!(vault.value(), 300);
 
     u::return_sale(sale);
@@ -416,7 +448,7 @@ fun cancel_emergency_hard_cap_reached_aborts() {
 }
 
 // A sale that has met its soft cap cannot be emergency-cancelled.
-#[test, expected_failure(abort_code = prefunded_sale::ESoftCapMet)]
+#[test, expected_failure(abort_code = prefunded_sale::ESoftCapReached)]
 fun cancel_emergency_soft_cap_met_aborts() {
     let (mut test, clk) = u::setup();
     u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);

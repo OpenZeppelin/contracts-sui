@@ -271,12 +271,24 @@ To author a new curve, follow the `vesting_wallet_linear` pattern:
    guarantee that the two match (see "Curve-agnostic protocols" above).
 
 The curve **must be monotonically non-decreasing in time and bounded above by
-`balance + released`.** `release` enforces only the failure modes that threaten funds:
-a regression *below* `released` aborts with `EVestedBelowReleased`, and exceeding
-`balance + released` aborts with `EInsufficientBalance` - in both cases before any state
-changes, so funds stay safe. An in-range regression (the attested cumulative dips but
-stays `>= released`) does **not** abort: `release` silently pays the smaller increment
-`vested - released`. Keep the curve monotone so releases only ever move forward.
+`balance + released`, and non-expansive in the total.** The last property is easy to
+miss: `deposit` is permissionless and curve modules read `balance + released` as the
+current total, so a deposit of `d` must raise the vested (hence releasable) amount by
+at most `d`. Otherwise a deposit pays for itself - a party who can fund the wallet tops
+the total up to where more than the deposit unlocks and drains the difference early. A threshold curve that vests nothing below some total and everything at or above it is
+the trap: it is constant in time (so trivially monotone) and equals the total at the
+threshold (so bounded), yet a single deposit clears the threshold and releases the lot.
+
+The reference linear curve is safe because it releases a time-fraction of the total, so
+a deposit only accelerates by a fraction of itself. `release` enforces only the failure
+modes that threaten funds: a regression *below* `released` aborts with
+`EVestedBelowReleased`, and exceeding `balance + released` aborts with
+`EInsufficientBalance` - in both cases before any state changes, so funds stay safe.
+
+An in-range regression (the attested cumulative dips but stays `>= released`) does **not**
+abort, and non-expansiveness is not checked at all: `release` silently pays the smaller
+increment `vested - released`, so a well-behaved curve must stay monotone and
+non-expansive on its own.
 
 ### The `VestedAmount` attestation
 
@@ -322,8 +334,10 @@ one per integration boundary described above:
   data, not a capability.
 - **A custom curve must stay honest.** The wallet trusts the witness and never
   re-derives the curve. A curve that mints a dishonest amount against its own wallet
-  can over-release up to the wallet's balance. Keep curves monotonic and bounded by
-  `balance + released`.
+  can over-release up to the wallet's balance. Keep curves monotonic, bounded by
+  `balance + released`, and non-expansive in that total - a deposit of `d` must raise
+  the releasable amount by at most `d`, or a top-up buys early release (see *Custom
+  schedules*).
 - **Coins sent to a destroyed wallet are stranded.** After `destroy`/`destroy_empty`
   the object address has no claim path. `vesting_wallet_linear::destroy` requires the
   schedule to have ended, which blocks front-running a pending deposit; pair teardown
