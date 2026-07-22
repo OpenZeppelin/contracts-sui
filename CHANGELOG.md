@@ -17,12 +17,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### `openzeppelin_sale`
 
+#### Added
+
+- new getter `max_sale_duration_ms`. (#488)
+- `prefunded_sale::mint_quote_unversioned`: a witness-gated quote constructor that opts out of freshness, for curves whose price is immune to sale-state changes (e.g. `fixed_rate_curve`); lets several quotes be minted and purchased in one PTB. (#499)
+- `prefunded_sale`: the phase predicates `is_init`, `is_active`, `is_finalized`, and `is_cancelled` are now `public` (previously package-private), plus a new `refund_vault_id` getter returning the paired refund vault's `Option<ID>`. (#504)
+- `prefunded_sale::refund_all` batch helper. (#507)
+
 #### Changed (Breaking)
 
+- `prefunded_sale`: `Quote`s minted via `mint_quote` are now freshness-enforced. `mint_quote` stamps the sale's new `state_version`, every `purchase` advances it, and `purchase` aborts with the new `EStaleQuote` if an intervening same-PTB purchase advanced it since the quote was minted. Adds a `state_version` field to `PrefundedSale` and `minted_at_version` to `Quote`. (#499)
 - `prefunded_sale::mint_quote` now takes a precomputed `allocation: u64` instead of `rate: u64`; aborts if the curve-computed allocation is zero. (#487)
 - Moved the `allocation = paid * rate` overflow check (and the `EAllocationOverflow` error) from `prefunded_sale` into `fixed_rate_curve`, where the multiplication now lives. (#487)
-- `prefunded_sale` abort codes renumbered: `EZeroAllocation` added at code `10`; `ERaisedOverflow`, `EHardCapExceeded`, and `EInsufficientInventoryAtActivate` shifted to `11`/`12`/`13`; `EAllocationOverflow` removed. (#487)
+- `prefunded_sale`: `EAllocationOverflow` (code `13`) is no longer emitted - its `paid * rate` overflow check moved to `fixed_rate_curve` - and its code is retired rather than reused; `ERaisedOverflow`, `EHardCapExceeded`, and `EInsufficientInventoryAtActivate` keep their existing codes `10`/`11`/`12`. A new `EZeroAllocation` error is appended at code `42`. (#487)
 - `prefunded_sale`: renamed `VestingScheduleParamsSet -> VestingScheduleSet`, adding the `VestingWitness` type param; renamed `set_vesting_schedule_params -> set_vesting_schedule`, which now accepts the `VestingSchedule<VestingWitness, VestingScheduleParams>` parameter instead of just `VestingScheduleParams`; renamed getter `vesting_schedule_params -> vesting_schedule`. (#489)
+- set a maximum sale duration cap `prefunded_sale::create_sale`, aborts with `ESaleDurationTooLong`. (#488)
+- `prefunded_sale::SaleCreated` event's `CurveParams` type parameter moved to the end, and added `Curve` type parameter. (#491)
+- `prefunded_sale`: aligned every abort message and doc comment with the guard that raises it, splitting error codes that conflated two predicates. `pair_refund_vault`'s wrong-cap check now raises a dedicated `EWrongVaultCap` (distinct from `EWrongVault`); `cancel_after_close`'s window check raises `ESaleNotClosed` (distinct from `finalize`'s `ESaleWindowStillOpen`); and the shared `ESoftCapMet` is replaced by `ESoftCapNotSet` and `ESoftCapReached`. `EActivationAfterClose`'s message now reflects its inclusive `now >= closes_at_ms` guard. (#498)
+- `prefunded_sale`: removed the `phase` getter (which returned the internal `Phase` value); query the phase through the `is_init` / `is_active` / `is_finalized` / `is_cancelled` predicates instead. (#504)
+- `prefunded_sale::mint_activation_ticket` and `fixed_rate_curve::activation_ticket` now abort with `ENotInit` unless the sale is in the `Init` phase. (#505)
+- `prefunded_sale::deposit` no longer emits `InventoryDeposited` on zero amount. (#508)
+- `refund_vault::release_balance` now rejects a zero `amount` (`EZeroRelease`). (#508)
+- `refund_vault::withdraw_all` no longer emits `VaultRelease` on zero amount. (#508)
+- `prefunded_sale::SaleCreated` now carries the `admin_cap_id` of the admin cap minted alongside the sale, and `refund_vault::RefundVaultCreated` now carries the `cap_id` of the controller cap minted alongside the vault. (#511)
+- `prefunded_sale::SaleActivated` now carries the `required_inventory` computed at activation. (#511)
+- `prefunded_sale`: `Purchased`, `Claimed`, and `Refunded` now carry `total_allocated_after` (the sale's total allocated after the operation), and `Refunded` additionally carries `allocation` (the allocation released back to the unallocated pool by the refund). (#511)
+- Renamed events `VaultDeposit`/`VaultRelease` to `VaultDeposited`/`VaultReleased` for naming consistency. (#515)
 
 ## 1.5.0 (17-07-2026)
 

@@ -116,6 +116,7 @@ fun claim_returns_allocation_and_draws_inventory() {
             u::buyer(),
             receipt_id,
             200,
+            0, // total_allocated_after
         ),
     );
     destroy(payout);
@@ -137,9 +138,40 @@ fun claim_all_sums_receipts() {
     let mut sale = u::take_sale(&test);
     let r1 = test.take_from_address<Receipt<SALE>>(u::buyer());
     let r2 = test.take_from_address<Receipt<SALE>>(u::buyer());
+    // Snapshot each receipt's id and allocation before they are consumed, so the
+    // per-event assertions below hold regardless of the take order.
+    let (r1_id, r1_alloc) = (object::id(&r1), r1.allocation());
+    let (r2_id, r2_alloc) = (object::id(&r2), r2.allocation());
+    let sale_id = object::id(&sale);
     let payout = sale.claim_all(vector[r1, r2], test.ctx());
     assert_eq!(payout.value(), 350);
     assert_eq!(sale.total_allocated(), 0);
+
+    // One Claimed event per receipt, each self-contained. `claim_all` pops the vector
+    // from the back, so r2 is claimed first and r1 second; `total_allocated_after`
+    // steps down 350 -> 350 - r2_alloc -> 0 across the two events.
+    let claimed = event::events_by_type<prefunded_sale::Claimed<SALE, USDC>>();
+    assert_eq!(claimed.length(), 2);
+    assert_eq!(
+        claimed[0],
+        prefunded_sale::test_new_claimed<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            r2_id,
+            r2_alloc,
+            r1_alloc, // total_allocated_after
+        ),
+    );
+    assert_eq!(
+        claimed[1],
+        prefunded_sale::test_new_claimed<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            r1_id,
+            r1_alloc,
+            0, // total_allocated_after
+        ),
+    );
     destroy(payout);
     u::return_sale(sale);
 
@@ -308,7 +340,8 @@ fun claim_all_into_vesting_sums_into_one_wallet() {
     test.end();
 }
 
-// Regression (H-1): the vesting lockup cannot be bypassed. `claim_into_vesting` pins
+// Regression (H-1): the vesting lockup cannot be bypassed by substituting a witness.
+// `claim_into_vesting` pins
 // the sale's `Linear` witness (the `&mut sale` argument unifies the function's
 // `VestingWitness` with the sale's), so the buyer must release through the honest
 // curve, which enforces the cliff. Right after finalize nothing is releasable; only
@@ -425,12 +458,17 @@ fun refund_returns_paid_and_draws_vault() {
             u::buyer(),
             receipt_id,
             300,
+            300,
+            0, // total_allocated_after
         ),
     );
-    // refund releases the payment out of the vault (VaultRelease 300, nothing left).
-    let releases = event::events_by_type<refund_vault::VaultRelease<USDC>>();
+    // refund releases the payment out of the vault (VaultReleased 300, nothing left).
+    let releases = event::events_by_type<refund_vault::VaultReleased<USDC>>();
     assert_eq!(releases.length(), 1);
-    assert_eq!(releases[0], refund_vault::test_new_vault_release<USDC>(object::id(&vault), 300, 0));
+    assert_eq!(
+        releases[0],
+        refund_vault::test_new_vault_released<USDC>(object::id(&vault), 300, 0),
+    );
     destroy(payment);
     u::return_sale(sale);
     u::return_vault(vault);
@@ -508,6 +546,177 @@ fun refund_wrong_vault_aborts() {
     let (mut foreign_vault, _foreign_cap) = refund_vault::new<USDC>(test.ctx());
     let r = test.take_from_address<Receipt<SALE>>(u::buyer());
     let _payment = sale.refund(&mut foreign_vault, r, test.ctx()); // aborts: EWrongVault
+    abort
+}
+
+// === refund_all ===
+
+// refund_all sums the paid amounts of several receipts into one payment and
+// releases exactly that much from the vault.
+#[test]
+fun refund_all_sums_receipts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 100);
+    buy_once(&mut test, &clk, 250); // raised 350 < soft cap 500
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let r1 = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let r2 = test.take_from_address<Receipt<SALE>>(u::buyer());
+    // Snapshot each receipt's id, paid amount, and allocation before they are consumed,
+    // so the per-event assertions below hold regardless of the take order.
+    let (r1_id, r1_paid, r1_alloc) = (object::id(&r1), r1.paid(), r1.allocation());
+    let (r2_id, r2_paid, r2_alloc) = (object::id(&r2), r2.paid(), r2.allocation());
+    let sale_id = object::id(&sale);
+    let payment = sale.refund_all(&mut vault, vector[r1, r2], test.ctx());
+    assert_eq!(payment.value(), 350);
+    assert_eq!(vault.value(), 0); // drained exactly
+    assert_eq!(sale.total_allocated(), 0);
+
+    // One Refunded + one vault release per receipt (the loop redeems each individually).
+    // `refund_all` pops the vector from the back, so r2 is refunded first and r1 second;
+    // each Refunded carries its own `allocation`, and `total_allocated_after` steps down
+    // 350 -> 350 - r2_alloc -> 0 across the two events.
+    let refunded = event::events_by_type<prefunded_sale::Refunded<SALE, USDC>>();
+    assert_eq!(refunded.length(), 2);
+    assert_eq!(
+        refunded[0],
+        prefunded_sale::test_new_refunded<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            r2_id,
+            r2_paid,
+            r2_alloc,
+            r1_alloc, // total_allocated_after
+        ),
+    );
+    assert_eq!(
+        refunded[1],
+        prefunded_sale::test_new_refunded<SALE, USDC>(
+            sale_id,
+            u::buyer(),
+            r1_id,
+            r1_paid,
+            r1_alloc,
+            0, // total_allocated_after
+        ),
+    );
+    let releases = event::events_by_type<refund_vault::VaultReleased<USDC>>();
+    assert_eq!(releases.length(), 2);
+    destroy(payment);
+    u::return_sale(sale);
+    u::return_vault(vault);
+
+    destroy(clk);
+    test.end();
+}
+
+// refund_all before the sale is cancelled is rejected (the batch's own phase guard,
+// ahead of the per-receipt guard in `refund`).
+#[test, expected_failure(abort_code = prefunded_sale::ENotCancelled)]
+fun refund_all_before_cancel_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+    buy_once(&mut test, &clk, 100);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let _payment = sale.refund_all(&mut vault, vector[r], test.ctx()); // aborts: ENotCancelled
+    abort
+}
+
+// refund_all with no receipts returns an empty balance (the batch loop is a no-op).
+#[test]
+fun refund_all_empty_returns_zero() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let payment = sale.refund_all(&mut vault, vector<Receipt<SALE>>[], test.ctx());
+    assert_eq!(payment.value(), 0);
+    destroy(payment);
+    u::return_sale(sale);
+    u::return_vault(vault);
+
+    destroy(clk);
+    test.end();
+}
+
+// A batch containing a receipt from a different sale aborts the whole call
+// (all-or-nothing) - the per-receipt receipt-sale check in `refund` fires inside the
+// loop, so the valid receipt alongside it is never released.
+#[test, expected_failure(abort_code = prefunded_sale::EReceiptSaleMismatch)]
+fun refund_all_foreign_receipt_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    // A receipt minted against a foreign sale id (package-internal helper).
+    let foreign = receipt::new_receipt<SALE>(
+        object::id_from_address(@0xDEAD),
+        u::buyer(),
+        300,
+        300,
+        1_000,
+        test.ctx(),
+    );
+    let _payment = sale.refund_all(&mut vault, vector[r, foreign], test.ctx()); // aborts: EReceiptSaleMismatch
+    abort
+}
+
+// A batch that folds in another buyer's receipt aborts: the per-receipt buyer check in
+// `refund` rejects it even though the caller owns the other receipts in the batch.
+#[test, expected_failure(abort_code = prefunded_sale::EBuyerOnly)]
+fun refund_all_wrong_buyer_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 1_000, 1_000);
+    buy_once(&mut test, &clk, 100); // buyer
+    // buyer2 also purchases, so their receipt exists to smuggle into buyer's batch.
+    test.next_tx(u::buyer2());
+    {
+        let mut sale = u::take_sale(&test);
+        u::buy(&mut sale, 100, &clk, test.ctx());
+        u::return_sale(sale);
+    };
+    cancel_now(&mut test, &mut clk); // raised 200 < soft cap 1_000
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    let r_buyer = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let r_other = test.take_from_address<Receipt<SALE>>(u::buyer2());
+    let _payment = sale.refund_all(&mut vault, vector[r_buyer, r_other], test.ctx()); // aborts: EBuyerOnly
+    abort
+}
+
+// refund_all rejects a vault that is not the paired one, just like `refund` (the check
+// runs per receipt inside the loop).
+#[test, expected_failure(abort_code = prefunded_sale::EWrongVault)]
+fun refund_all_wrong_vault_aborts() {
+    let (mut test, mut clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 500, 1_000);
+    buy_once(&mut test, &clk, 300); // below soft cap
+    cancel_now(&mut test, &mut clk);
+
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    let (mut foreign_vault, _foreign_cap) = refund_vault::new<USDC>(test.ctx());
+    let r = test.take_from_address<Receipt<SALE>>(u::buyer());
+    let _payment = sale.refund_all(&mut foreign_vault, vector[r], test.ctx()); // aborts: EWrongVault
     abort
 }
 
