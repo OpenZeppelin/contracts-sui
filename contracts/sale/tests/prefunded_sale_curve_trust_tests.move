@@ -69,7 +69,7 @@ fun activation_trusts_undersized_required_inventory() {
 
     test.next_tx(u::admin());
     let sale = take_bad_sale(&test);
-    assert!(sale.phase().is_active());
+    assert!(sale.is_active());
     assert_eq!(sale.inventory_total(), 10); // < hard_cap, yet active
     ts::return_shared(sale);
 
@@ -128,11 +128,11 @@ fun overallocating_quote_within_inventory_is_accepted() {
 
 // === raised overflow guard ===
 
-// ERaisedOverflow fires before the hard-cap check when `raised + paid` would exceed
-// u64::MAX. The raised-overflow check runs before the inventory bound, so a tiny
-// allocation 1 (the minimum `mint_quote` permits) never gets in the way: a first buy
-// of u64::MAX pushes raised to u64::MAX (== hard_cap), then any further non-zero
-// payment overflows.
+// ERaisedOverflow fires before the hard-cap and inventory-bound checks when
+// `raised + paid` would exceed u64::MAX. A first buy of u64::MAX pushes raised to
+// u64::MAX (== hard_cap); a second non-zero payment then overflows before the
+// inventory bound is ever consulted - so even a second allocation that exceeds the
+// remaining inventory aborts with ERaisedOverflow, not EInsufficientInventory.
 #[test, expected_failure(abort_code = prefunded_sale::ERaisedOverflow)]
 fun purchase_raised_overflow_aborts() {
     let (mut test, clk) = u::setup();
@@ -149,13 +149,14 @@ fun purchase_raised_overflow_aborts() {
         1,
     );
     sale.purchase(q1, option::none(), &clk, test.ctx());
-    // Second buy: paid = 1 -> u64::MAX - 1 >= u64::MAX is false -> ERaisedOverflow, which
-    // fires before the inventory bound, so allocation 1 is never checked against it.
+    // Second buy: paid = 1 -> u64::MAX - 1 >= u64::MAX is false -> ERaisedOverflow. The
+    // allocation 10 exceeds the remaining inventory (10 - 1 = 9), but ERaisedOverflow
+    // fires before the inventory bound, so that allocation is never checked against it.
     let q2 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
         &sale,
         BadCurve {},
         u::pay_balance(1),
-        1,
+        10,
     );
     sale.purchase(q2, option::none(), &clk, test.ctx()); // aborts: ERaisedOverflow
     abort
@@ -182,4 +183,68 @@ fun mint_quote_zero_allocation_aborts() {
         0,
     );
     abort
+}
+
+// === Quote freshness (opt-in via mint_quote) ===
+
+// A versioned quote (minted via `mint_quote`) goes stale if another purchase advances
+// the sale's `state_version` between mint and consumption. Two quotes are minted up
+// front against version 0; the first purchase bumps the version, so consuming the
+// second aborts with EStaleQuote instead of filling at the pre-purchase price. This is
+// the guarantee a state-dependent curve relies on.
+#[test, expected_failure(abort_code = prefunded_sale::EStaleQuote)]
+fun stale_versioned_quote_aborts() {
+    let (mut test, clk) = u::setup();
+    activate_bad(&mut test, &clk, 1_000, 1_000, 1_000);
+
+    test.next_tx(u::buyer());
+    let mut sale = take_bad_sale(&test);
+    let q1 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
+        &sale,
+        BadCurve {},
+        u::pay_balance(1),
+        1,
+    );
+    let q2 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
+        &sale,
+        BadCurve {},
+        u::pay_balance(1),
+        1,
+    );
+    sale.purchase(q1, option::none(), &clk, test.ctx()); // state_version 0 -> 1
+    sale.purchase(q2, option::none(), &clk, test.ctx()); // q2 stamped 0 -> EStaleQuote
+    abort
+}
+
+// Re-minting a versioned quote after a purchase is fresh: the new quote stamps the
+// advanced `state_version` and is consumed at that same version, so it succeeds. This
+// is the intended usage for a state-dependent curve - re-quote between purchases.
+#[test]
+fun requoting_versioned_after_purchase_succeeds() {
+    let (mut test, clk) = u::setup();
+    activate_bad(&mut test, &clk, 1_000, 1_000, 1_000);
+
+    test.next_tx(u::buyer());
+    let mut sale = take_bad_sale(&test);
+    let q1 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
+        &sale,
+        BadCurve {},
+        u::pay_balance(1),
+        1,
+    );
+    sale.purchase(q1, option::none(), &clk, test.ctx()); // state_version 0 -> 1
+    // Re-quote against the advanced state; stamps version 1, consumed at version 1.
+    let q2 = prefunded_sale::mint_quote<BadCurve, u64, SALE, USDC, BadCurve, u64>(
+        &sale,
+        BadCurve {},
+        u::pay_balance(1),
+        1,
+    );
+    sale.purchase(q2, option::none(), &clk, test.ctx()); // fresh: succeeds
+    assert_eq!(sale.raised(), 2);
+    assert_eq!(sale.total_allocated(), 2);
+    ts::return_shared(sale);
+
+    destroy(clk);
+    test.end();
 }
