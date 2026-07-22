@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+## 1.5.1 (22-07-2026)
+
 ### `openzeppelin_finance`
 
 #### Added

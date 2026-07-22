@@ -26,7 +26,7 @@ payments deposited into it.
 
 ```toml
 [dependencies]
-openzeppelin_sale = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/sale", rev = "v1.5.0" }
+openzeppelin_sale = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/sale", rev = "v1.5.1" }
 ```
 
 > [!NOTE]
