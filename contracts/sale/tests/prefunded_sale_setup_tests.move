@@ -171,6 +171,7 @@ fun create_sale_initializes_in_init_phase() {
         created[0],
         prefunded_sale::test_new_sale_created<SALE, USDC, FixedRateCurve, FrcParams>(
             object::id(&sale),
+            object::id(&cap),
             1_000,
             500,
             1_000,
@@ -221,6 +222,42 @@ fun deposit_accumulates_inventory() {
         deposits[1],
         prefunded_sale::test_new_inventory_deposited<SALE, USDC>(object::id(&sale), 700, 1_000),
     );
+
+    destroy(sale);
+    destroy(cap);
+}
+
+// A zero-value deposit is a no-op: inventory is unchanged and no
+// InventoryDeposited event is emitted. The sale still accepts real deposits after.
+#[test]
+fun deposit_zero_is_noop() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+
+    sale.deposit(u::sale_balance(0));
+    assert_eq!(sale.inventory_total(), 0);
+    // The zero-value deposit emitted no InventoryDeposited event.
+    assert_eq!(event::events_by_type<prefunded_sale::InventoryDeposited<SALE, USDC>>().length(), 0);
+
+    // Still accepts real deposits after the no-op.
+    sale.deposit(u::sale_balance(500));
+    assert_eq!(sale.inventory_total(), 500);
+    // Only the non-zero deposit produced an event.
+    assert_eq!(event::events_by_type<prefunded_sale::InventoryDeposited<SALE, USDC>>().length(), 1);
 
     destroy(sale);
     destroy(cap);
@@ -919,7 +956,7 @@ fun share_and_activate_emits_pairing_and_activation_events() {
     assert_eq!(activated.length(), 1);
     assert_eq!(
         activated[0],
-        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, u::opens()),
+        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, 1_000, u::opens()),
     );
 
     destroy(cap);
