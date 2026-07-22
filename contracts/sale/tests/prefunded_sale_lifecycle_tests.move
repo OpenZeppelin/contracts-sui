@@ -41,7 +41,7 @@ fun finalize_after_close_succeeds() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
-    assert!(sale.phase().is_finalized());
+    assert!(sale.is_finalized());
     assert!(vault.is_closed());
     assert_eq!(sale.proceeds_amount(), 500); // proceeds stay until withdrawn
 
@@ -81,7 +81,7 @@ fun finalize_early_when_hard_cap_reached() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.finalize(&mut vault, &clk);
-    assert!(sale.phase().is_finalized());
+    assert!(sale.is_finalized());
     u::return_sale(sale);
     u::return_vault(vault);
 
@@ -165,7 +165,7 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
     let mut sale = u::take_sale(&test);
     let mut vault = u::take_vault(&test);
     sale.cancel_after_close(&mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert!(vault.is_refunding());
     assert_eq!(vault.value(), 300); // locked == raised
     assert_eq!(sale.proceeds_amount(), 0); // proceeds drained
@@ -181,12 +181,12 @@ fun cancel_after_close_succeeds_and_routes_proceeds() {
             5_001,
         ),
     );
-    // do_cancel routes proceeds into the vault (VaultDeposit 300) then flips Active -> Refunding.
-    let deposits = event::events_by_type<refund_vault::VaultDeposit<USDC>>();
+    // do_cancel routes proceeds into the vault (VaultDeposited 300) then flips Active -> Refunding.
+    let deposits = event::events_by_type<refund_vault::VaultDeposited<USDC>>();
     assert_eq!(deposits.length(), 1);
     assert_eq!(
         deposits[0],
-        refund_vault::test_new_vault_deposit<USDC>(object::id(&vault), 300, 300),
+        refund_vault::test_new_vault_deposited<USDC>(object::id(&vault), 300, 300),
     );
     let changed = event::events_by_type<refund_vault::VaultStateChanged<USDC>>();
     assert_eq!(changed.length(), 1);
@@ -297,7 +297,7 @@ fun cancel_emergency_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert_eq!(vault.value(), 100);
 
     let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
@@ -333,13 +333,13 @@ fun cancel_emergency_zero_raised_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert!(vault.is_refunding());
     assert_eq!(vault.value(), 0);
 
-    // Zero proceeds -> the vault deposit is a no-op and emits no VaultDeposit; the sale
+    // Zero proceeds -> the vault deposit is a no-op and emits no VaultDeposited; the sale
     // still cancels (SaleCancelled with raised == 0) and the vault still flips to Refunding.
-    assert_eq!(event::events_by_type<refund_vault::VaultDeposit<USDC>>().length(), 0);
+    assert_eq!(event::events_by_type<refund_vault::VaultDeposited<USDC>>().length(), 0);
     let cancelled = event::events_by_type<prefunded_sale::SaleCancelled<SALE, USDC>>();
     assert_eq!(cancelled.length(), 1);
     assert_eq!(
@@ -376,7 +376,7 @@ fun cancel_emergency_at_exact_close_soft_cap_unmet_succeeds() {
     let mut vault = u::take_vault(&test);
     let cap = u::take_cap(&test);
     sale.cancel_emergency(&cap, &mut vault, &clk);
-    assert!(sale.phase().is_cancelled());
+    assert!(sale.is_cancelled());
     assert_eq!(vault.value(), 300);
 
     u::return_sale(sale);
