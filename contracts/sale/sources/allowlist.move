@@ -138,7 +138,8 @@ public fun admin_sale_id<S>(admin: &AllowlistAdmin<S>): ID { admin.sale_id }
 //
 // Only the sale flavor's `enable_allowlist` calls this. Issuing an
 // admin commits the sale to allowlist mode (`requires_allowlist = true`)
-// and is idempotent on the sale side.
+// and is one-shot on the sale side: a second `enable_allowlist` aborts
+// with `EAllowlistAlreadyEnabled`.
 
 /// Issue the single `AllowlistAdmin<S>` for a sale. Called once by the sale flavor's
 /// `enable_allowlist`.

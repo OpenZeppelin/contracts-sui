@@ -18,9 +18,11 @@
 ///
 /// Struct fields are module-private, so only this module can construct a
 /// `FixedRateCurve` witness, and therefore only this module can mint a
-/// `Quote<FixedRateCurve>` (via `prefunded_sale::mint_quote_unversioned`). A sale
-/// parameterized by `FixedRateCurve` can be driven by no other pricing logic. The
-/// public `params` constructor is the seam an external protocol can use to build the
+/// `Quote` for a `PrefundedSale<FixedRateCurve, ..>` (via
+/// `prefunded_sale::mint_quote_unversioned`; `Quote` itself is tagged only by `PaymentCoin`,
+/// so the curve binding is enforced through the witness, not the `Quote`'s type). A sale
+/// parameterized by `FixedRateCurve` can be driven by no other pricing logic. The public
+/// `params` constructor is the seam an external protocol can use to build the
 /// config without surrendering the witness.
 ///
 /// ### Purchase
@@ -54,6 +56,14 @@ const ERequiredInventoryOverflow: vector<u8> =
 
 /// `paid * rate` would exceed `u64::MAX`, so the allocation this curve prices
 /// cannot be represented.
+///
+/// This guard lives in `quote`, which runs before `prefunded_sale::purchase` reaches its
+/// hard-cap check. On a sale configured at the boundary `hard_cap == u64::MAX / rate`
+/// (which the activation guard permits), a payment whose own value exceeds `hard_cap`
+/// therefore aborts here with `EAllocationOverflow` rather than the more intuitive
+/// `EHardCapExceeded`. A payment within the cap can never reach this: the activation
+/// guard (`hard_cap * rate <= u64::MAX`) rules the overflow out. So this only surfaces
+/// as a misleading abort at that extreme configuration.
 #[error(code = 2)]
 const EAllocationOverflow: vector<u8> = "The token allocation would be too large to represent";
 
@@ -61,7 +71,7 @@ const EAllocationOverflow: vector<u8> = "The token allocation would be too large
 
 /// Witness type for this curve. Field-less with `drop` only; its
 /// constructor is module-private, so no other module can mint a
-/// `Quote<FixedRateCurve>`.
+/// `Quote` for a `PrefundedSale<FixedRateCurve, ..>`.
 public struct FixedRateCurve has drop {}
 
 /// Fixed-rate parameters, stored on the sale via `prefunded_sale`'s
@@ -134,6 +144,8 @@ public fun params(rate: u64): Params {
 ///
 /// #### Aborts
 /// - `ERequiredInventoryOverflow` if `hard_cap * rate` would exceed `u64::MAX`.
+/// - `prefunded_sale::ENotInit` if the sale is not in `Init` phase; ticket minting is
+///   only permitted during setup.
 public fun activation_ticket<
     SaleCoin,
     PaymentCoin,
