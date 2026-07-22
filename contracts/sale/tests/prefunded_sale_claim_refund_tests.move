@@ -7,7 +7,7 @@
 // are pinned by exact-value assertions.
 module openzeppelin_sale::prefunded_sale_claim_refund_tests;
 
-use openzeppelin_finance::vesting_wallet::VestingWallet;
+use openzeppelin_finance::vesting_wallet::{VestingWallet, VestingSchedule};
 use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params as VParams};
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::prefunded_sale::{Self, PrefundedSale};
@@ -54,7 +54,11 @@ fun cancel_now(test: &mut Scenario, clk: &mut Clock) {
 
 // Build an Active sale carrying the given issuer-defined vesting schedule, rate 1,
 // no soft cap, inventory 1_000.
-fun setup_vesting_sale_with(test: &mut Scenario, clk: &Clock, params: VParams) {
+fun setup_vesting_sale_with(
+    test: &mut Scenario,
+    clk: &Clock,
+    schedule: VestingSchedule<Linear, VParams>,
+) {
     let ctx = test.ctx();
     let (mut sale, cap) = prefunded_sale::create_sale<
         FixedRateCurve,
@@ -72,7 +76,7 @@ fun setup_vesting_sale_with(test: &mut Scenario, clk: &Clock, params: VParams) {
         ctx,
     );
     sale.deposit(u::sale_balance(1_000));
-    sale.set_vesting_schedule_params(params);
+    sale.set_vesting_schedule(schedule);
     let (vault, vault_cap) = refund_vault::new<USDC>(ctx);
     sale.pair_refund_vault(&vault, vault_cap);
     let ticket = fixed_rate_curve::activation_ticket(&sale);
@@ -82,7 +86,7 @@ fun setup_vesting_sale_with(test: &mut Scenario, clk: &Clock, params: VParams) {
 
 // A vesting sale with the default 4-step (monthly-ish) schedule.
 fun setup_vesting_sale(test: &mut Scenario, clk: &Clock) {
-    setup_vesting_sale_with(test, clk, vesting_wallet_linear::params(0, 0, 1_000, 4));
+    setup_vesting_sale_with(test, clk, vesting_wallet_linear::vesting_schedule(0, 0, 1_000, 4));
 }
 
 // === claim ===
@@ -336,7 +340,8 @@ fun claim_all_into_vesting_sums_into_one_wallet() {
     test.end();
 }
 
-// Regression (H-1): the vesting lockup cannot be bypassed. `claim_into_vesting` pins
+// Regression (H-1): the vesting lockup cannot be bypassed by substituting a witness.
+// `claim_into_vesting` pins
 // the sale's `Linear` witness (the `&mut sale` argument unifies the function's
 // `VestingWitness` with the sale's), so the buyer must release through the honest
 // curve, which enforces the cliff. Right after finalize nothing is releasable; only
@@ -350,7 +355,7 @@ fun vesting_lockup_holds_through_pinned_witness() {
     setup_vesting_sale_with(
         &mut test,
         &clk,
-        vesting_wallet_linear::params(u::opens(), 100_000, 100_000, 1),
+        vesting_wallet_linear::vesting_schedule(u::opens(), 100_000, 100_000, 1),
     );
     buy_once(&mut test, &clk, 100); // rate 1 -> alloc 100
     finalize_now(&mut test, &mut clk); // clk -> 5_001, still far below the cliff

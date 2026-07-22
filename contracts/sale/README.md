@@ -67,9 +67,10 @@ PrefundedSale<Curve, CurveParams, SaleCoin, PaymentCoin, VestingWitness, Vesting
 | `VestingScheduleParams` | The vesting params type. Filled only if you attach a schedule, but the slot must always be instantiated. | `vesting_wallet_linear::Params` |
 
 The sale never prices a purchase itself. It accepts a `Quote` - carrying a
-curve-computed `allocation` - and applies it **verbatim**, bounded only by unallocated
-inventory and `u64` overflow guards. There is **no `max_rate` field and no
-independent per-payment rate check**: correct pricing is delegated to the curve.
+curve-computed `allocation` - and applies it **verbatim**, bounded only by a
+non-zero floor (a paying buyer must receive tokens), unallocated inventory, and
+`u64` overflow guards. There is **no `max_rate` field and no independent
+per-payment rate check**: correct pricing is delegated to the curve.
 
 What keeps this safe is the **witness gate**. A `Quote` for a `PrefundedSale<C, …>`
 can only be minted by passing a value of type `C`, and `C`'s constructor is private to
@@ -83,6 +84,18 @@ by no other code - the curve is first-party, trusted, and audited alongside the 
 > sell out before the hard cap). Treat any custom curve as security-critical and audit
 > it with the sale. The provided `fixed_rate_curve` is honest by construction.
 
+> [!NOTE]
+> **Quote freshness (custom curves).** A `Quote` is priced against the sale state at
+> mint time and applied verbatim; `purchase` never reprices. Within one PTB, several
+> quotes can be minted up front and another purchase can land between a quote's mint and
+> its consumption, advancing `raised` / `total_allocated`. A curve that prices from that
+> mutable state (a bonding curve) must mint via `prefunded_sale::mint_quote`, which
+> stamps the sale's `state_version`; `purchase` then aborts (`EStaleQuote`) if an
+> intervening purchase advanced it, so the quote can never fill at a stale price. A
+> rate-immune curve like `fixed_rate_curve` mints via `mint_quote_unversioned`, opting
+> out so several quotes can be batched in one PTB. **Choosing `mint_quote_unversioned`
+> for a state-dependent curve reintroduces the staleness gap.**
+
 ### Hot potatoes: `Quote` and `AllowEntry`
 
 Two carrier types have **no abilities** - they cannot be stored, copied, transferred,
@@ -91,7 +104,9 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
 - **`Quote<PaymentCoin>`** - carries the buyer's payment `Balance` *and* the
   curve-computed allocation. The curve module's `quote(...)` mints it; the sale's
   `purchase(...)` is its only legal consumer. Pricing and funds stay welded together
-  and cannot be replayed across transactions.
+  and cannot be replayed across transactions. *Within* a PTB, a quote can optionally
+  carry a freshness stamp (see the note above) so it cannot be consumed at a price
+  staled by an intervening purchase.
 - **`AllowEntry<SaleCoin>`** - a single-use compliance ticket (allowlist sales only).
   Your compliance module mints one per approved buyer; `purchase` consumes it,
   asserting it was issued for *this* sale and *this* buyer. No warehousing, no replay.
@@ -105,7 +120,7 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
   create_sale ─┐
   deposit       │
   set_per_buyer_cap          │  Init phase - sale is an OWNED value;
-  set_vesting_schedule_params├   holding it by &mut is the authority.
+  set_vesting_schedule       ├   holding it by &mut is the authority.
   enable_allowlist           │   All setup happens here.
   pair_refund_vault          │
                              │
@@ -152,27 +167,48 @@ sale consumes the vault's controller cap and from then on drives the vault's sta
 directly from the vault; this never depends on admin liveness.
 
 An external router deciding between `claim` and `refund` reads the sale's phase
-directly - `is_finalized()` for the claim path, `is_cancelled()` for the refund path
-(the full set is `is_init` / `is_active` / `is_finalized` / `is_cancelled`). Do **not**
+directly - `sale.is_finalized()` for the claim path, `sale.is_cancelled()` for the refund path
+(the full set is `sale.is_init()` / `sale.is_active()` / `sale.is_finalized()` / `sale.is_cancelled()`). Do **not**
 infer the phase from the vault's `is_refunding` / `is_closed` state: that flip is an
 internal consequence of the sale's transition, not a supported signal, and a caller
 could supply an unrelated vault of the right coin type. Verify a vault is the sale's
-own with `refund_vault_id()` before trusting it.
+own with `sale.refund_vault_id()` before trusting it.
 
 ### Optional vesting
 
-Attach an issuer-defined schedule with `set_vesting_schedule_params` during `Init`.
+Attach an issuer-defined schedule with `set_vesting_schedule` during `Init`. The
+schedule is supplied as a `VestingSchedule<VestingWitness, VestingScheduleParams>` that
+(for a genuine curve witness: a `drop` type whose declaring module is its sole constructor)
+only the curve module can mint (e.g. `vesting_wallet_linear::vesting_schedule(..)`), so the
+witness and params pinned in the sale's type are guaranteed to be a matching pair - naming
+one curve's witness with another's params simply fails to compile.
 When set, the plain `claim` path aborts and the only redemption route is
 `claim_into_vesting`, which returns a funded
 [`VestingWallet`](../finance) (from `openzeppelin_finance`) - with `beneficiary` forced
 to the buyer and the sale's fixed schedule params - plus the wallet's `DestroyCap`
-(teardown authority). The buyer cannot influence or bypass the schedule. Releases pay
-into the beneficiary's address balance, so the buyer receives funds without holding
-the wallet.
+(teardown authority). The buyer cannot supply or override the schedule, nor swap in a
+permissive curve of their own: the wallet is built under the sale's pinned
+`VestingWitness`, so only that curve module can release it. Two conditions on the
+issuer-pinned curve make that guarantee real:
+
+- **Private witness.** `VestingWitness` must be a private curve witness only its
+  declaring module can build (e.g. `Linear`). A publicly constructible witness (e.g.
+  `bool`) lets the buyer mint the pinned witness themselves and release the whole
+  allocation immediately, so integrators must pin a private witness type to enforce the
+  fixed schedule.
+- **Non-expansive in the wallet's total** (`balance + released`). The wallet is
+  returned by value, so the buyer can `deposit` into it, and a deposit of `d` must raise
+  the releasable amount by at most `d` or a top-up buys early release. The shipped
+  `vesting_wallet_linear` satisfies this; a threshold curve that unlocks everything once
+  the total crosses a level does not.
+
+Curve selection is the issuer's responsibility, fixed at `create_sale`, not a buyer
+lever. Releases pay into the beneficiary's address balance, so the buyer receives funds
+without holding the wallet.
 
 ## Choosing a sale shape
 
-Four orthogonal, independent configuration axes:
+Five orthogonal, independent configuration axes:
 
 - **Hard cap (required, `> 0`).** Bounds the maximum raise. Inventory backing for the
   full hard cap is enforced at activation, so with an honest curve a `purchase` never
@@ -186,6 +222,11 @@ Four orthogonal, independent configuration axes:
   Configure with `set_per_buyer_cap`.
 - **Allowlist (optional).** Compliance-gated mode: every `purchase` must consume an
   `AllowEntry`. Configure with `enable_allowlist`.
+- **Vesting (optional).** Redemption streams each allocation through a `VestingWallet`
+  instead of releasing it at `claim`; the plain `claim` / `claim_all` paths then abort
+  and buyers redeem via `claim_into_vesting` / `claim_all_into_vesting`. Configure with
+  `set_vesting_schedule` (one-shot, irreversible); see
+  [Optional vesting](#optional-vesting) above.
 
 The three shapes a fixed-price sale typically takes:
 
@@ -216,7 +257,7 @@ implicit - the sale is an owned value, so only its holder can pass it by `&mut`.
 use openzeppelin_sale::prefunded_sale;
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::refund_vault;
-use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
+use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params as VParams};
 use sui::clock::Clock;
 use sui::coin::Coin;
 
@@ -250,7 +291,7 @@ public fun launch(
     // 3. Optional knobs - all Init-only and one-shot.
     sale.set_per_buyer_cap(per_buyer_cap, ctx);
     // let allow_admin = sale.enable_allowlist(ctx);  // for a strategic round
-    // sale.set_vesting_schedule_params(vesting_wallet_linear::params(...));
+    // sale.set_vesting_schedule(vesting_wallet_linear::vesting_schedule(...));
 
     // 4. Pair a fresh, empty, Active vault, then activate. share_and_activate takes
     //    the vault by value and shares it together with the sale, so the
@@ -315,10 +356,10 @@ transfer::public_transfer(coin::from_balance(money_back, ctx), ctx.sender());
 
 ### Redeem into vesting
 
-For a sale created with `set_vesting_schedule_params`, redemption must go through
-`claim_into_vesting`. The vesting schedule - both its `VestingWitness` (here
-`vesting_wallet_linear::Linear`) and its `VestingScheduleParams` - is fixed at
-`create_sale`, so `claim_into_vesting` infers **every** type argument from the `sale`
+For a sale configured with `set_vesting_schedule` during `Init`, redemption must go through
+`claim_into_vesting`. The vesting witness/params type pair (here
+`vesting_wallet_linear::Linear` and `vesting_wallet_linear::Params`) is fixed at
+`create_sale`; `set_vesting_schedule` attaches the concrete schedule values, so `claim_into_vesting` infers **every** type argument from the `sale`
 it takes by `&mut`. The turbofish below is written out only to name the wallet's type;
 you can drop it entirely and let inference fill it in:
 
@@ -403,10 +444,15 @@ in a wallet.
 
 ## Security Notes
 
-- **The curve is trusted.** The sale applies the curve's allocation verbatim, bounded
-  only by inventory and overflow. The witness gate makes a `FixedRateCurve` sale
+- **The curve is trusted.** The sale applies the curve's allocation verbatim,
+  bounded only by a non-zero floor (a paying buyer must receive tokens),
+  inventory, and overflow. The witness gate makes a `FixedRateCurve` sale
   un-priceable by anything but the fixed-rate module; a *custom* curve is
   security-critical and must be audited with the sale.
+- **Quotes are freshness-safe only when versioned.** A state-dependent curve must mint
+  via `mint_quote`, so `purchase` rejects (`EStaleQuote`) a quote staled by an
+  intervening same-PTB purchase. `mint_quote_unversioned` opts out and is safe only for
+  a rate-immune curve like `fixed_rate_curve`.
 - **Buyer redemption never depends on admin liveness.** `purchase`, `claim`, `refund`,
   `finalize`, and `cancel_after_close` are permissionless. Losing the `SaleAdminCap`
   forfeits only `cancel_emergency`, `withdraw_proceeds`, and `withdraw_unsold_inventory`
