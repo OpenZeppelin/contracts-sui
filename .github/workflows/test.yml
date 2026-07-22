@@ -157,26 +157,33 @@ jobs:
         # `--rand-num-iters 1`: coverage only needs each line executed once; the
         # full randomized property iterations run in the `test` job above.
         #
-        # `collections`'s differential test suites (the `*_differential_tests`
-        # modules) build large maps/sets whose traces run into multiple GB - the
-        # heaviest never finish under `--trace` (>40 min) - and `sui move test`
-        # has no exclude flag. Disable every `#[test]` in those modules at the
-        # source level for the traced run, then restore via git. They still run
-        # untraced in the `test` job above.
+        # Some suites build large collections whose traces run into multiple GB -
+        # the heaviest never finish under `--trace` (>40 min) - and `sui move
+        # test` has no exclude flag, so we disable them at the source level for
+        # the traced run and restore via git. They still run untraced in the
+        # `test` job above. Two scopes:
+        #   * `collections`: the whole `*_differential_tests` modules.
+        #   * others: individually named heavy tests (any test attribute).
         shell: bash
         run: |
           set -euo pipefail
-          files=$(grep -rlE --include='*.move' 'module .*_differential_tests;' tests 2>/dev/null || true)
-          if [ -n "$files" ]; then
-            trap 'git checkout -- $files' EXIT
-            perl -0pi -e 's/#\[test\]/#[allow(unused_function)]/g' $files
+          diff_files=$(grep -rlE --include='*.move' 'module .*_differential_tests;' tests 2>/dev/null || true)
+          heavy_tests='quick_sort_random_is_sorted_and_preserves_elements'
+          heavy_files=$(grep -rlE --include='*.move' "fun ($heavy_tests)" tests 2>/dev/null || true)
+          disabled=()
+          [ -n "$diff_files" ] && disabled+=($diff_files)
+          [ -n "$heavy_files" ] && disabled+=($heavy_files)
+          if [ ${#disabled[@]} -gt 0 ]; then
+            trap 'git checkout -- "${disabled[@]}"' EXIT
+            [ -n "$diff_files" ] && perl -0pi -e 's/#\[test\]/#[allow(unused_function)]/g' $diff_files
+            [ -n "$heavy_files" ] && perl -0pi -e "s/#\[(test|random_test)\]\n(fun ($heavy_tests))/#[allow(unused_function)]\n\$2/g" $heavy_files
             # Fail loudly if the disable didn't happen (e.g. after a reformat),
             # otherwise the traced run silently hangs again. Capture the list
             # first so `sui move test` can't die from SIGPIPE (which under
             # pipefail would mask a match and skip this guard).
             test_list=$(sui move test --list 2>/dev/null || true)
-            if grep -qE '_differential_tests::' <<<"$test_list"; then
-              echo "::error::failed to disable differential tests before tracing" >&2
+            if grep -qE "_differential_tests::|::($heavy_tests)" <<<"$test_list"; then
+              echo "::error::failed to disable heavy tests before tracing" >&2
               exit 1
             fi
           fi
