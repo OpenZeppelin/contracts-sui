@@ -1699,7 +1699,8 @@ public fun claim<
 /// - `EClaimRequiresVesting` if the sale has a vesting schedule attached.
 /// - `ENotFinalized` if the sale is not in `Finalized` phase.
 /// - `EReceiptSaleMismatch` if any receipt was issued by a different sale.
-/// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt.
+/// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt. An empty
+///   `receipts` vector never triggers this - there are no receipts to check.
 public fun claim_all<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1805,6 +1806,8 @@ public fun claim_into_vesting<
     assert!(sale.vesting_schedule.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_internal(receipt, ctx);
 
+    // `quote` ensures that a `Receipt` always carries `allocation > 0`, so `payout > 0`.
+
     let (mut wallet, destroy_cap) = vesting_wallet::new(
         sale.vesting_schedule.borrow().params(),
         ctx.sender(), // only buyer can claim
@@ -1844,7 +1847,8 @@ public fun claim_into_vesting<
 ///   `claim_all`).
 /// - `ENotFinalized` if the sale is not in `Finalized` phase.
 /// - `EReceiptSaleMismatch` if any receipt was issued by a different sale.
-/// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt.
+/// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt. An empty
+///   `receipts` vector never triggers this - there are no receipts to check.
 /// - `vesting_wallet::EBalanceOverflow`, propagated when funding the wallet (guarded:
 ///   the summed allocation never exceeds total inventory and fits in `u64`, so
 ///   unreachable in normal operation).
@@ -1870,10 +1874,12 @@ public fun claim_all_into_vesting<
     assert!(sale.vesting_schedule.is_some(), ENoVestingScheduleAttached);
     let payout = sale.claim_all_internal(receipts, ctx);
 
+    // `quote` ensures that a `Receipt` always carries `allocation > 0`, so `payout > 0`.
+
     let (mut wallet, destroy_cap) = vesting_wallet::new(
         sale.vesting_schedule.borrow().params(),
         // beneficiary = sender; each receipt's `buyer == sender` is checked per-receipt
-        // inside `claim_all_internal` (vacuously true for an empty `receipts` vector)
+        // inside `claim_all_internal` (no receipts to check for an empty `receipts` vector)
         ctx.sender(),
         ctx,
     );
@@ -2065,7 +2071,8 @@ public fun refund<
 /// #### Aborts
 /// - `ENotCancelled` if the sale is not in `Cancelled` phase.
 /// - `EReceiptSaleMismatch` if any receipt was issued by a different sale.
-/// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt.
+/// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt. An empty
+///   `receipts` vector never triggers this - there are no receipts to check.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
 /// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`,
 ///   `refund_vault::EZeroRelease`, and `refund_vault::EInsufficientLocked`, propagated
