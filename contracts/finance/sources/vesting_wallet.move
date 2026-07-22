@@ -281,8 +281,8 @@ public struct DestroyCap has key, store {
 /// curve witness (a `drop` type whose declaring module is its sole constructor), only the
 /// declaring module can produce that value - so a `VestingSchedule<W, P>` can only be
 /// built by the curve that owns `W`, which fixes `P` to that same curve's parameters.
-/// forces its own witness and params type arguments to unify against a coherent pair: an
-/// incoherent pairing has no inhabitant and fails to type-check.
+/// This forces its own witness and params type arguments to unify against a coherent pair:
+/// an incoherent pairing has no inhabitant and fails to type-check.
 ///
 /// # Why an integrator should accept this over a bare `P`
 ///
