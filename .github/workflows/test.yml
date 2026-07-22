@@ -181,7 +181,11 @@ jobs:
             # otherwise the traced run silently hangs again. Capture the list
             # first so `sui move test` can't die from SIGPIPE (which under
             # pipefail would mask a match and skip this guard).
-            test_list=$(sui move test --list 2>/dev/null || true)
+            if ! test_list=$(sui move test --list 2>&1); then
+              echo "::error::failed to enumerate Move tests before tracing" >&2
+              printf '%s\n' "$test_list" >&2
+              exit 1
+            fi
             if grep -qE "_differential_tests::|::($heavy_tests)" <<<"$test_list"; then
               echo "::error::failed to disable heavy tests before tracing" >&2
               exit 1
