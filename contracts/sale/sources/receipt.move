@@ -147,6 +147,6 @@ public(package) fun deliver<S>(receipt: Receipt<S>, to: address) {
 /// Returns `(sale_id, buyer, paid, allocation, purchased_at_ms)`.
 public(package) fun consume<S>(r: Receipt<S>): (ID, address, u64, u64, u64) {
     let Receipt { id, sale_id, buyer, paid, allocation, purchased_at_ms } = r;
-    object::delete(id);
+    id.delete();
     (sale_id, buyer, paid, allocation, purchased_at_ms)
 }

@@ -1258,7 +1258,7 @@ public fun withdraw_all<T>(
     // case is a clean zero-balance no-op that never reaches the flagged primitive.
     let amount = balance::settled_funds_value<T>(root, vault_id.to_address());
     let bal = if (amount == 0) {
-        balance::zero<T>()
+        balance::zero()
     } else {
         let w = balance::withdraw_funds_from_object<T>(&mut v.id, amount);
         balance::redeem_funds(w)
