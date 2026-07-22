@@ -98,6 +98,7 @@ fun purchase_delivers_receipt_and_updates_state() {
             100, // paid
             200, // allocation (rate 2)
             100, // raised_after
+            200, // total_allocated_after
             u::opens(), // purchased_at_ms
         ),
     );
