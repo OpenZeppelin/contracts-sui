@@ -18,8 +18,10 @@
 ///
 /// Struct fields are module-private, so only this module can construct a
 /// `FixedRateCurve` witness, and therefore only this module can mint a
-/// `Quote<FixedRateCurve>` (via `prefunded_sale::mint_quote`). A sale parameterized by
-/// `FixedRateCurve` can be driven by no other pricing logic. The public
+/// `Quote` for a `PrefundedSale<FixedRateCurve, ..>` (via
+/// `prefunded_sale::mint_quote_unversioned`; `Quote` itself is tagged only by `PaymentCoin`,
+/// so the curve binding is enforced through the witness, not the `Quote`'s type). A sale
+/// parameterized by `FixedRateCurve` can be driven by no other pricing logic. The public
 /// `params` constructor is the seam an external protocol can use to build the
 /// config without surrendering the witness.
 ///
@@ -52,11 +54,24 @@ const ERateZero: vector<u8> = "The exchange rate must be greater than zero";
 const ERequiredInventoryOverflow: vector<u8> =
     "The required token inventory is too large to represent";
 
+/// `paid * rate` would exceed `u64::MAX`, so the allocation this curve prices
+/// cannot be represented.
+///
+/// This guard lives in `quote`, which runs before `prefunded_sale::purchase` reaches its
+/// hard-cap check. On a sale configured at the boundary `hard_cap == u64::MAX / rate`
+/// (which the activation guard permits), a payment whose own value exceeds `hard_cap`
+/// therefore aborts here with `EAllocationOverflow` rather than the more intuitive
+/// `EHardCapExceeded`. A payment within the cap can never reach this: the activation
+/// guard (`hard_cap * rate <= u64::MAX`) rules the overflow out. So this only surfaces
+/// as a misleading abort at that extreme configuration.
+#[error(code = 2)]
+const EAllocationOverflow: vector<u8> = "The token allocation would be too large to represent";
+
 // === Structs ===
 
 /// Witness type for this curve. Field-less with `drop` only; its
 /// constructor is module-private, so no other module can mint a
-/// `Quote<FixedRateCurve>`.
+/// `Quote` for a `PrefundedSale<FixedRateCurve, ..>`.
 public struct FixedRateCurve has drop {}
 
 /// Fixed-rate parameters, stored on the sale via `prefunded_sale`'s
@@ -73,6 +88,42 @@ public struct Params has copy, drop, store {
 /// Build a validated `Params`. The only way to obtain a `Params` outside this
 /// module (its field is module-private), so a protocol that drives
 /// `prefunded_sale::create_sale` directly can build the config itself.
+///
+/// #### Price envelope
+///
+/// This curve prices every purchase as `allocation = paid * rate` with an integer
+/// `rate >= 1`, so the allocation is never smaller than the payment measured in
+/// smallest units. In human terms, the price of one sale token denominated in
+/// payment coin is `10^(sale_decimals - payment_decimals) / rate`. Two limits
+/// follow, and an integrator must configure `rate` around both:
+///
+/// - Ceiling: `rate` cannot drop below 1, so the price cannot exceed
+///   `10^(sale_decimals - payment_decimals)`. For a sale/payment pair with equal
+///   decimals that ceiling is exactly 1 payment token per sale token.
+/// - Grid: only reciprocal-integer fractions of the ceiling are exact (`1/1`,
+///   `1/2`, `1/3`, ... of it). A price off that grid must be approximated by the
+///   nearest integer `rate`, which misprices every purchase silently, with no
+///   abort and no event.
+///
+/// Worked example (equal decimals, e.g. a token sold against a same-decimal
+/// stablecoin, so the ceiling is 1.00): a 5.00 target is unreachable - it sits
+/// above the ceiling, and the nearest configurable prices are 1.00 (`rate = 1`)
+/// and 0.50 (`rate = 2`). Below the ceiling, 0.20 is exact (`rate = 5`) but 0.30
+/// is not - the nearest are 0.333.. (`rate = 3`) and 0.25 (`rate = 4`).
+///
+/// An integrator needing an off-grid price on a given decimal pairing should
+/// supply its own curve: the sale applies the curve-computed `allocation`
+/// verbatim (see `prefunded_sale::mint_quote`), so a custom curve can compute the
+/// allocation directly - e.g. with a widened division and an explicit rounding
+/// mode - and express any price on any decimal pairing, free of this grid.
+///
+/// The smallest change that lifts both limits is to fork this curve into a
+/// fractional-rate variant: replace the single `rate` with a `rate_numerator` and
+/// `rate_denominator` pair and price as `allocation = paid * rate_numerator /
+/// rate_denominator` (widening the multiplication before the division to avoid
+/// overflow, and choosing a rounding mode). The denominator lets the price land on
+/// any rational rather than only reciprocal-integer fractions, which removes the
+/// grid; a numerator below the denominator raises the price past the old ceiling.
 ///
 /// #### Parameters
 /// - `rate`: Sale tokens (smallest units) allocated per 1 payment-coin smallest
@@ -100,6 +151,8 @@ public fun params(rate: u64): Params {
 ///
 /// #### Aborts
 /// - `ERequiredInventoryOverflow` if `hard_cap * rate` would exceed `u64::MAX`.
+/// - `prefunded_sale::ENotInit` if the sale is not in `Init` phase; ticket minting is
+///   only permitted during setup.
 public fun activation_ticket<
     SaleCoin,
     PaymentCoin,
@@ -123,9 +176,11 @@ public fun activation_ticket<
 
 // === Quote ===
 
-/// Mint a `Quote<PaymentCoin>` for a buyer's `balance`. The allocation is
-/// `balance.value() * rate`, u128-widened to detect overflow. The `Quote` carries
-/// the balance through to `purchase`.
+/// Mint a `Quote<PaymentCoin>` for a buyer's `balance`. This curve computes the
+/// allocation as `balance.value() * rate`, u128-widened to detect overflow, and
+/// hands the finished `u64` to `prefunded_sale::mint_quote_unversioned`, letting
+/// a buyer mint and purchase several quotes in one PTB. The `Quote` carries the
+/// balance through to `purchase`.
 ///
 /// #### Parameters
 /// - `sale`: The sale being purchased from, read for its configured `rate`.
@@ -136,9 +191,11 @@ public fun activation_ticket<
 ///   the computed allocation.
 ///
 /// #### Aborts
+/// - `EAllocationOverflow` if `balance.value() * rate` would exceed `u64::MAX`.
 /// - `prefunded_sale::EZeroPayment` if `balance` has zero value.
-/// - `prefunded_sale::EAllocationOverflow` if `balance.value() * rate` would exceed
-///   `u64::MAX`.
+/// - `prefunded_sale::EZeroAllocation` if the computed allocation is zero;
+///   guarded as unreachable here since `rate > 0` and a non-zero `balance` value
+///   yield a positive product.
 public fun quote<
     SaleCoin,
     PaymentCoin,
@@ -156,7 +213,9 @@ public fun quote<
     balance: Balance<PaymentCoin>,
 ): Quote<PaymentCoin> {
     let rate = sale.curve_params().rate;
-    sale.mint_quote(FixedRateCurve {}, balance, rate)
+    let allocation = (balance.value() as u128) * (rate as u128);
+    assert!(allocation <= (std::u64::max_value!() as u128), EAllocationOverflow);
+    sale.mint_quote_unversioned(FixedRateCurve {}, balance, allocation as u64)
 }
 
 // === View helpers ===

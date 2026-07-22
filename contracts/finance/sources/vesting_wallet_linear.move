@@ -55,6 +55,7 @@ module openzeppelin_finance::vesting_wallet_linear;
 use openzeppelin_finance::vesting_wallet::{
     Self,
     VestingWallet,
+    VestingSchedule,
     VestedAmount,
     DestroyReceipt,
     DestroyCap,
@@ -171,6 +172,80 @@ public fun params_continuous(start_ms: u64, cliff_ms: u64, duration_ms: u64): Pa
     // The continuous curve is the stepped curve with one tranche per millisecond.
     // A zero `duration_ms` becomes zero `steps`, so `params` rejects it with `EZeroSteps`.
     params(start_ms, cliff_ms, 1, duration_ms)
+}
+
+/// Bundle a validated stepped `Params` with the `Linear` witness into a
+/// `VestingSchedule<Linear, Params>`. This is the raw-input constructor for such a
+/// bundle (see also `vesting_schedule_continuous` and `into_vesting_schedule`); since
+/// only this module can construct the `Linear` witness, a consumer that accepts the
+/// bundle is guaranteed the witness and params come from this curve. Use
+/// it to configure a curve-agnostic consumer (e.g. a sale's vesting policy) that pins
+/// both the witness and params type arguments and must keep them coherent.
+///
+/// #### Parameters
+/// - `start_ms`: Timestamp (ms) at which vesting begins.
+/// - `cliff_ms`: Cliff length (ms from `start_ms`); `0` for no cliff.
+/// - `period_ms`: Length of each tranche period (ms).
+/// - `steps`: Number of equal tranches.
+///
+/// #### Returns
+/// - A `VestingSchedule<Linear, Params>` carrying the validated stepped schedule.
+///
+/// #### Aborts
+/// - `EZeroPeriod` if `period_ms == 0`.
+/// - `EZeroSteps` if `steps == 0`.
+/// - `EScheduleOverflow` if `period_ms * steps`, or `start_ms` plus that duration,
+///   would overflow `u64`.
+/// - `EInvalidCliff` if `cliff_ms > period_ms * steps`.
+public fun vesting_schedule(
+    start_ms: u64,
+    cliff_ms: u64,
+    period_ms: u64,
+    steps: u64,
+): VestingSchedule<Linear, Params> {
+    vesting_wallet::new_schedule(Linear {}, params(start_ms, cliff_ms, period_ms, steps))
+}
+
+/// Continuous (`period_ms = 1`) analog of `vesting_schedule`: bundle a validated
+/// continuous `Params` with the `Linear` witness. See `vesting_schedule` for how the
+/// bundle keeps a consumer's witness and params type arguments coherent.
+///
+/// #### Parameters
+/// - `start_ms`: Timestamp (ms) at which vesting begins.
+/// - `cliff_ms`: Cliff length (ms from `start_ms`); `0` for no cliff.
+/// - `duration_ms`: Length of the vesting period (ms).
+///
+/// #### Returns
+/// - A `VestingSchedule<Linear, Params>` carrying the validated continuous schedule.
+///
+/// #### Aborts
+/// - `EZeroSteps` if `duration_ms == 0`.
+/// - `EInvalidCliff` if `cliff_ms > duration_ms`.
+/// - `EScheduleOverflow` if `start_ms + duration_ms` would overflow `u64`.
+public fun vesting_schedule_continuous(
+    start_ms: u64,
+    cliff_ms: u64,
+    duration_ms: u64,
+): VestingSchedule<Linear, Params> {
+    vesting_wallet::new_schedule(Linear {}, params_continuous(start_ms, cliff_ms, duration_ms))
+}
+
+/// Wrap an already-built `Params` into a `VestingSchedule<Linear, Params>`. Where
+/// `vesting_schedule` validates and bundles in one step, this bundles a `Params` you
+/// already hold - e.g. one read back from a wallet via `vesting_wallet::schedule_params`,
+/// or produced by `params` / `params_continuous`. It is the inverse of the bundle's
+/// `vesting_wallet::params` accessor. No revalidation is needed: a `Params` can only be
+/// obtained from this module's validating constructors, so it is already well-formed;
+/// and since only this module can supply the `Linear` witness, the resulting
+/// `(Linear, Params)` pair is coherent by construction.
+///
+/// #### Parameters
+/// - `params`: The stepped-schedule parameters to bundle.
+///
+/// #### Returns
+/// - A `VestingSchedule<Linear, Params>` carrying `params`.
+public fun into_vesting_schedule(params: Params): VestingSchedule<Linear, Params> {
+    vesting_wallet::new_schedule(Linear {}, params)
 }
 
 /// Build a `VestingWallet<Linear, Params, C>` on the stepped (tranche) schedule.
