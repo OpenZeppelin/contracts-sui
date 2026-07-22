@@ -2196,7 +2196,7 @@ public fun mint_quote<
 ///
 /// #### Aborts
 /// - `EZeroPayment` if `payment` has zero value.
-/// - `EAllocationOverflow` if `allocation` is zero.
+/// - `EZeroAllocation` if `allocation` is zero.
 public fun mint_quote_unversioned<
     Curve: drop,
     CurveParams: copy + drop + store,
