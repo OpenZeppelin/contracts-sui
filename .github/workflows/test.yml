@@ -154,10 +154,32 @@ jobs:
           version: ${{ env.SUI_VERSION }}
 
       - name: Run tests with tracing
+        # `collections` package times out due to `differential_1200_ops` tests,
+        # so we handle that in a separate job.
+        if: matrix.package != 'collections'
         # `--rand-num-iters 1`: coverage only needs each line executed once. The
         # full randomized property iterations run in the `test` job above, so a
         # single iteration here keeps trace volume down without losing coverage.
         run: sui move test --trace --rand-num-iters 1
+        working-directory: ./${{ matrix.package }}
+
+      - name: Run tests with tracing (collections)
+        # `collections` only: `differential_1200_ops`'s 1,200-op loop produces a
+        # multi-GB trace that never finishes under `--trace` (>40 min), and
+        # `sui move test` has no exclude flag. Drive the traced run from the test
+        # list and skip that one function; traces accumulate across invocations,
+        # so the union covers every other test. The 1,200-op correctness proof
+        # still runs untraced in the `test` job above.
+        if: matrix.package == 'collections'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t TESTS < <(sui move test --list 2>/dev/null \
+            | sed -n 's/: test$//p' \
+            | grep -v '::differential_1200_ops$')
+          for t in "${TESTS[@]}"; do
+            sui move test --trace --rand-num-iters 1 "$t"
+          done
         working-directory: ./${{ matrix.package }}
 
       - name: Generate Codecov report
