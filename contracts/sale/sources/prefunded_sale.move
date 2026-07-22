@@ -8,11 +8,11 @@
 /// ### Lifecycle
 ///
 /// ```text
-///   create_sale          +
+///   create_sale          |
 ///   deposit              |
 ///   set_per_buyer_cap    |   (Init phase - sale is owned by caller;
 ///   set_vesting_schedule |   holding it by &mut is the authority)
-///   pair_refund_vault    |    holding it by &mut is the authority)
+///   pair_refund_vault    |
 ///   enable_allowlist     |
 ///                        |
 ///   share_and_activate   +-->  (Active phase - sale is shared)
