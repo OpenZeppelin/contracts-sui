@@ -157,27 +157,26 @@ jobs:
         # `--rand-num-iters 1`: coverage only needs each line executed once; the
         # full randomized property iterations run in the `test` job above.
         #
-        # `collections`'s heavy differential tests (`differential_1200_ops`, a
-        # 1,200-op loop, and `large_n_build_and_full_walk`, a ~1,000-entry build)
-        # produce multi-GB traces and never finish under `--trace` (>40 min), and
-        # `sui move test` has no exclude flag. Disable them at the source level
-        # for the traced run, then restore via git. They still run untraced in
-        # the `test` job above.
+        # `collections`'s differential test suites (the `*_differential_tests`
+        # modules) build large maps/sets whose traces run into multiple GB - the
+        # heaviest never finish under `--trace` (>40 min) - and `sui move test`
+        # has no exclude flag. Disable every `#[test]` in those modules at the
+        # source level for the traced run, then restore via git. They still run
+        # untraced in the `test` job above.
         shell: bash
         run: |
           set -euo pipefail
-          heavy='differential_1200_ops|large_n_build_and_full_walk'
-          files=$(grep -rlE --include='*.move' "fun ($heavy)" tests 2>/dev/null || true)
+          files=$(grep -rlE --include='*.move' 'module .*_differential_tests;' tests 2>/dev/null || true)
           if [ -n "$files" ]; then
             trap 'git checkout -- $files' EXIT
-            perl -0pi -e "s/#\[test\]\n(fun ($heavy))/#[allow(unused_function)]\n\$1/g" $files
+            perl -0pi -e 's/#\[test\]/#[allow(unused_function)]/g' $files
             # Fail loudly if the disable didn't happen (e.g. after a reformat),
             # otherwise the traced run silently hangs again. Capture the list
             # first so `sui move test` can't die from SIGPIPE (which under
             # pipefail would mask a match and skip this guard).
             test_list=$(sui move test --list 2>/dev/null || true)
-            if grep -qE "::($heavy):" <<<"$test_list"; then
-              echo "::error::failed to disable heavy tests before tracing" >&2
+            if grep -qE '_differential_tests::' <<<"$test_list"; then
+              echo "::error::failed to disable differential tests before tracing" >&2
               exit 1
             fi
           fi
