@@ -826,8 +826,8 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// is buildable by anyone, so a `bool` pair is trivially coherent yet unlocked.
 /// For a non-vesting sale both slots are inert, but still name a real curve's
 /// witness/params pair (e.g. `vesting_wallet_linear::{Linear, Params}`) rather than a
-/// throwaway public type: naming a module-private witness costs nothing and ensures the
-/// sale has a real lockup should a schedule ever be attached later.
+/// publicly-constructible placeholder (e.g. `bool`): naming a witness type only its
+/// declaring module can construct keeps the sale safe if a schedule is ever attached later.
 ///
 /// #### Parameters
 /// - `curve_params`: The curve's stored configuration, opaque to the sale.
