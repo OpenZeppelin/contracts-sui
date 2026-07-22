@@ -171,6 +171,7 @@ fun create_sale_initializes_in_init_phase() {
         created[0],
         prefunded_sale::test_new_sale_created<SALE, USDC, FixedRateCurve, FrcParams>(
             object::id(&sale),
+            object::id(&cap),
             1_000,
             500,
             1_000,
@@ -221,6 +222,42 @@ fun deposit_accumulates_inventory() {
         deposits[1],
         prefunded_sale::test_new_inventory_deposited<SALE, USDC>(object::id(&sale), 700, 1_000),
     );
+
+    destroy(sale);
+    destroy(cap);
+}
+
+// A zero-value deposit is a no-op: inventory is unchanged and no
+// InventoryDeposited event is emitted. The sale still accepts real deposits after.
+#[test]
+fun deposit_zero_is_noop() {
+    let mut ctx = tx_context::dummy();
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        1_000,
+        5_000,
+        &mut ctx,
+    );
+
+    sale.deposit(u::sale_balance(0));
+    assert_eq!(sale.inventory_total(), 0);
+    // The zero-value deposit emitted no InventoryDeposited event.
+    assert_eq!(event::events_by_type<prefunded_sale::InventoryDeposited<SALE, USDC>>().length(), 0);
+
+    // Still accepts real deposits after the no-op.
+    sale.deposit(u::sale_balance(500));
+    assert_eq!(sale.inventory_total(), 500);
+    // Only the non-zero deposit produced an event.
+    assert_eq!(event::events_by_type<prefunded_sale::InventoryDeposited<SALE, USDC>>().length(), 1);
 
     destroy(sale);
     destroy(cap);
@@ -534,6 +571,19 @@ fun enable_allowlist_after_activate_aborts() {
     abort
 }
 
+// A ticket can only be minted while the sale is in Init: minting one against a live,
+// shared sale (here via the curve wrapper, which takes the sale by reference) aborts.
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
+fun mint_activation_ticket_after_activate_aborts() {
+    let (mut test, clk) = u::setup();
+    u::create_and_activate(&mut test, &clk, 1, 1_000, 0, 1_000);
+
+    test.next_tx(u::admin());
+    let sale = u::take_sale(&test);
+    let _ticket = fixed_rate_curve::activation_ticket(&sale); // aborts: ENotInit
+    abort
+}
+
 // === share_and_activate ===
 
 // Activation requires a paired vault.
@@ -744,6 +794,57 @@ fun activate_with_foreign_ticket_aborts() {
     abort
 }
 
+// share_and_activate's own ENotInit guard - the load-bearing check that a terminal
+// sale cannot be reset to Active. Two tickets are minted while the sale is in Init
+// (the only phase mint permits); the first activates it, a hard-cap purchase then lets
+// it finalize *early, in-window*, and the finalized sale is taken back by value and
+// re-passed with the second ticket. The ticket matches, a vault is paired, it is the
+// right vault, and the window is still open - every guard except the phase check passes,
+// so only ENotInit stops the reset that would brick the sale.
+#[test, expected_failure(abort_code = prefunded_sale::ENotInit)]
+fun reactivate_finalized_sale_aborts() {
+    let (mut test, clk) = u::setup();
+
+    // Init: build the sale and mint both tickets before activating with the first.
+    let (mut sale, cap) = prefunded_sale::create_sale<
+        FixedRateCurve,
+        FrcParams,
+        SALE,
+        USDC,
+        Linear,
+        VParams,
+    >(
+        fixed_rate_curve::params(1),
+        1_000,
+        0,
+        u::opens(),
+        u::closes(),
+        test.ctx(),
+    );
+    sale.deposit(u::sale_balance(1_000));
+    let (vault, vault_cap) = refund_vault::new<USDC>(test.ctx());
+    sale.pair_refund_vault(&vault, vault_cap);
+    let ticket1 = fixed_rate_curve::activation_ticket(&sale);
+    let ticket2 = fixed_rate_curve::activation_ticket(&sale); // held for the reactivation attempt
+    sale.share_and_activate(vault, ticket1, &clk);
+    transfer::public_transfer(cap, u::admin());
+
+    // Buy out the hard cap so the sale can finalize early, still inside the window.
+    test.next_tx(u::buyer());
+    let mut sale = u::take_sale(&test);
+    u::buy(&mut sale, 1_000, &clk, test.ctx());
+    u::return_sale(sale);
+
+    // Finalize in-window (hard cap reached), then re-pass the now-terminal sale by value.
+    test.next_tx(u::admin());
+    let mut sale = u::take_sale(&test);
+    let mut vault = u::take_vault(&test);
+    sale.finalize(&mut vault, &clk);
+    assert!(sale.is_finalized());
+    sale.share_and_activate(vault, ticket2, &clk); // aborts: ENotInit
+    abort
+}
+
 // === Setup event emission (happy paths) ===
 
 // set_per_buyer_cap happy path: there is no state getter for the cap, so the
@@ -855,7 +956,7 @@ fun share_and_activate_emits_pairing_and_activation_events() {
     assert_eq!(activated.length(), 1);
     assert_eq!(
         activated[0],
-        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, u::opens()),
+        prefunded_sale::test_new_sale_activated<SALE, USDC>(sale_id, 1_000, u::opens()),
     );
 
     destroy(cap);
