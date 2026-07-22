@@ -478,7 +478,7 @@ in a wallet.
 > Integration examples are illustrations of how the primitive can be wired up, **not**
 > production-ready code.
 
-Complete integration examples live in [`examples/prefunded_sale/`](examples/prefunded_sale):
+Complete integration examples live in [`examples/`](examples/):
 
 - [`kyc_registry`](examples/prefunded_sale/kyc_registry.move) - the **compliance-gated
   strategic round** pattern: a shared KYC allowlist that wraps the sale's
@@ -488,6 +488,25 @@ Complete integration examples live in [`examples/prefunded_sale/`](examples/pref
   [tests](examples/prefunded_sale/tests/kyc_registry_tests.move) drive the full strategic
   round end to end: KYC approval, a per-buyer-capped purchase, `finalize`, and redemption
   into a vesting wallet, plus the soft-cap-miss refund path.
+- [`example_tiered_rate_curve`](examples/prefunded_sale/tiered_rate_curve.move) - the
+  **custom pricing curve** pattern: a tranched (supply-tiered) curve whose
+  token-per-payment rate steps as the sale fills, so early buyers get a better rate.
+  It declares its own witness and `Params` and implements the three witness-gated seam
+  points (`params`, `activation_ticket`, `quote`) against `prefunded_sale` - the shape
+  `fixed_rate_curve` cannot teach because its witness constructor is private. Because
+  its step-rate allocation is exactly additive, `required_inventory = integrate(0,
+  hard_cap)` and sold-out coincides with hard-cap-reached, making the trusted-curve
+  boundary concrete: the committed inventory is exactly what a dishonest curve would
+  have to respect.
+- [`example_escrow_crowdfund`](examples/refund_vault/escrow_crowdfund.move) - the
+  **standalone `refund_vault`** pattern, with no `prefunded_sale` involved: an
+  all-or-nothing (Kickstarter-style) crowdfund. It shows that the vault is a *dumb
+  escrow* - one pooled balance plus a lifecycle state, no per-depositor accounting - so
+  the campaign keeps its own `backer -> amount` ledger to drive exact refunds, owns the
+  `RefundVaultCap` internally (cap loss designed out), and drives the vault's
+  `Active -> Closed` (goal met, pot to the beneficiary) vs `Active -> Refunding` (goal
+  missed, backers reclaim) fork. Funds move as `Balance` and settle into
+  [address balances](https://docs.sui.io/onchain-finance/asset-custody/address-balances/using-address-balances) via `balance::send_funds` - no coin objects.
 
 The full unit suite under [`tests/`](tests) doubles as an executable specification -
 `test_utils.move` shows the canonical `Init -> Active` setup, and the thematic files
