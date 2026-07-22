@@ -51,7 +51,7 @@
 ///     - `finalize` and `cancel_after_close` are open to any caller
 ///       with visibility to the sale, once their conditions hold.
 ///     - The redemption paths - `claim`, `claim_all`,
-///       `claim_into_vesting`, `claim_all_into_vesting`, and `refund` -
+///       `claim_into_vesting`, `claim_all_into_vesting`, `refund` and `refund_all` -
 ///       are **buyer-bound**: each asserts `ctx.sender() ==
 ///       receipt.buyer` (`EBuyerOnly`), so only the buyer who made a
 ///       purchase can redeem its receipt.
