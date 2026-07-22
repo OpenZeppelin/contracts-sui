@@ -8,7 +8,7 @@ a `PaymentCoin` during a time window and each receives a non-transferable `Recei
 After the window the sale resolves one of two ways: **finalize** (success - buyers
 claim their tokens, the issuer withdraws proceeds) or **cancel** (failure - buyers
 recover their payment from an escrow vault). Use it for capped public rounds,
-anti-whale public rounds, and compliance-gated strategic rounds.
+per-address-capped public rounds, and compliance-gated strategic rounds.
 
 Pricing is not baked in. The sale is generic over a **witness-gated curve module**
 that computes each buyer's allocation; a built-in **fixed-rate curve**
@@ -43,7 +43,7 @@ are supporting types you will see in signatures.
 | --- | --- |
 | [`prefunded_sale`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#prefunded_sale) | The sale itself. Create + configure (Init), `share_and_activate`, `purchase`, close (`finalize` / `cancel_*`), and redeem (`claim*` / `refund` / `withdraw_*`). **Start here.** |
 | [`fixed_rate_curve`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#fixed_rate_curve) | The built-in pricing curve: `allocation = paid * rate`, fixed for the whole sale. Mints the `Quote` and `ActivationTicket` a `FixedRateCurve` sale needs. **Most sales use this.** |
-| [`refund_vault`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#refund_vault) | A generic refundable escrow over `Balance<P>`. Every sale is paired with one; on cancel it holds the proceeds and pays buyers back individually. Usable standalone. |
+| [`refund_vault`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#refund_vault) | A generic, cap-gated refundable escrow over `Balance<P>`. Every sale is paired with one; on cancel it holds the proceeds, and each buyer recovers their payment through the sale's `Receipt`-authorized `refund` (the vault itself keeps no per-depositor ledger). Usable standalone. |
 | [`allowlist`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#allowlist) | A typed compliance slot (`AllowlistAdmin` + single-use `AllowEntry`). The library ships **no** KYC logic - you wire your own scheme against these types. |
 | [`receipt`](https://docs.openzeppelin.com/contracts-sui/1.x/api/sale#receipt) | The non-transferable, buyer-bound claim ticket minted by `purchase` and consumed by `claim` / `refund`. |
 
@@ -84,6 +84,18 @@ by no other code - the curve is first-party, trusted, and audited alongside the 
 > sell out before the hard cap). Treat any custom curve as security-critical and audit
 > it with the sale. The provided `fixed_rate_curve` is honest by construction.
 
+> [!NOTE]
+> **Quote freshness (custom curves).** A `Quote` is priced against the sale state at
+> mint time and applied verbatim; `purchase` never reprices. Within one PTB, several
+> quotes can be minted up front and another purchase can land between a quote's mint and
+> its consumption, advancing `raised` / `total_allocated`. A curve that prices from that
+> mutable state (a bonding curve) must mint via `prefunded_sale::mint_quote`, which
+> stamps the sale's `state_version`; `purchase` then aborts (`EStaleQuote`) if an
+> intervening purchase advanced it, so the quote can never fill at a stale price. A
+> rate-immune curve like `fixed_rate_curve` mints via `mint_quote_unversioned`, opting
+> out so several quotes can be batched in one PTB. **Choosing `mint_quote_unversioned`
+> for a state-dependent curve reintroduces the staleness gap.**
+
 ### Hot potatoes: `Quote` and `AllowEntry`
 
 Two carrier types have **no abilities** - they cannot be stored, copied, transferred,
@@ -92,7 +104,9 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
 - **`Quote<PaymentCoin>`** - carries the buyer's payment `Balance` *and* the
   curve-computed allocation. The curve module's `quote(...)` mints it; the sale's
   `purchase(...)` is its only legal consumer. Pricing and funds stay welded together
-  and cannot be replayed across transactions.
+  and cannot be replayed across transactions. *Within* a PTB, a quote can optionally
+  carry a freshness stamp (see the note above) so it cannot be consumed at a price
+  staled by an intervening purchase.
 - **`AllowEntry<SaleCoin>`** - a single-use compliance ticket (allowlist sales only).
   Your compliance module mints one per approved buyer; `purchase` consumes it,
   asserting it was issued for *this* sale and *this* buyer. No warehousing, no replay.
@@ -106,7 +120,7 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
   create_sale ─┐
   deposit       │
   set_per_buyer_cap          │  Init phase - sale is an OWNED value;
-  set_vesting_schedule_params├   holding it by &mut is the authority.
+  set_vesting_schedule       ├   holding it by &mut is the authority.
   enable_allowlist           │   All setup happens here.
   pair_refund_vault          │
                              │
@@ -119,10 +133,10 @@ or dropped, so they must be minted and consumed **in the same transaction (PTB)*
                                        │      withdraw_unsold_inventory
                                        │
                                        ├──▶ cancel_after_close   (permissionless; soft-cap miss)
-                                       │      refund, withdraw_unsold_inventory
+                                       │      refund / refund_all, withdraw_unsold_inventory
                                        │
                                        └──▶ cancel_emergency     (admin-only; in-window emergency)
-                                              refund, withdraw_unsold_inventory
+                                              refund / refund_all, withdraw_unsold_inventory
 ```
 
 `Finalized` and `Cancelled` are terminal. During `Init` the sale is an owned value and
@@ -140,7 +154,8 @@ Each `purchase` delivers one `Receipt<SaleCoin>` to the buyer. It has `key` only
 - **KYC enforced at purchase carries through to distribution** - a verified buyer
   cannot forward a claim to an unverified address.
 
-A buyer with several purchases holds several receipts; `claim_all` batches them.
+A buyer with several purchases holds several receipts; `claim_all` batches redemption
+on a finalized sale and `refund_all` batches recovery on a cancelled one.
 
 ### Every sale needs a refund vault
 
@@ -151,37 +166,79 @@ sale consumes the vault's controller cap and from then on drives the vault's sta
 `finalize` flips it to `Closed`, cancel flips it to `Refunding`. Buyers refund
 directly from the vault; this never depends on admin liveness.
 
+An external router deciding between `claim` and `refund` reads the sale's phase
+directly - `sale.is_finalized()` for the claim path, `sale.is_cancelled()` for the refund path
+(the full set is `sale.is_init()` / `sale.is_active()` / `sale.is_finalized()` / `sale.is_cancelled()`). Do **not**
+infer the phase from the vault's `is_refunding` / `is_closed` state: that flip is an
+internal consequence of the sale's transition, not a supported signal, and a caller
+could supply an unrelated vault of the right coin type. Verify a vault is the sale's
+own with `sale.refund_vault_id()` before trusting it.
+
 ### Optional vesting
 
-Attach an issuer-defined schedule with `set_vesting_schedule_params` during `Init`.
+Attach an issuer-defined schedule with `set_vesting_schedule` during `Init`. The
+schedule is supplied as a `VestingSchedule<VestingWitness, VestingScheduleParams>` that
+(for a genuine curve witness: a `drop` type whose declaring module is its sole constructor)
+only the curve module can mint (e.g. `vesting_wallet_linear::vesting_schedule(..)`), so the
+witness and params pinned in the sale's type are guaranteed to be a matching pair - naming
+one curve's witness with another's params simply fails to compile.
 When set, the plain `claim` path aborts and the only redemption route is
 `claim_into_vesting`, which returns a funded
 [`VestingWallet`](../finance) (from `openzeppelin_finance`) - with `beneficiary` forced
 to the buyer and the sale's fixed schedule params - plus the wallet's `DestroyCap`
-(teardown authority). The buyer cannot influence or bypass the schedule. Releases pay
-into the beneficiary's address balance, so the buyer receives funds without holding
-the wallet.
+(teardown authority). The buyer cannot supply or override the schedule, nor swap in a
+permissive curve of their own: the wallet is built under the sale's pinned
+`VestingWitness`, so only that curve module can release it. Two conditions on the
+issuer-pinned curve make that guarantee real:
+
+- **Private witness.** `VestingWitness` must be a private curve witness only its
+  declaring module can build (e.g. `Linear`). A publicly constructible witness (e.g.
+  `bool`) lets the buyer mint the pinned witness themselves and release the whole
+  allocation immediately, so integrators must pin a private witness type to enforce the
+  fixed schedule.
+- **Non-expansive in the wallet's total** (`balance + released`). The wallet is
+  returned by value, so the buyer can `deposit` into it, and a deposit of `d` must raise
+  the releasable amount by at most `d` or a top-up buys early release. The shipped
+  `vesting_wallet_linear` satisfies this; a threshold curve that unlocks everything once
+  the total crosses a level does not.
+
+Curve selection is the issuer's responsibility, fixed at `create_sale`, not a buyer
+lever. Releases pay into the beneficiary's address balance, so the buyer receives funds
+without holding the wallet.
 
 ## Choosing a sale shape
 
-Four orthogonal, independent configuration axes:
+Five orthogonal, independent configuration axes:
 
-- **Hard cap (required, `> 0`).** Bounds the maximum raise. Inventory backing is
-  enforced at activation, so *sold-out* and *hard-cap-reached* coincide.
+- **Hard cap (required, `> 0`).** Bounds the maximum raise. Inventory backing for the
+  full hard cap is enforced at activation, so with an honest curve a `purchase` never
+  runs out of inventory before the hard cap is reached (a buggy or dishonest curve can
+  over-allocate and sell out early - see the curve-trust note above). Depositing more
+  than the backing is allowed, and the surplus stays withdrawable, so
+  *hard-cap-reached* does not imply the inventory is exhausted.
 - **Soft cap (optional, `0 = none`).** Minimum raise required to `finalize`. If the
   window closes below it, anyone can `cancel_after_close` and every buyer can refund.
 - **Per-buyer cap (optional).** Cumulative cap on a single buyer's total payment.
   Configure with `set_per_buyer_cap`.
 - **Allowlist (optional).** Compliance-gated mode: every `purchase` must consume an
   `AllowEntry`. Configure with `enable_allowlist`.
+- **Vesting (optional).** Redemption streams each allocation through a `VestingWallet`
+  instead of releasing it at `claim`; the plain `claim` / `claim_all` paths then abort
+  and buyers redeem via `claim_into_vesting` / `claim_all_into_vesting`. Configure with
+  `set_vesting_schedule` (one-shot, irreversible); see
+  [Optional vesting](#optional-vesting) above.
 
 The three shapes a fixed-price sale typically takes:
 
 | Shape | KYC | Soft cap | Per-buyer cap | Typical use |
 | --- | --- | --- | --- | --- |
 | Public round | no | no | no | Open public sale, FCFS |
-| Capped public round | no | optional | yes | Anti-whale public sale |
+| Capped public round | no | optional | yes | Public sale with a per-address spend cap |
 | Strategic round | yes | yes | yes | Compliance-gated raise |
+
+The per-buyer cap is keyed by sender address, so it bounds spend **per address**, not
+per actor. Without KYC (the strategic round), one actor buying from many addresses
+defeats it - a per-address cap is not, on its own, whale resistance.
 
 This primitive is **not** a bonding curve, LBP, auction (Dutch / English / sealed-bid),
 or fair launch - those have different mechanics and belong in separate standards.
@@ -200,7 +257,7 @@ implicit - the sale is an owned value, so only its holder can pass it by `&mut`.
 use openzeppelin_sale::prefunded_sale;
 use openzeppelin_sale::fixed_rate_curve::{Self, FixedRateCurve, Params as FrcParams};
 use openzeppelin_sale::refund_vault;
-use openzeppelin_finance::vesting_wallet_linear::{Linear, Params as VParams};
+use openzeppelin_finance::vesting_wallet_linear::{Self, Linear, Params as VParams};
 use sui::clock::Clock;
 use sui::coin::Coin;
 
@@ -234,7 +291,7 @@ public fun launch(
     // 3. Optional knobs - all Init-only and one-shot.
     sale.set_per_buyer_cap(per_buyer_cap, ctx);
     // let allow_admin = sale.enable_allowlist(ctx);  // for a strategic round
-    // sale.set_vesting_schedule_params(vesting_wallet_linear::params(...));
+    // sale.set_vesting_schedule(vesting_wallet_linear::vesting_schedule(...));
 
     // 4. Pair a fresh, empty, Active vault, then activate. share_and_activate takes
     //    the vault by value and shares it together with the sale, so the
@@ -299,10 +356,10 @@ transfer::public_transfer(coin::from_balance(money_back, ctx), ctx.sender());
 
 ### Redeem into vesting
 
-For a sale created with `set_vesting_schedule_params`, redemption must go through
-`claim_into_vesting`. The vesting schedule - both its `VestingWitness` (here
-`vesting_wallet_linear::Linear`) and its `VestingScheduleParams` - is fixed at
-`create_sale`, so `claim_into_vesting` infers **every** type argument from the `sale`
+For a sale configured with `set_vesting_schedule` during `Init`, redemption must go through
+`claim_into_vesting`. The vesting witness/params type pair (here
+`vesting_wallet_linear::Linear` and `vesting_wallet_linear::Params`) is fixed at
+`create_sale`; `set_vesting_schedule` attaches the concrete schedule values, so `claim_into_vesting` infers **every** type argument from the `sale`
 it takes by `&mut`. The turbofish below is written out only to name the wallet's type;
 you can drop it entirely and let inference fill it in:
 
@@ -379,7 +436,7 @@ in a wallet.
 | Mistake | What happens | Fix |
 | --- | --- | --- |
 | Configuring (deposit / caps / allowlist / vesting) after `share_and_activate` | Aborts (`ENotInit`) | Do all setup in `Init`, before activating. |
-| Pairing a vault that already holds funds, or is shared/closed | Aborts (`EVaultNotEmpty` / `EVaultNotActive`) | Pair a fresh, empty `Active` vault, then `share` it after activation. |
+| Pairing a vault that already holds funds, or is not `Active` (already `Refunding` / `Closed`) | Aborts (`EVaultNotEmpty` / `EVaultNotActive`) | Pair a fresh, empty `Active` vault; `share_and_activate` then consumes and shares it for you (don't `share` it yourself first). |
 | Activating with under-provisioned inventory | Aborts (`EInsufficientInventoryAtActivate`) | Deposit `≥ hard_cap * rate` before activating (the curve's `activation_ticket` computes the requirement). |
 | Plain `claim` on a vesting sale (or `claim_into_vesting` on a non-vesting sale) | Aborts (`EClaimRequiresVesting` / `ENoVestingScheduleAttached`) | Match the redemption path to whether a schedule is attached. |
 | Buying then redeeming from a different wallet | Aborts (`EBuyerOnly`) | Redeem from the purchasing address - receipts are buyer-bound. |
@@ -392,6 +449,10 @@ in a wallet.
   inventory, and overflow. The witness gate makes a `FixedRateCurve` sale
   un-priceable by anything but the fixed-rate module; a *custom* curve is
   security-critical and must be audited with the sale.
+- **Quotes are freshness-safe only when versioned.** A state-dependent curve must mint
+  via `mint_quote`, so `purchase` rejects (`EStaleQuote`) a quote staled by an
+  intervening same-PTB purchase. `mint_quote_unversioned` opts out and is safe only for
+  a rate-immune curve like `fixed_rate_curve`.
 - **Buyer redemption never depends on admin liveness.** `purchase`, `claim`, `refund`,
   `finalize`, and `cancel_after_close` are permissionless. Losing the `SaleAdminCap`
   forfeits only `cancel_emergency`, `withdraw_proceeds`, and `withdraw_unsold_inventory`
@@ -417,10 +478,20 @@ in a wallet.
 > Integration examples are illustrations of how the primitive can be wired up, **not**
 > production-ready code.
 
+Complete integration examples live in [`examples/prefunded_sale/`](examples/prefunded_sale):
+
+- [`kyc_registry`](examples/prefunded_sale/kyc_registry.move) - the **compliance-gated
+  strategic round** pattern: a shared KYC allowlist that wraps the sale's
+  `AllowlistAdmin`, gates entry minting on a membership check, and lets a cleared buyer
+  self-serve their single-use `AllowEntry` inside the purchase PTB - the concrete wiring
+  for the `allowlist` slot the library ships no logic for. The
+  [tests](examples/prefunded_sale/tests/kyc_registry_tests.move) drive the full strategic
+  round end to end: KYC approval, a per-buyer-capped purchase, `finalize`, and redemption
+  into a vesting wallet, plus the soft-cap-miss refund path.
+
 The full unit suite under [`tests/`](tests) doubles as an executable specification -
 `test_utils.move` shows the canonical `Init -> Active` setup, and the thematic files
-exercise every purchase, close, redemption, and failure path. Standalone integration
-examples will live in [`examples/`](examples).
+exercise every purchase, close, redemption, and failure path.
 
 ## Learn More
 
