@@ -64,7 +64,7 @@ fun launch(scenario: &mut ts::Scenario, clk: &Clock) {
     );
     sale.deposit(balance::create_for_testing<SALE>(INVENTORY));
     sale.set_per_buyer_cap(PER_BUYER_CAP, ctx);
-    sale.set_vesting_schedule_params(linear::params_continuous(VEST_START, 0, VEST_DURATION));
+    sale.set_vesting_schedule(linear::vesting_schedule_continuous(VEST_START, 0, VEST_DURATION));
 
     // The single mint authority never leaves the shared registry.
     let allow_admin = sale.enable_allowlist(ctx);
