@@ -167,11 +167,12 @@ sale consumes the vault's controller cap and from then on drives the vault's sta
 directly from the vault; this never depends on admin liveness.
 
 An external router deciding between `claim` and `refund` reads the sale's phase
-directly - `sale.is_finalized()` for the claim path, `sale.is_cancelled()` for the refund path
-(the full set is `sale.is_init()` / `sale.is_active()` / `sale.is_finalized()` / `sale.is_cancelled()`). Do **not**
-infer the phase from the vault's `is_refunding` / `is_closed` state: that flip is an
-internal consequence of the sale's transition, not a supported signal, and a caller
-could supply an unrelated vault of the right coin type. Verify a vault is the sale's
+directly - `sale.is_finalized()` for the claim path, `sale.is_cancelled()` for
+the refund path (the full set is `sale.is_init()` / `sale.is_active()` /
+`sale.is_finalized()` / `sale.is_cancelled()`). Do **not** infer the phase from
+the vault's `is_refunding` / `is_closed` state: that flip is an internal
+consequence of the sale's transition, not a supported signal, and a caller could
+supply an unrelated vault of the right coin type. Verify a vault is the sale's
 own with `sale.refund_vault_id()` before trusting it.
 
 ### Optional vesting
