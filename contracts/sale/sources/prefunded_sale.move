@@ -492,8 +492,9 @@ const MAX_SALE_DURATION_MS: u64 = 31_536_000_000;
 /// and fails to compile. An integrator shipping a second curve alongside the built-in
 /// linear one does not have to keep the slots in step by hand - the compiler does. This
 /// coherence check is type-matching only and is not a substitute for the witness rule
-/// above: with a public witness such as `bool`, `new_schedule<bool, _>(true, ..)` is
-/// buildable by anyone, so the pair is trivially coherent yet the lockup is bypassable.
+/// above: with a publicly-constructible witness such as `bool`,
+/// `new_schedule<bool, _>(true, ..)` is buildable by anyone, so the pair is trivially
+/// coherent yet the lockup is bypassable.
 public struct PrefundedSale<
     phantom Curve: drop,
     CurveParams: copy + drop + store,
@@ -822,8 +823,9 @@ public struct InventoryWithdrawn<phantom SaleCoin, phantom PaymentCoin> has copy
 /// into a live vesting sale: `set_vesting_schedule` accepts only a curve-minted
 /// `VestingSchedule<VestingWitness, VestingScheduleParams>`, so attaching a schedule to an
 /// incoherent pair fails to compile - such a sale can only ever redeem via plain `claim`.
-/// That coherence check does not rescue a public witness: `new_schedule<bool, _>(true, ..)`
-/// is buildable by anyone, so a `bool` pair is trivially coherent yet unlocked.
+/// That coherence check does not rescue a publicly-constructible witness:
+/// `new_schedule<bool, _>(true, ..)` is buildable by anyone, so a `bool` pair is trivially
+/// coherent yet unlocked.
 /// For a non-vesting sale both slots are inert, but still name a real curve's
 /// witness/params pair (e.g. `vesting_wallet_linear::{Linear, Params}`) rather than a
 /// publicly-constructible placeholder (e.g. `bool`): naming a witness type only its
@@ -1001,7 +1003,7 @@ public fun set_per_buyer_cap<
 /// declaring module can construct: `claim_into_vesting` builds the wallet under the
 /// sale's pinned `VestingWitness` type parameter, so only the module that owns that
 /// witness can mint the `VestedAmount` needed to release, and a buyer cannot supply a
-/// permissive witness of their own. Pinning an ordinary public `drop` type such as
+/// permissive witness of their own. Pinning a publicly-constructible `drop` type such as
 /// `bool` voids this - anyone could mint the attestation and release the whole balance
 /// on the first call, and the coherence check on `schedule` below does not restore the
 /// guarantee - so `create_sale` must name a real curve's witness even when no schedule
@@ -1643,8 +1645,8 @@ public fun cancel_emergency<
 /// vesting wallet. Whether that wallet actually locks the tokens depends on
 /// `VestingWitness` being a genuine curve witness and the pinned curve being well-behaved
 /// (see `set_vesting_schedule`, `claim_into_vesting`, and the `PrefundedSale` type doc) -
-/// a public witness leaves the wallet releasable at once, and an expansive curve lets a
-/// buyer deposit to unlock early.
+/// a publicly-constructible witness leaves the wallet releasable at once, and an expansive
+/// curve lets a buyer deposit to unlock early.
 ///
 /// #### Parameters
 /// - `sale`: The shared sale, in `Finalized` phase.
@@ -1741,10 +1743,10 @@ public fun claim_all<
 /// `VestingWitness` - a `drop` type only its declaring module can construct - can mint
 /// the `VestedAmount` that `release` requires; `release` itself stays permissionless, but
 /// is inert without one. This is a genuine lockup only when that witness is a real curve's
-/// witness: if the sale was created with a public witness anyone can build (e.g. `bool`),
-/// no substitution is needed - the buyer constructs the pinned witness directly, mints a
-/// full `VestedAmount`, and releases at once. This is why `create_sale` must pin a real
-/// curve's witness - see there.
+/// witness: if the sale was created with a publicly-constructible witness anyone can build
+/// (e.g. `bool`), no substitution is needed - the buyer constructs the pinned witness
+/// directly, mints a full `VestedAmount`, and releases at once. This is why `create_sale`
+/// must pin a real curve's witness - see there.
 ///
 /// Witness-pinning closes the substitution attack, but not the schedule on its own: the
 /// wallet is returned **by value**, so the buyer can `deposit` into it, and curve
