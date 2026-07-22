@@ -111,12 +111,19 @@ public struct Params has copy, drop, store {
 /// and 0.50 (`rate = 2`). Below the ceiling, 0.20 is exact (`rate = 5`) but 0.30
 /// is not - the nearest are 0.333.. (`rate = 3`) and 0.25 (`rate = 4`).
 ///
-/// An integrator needing an off-grid price on a given decimal pairing should not
-/// fork this curve but supply its own: the sale applies the curve-computed
-/// `allocation` verbatim (see `prefunded_sale::mint_quote`), so a custom curve
-/// can compute the allocation directly - e.g. with a widened division and an
-/// explicit rounding mode - and express any price on any decimal pairing, free of
-/// this grid.
+/// An integrator needing an off-grid price on a given decimal pairing should
+/// supply its own curve: the sale applies the curve-computed `allocation`
+/// verbatim (see `prefunded_sale::mint_quote`), so a custom curve can compute the
+/// allocation directly - e.g. with a widened division and an explicit rounding
+/// mode - and express any price on any decimal pairing, free of this grid.
+///
+/// The smallest change that lifts both limits is to fork this curve into a
+/// fractional-rate variant: replace the single `rate` with a `rate_numerator` and
+/// `rate_denominator` pair and price as `allocation = paid * rate_numerator /
+/// rate_denominator` (widening the multiplication before the division to avoid
+/// overflow, and choosing a rounding mode). The denominator lets the price land on
+/// any rational rather than only reciprocal-integer fractions, which removes the
+/// grid; a numerator below the denominator raises the price past the old ceiling.
 ///
 /// #### Parameters
 /// - `rate`: Sale tokens (smallest units) allocated per 1 payment-coin smallest
