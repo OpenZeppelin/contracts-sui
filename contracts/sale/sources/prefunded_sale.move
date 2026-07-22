@@ -8,14 +8,14 @@
 /// ### Lifecycle
 ///
 /// ```text
-///   create_sale --+
-///   deposit --+
-///   set_per_buyer_cap           |  (Init phase - sale is owned by caller;
-///   set_vesting_schedule +   holding it by &mut is the authority)
-///   pair_refund_vault           |
-///   enable_allowlist            |
-///                               |
-///   share_and_activate ---------+-->  (Active phase - sale is shared)
+///   create_sale          |
+///   deposit              |
+///   set_per_buyer_cap    |   (Init phase - sale is owned by caller;
+///   set_vesting_schedule |   holding it by &mut is the authority)
+///   pair_refund_vault    |
+///   enable_allowlist     |
+///                        |
+///   share_and_activate   +-->  (Active phase - sale is shared)
 ///                                  |
 ///                              purchase xN
 ///                                  |
@@ -25,13 +25,13 @@
 ///                                  |      claim_all_into_vesting,
 ///                                  |      withdraw_proceeds, withdraw_unsold_inventory
 ///                                  |
-///                                  +--> cancel_after_close (permissionless;
-///                                  |      refund,                            soft-cap miss)
+///                                  +--> cancel_after_close   (permissionless;
+///                                  |      refund, refund_all, soft-cap miss)
 ///                                  |      withdraw_unsold_inventory
 ///                                  |
-///                                  +--> cancel_emergency   (admin-only;
-///                                          refund,                            in-window emergency)
-///                                          withdraw_unsold_inventory
+///                                  +--> cancel_emergency     (admin-only;
+///                                         refund, refund_all, in-window emergency)
+///                                         withdraw_unsold_inventory
 /// ```
 ///
 /// `Finalized` and `Cancelled` are terminal.
@@ -44,14 +44,14 @@
 ///
 /// - **Permissionless (no admin cap required):** `purchase`, `claim`,
 ///   `claim_all`, `claim_into_vesting`, `claim_all_into_vesting`,
-///   `refund`, `finalize`, `cancel_after_close`. None of these need the
+///   `refund`, `refund_all`, `finalize`, `cancel_after_close`. None of these need the
 ///   `SaleAdminCap`, so **buyer claims and refunds do not depend on
 ///   admin liveness.** Authorization within this category is not
 ///   uniform, though:
 ///     - `finalize` and `cancel_after_close` are open to any caller
 ///       with visibility to the sale, once their conditions hold.
 ///     - The redemption paths - `claim`, `claim_all`,
-///       `claim_into_vesting`, `claim_all_into_vesting`, and `refund` -
+///       `claim_into_vesting`, `claim_all_into_vesting`, `refund` and `refund_all` -
 ///       are **buyer-bound**: each asserts `ctx.sender() ==
 ///       receipt.buyer` (`EBuyerOnly`), so only the buyer who made a
 ///       purchase can redeem its receipt.
@@ -164,8 +164,9 @@
 ///
 /// 5. **Receipts are non-transferable and buyer-bound.** A buyer with
 ///    multiple purchases holds multiple receipts; `claim_all` batches
-///    them. Wallet rotation between purchase and redemption is not
-///    supported. `claim` and `refund` assert
+///    redemption on a finalized sale and `refund_all` batches recovery
+///    on a cancelled one. Wallet rotation between purchase and
+///    redemption is not supported. `claim` and `refund` assert
 ///    `ctx.sender() == receipt.buyer`.
 ///
 /// 6. **Stale receipts pin both inventory and refund funds.** No
@@ -679,6 +680,8 @@ public struct SaleCreated<
     CurveParams,
 > has copy, drop {
     sale_id: ID,
+    /// Id of the admin cap minted alongside the sale.
+    admin_cap_id: ID,
     hard_cap: u64,
     soft_cap: u64,
     opens_at_ms: u64,
@@ -725,6 +728,7 @@ public struct AllowlistEnabled<phantom SaleCoin, phantom PaymentCoin> has copy, 
 /// Emitted by `share_and_activate` when the sale goes live.
 public struct SaleActivated<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     sale_id: ID,
+    required_inventory: u64,
     activated_at_ms: u64,
 }
 
@@ -736,6 +740,7 @@ public struct Purchased<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     paid: u64,
     allocation: u64,
     raised_after: u64,
+    total_allocated_after: u64,
     purchased_at_ms: u64,
 }
 
@@ -761,6 +766,7 @@ public struct Claimed<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     buyer: address,
     receipt_id: ID,
     amount: u64,
+    total_allocated_after: u64,
 }
 
 /// Emitted by `refund` when a buyer recovers their payment.
@@ -769,6 +775,8 @@ public struct Refunded<phantom SaleCoin, phantom PaymentCoin> has copy, drop {
     buyer: address,
     receipt_id: ID,
     amount: u64,
+    allocation: u64,
+    total_allocated_after: u64,
 }
 
 /// Emitted by `withdraw_proceeds` when the admin withdraws collected proceeds.
@@ -862,9 +870,9 @@ public fun create_sale<
 
     let sale = PrefundedSale {
         id: object::new(ctx),
-        inventory: balance::zero<SaleCoin>(),
+        inventory: balance::zero(),
         total_allocated: 0,
-        proceeds: balance::zero<PaymentCoin>(),
+        proceeds: balance::zero(),
         curve_params,
         hard_cap,
         soft_cap,
@@ -885,6 +893,7 @@ public fun create_sale<
 
     event::emit(SaleCreated<SaleCoin, PaymentCoin, Curve, CurveParams> {
         sale_id,
+        admin_cap_id: object::id(&cap),
         hard_cap,
         soft_cap,
         opens_at_ms,
@@ -898,6 +907,9 @@ public fun create_sale<
 /// Deposit sale tokens into inventory. May be called multiple times during Init.
 /// Authority is implicit: the sale is owned, so only the caller that created it can
 /// pass it as `&mut`.
+///
+/// A deposit of a zero-value balance is a no-op: the balance is consumed but no
+/// `InventoryDeposited` event is emitted.
 ///
 /// #### Parameters
 /// - `sale`: The sale to fund, in `Init` phase.
@@ -927,6 +939,7 @@ public fun deposit<
     assert!(sale.is_init(), ENotInit);
     let amount = inventory.value();
     sale.inventory.join(inventory);
+    if (amount == 0) return;
     event::emit(InventoryDeposited<SaleCoin, PaymentCoin> {
         sale_id: object::id(sale),
         amount,
@@ -1272,6 +1285,7 @@ public fun share_and_activate<
     vault.share();
     event::emit(SaleActivated<SaleCoin, PaymentCoin> {
         sale_id,
+        required_inventory,
         activated_at_ms,
     });
 }
@@ -1436,6 +1450,7 @@ public fun purchase<
         paid,
         allocation,
         raised_after: sale.raised,
+        total_allocated_after: sale.total_allocated,
         purchased_at_ms: now,
     });
 }
@@ -1462,11 +1477,10 @@ public fun purchase<
 ///   reached.
 /// - `ESoftCapNotMet` if `raised < soft_cap`.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-///
-/// Propagated from the paired vault via `flip_to_closed` (guarded by the sale's
-/// invariants - the paired vault always matches and is active while the sale is
-/// open - so unreachable in normal operation):
-/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotActiveState`.
+/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState`, propagated from
+///   the paired vault via `flip_to_closed` (guarded by the sale's invariants - the paired
+///   vault always matches and is active while the sale is open - so unreachable in normal
+///   operation).
 public fun finalize<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1529,11 +1543,10 @@ public fun finalize<
 /// - `ESoftCapNotSet` if no soft cap is configured.
 /// - `ESoftCapReached` if a soft cap was reached (`raised >= soft_cap`).
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-///
-/// Propagated through the internal cancel path (guarded by the sale's invariants, so
-/// unreachable in normal operation):
-/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState` (depositing
-///   proceeds into the vault and flipping it to refunding).
+/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState`, propagated
+///   through the internal cancel path when depositing proceeds into the vault and
+///   flipping it to refunding (guarded by the sale's invariants, so unreachable in
+///   normal operation).
 public fun cancel_after_close<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1586,11 +1599,10 @@ public fun cancel_after_close<
 /// - `ESaleAlreadyComplete` if `raised >= hard_cap`.
 /// - `ESoftCapReached` if a soft cap is configured and `raised >= soft_cap`.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-///
-/// Propagated through the internal cancel path (guarded by the sale's invariants, so
-/// unreachable in normal operation):
-/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState` (depositing
-///   proceeds into the vault and flipping it to refunding).
+/// - `refund_vault::EWrongVaultCap` and `refund_vault::ENotActiveState`, propagated
+///   through the internal cancel path when depositing proceeds into the vault and
+///   flipping it to refunding (guarded by the sale's invariants, so unreachable in
+///   normal operation).
 public fun cancel_emergency<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -1984,11 +1996,11 @@ public fun withdraw_unsold_inventory<
 /// - `EReceiptSaleMismatch` if `receipt` was issued by a different sale.
 /// - `EBuyerOnly` if `ctx.sender()` is not the receipt's buyer.
 /// - `EWrongVault` if `vault` is not the one paired with this sale.
-///
-/// Propagated from the paired vault via `release_balance` (guarded by the sale's
-/// refund-solvency invariant, so unreachable in normal operation):
 /// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`,
-///   `refund_vault::EInsufficientLocked`.
+///   `refund_vault::EZeroRelease`, and `refund_vault::EInsufficientLocked`, propagated
+///   from the paired vault via `release_balance` (guarded by the sale's refund-solvency
+///   invariant and the nonzero-payment check at purchase, so unreachable in normal
+///   operation).
 public fun refund<
     Curve: drop,
     CurveParams: copy + drop + store,
@@ -2030,9 +2042,67 @@ public fun refund<
         buyer,
         receipt_id,
         amount: paid,
+        allocation,
+        total_allocated_after: sale.total_allocated,
     });
 
     payment
+}
+
+/// Batch helper: refund several receipts in one call, summing their payments into one
+/// `Balance<PaymentCoin>`. Aborts the whole call (releasing nothing) if any receipt
+/// is invalid.
+///
+/// #### Parameters
+/// - `sale`: The shared sale, in `Cancelled` phase.
+/// - `vault`: The paired refund vault, in `Refunding` state.
+/// - `receipts`: The buyer's receipts. All consumed.
+/// - `ctx`: Transaction context; `ctx.sender()` must equal each receipt's buyer.
+///
+/// #### Returns
+/// - A `Balance<PaymentCoin>` summing every receipt's `paid` amount.
+///
+/// #### Aborts
+/// - `ENotCancelled` if the sale is not in `Cancelled` phase.
+/// - `EReceiptSaleMismatch` if any receipt was issued by a different sale.
+/// - `EBuyerOnly` if `ctx.sender()` is not the buyer of any receipt.
+/// - `EWrongVault` if `vault` is not the one paired with this sale.
+/// - `refund_vault::EWrongVaultCap`, `refund_vault::ENotRefundingState`,
+///   `refund_vault::EZeroRelease`, and `refund_vault::EInsufficientLocked`, propagated
+///   from the paired vault via `release_balance` (guarded by the sale's refund-solvency
+///   invariant and the nonzero-payment check at purchase, so unreachable in normal
+///   operation).
+public fun refund_all<
+    Curve: drop,
+    CurveParams: copy + drop + store,
+    SaleCoin,
+    PaymentCoin,
+    VestingWitness: drop,
+    VestingScheduleParams: copy + drop + store,
+>(
+    sale: &mut PrefundedSale<
+        Curve,
+        CurveParams,
+        SaleCoin,
+        PaymentCoin,
+        VestingWitness,
+        VestingScheduleParams,
+    >,
+    vault: &mut RefundVault<PaymentCoin>,
+    mut receipts: vector<Receipt<SaleCoin>>,
+    ctx: &mut TxContext,
+): Balance<PaymentCoin> {
+    assert!(sale.is_cancelled(), ENotCancelled);
+    let paired_vault_id = *sale.refund_vault_id.borrow();
+    assert!(object::id(vault) == paired_vault_id, EWrongVault);
+
+    let mut total = balance::zero();
+    while (!receipts.is_empty()) {
+        let r = receipts.pop_back();
+        total.join(sale.refund(vault, r, ctx));
+    };
+    receipts.destroy_empty();
+    total
 }
 
 // === Quote ===
@@ -2835,6 +2905,7 @@ fun claim_internal<
         buyer,
         receipt_id,
         amount: allocation,
+        total_allocated_after: sale.total_allocated,
     });
 
     payout
@@ -2860,7 +2931,7 @@ fun claim_all_internal<
     ctx: &TxContext,
 ): Balance<SaleCoin> {
     assert!(sale.is_finalized(), ENotFinalized);
-    let mut total = balance::zero<SaleCoin>();
+    let mut total = balance::zero();
     while (!receipts.is_empty()) {
         let r = receipts.pop_back();
         total.join(sale.claim_internal(r, ctx));
@@ -2892,13 +2963,22 @@ fun new_quote<PaymentCoin>(
 #[test_only]
 public fun test_new_sale_created<SaleCoin, PaymentCoin, Curve: drop, CurveParams: copy + drop>(
     sale_id: ID,
+    admin_cap_id: ID,
     hard_cap: u64,
     soft_cap: u64,
     opens_at_ms: u64,
     closes_at_ms: u64,
     curve_params: CurveParams,
 ): SaleCreated<SaleCoin, PaymentCoin, Curve, CurveParams> {
-    SaleCreated { sale_id, hard_cap, soft_cap, opens_at_ms, closes_at_ms, curve_params }
+    SaleCreated {
+        sale_id,
+        admin_cap_id,
+        hard_cap,
+        soft_cap,
+        opens_at_ms,
+        closes_at_ms,
+        curve_params,
+    }
 }
 
 /// Build an `InventoryDeposited` event value for asserting against `event::events_by_type`.
@@ -2957,9 +3037,10 @@ public fun test_new_allowlist_enabled<SaleCoin, PaymentCoin>(
 #[test_only]
 public fun test_new_sale_activated<SaleCoin, PaymentCoin>(
     sale_id: ID,
+    required_inventory: u64,
     activated_at_ms: u64,
 ): SaleActivated<SaleCoin, PaymentCoin> {
-    SaleActivated { sale_id, activated_at_ms }
+    SaleActivated { sale_id, required_inventory, activated_at_ms }
 }
 
 /// Build a `Purchased` event value for asserting against `event::events_by_type`.
@@ -2971,9 +3052,19 @@ public fun test_new_purchased<SaleCoin, PaymentCoin>(
     paid: u64,
     allocation: u64,
     raised_after: u64,
+    total_allocated_after: u64,
     purchased_at_ms: u64,
 ): Purchased<SaleCoin, PaymentCoin> {
-    Purchased { sale_id, buyer, receipt_id, paid, allocation, raised_after, purchased_at_ms }
+    Purchased {
+        sale_id,
+        buyer,
+        receipt_id,
+        paid,
+        allocation,
+        raised_after,
+        total_allocated_after,
+        purchased_at_ms,
+    }
 }
 
 /// Read the `receipt_id` off a `Purchased` event. The receipt is delivered inside the
@@ -3022,8 +3113,9 @@ public fun test_new_claimed<SaleCoin, PaymentCoin>(
     buyer: address,
     receipt_id: ID,
     amount: u64,
+    total_allocated_after: u64,
 ): Claimed<SaleCoin, PaymentCoin> {
-    Claimed { sale_id, buyer, receipt_id, amount }
+    Claimed { sale_id, buyer, receipt_id, amount, total_allocated_after }
 }
 
 /// Build a `Refunded` event value for asserting against `event::events_by_type`.
@@ -3033,8 +3125,10 @@ public fun test_new_refunded<SaleCoin, PaymentCoin>(
     buyer: address,
     receipt_id: ID,
     amount: u64,
+    allocation: u64,
+    total_allocated_after: u64,
 ): Refunded<SaleCoin, PaymentCoin> {
-    Refunded { sale_id, buyer, receipt_id, amount }
+    Refunded { sale_id, buyer, receipt_id, amount, allocation, total_allocated_after }
 }
 
 /// Build a `ProceedsWithdrawn` event value for asserting against `event::events_by_type`.

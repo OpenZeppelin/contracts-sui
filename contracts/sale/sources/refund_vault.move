@@ -65,6 +65,10 @@ const EWrongVaultCap: vector<u8> = "This capability does not control this refund
 #[error(code = 4)]
 const EInsufficientLocked: vector<u8> = "The requested amount exceeds the funds held in the vault";
 
+/// `release_balance` was called with a zero amount.
+#[error(code = 5)]
+const EZeroRelease: vector<u8> = "The release amount must be greater than zero";
+
 // === Structs ===
 
 /// The refund vault's lifecycle state. Transitions are one-way:
@@ -102,10 +106,12 @@ public struct RefundVaultCap<phantom P> has key, store {
 /// Emitted by `new` when a vault is created.
 public struct RefundVaultCreated<phantom P> has copy, drop {
     vault_id: ID,
+    /// Id of the controller cap minted alongside the vault.
+    cap_id: ID,
 }
 
 /// Emitted by `deposit` when funds are added to the locked balance.
-public struct VaultDeposit<phantom P> has copy, drop {
+public struct VaultDeposited<phantom P> has copy, drop {
     vault_id: ID,
     /// Amount added by this deposit.
     amount: u64,
@@ -121,7 +127,7 @@ public struct VaultStateChanged<phantom P> has copy, drop {
 }
 
 /// Emitted by `release_balance` and `withdraw_all` when funds leave the vault.
-public struct VaultRelease<phantom P> has copy, drop {
+public struct VaultReleased<phantom P> has copy, drop {
     vault_id: ID,
     /// Amount released by this call.
     amount: u64,
@@ -149,12 +155,12 @@ public struct VaultRelease<phantom P> has copy, drop {
 public fun new<P>(ctx: &mut TxContext): (RefundVault<P>, RefundVaultCap<P>) {
     let vault = RefundVault {
         id: object::new(ctx),
-        locked: balance::zero<P>(),
+        locked: balance::zero(),
         state: VaultState::Active,
     };
     let vault_id = object::id(&vault);
     let cap = RefundVaultCap { id: object::new(ctx), vault_id };
-    event::emit(RefundVaultCreated<P> { vault_id });
+    event::emit(RefundVaultCreated<P> { vault_id, cap_id: object::id(&cap) });
     (vault, cap)
 }
 
@@ -172,7 +178,7 @@ public fun share<P>(vault: RefundVault<P>) {
 /// Deposit funds into the locked balance. Vault must be in `Active` state.
 ///
 /// A deposit of a zero-value balance is a no-op: the balance is consumed but no
-/// `VaultDeposit` event is emitted.
+/// `VaultDeposited` event is emitted.
 ///
 /// #### Parameters
 /// - `vault`: The vault to deposit into.
@@ -189,7 +195,7 @@ public fun deposit<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>, funds
     let amount = funds.value();
     vault.locked.join(funds);
     if (amount == 0) return;
-    event::emit(VaultDeposit<P> {
+    event::emit(VaultDeposited<P> {
         vault_id: object::id(vault),
         amount,
         locked_after: vault.locked.value(),
@@ -252,6 +258,7 @@ public fun flip_to_closed<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>
 /// #### Aborts
 /// - `EWrongVaultCap` if `cap` does not control `vault`.
 /// - `ENotRefundingState` if `vault` is not in `Refunding` state.
+/// - `EZeroRelease` if `amount` is zero.
 /// - `EInsufficientLocked` if `amount` exceeds the locked balance.
 public fun release_balance<P>(
     vault: &mut RefundVault<P>,
@@ -260,9 +267,10 @@ public fun release_balance<P>(
 ): Balance<P> {
     assert_cap(vault, cap);
     assert!(vault.state.is_refunding_state(), ENotRefundingState);
+    assert!(amount > 0, EZeroRelease);
     assert!(vault.locked.value() >= amount, EInsufficientLocked);
     let part = vault.locked.split(amount);
-    event::emit(VaultRelease<P> {
+    event::emit(VaultReleased<P> {
         vault_id: object::id(vault),
         amount,
         locked_after: vault.locked.value(),
@@ -271,6 +279,9 @@ public fun release_balance<P>(
 }
 
 /// Withdraw the entire locked balance. Vault must be in `Closed`.
+///
+/// Idempotent: a second call (or one against an empty vault) returns an empty balance
+/// and emits no `VaultReleased` event.
 ///
 /// #### Parameters
 /// - `vault`: The vault to drain.
@@ -287,11 +298,13 @@ public fun withdraw_all<P>(vault: &mut RefundVault<P>, cap: &RefundVaultCap<P>):
     assert!(vault.state.is_closed_state(), ENotClosedState);
     let amount = vault.locked.value();
     let part = vault.locked.split(amount);
-    event::emit(VaultRelease<P> {
-        vault_id: object::id(vault),
-        amount,
-        locked_after: 0,
-    });
+    if (amount > 0) {
+        event::emit(VaultReleased<P> {
+            vault_id: object::id(vault),
+            amount,
+            locked_after: 0,
+        });
+    };
     part
 }
 
@@ -399,18 +412,18 @@ public fun test_state_closed(): VaultState { VaultState::Closed }
 
 /// Build a `RefundVaultCreated` event value for asserting against `event::events_by_type`.
 #[test_only]
-public fun test_new_refund_vault_created<P>(vault_id: ID): RefundVaultCreated<P> {
-    RefundVaultCreated { vault_id }
+public fun test_new_refund_vault_created<P>(vault_id: ID, cap_id: ID): RefundVaultCreated<P> {
+    RefundVaultCreated { vault_id, cap_id }
 }
 
-/// Build a `VaultDeposit` event value for asserting against `event::events_by_type`.
+/// Build a `VaultDeposited` event value for asserting against `event::events_by_type`.
 #[test_only]
-public fun test_new_vault_deposit<P>(
+public fun test_new_vault_deposited<P>(
     vault_id: ID,
     amount: u64,
     locked_after: u64,
-): VaultDeposit<P> {
-    VaultDeposit { vault_id, amount, locked_after }
+): VaultDeposited<P> {
+    VaultDeposited { vault_id, amount, locked_after }
 }
 
 /// Build a `VaultStateChanged` event value for asserting against `event::events_by_type`.
@@ -423,12 +436,12 @@ public fun test_new_vault_state_changed<P>(
     VaultStateChanged { vault_id, old_state, new_state }
 }
 
-/// Build a `VaultRelease` event value for asserting against `event::events_by_type`.
+/// Build a `VaultReleased` event value for asserting against `event::events_by_type`.
 #[test_only]
-public fun test_new_vault_release<P>(
+public fun test_new_vault_released<P>(
     vault_id: ID,
     amount: u64,
     locked_after: u64,
-): VaultRelease<P> {
-    VaultRelease { vault_id, amount, locked_after }
+): VaultReleased<P> {
+    VaultReleased { vault_id, amount, locked_after }
 }
