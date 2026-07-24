@@ -1,5 +1,10 @@
 # `openzeppelin_timelock`
 
+> This release has been professionally audited. See the security audit report in
+`audits/`.
+
+> It is available as open source code in this repository but is **not published to the Move Registry (MVR)** by OpenZeppelin. To use it, add this repository as a Move dependency directly in `Move.toml` (or vendor the source) rather than resolving it via `mvr add`. If you'd like to consume it via MVR, you can publish and register this package to the registry yourself under your own namespace.
+
 A delayed-operation controller for Sui - a Sui-native take on OpenZeppelin's `TimelockController`. It enforces a minimum on-chain delay between *scheduling* a privileged operation and *executing* it, giving users a window to react before the change takes effect.
 
 Operations carry typed parameters stored on-chain, and an integration binds to a specific timelock through a stored `OperationCap`, so the canonical-timelock check is enforced by the library rather than by hand-written asserts. Execution returns the typed params through a no-ability `ExecutionTicket<Action, Params>` hot potato that the consumer redeems in the same transaction. Roles come from a hard dependency on `openzeppelin_access`.

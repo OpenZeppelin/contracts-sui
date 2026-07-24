@@ -1,5 +1,9 @@
 # `openzeppelin_utils`
 
+> This package is open-source and not actively maintained.
+
+> The `UpgradeCap` for packages published to the Move Registry under `@openzeppelin-move/*` has been made immutable, so these packages can no longer be upgraded by OpenZeppelin or anyone else.
+
 Embeddable primitives for Sui smart contract development.
 
 ## Install

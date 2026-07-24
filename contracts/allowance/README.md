@@ -1,5 +1,10 @@
 # `openzeppelin_allowance`
 
+> This release has been professionally audited. See the security audit report in
+`audits/`.
+
+> It is available as open source code in this repository but is **not published to the Move Registry (MVR)** by OpenZeppelin. To use it, add this repository as a Move dependency directly in `Move.toml` (or vendor the source) rather than resolving it via `mvr add`. If you'd like to consume it via MVR, you can publish and register this package to the registry yourself under your own namespace.
+
 Capability-keyed, multi-coin spending allowances for Sui: an owner funds a shared vault and grants bounded, optionally expiring, revocable spend authority that delegates draw on demand, without giving up custody and without signing each spend.
 
 The `openzeppelin_allowance` package lets a treasury, protocol, or wallet delegate "you may spend up to X of coin T" to another party (an address, a keeper service, an embedded protocol record) while keeping the funds, the ability to raise or lower the budget at any time, and a one-call kill switch.
