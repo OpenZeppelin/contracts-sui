@@ -13,7 +13,7 @@ Operations carry typed parameters stored on-chain, and an integration binds to a
 
 ```toml
 [dependencies]
-openzeppelin_timelock = { r.mvr = "@openzeppelin-move/timelock" }
+openzeppelin_sale = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/timelock", rev = "v1.5.1" }
 ```
 
 ## Module Snapshot
