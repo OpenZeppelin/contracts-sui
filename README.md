@@ -61,7 +61,7 @@ longer be upgraded by OpenZeppelin or anyone else.
 ## Security
 
 This project was built by OpenZeppelin with the goal of providing a secure and reliable library of smart contract components
-for the Sui ecosystem. We address security through risk management in various areas such as engineering and open source best
+for the Sui ecosystem. We addressed security through risk management in various areas such as engineering and open-source best
 practices, scoping and API design, multi-layered review processes, and incident response preparedness.
 
 Refer to [SECURITY.md](SECURITY.md) for more details.
