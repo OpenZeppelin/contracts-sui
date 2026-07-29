@@ -1,5 +1,6 @@
 # `openzeppelin_fp_math`
 
+> [!WARNING]
 > This package is open-source and not actively maintained.
 >
 > The `UpgradeCap` for packages published to the Move Registry under `@openzeppelin-move/*` has been made immutable, so these packages can no longer be upgraded by OpenZeppelin or anyone else.
@@ -12,6 +13,10 @@ Fixed-point decimal types with 9 decimals (10^9), matching Sui coin precision.
 [dependencies]
 openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
 ```
+
+> [!NOTE]
+> `openzeppelin_fp_math` depends on [`openzeppelin_math`](../core) for rounding modes
+> and widened integer arithmetic.
 
 ## Types
 

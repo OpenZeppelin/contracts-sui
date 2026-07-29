@@ -1,5 +1,6 @@
 # `openzeppelin_finance`
 
+> [!WARNING]
 > This package is open-source and not actively maintained.
 >
 > This release has been professionally audited. See the security audit report in
@@ -14,6 +15,17 @@ and pays it out on a schedule. A curve-agnostic core handles release accounting 
 conservation of funds; the curve - linear, stepped, cliff, or a custom shape you
 write - is a separate, swappable concern. Use it for token grants, team and investor
 vesting, payroll streams, and emission schedules.
+
+## Install
+
+```toml
+[dependencies]
+openzeppelin_finance = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/finance", rev = "v1.5.1" }
+```
+
+> [!NOTE]
+> `openzeppelin_finance` depends on [`openzeppelin_math`](../../math/core) for the
+> linear vesting calculation.
 
 ## Modules
 

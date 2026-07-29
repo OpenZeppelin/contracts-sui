@@ -1,5 +1,6 @@
 # `openzeppelin_sale`
 
+> [!WARNING]
 > This package is open-source and not actively maintained.
 >
 > This release has been professionally audited. See the security audit report in
@@ -37,9 +38,8 @@ openzeppelin_sale = { git = "https://github.com/OpenZeppelin/contracts-sui.git",
 ```
 
 > [!NOTE]
-> `openzeppelin_sale` is **not yet published** to the Move Registry. The handle above
-> is the intended install form once released; until then, vendor the package from
-> source. It depends on [`openzeppelin_finance`](../finance) for the vesting path.
+> `openzeppelin_sale` depends on [`openzeppelin_finance`](../finance) for the vesting
+> path.
 
 ## Modules
 
