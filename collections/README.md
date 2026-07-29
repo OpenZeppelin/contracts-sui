@@ -1,5 +1,12 @@
 # `openzeppelin_collections`
 
+> This package is open-source and not actively maintained.
+>
+> This release has been professionally audited. See the security audit report in
+`audits/`.
+>
+> It is available as open-source code in this repository but is **not published to the Move Registry (MVR)** by OpenZeppelin. To use it, add this repository as a Move dependency directly in `Move.toml` (or vendor the source) rather than resolving it via `mvr add`. If you'd like to consume it via MVR, you can publish and register this package to the registry yourself under your own namespace.
+
 The ordered-collections family for Sui Move: two modules for ordered key/value and set data that share one comparator model and a parallel API. Reach for the single-object `sorted_map` (an ordered `SortedMap<K, V>` over one sorted vector) for key/value data, or its set counterpart `sorted_set` for ordered membership. Both read in key order - head/tail, floor/ceiling, next key, sorted pages - not just point lookups.
 
 > [!WARNING]
