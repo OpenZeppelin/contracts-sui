@@ -4,7 +4,17 @@
 [![Coverage Status](https://codecov.io/gh/OpenZeppelin/contracts-sui/graph/badge.svg)](https://codecov.io/gh/OpenZeppelin/contracts-sui)
 [![License](https://img.shields.io/github/license/OpenZeppelin/contracts-sui)](https://github.com/OpenZeppelin/contracts-sui/blob/main/LICENSE)
 
-> [!Warning]
+> [!WARNING]
+> This package is open-source and not actively maintained.
+>
+> This library is open source and available to use, but is no longer under
+active maintenance. No new features, bug fixes, or updates should be
+expected on existing releases.
+>
+> The `UpgradeCap` for packages published to the Move Registry
+under `@openzeppelin-move/*` has been made immutable, so these packages can no
+longer be upgraded by OpenZeppelin or anyone else.
+>
 > This is experimental software and is provided on an "as is" and "as available"
 > basis. We do not give any warranties and will not be liable for any losses
 > incurred through any use of this code base.
@@ -47,16 +57,6 @@ does not have a 1-to-1 mapping with other OpenZeppelin contracts. Due to
 differences in the Sui architecture and Move language capabilities, certain
 features and implementations may differ from their counterparts in other
 ecosystems.
-
-## Project Status
-
-This library is open source and available to use, but is no longer under
-active maintenance. No new features, bug fixes, or updates should be
-expected on existing releases.
-
-The `UpgradeCap` for packages published to the Move Registry
-under `@openzeppelin-move/*` has been made immutable, so these packages can no
-longer be upgraded by OpenZeppelin or anyone else.
 
 ## Security
 
