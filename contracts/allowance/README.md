@@ -15,7 +15,18 @@ The `openzeppelin_allowance` package lets a treasury, protocol, or wallet delega
 > [!WARNING]
 > A `SpenderCap` is a **bearer instrument**: whoever can present it to `spend` exercises the full authority of every budget it keys, up to each budget's limit. The library never checks who holds or presents a cap. Any protocol that custodies a cap MUST sender-gate the function that borrows it, and MUST validate the cap's vault binding before accepting it. See [Security Notes](#security-notes).
 
-## Module Snapshot
+## Install
+
+```toml
+[dependencies]
+openzeppelin_allowance = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/allowance", rev = "v1.5.1" }
+```
+
+> [!NOTE]
+> `openzeppelin_allowance` is **not yet published** to the Move Registry. The handle above
+> is the intended install form once released; until then, vendor the package from source.
+
+## Modules
 
 | Module | Summary |
 |--------|---------|
