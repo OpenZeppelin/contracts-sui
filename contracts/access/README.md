@@ -1,5 +1,9 @@
 # `openzeppelin_access`
 
+> This package is open-source and not actively maintained.
+>
+> The `UpgradeCap` for packages published to the Move Registry under `@openzeppelin-move/*` has been made immutable, so these packages can no longer be upgraded by OpenZeppelin or anyone else.
+
 Role-based authorization and controlled ownership-transfer primitives for Sui Move protocols.
 
 The `openzeppelin_access` package helps protocols protect privileged functions, shared state, admin capabilities, treasury capabilities, and governance-controlled operations.

@@ -48,10 +48,20 @@ differences in the Sui architecture and Move language capabilities, certain
 features and implementations may differ from their counterparts in other
 ecosystems.
 
+## Project Status
+
+This library is open source and available to use, but is no longer under
+active maintenance. No new features, bug fixes, or updates should be
+expected on existing releases.
+
+The `UpgradeCap` for packages published to the Move Registry
+under `@openzeppelin-move/*` has been made immutable, so these packages can no
+longer be upgraded by OpenZeppelin or anyone else.
+
 ## Security
 
-This project is maintained by OpenZeppelin with the goal of providing a secure and reliable library of smart contract components
-for the Sui ecosystem. We address security through risk management in various areas such as engineering and open source best
+This project was built by OpenZeppelin with the goal of providing a secure and reliable library of smart contract components
+for the Sui ecosystem. We addressed security through risk management in various areas such as engineering and open-source best
 practices, scoping and API design, multi-layered review processes, and incident response preparedness.
 
 Refer to [SECURITY.md](SECURITY.md) for more details.

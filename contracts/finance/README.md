@@ -1,5 +1,12 @@
 # `openzeppelin_finance`
 
+> This package is open-source and not actively maintained.
+>
+> This release has been professionally audited. See the security audit report in
+`audits/`.
+>
+> It is available as open-source code in this repository but is **not published to the Move Registry (MVR)** by OpenZeppelin. To use it, add this repository as a Move dependency directly in `Move.toml` (or vendor the source) rather than resolving it via `mvr add`. If you'd like to consume it via MVR, you can publish and register this package to the registry yourself under your own namespace.
+
 Vesting primitives for releasing a locked coin to a beneficiary over time.
 
 The `openzeppelin_finance` package locks a `Balance<C>` for a single beneficiary
