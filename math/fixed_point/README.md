@@ -15,7 +15,7 @@ openzeppelin_fp_math = { r.mvr = "@openzeppelin-move/fixed-point-math" }
 ```
 
 > [!NOTE]
-> `openzeppelin_fp_math` depends on [`@openzeppelin-move/integer-math`](https://www.moveregistry.com/package/@openzeppelin-move/integer-math) for rounding modes
+> `openzeppelin_fp_math` depends on [`openzeppelin_math`](../core) for rounding modes
 > and widened integer arithmetic.
 
 ## Types
