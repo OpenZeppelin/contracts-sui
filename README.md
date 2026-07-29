@@ -14,10 +14,6 @@ expected on existing releases.
 > The `UpgradeCap` for packages published to the Move Registry
 under `@openzeppelin-move/*` has been made immutable, so these packages can no
 longer be upgraded by OpenZeppelin or anyone else.
->
-> This is experimental software and is provided on an "as is" and "as available"
-> basis. We do not give any warranties and will not be liable for any losses
-> incurred through any use of this code base.
 
 **OpenZeppelin Contracts for Sui** is a collection of secure smart contract
 libraries written in Move for the [Sui blockchain](https://sui.io/). Our goal
