@@ -24,9 +24,8 @@ openzeppelin_finance = { git = "https://github.com/OpenZeppelin/contracts-sui.gi
 ```
 
 > [!NOTE]
-> `openzeppelin_finance` is **not yet published** to the Move Registry. The handle above
-> is the intended install form once released; until then, vendor the package from
-> source. It depends on [`openzeppelin_math`](../../math/core) for the linear vesting calculation.
+> `openzeppelin_finance` depends on [`openzeppelin_math`](../../math/core) for the
+> linear vesting calculation.
 
 ## Modules
 
