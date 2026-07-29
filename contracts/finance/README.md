@@ -16,6 +16,18 @@ conservation of funds; the curve - linear, stepped, cliff, or a custom shape you
 write - is a separate, swappable concern. Use it for token grants, team and investor
 vesting, payroll streams, and emission schedules.
 
+## Install
+
+```toml
+[dependencies]
+openzeppelin_finance = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/finance", rev = "v1.5.1" }
+```
+
+> [!NOTE]
+> `openzeppelin_finance` is **not yet published** to the Move Registry. The handle above
+> is the intended install form once released; until then, vendor the package from
+> source. It depends on [`openzeppelin_math`](../../math/core) for the linear vesting calculation.
+
 ## Modules
 
 | Module | Use it when |
