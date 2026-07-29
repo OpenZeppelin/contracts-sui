@@ -20,10 +20,6 @@ The ordered-collections family for Sui Move: two modules for ordered key/value a
 openzeppelin_collections = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/collections", rev = "v1.5.1" }
 ```
 
-> [!NOTE]
-> `openzeppelin_collections` is **not yet published** to the Move Registry. The handle above
-> is the intended install form once released; until then, vendor the package from source.
-
 ## Modules
 
 | Module | Summary |

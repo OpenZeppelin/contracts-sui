@@ -22,10 +22,6 @@ The `openzeppelin_allowance` package lets a treasury, protocol, or wallet delega
 openzeppelin_allowance = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/allowance", rev = "v1.5.1" }
 ```
 
-> [!NOTE]
-> `openzeppelin_allowance` is **not yet published** to the Move Registry. The handle above
-> is the intended install form once released; until then, vendor the package from source.
-
 ## Modules
 
 | Module | Summary |

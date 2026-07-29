@@ -16,10 +16,14 @@ Operations carry typed parameters stored on-chain, and an integration binds to a
 
 ```toml
 [dependencies]
-openzeppelin_sale = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/timelock", rev = "v1.5.1" }
+openzeppelin_timelock = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/timelock", rev = "v1.5.1" }
 ```
 
-## Module Snapshot
+> [!NOTE]
+> `openzeppelin_timelock` depends on [`openzeppelin_access`](../access) for role-based
+> authorization.
+
+## Modules
 
 | Module | Summary |
 |--------|---------|

@@ -14,7 +14,7 @@ Embeddable primitives for Sui smart contract development.
 openzeppelin_utils = { r.mvr = "@openzeppelin-move/utils" }
 ```
 
-## Module Snapshot
+## Modules
 
 | Module | Summary |
 |--------|---------|
