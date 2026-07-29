@@ -1,5 +1,6 @@
 # `openzeppelin_allowance`
 
+> [!WARNING]
 > This package is open-source and not actively maintained.
 >
 > This release has been professionally audited. See the security audit report in
