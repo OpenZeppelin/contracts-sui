@@ -5,8 +5,6 @@
 [![License](https://img.shields.io/github/license/OpenZeppelin/contracts-sui)](https://github.com/OpenZeppelin/contracts-sui/blob/main/LICENSE)
 
 > [!WARNING]
-> This package is open-source and not actively maintained.
->
 > This library is open source and available to use, but is no longer under
 active maintenance. No new features, bug fixes, or updates should be
 expected on existing releases.
